@@ -1,0 +1,24 @@
+{
+  "metadata": {
+    "id": "57ffdeda-d370-424d-a312-f17d563dd78d",
+    "name": "BAUD",
+    "version": "1.0.0",
+    "created": "2026-08-09",
+    "last_updated": "2026-08-09",
+    "total_branches": 1
+  },
+  "branches": [
+    {
+      "name": "BAUD",
+      "path": "src/baud/baud",
+      "profile": "AIPass Workshop",
+      "description": "Resident agent of the baud project.",
+      "email": "@baud",
+      "status": "active",
+      "created": "2026-08-09",
+      "last_active": "2026-08-09",
+      "registry_id": "c3976b3d-b874-46db-a700-e7508bd095be",
+      "owner": true
+    }
+  ]
+}

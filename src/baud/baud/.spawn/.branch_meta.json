@@ -1,0 +1,154 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "template_version": "1.0.0",
+    "last_updated": "2026-08-09",
+    "branch_name": "baud"
+  },
+  "file_tracking": {
+    "f007": {
+      "template_name": "DASHBOARD.local.json",
+      "current_name": "DASHBOARD.local.json",
+      "current_path": "DASHBOARD.local.json",
+      "content_hash": "1974479d2c31"
+    },
+    "f008": {
+      "template_name": "README.md",
+      "current_name": "README.md",
+      "current_path": "README.md",
+      "content_hash": "2712b6791e99"
+    },
+    "f001": {
+      "template_name": ".ai_mail.local/README.md",
+      "current_name": "README.md",
+      "current_path": ".ai_mail.local/README.md",
+      "content_hash": "b8b5b639427e"
+    },
+    "f002": {
+      "template_name": ".ai_mail.local/inbox.json",
+      "current_name": "inbox.json",
+      "current_path": ".ai_mail.local/inbox.json",
+      "content_hash": "c9702fe2cc21"
+    },
+    "f003": {
+      "template_name": ".aipass/aipass_local_prompt.md",
+      "current_name": "aipass_local_prompt.md",
+      "current_path": ".aipass/aipass_local_prompt.md",
+      "content_hash": "fd4c771b2ed1"
+    },
+    "f004": {
+      "template_name": ".trinity/local.json",
+      "current_name": "local.json",
+      "current_path": ".trinity/local.json",
+      "content_hash": "23e19dd336b6"
+    },
+    "f005": {
+      "template_name": ".trinity/observations.json",
+      "current_name": "observations.json",
+      "current_path": ".trinity/observations.json",
+      "content_hash": "0f58b4721cc4"
+    },
+    "f006": {
+      "template_name": ".trinity/passport.json",
+      "current_name": "passport.json",
+      "current_path": ".trinity/passport.json",
+      "content_hash": "94b7c9b64499"
+    },
+    "f009": {
+      "template_name": "apps/__init__.py",
+      "current_name": "__init__.py",
+      "current_path": "apps/__init__.py",
+      "content_hash": "e3b0c44298fc"
+    },
+    "f010": {
+      "template_name": "apps/baud.py",
+      "current_name": "baud.py",
+      "current_path": "apps/baud.py",
+      "content_hash": "1239d5e6865f"
+    },
+    "f011": {
+      "template_name": "apps/handlers/README.md",
+      "current_name": "README.md",
+      "current_path": "apps/handlers/README.md",
+      "content_hash": "400f326c1d86"
+    },
+    "f012": {
+      "template_name": "apps/handlers/__init__.py",
+      "current_name": "__init__.py",
+      "current_path": "apps/handlers/__init__.py",
+      "content_hash": "e3b0c44298fc"
+    },
+    "f013": {
+      "template_name": "apps/modules/README.md",
+      "current_name": "README.md",
+      "current_path": "apps/modules/README.md",
+      "content_hash": "d20ba426791c"
+    },
+    "f014": {
+      "template_name": "apps/modules/__init__.py",
+      "current_name": "__init__.py",
+      "current_path": "apps/modules/__init__.py",
+      "content_hash": "e3b0c44298fc"
+    },
+    "f015": {
+      "template_name": "artifacts/README.md",
+      "current_name": "README.md",
+      "current_path": "artifacts/README.md",
+      "content_hash": "a4ccb83ad422"
+    },
+    "f016": {
+      "template_name": "artifacts/birth_certificate.json",
+      "current_name": "birth_certificate.json",
+      "current_path": "artifacts/birth_certificate.json",
+      "content_hash": "25471c3ebb8f"
+    },
+    "f017": {
+      "template_name": "logs/README.md",
+      "current_name": "README.md",
+      "current_path": "logs/README.md",
+      "content_hash": "88aa140213d0"
+    }
+  },
+  "directory_tracking": {
+    "d001": {
+      "template_name": ".ai_mail.local",
+      "current_name": ".ai_mail.local",
+      "current_path": ".ai_mail.local"
+    },
+    "d002": {
+      "template_name": ".aipass",
+      "current_name": ".aipass",
+      "current_path": ".aipass"
+    },
+    "d003": {
+      "template_name": ".trinity",
+      "current_name": ".trinity",
+      "current_path": ".trinity"
+    },
+    "d004": {
+      "template_name": "apps",
+      "current_name": "apps",
+      "current_path": "apps"
+    },
+    "d007": {
+      "template_name": "artifacts",
+      "current_name": "artifacts",
+      "current_path": "artifacts"
+    },
+    "d008": {
+      "template_name": "logs",
+      "current_name": "logs",
+      "current_path": "logs"
+    },
+    "d005": {
+      "template_name": "apps/handlers",
+      "current_name": "handlers",
+      "current_path": "apps/handlers"
+    },
+    "d006": {
+      "template_name": "apps/modules",
+      "current_name": "modules",
+      "current_path": "apps/modules"
+    }
+  }
+}

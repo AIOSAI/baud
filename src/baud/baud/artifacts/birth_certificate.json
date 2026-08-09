@@ -1,0 +1,15 @@
+{
+  "id": "1",
+  "name": "BAUD Birth Certificate",
+  "type": "birth_certificate",
+  "creator": "SYSTEM",
+  "owner": "BAUD",
+  "rarity": "unique",
+  "description": "Official birth certificate for BAUD. Citizen #1, project_agent class. Purpose: Resident agent of the baud project.",
+  "metadata": {
+    "citizen_number": "1",
+    "citizen_class": "project_agent",
+    "purpose": "Resident agent of the baud project."
+  },
+  "created_at": "2026-08-09"
+}

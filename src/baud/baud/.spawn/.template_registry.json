@@ -1,0 +1,144 @@
+{
+  "metadata": {
+    "description": "Template registry for tracking files",
+    "generated": true
+  },
+  "files": {
+    "f001": {
+      "path": ".ai_mail.local/README.md",
+      "name": "README.md",
+      "content_hash": "b8b5b639427e",
+      "has_branch_placeholder": false
+    },
+    "f002": {
+      "path": ".ai_mail.local/inbox.json",
+      "name": "inbox.json",
+      "content_hash": "c9702fe2cc21",
+      "has_branch_placeholder": false
+    },
+    "f003": {
+      "path": ".aipass/aipass_local_prompt.md",
+      "name": "aipass_local_prompt.md",
+      "content_hash": "fd4c771b2ed1",
+      "has_branch_placeholder": false
+    },
+    "f004": {
+      "path": ".trinity/local.json",
+      "name": "local.json",
+      "content_hash": "23e19dd336b6",
+      "has_branch_placeholder": false
+    },
+    "f005": {
+      "path": ".trinity/observations.json",
+      "name": "observations.json",
+      "content_hash": "0f58b4721cc4",
+      "has_branch_placeholder": false
+    },
+    "f006": {
+      "path": ".trinity/passport.json",
+      "name": "passport.json",
+      "content_hash": "94b7c9b64499",
+      "has_branch_placeholder": false
+    },
+    "f007": {
+      "path": "DASHBOARD.local.json",
+      "name": "DASHBOARD.local.json",
+      "content_hash": "1974479d2c31",
+      "has_branch_placeholder": false
+    },
+    "f008": {
+      "path": "README.md",
+      "name": "README.md",
+      "content_hash": "2712b6791e99",
+      "has_branch_placeholder": false
+    },
+    "f009": {
+      "path": "apps/__init__.py",
+      "name": "__init__.py",
+      "content_hash": "e3b0c44298fc",
+      "has_branch_placeholder": false
+    },
+    "f010": {
+      "path": "apps/baud.py",
+      "name": "baud.py",
+      "content_hash": "1239d5e6865f",
+      "has_branch_placeholder": false
+    },
+    "f011": {
+      "path": "apps/handlers/README.md",
+      "name": "README.md",
+      "content_hash": "400f326c1d86",
+      "has_branch_placeholder": false
+    },
+    "f012": {
+      "path": "apps/handlers/__init__.py",
+      "name": "__init__.py",
+      "content_hash": "e3b0c44298fc",
+      "has_branch_placeholder": false
+    },
+    "f013": {
+      "path": "apps/modules/README.md",
+      "name": "README.md",
+      "content_hash": "d20ba426791c",
+      "has_branch_placeholder": false
+    },
+    "f014": {
+      "path": "apps/modules/__init__.py",
+      "name": "__init__.py",
+      "content_hash": "e3b0c44298fc",
+      "has_branch_placeholder": false
+    },
+    "f015": {
+      "path": "artifacts/README.md",
+      "name": "README.md",
+      "content_hash": "a4ccb83ad422",
+      "has_branch_placeholder": false
+    },
+    "f016": {
+      "path": "artifacts/birth_certificate.json",
+      "name": "birth_certificate.json",
+      "content_hash": "25471c3ebb8f",
+      "has_branch_placeholder": false
+    },
+    "f017": {
+      "path": "logs/README.md",
+      "name": "README.md",
+      "content_hash": "88aa140213d0",
+      "has_branch_placeholder": false
+    }
+  },
+  "directories": {
+    "d001": {
+      "path": ".ai_mail.local",
+      "name": ".ai_mail.local"
+    },
+    "d002": {
+      "path": ".aipass",
+      "name": ".aipass"
+    },
+    "d003": {
+      "path": ".trinity",
+      "name": ".trinity"
+    },
+    "d004": {
+      "path": "apps",
+      "name": "apps"
+    },
+    "d005": {
+      "path": "apps/handlers",
+      "name": "handlers"
+    },
+    "d006": {
+      "path": "apps/modules",
+      "name": "modules"
+    },
+    "d007": {
+      "path": "artifacts",
+      "name": "artifacts"
+    },
+    "d008": {
+      "path": "logs",
+      "name": "logs"
+    }
+  }
+}

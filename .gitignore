@@ -1,0 +1,39 @@
+# AIPass local state
+.trinity/
+.ai_mail.local/
+*.local.*
+
+# Plans (local working docs)
+DPLAN-*
+FPLAN-*
+APLAN-*
+TDPLAN-*
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives
+.archive/
+
+# Disabled files
+*(disabled)*
+
+# Registry lock
+.*_REGISTRY.lock
