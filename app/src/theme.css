@@ -209,7 +209,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  width: 236px;
+  /* Wide enough that four two-digit figures share line one (git sits on
+     line two on every card) and the footer buttons never bleed past the
+     edge. 236px was ~12px short of both (Patrick-caught 2026-08-09). */
+  width: 260px;
   padding: 9px 11px;
   border: 1px solid var(--baud-line);
   border-radius: var(--baud-radius);
@@ -254,7 +257,11 @@ body {
 
 .baud-chip-figures {
   display: flex;
-  gap: 12px;
+  /* The git badge is a conditional fifth figure on a fixed-width card:
+     without wrap it renders past the card edge, invisibly. Row gap stays
+     tight so a wrapped line reads as a second figures line, not a gap. */
+  flex-wrap: wrap;
+  gap: 3px 10px;
 }
 
 /* State badge - only worn while something is actually happening. */
@@ -279,6 +286,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* Fence, not layout: if the row ever outgrows the card again the
+     buttons wrap under the age text instead of bleeding off the edge. */
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -411,6 +421,17 @@ body {
 
 .baud-figure-alert .baud-figure-value {
   color: var(--baud-amber);
+}
+
+/* The git badge only exists while a branch holds uncommitted work - it is
+   amber head to toe so it reads as one mark, not another counter. */
+.baud-figure-git .baud-figure-value {
+  color: var(--baud-amber);
+}
+
+.baud-figure-git .baud-figure-label {
+  color: var(--baud-amber);
+  opacity: 0.65;
 }
 
 /* ------------------------------------------------------------- workbench

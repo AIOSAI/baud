@@ -36,3 +36,9 @@ export interface FileText {
   content: string;
   truncated: boolean;
 }
+
+/** Mirrors `GitChanges` in src-tauri/src/lib.rs. */
+export interface GitChanges {
+  files: string[];
+  count: number;
+}

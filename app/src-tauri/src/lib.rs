@@ -24,10 +24,17 @@
 //! view could already see. Writing stays impossible by construction; if an
 //! editor ever lands, it arrives as its own explicit command with its own
 //! doctrine paragraph, not as a quiet extension of these.
+//!
+//! Milestone 5 adds the changes badge: `git_changes` and `git_diff_text`,
+//! which shell out to the operator's installed `git` binary with exactly one
+//! verb - `diff` - scoped to the card's directory. Diff is a read: it looks
+//! at the working files and reports, touching nothing. No write verb exists
+//! in this codebase; committing stays where it belongs, in the terminal.
 
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -464,6 +471,68 @@ fn read_file_text(path: String) -> Result<FileText, String> {
     })
 }
 
+/// Uncommitted edits in one branch's subtree, straight from local git.
+#[derive(Debug, Clone, Serialize)]
+pub struct GitChanges {
+    pub files: Vec<String>,
+    pub count: usize,
+}
+
+/// Run the installed `git` binary read-only inside `dir` and return stdout.
+/// `None` covers every normal quiet case at once: not a repo, an empty repo
+/// with no HEAD yet, or no git on the machine - all of which just mean
+/// "nothing to report", not a fault worth surfacing on a card.
+fn git_read(dir: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git").current_dir(dir).args(args).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// The uncommitted-changes list for a directory: tracked files under it that
+/// differ from HEAD (staged or not). `--relative` keeps names local to the
+/// branch dir instead of repo-root-relative - every src/aipass branch shares
+/// one repo, and a card should only ever speak about its own subtree.
+fn git_changes_in(dir: &Path) -> GitChanges {
+    let files: Vec<String> = git_read(dir, &["diff", "HEAD", "--relative", "--name-only", "--", "."])
+        .map(|out| out.lines().map(str::to_owned).collect())
+        .unwrap_or_default();
+    let count = files.len();
+    GitChanges { files, count }
+}
+
+/// The full uncommitted diff for a directory, as one patch text.
+fn git_diff_in(dir: &Path) -> Result<FileText, String> {
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args(["diff", "HEAD", "--relative", "--", "."])
+        .output()
+        .map_err(|err| format!("could not run git: {err}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git diff failed: {}", stderr.trim()));
+    }
+    let (content, truncated) = viewer_text(output.stdout, VIEWER_MAX_BYTES as usize)?;
+    Ok(FileText {
+        path: dir.display().to_string(),
+        content,
+        truncated,
+    })
+}
+
+/// Count a branch's uncommitted files for the card badge. Fenced, read-only.
+#[tauri::command]
+fn git_changes(path: String) -> Result<GitChanges, String> {
+    Ok(git_changes_in(&fenced_path(&path)?))
+}
+
+/// The diff behind the badge, for the changes tab. Fenced, read-only.
+#[tauri::command]
+fn git_diff_text(path: String) -> Result<FileText, String> {
+    git_diff_in(&fenced_path(&path)?)
+}
+
 /// Read a `quick_status` count that may be a number or a list of items.
 fn count_field(quick_status: &Value, key: &str) -> u64 {
     match quick_status.get(key) {
@@ -611,6 +680,8 @@ pub fn run() {
             fleet_snapshot,
             list_dir,
             read_file_text,
+            git_changes,
+            git_diff_text,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
@@ -706,6 +777,56 @@ mod tests {
         );
         let (cut, truncated) = viewer_text(b"0123456789".to_vec(), 4).unwrap();
         assert_eq!((cut.as_str(), truncated), ("0123", true));
+    }
+
+    #[test]
+    fn git_changes_and_diff_see_uncommitted_edits() {
+        // A real throwaway repo: the machine has git (BAUD's doctrine leans
+        // on the installed binary), so exercise the actual verbs end to end.
+        let repo = std::env::temp_dir().join(format!("baud-git-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&repo);
+        fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| {
+            let status = Command::new("git")
+                .current_dir(&repo)
+                .args(args)
+                .output()
+                .unwrap()
+                .status;
+            assert!(status.success(), "git {args:?} failed");
+        };
+        git(&["init", "-q"]);
+
+        // Empty repo: no HEAD yet - the badge must stay quiet, not error.
+        assert_eq!(git_changes_in(&repo).count, 0);
+
+        fs::write(repo.join("note.txt"), "old line\n").unwrap();
+        git(&["add", "."]);
+        git(&[
+            "-c",
+            "user.email=baud@test",
+            "-c",
+            "user.name=baud",
+            "commit",
+            "-q",
+            "-m",
+            "seed",
+        ]);
+        assert_eq!(git_changes_in(&repo).count, 0);
+
+        fs::write(repo.join("note.txt"), "new line\n").unwrap();
+        let changes = git_changes_in(&repo);
+        assert_eq!(changes.files, vec!["note.txt".to_string()]);
+
+        let diff = git_diff_in(&repo).unwrap();
+        assert!(diff.content.contains("-old line"));
+        assert!(diff.content.contains("+new line"));
+        assert!(!diff.truncated);
+
+        // Not a repo at all: quiet zero again.
+        let _ = fs::remove_dir_all(repo.join(".git"));
+        assert_eq!(git_changes_in(&repo).count, 0);
+        let _ = fs::remove_dir_all(&repo);
     }
 
     #[test]

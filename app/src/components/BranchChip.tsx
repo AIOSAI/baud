@@ -1,7 +1,14 @@
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+
 import { relativeAge } from "../age";
-import type { BranchStatus } from "../types";
+import type { BranchStatus, GitChanges } from "../types";
 
 export type LaunchMode = "resume" | "fresh";
+
+/** Git polls slower than the dashboard: a subprocess per card per tick is
+ *  real work, and uncommitted-file counts don't move second to second. */
+const GIT_POLL_MS = 15_000;
 
 interface BranchChipProps {
   branch: BranchStatus;
@@ -11,6 +18,8 @@ interface BranchChipProps {
   onFiles: (branch: BranchStatus) => void;
   /** Operator clicked a figure or the summary: open the file behind it. */
   onOpenFile: (path: string, name: string, branch: string) => void;
+  /** Operator clicked the changes badge: open this branch's diff tab. */
+  onOpenDiff: (branch: BranchStatus) => void;
 }
 
 /**
@@ -22,8 +31,36 @@ interface BranchChipProps {
  * (the machine is churning), an interactive session burns steady (someone is
  * at the wheel), and a branch with neither sits dim.
  */
-export default function BranchChip({ branch, onLaunch, onFiles, onOpenFile }: BranchChipProps) {
+export default function BranchChip({
+  branch,
+  onLaunch,
+  onFiles,
+  onOpenFile,
+  onOpenDiff,
+}: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
+
+  // Uncommitted-changes count, straight from local git on its own slow tick.
+  // Zero (or a dir that isn't a repo) simply shows no badge.
+  const [changes, setChanges] = useState<GitChanges | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = () => {
+      invoke<GitChanges>("git_changes", { path: branch.path })
+        .then((next) => {
+          if (mounted) setChanges(next);
+        })
+        .catch(() => {
+          if (mounted) setChanges(null);
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, GIT_POLL_MS);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [branch.path]);
 
   // Every number on the card is a door: clicking it opens the file the
   // number came from, in the reading room.
@@ -77,6 +114,21 @@ export default function BranchChip({ branch, onLaunch, onFiles, onOpenFile }: Br
         <Figure label="open" value={branch.opened_mail} onClick={peekInbox} />
         <Figure label="plans" value={branch.active_plans} onClick={peekDashboard} />
         <Figure label="todos" value={branch.todo_count} onClick={peekTodos} />
+        {/* Permanent spot (Patrick ruling 2026-08-09): a dim zero when the
+            tree is clean, amber the moment anything is uncommitted. */}
+        <button
+          type="button"
+          className={`baud-figure ${(changes?.count ?? 0) > 0 ? "baud-figure-git" : ""}`}
+          title={
+            (changes?.count ?? 0) > 0
+              ? `${changes?.count} uncommitted file(s) - open the diff`
+              : "no uncommitted changes - open the (empty) diff"
+          }
+          onClick={() => onOpenDiff(branch)}
+        >
+          <span className="baud-figure-value">{changes?.count ?? 0}</span>
+          <span className="baud-figure-label">⎇ git</span>
+        </button>
       </div>
 
       <footer className="baud-chip-foot">

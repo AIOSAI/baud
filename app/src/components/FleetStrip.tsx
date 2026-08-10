@@ -6,6 +6,7 @@ interface FleetStripProps {
   onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
   onFiles: (branch: BranchStatus) => void;
   onOpenFile: (path: string, name: string, branch: string) => void;
+  onOpenDiff: (branch: BranchStatus) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -28,6 +29,7 @@ export default function FleetStrip({
   onLaunch,
   onFiles,
   onOpenFile,
+  onOpenDiff,
 }: FleetStripProps) {
   if (branches.length === 0) {
     return (
@@ -46,6 +48,7 @@ export default function FleetStrip({
           onLaunch={onLaunch}
           onFiles={onFiles}
           onOpenFile={onOpenFile}
+          onOpenDiff={onOpenDiff}
         />
       ))}
     </div>

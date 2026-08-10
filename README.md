@@ -38,13 +38,37 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   Dim = idle.
 - **Figures** — mail / open / plans / todos from the branch's
   `DASHBOARD.local.json`, plus its summary line and how fresh it is.
+- **Git figure** — a permanent `⎇ git` count of uncommitted files,
+  straight from the installed `git` binary (`git diff HEAD`, scoped and
+  `--relative` to the branch dir — every `src/aipass` branch shares one
+  repo, and a card only ever speaks about its own subtree). Dim zero when
+  the tree is clean, amber when anything is uncommitted. Clicking it opens
+  the diff tab.
 - **Buttons** — `▸ resume` continues the branch's conversation, `fresh`
   starts a new one. Resume picks the right door automatically: `claude -c`
   when interactive history exists, `claude --resume <id>` when the only
   transcripts are headless dispatch runs (`-c` refuses those). A citizen
-  with no transcripts at all shows a single `▸ claude`.
+  with no transcripts at all shows a single `▸ claude`. `files` docks the
+  branch's file tree.
 
 Strip order: dispatched first, then interactive, then alphabetical.
+
+### The reading room
+
+Every number on a card is a door: clicking a figure opens the file the
+number came from (inbox, dashboard, todos) in a read-only CodeMirror pane,
+and the `files` button docks a lazy directory tree for browsing anything
+else in the branch. Open files live in tabs beside the terminal — the
+terminal never unmounts, hidden panes are just display-hidden, so claude
+keeps streaming underneath while you read.
+
+The changes badge opens the same kind of tab holding the branch's full
+uncommitted diff in patch syntax. Diff tabs refetch every time they come
+back to the front (a diff goes stale the moment the agent keeps working);
+file tabs load once. Everything is read-only and fenced: the backend
+canonicalizes every requested path and refuses anything outside the AIPass
+root, viewers cap at 512 KB, binaries are refused. There are no write
+commands in the codebase — committing stays in the terminal, through drone.
 
 ### Terminal
 
@@ -102,6 +126,8 @@ resulting green lamps like any others.
 | interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
 | resume kind | `~/.claude/projects/<munged-path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries; headless dispatch runs never do |
 | figures | the branch's `DASHBOARD.local.json` `quick_status` |
+| files / viewer | `list_dir` + `read_file_text`, fenced to the AIPass root |
+| changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
 
 Every fallible read degrades to a default and records the failure in the
 payload — one bad file never takes down the snapshot.

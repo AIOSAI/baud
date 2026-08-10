@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import FleetStrip from "./components/FleetStrip";
 import type { LaunchMode } from "./components/BranchChip";
+import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
@@ -11,11 +12,18 @@ import type { BranchStatus, FleetSnapshot } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
 
-/** A file open in the reading room. The path doubles as the tab id. */
+/**
+ * One workbench tab. A `file` tab views the file at `path`; a `diff` tab
+ * shows the branch dir's uncommitted git diff, with `path` carrying a
+ * synthetic `diff:` id so the two kinds can never collide on one file.
+ */
 interface FileTab {
   path: string;
   name: string;
   branch: string;
+  kind: "file" | "diff";
+  /** The branch directory a diff tab reads - unused by file tabs. */
+  dir?: string;
 }
 
 /** The terminal's reserved tab id - never closable, never a real path. */
@@ -39,9 +47,30 @@ export default function App() {
 
   const openFile = useCallback((path: string, name: string, branch: string) => {
     setFileTabs((current) =>
-      current.some((tab) => tab.path === path) ? current : [...current, { path, name, branch }],
+      current.some((tab) => tab.path === path)
+        ? current
+        : [...current, { path, name, branch, kind: "file" as const }],
     );
     setActiveTab(path);
+  }, []);
+
+  const openDiff = useCallback((branch: BranchStatus) => {
+    const id = `diff:${branch.path}`;
+    setFileTabs((current) =>
+      current.some((tab) => tab.path === id)
+        ? current
+        : [
+            ...current,
+            {
+              path: id,
+              name: "changes",
+              branch: branch.name,
+              kind: "diff" as const,
+              dir: branch.path,
+            },
+          ],
+    );
+    setActiveTab(id);
   }, []);
 
   const closeFile = useCallback((path: string) => {
@@ -150,6 +179,7 @@ export default function App() {
           onLaunch={launch}
           onFiles={toggleTree}
           onOpenFile={openFile}
+          onOpenDiff={openDiff}
         />
       )}
 
@@ -208,7 +238,11 @@ export default function App() {
               key={tab.path}
               className={`baud-pane ${activeTab === tab.path ? "" : "baud-pane-hidden"}`}
             >
-              <FileView path={tab.path} />
+              {tab.kind === "diff" ? (
+                <DiffView dir={tab.dir ?? ""} active={activeTab === tab.path} />
+              ) : (
+                <FileView path={tab.path} />
+              )}
             </div>
           ))}
         </section>
