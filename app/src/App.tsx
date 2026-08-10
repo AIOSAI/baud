@@ -145,7 +145,12 @@ export default function App() {
           <p className="baud-empty">Waiting for the first snapshot…</p>
         </div>
       ) : (
-        <FleetStrip branches={branches} onLaunch={launch} onFiles={toggleTree} />
+        <FleetStrip
+          branches={branches}
+          onLaunch={launch}
+          onFiles={toggleTree}
+          onOpenFile={openFile}
+        />
       )}
 
       <main className="baud-stage">

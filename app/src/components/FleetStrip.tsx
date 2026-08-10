@@ -5,6 +5,7 @@ interface FleetStripProps {
   branches: BranchStatus[];
   onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
   onFiles: (branch: BranchStatus) => void;
+  onOpenFile: (path: string, name: string, branch: string) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -22,7 +23,12 @@ function sortForDisplay(branches: BranchStatus[]): BranchStatus[] {
  * rather than wrapping, so the terminal below it never loses height as the
  * fleet grows.
  */
-export default function FleetStrip({ branches, onLaunch, onFiles }: FleetStripProps) {
+export default function FleetStrip({
+  branches,
+  onLaunch,
+  onFiles,
+  onOpenFile,
+}: FleetStripProps) {
   if (branches.length === 0) {
     return (
       <div className="baud-strip baud-strip-empty">
@@ -34,7 +40,13 @@ export default function FleetStrip({ branches, onLaunch, onFiles }: FleetStripPr
   return (
     <div className="baud-strip">
       {sortForDisplay(branches).map((branch) => (
-        <BranchChip key={branch.name} branch={branch} onLaunch={onLaunch} onFiles={onFiles} />
+        <BranchChip
+          key={branch.name}
+          branch={branch}
+          onLaunch={onLaunch}
+          onFiles={onFiles}
+          onOpenFile={onOpenFile}
+        />
       ))}
     </div>
   );

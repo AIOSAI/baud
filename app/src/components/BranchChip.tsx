@@ -9,6 +9,8 @@ interface BranchChipProps {
   onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
   /** Operator clicked files: open this branch's directory tree. */
   onFiles: (branch: BranchStatus) => void;
+  /** Operator clicked a figure or the summary: open the file behind it. */
+  onOpenFile: (path: string, name: string, branch: string) => void;
 }
 
 /**
@@ -20,8 +22,16 @@ interface BranchChipProps {
  * (the machine is churning), an interactive session burns steady (someone is
  * at the wheel), and a branch with neither sits dim.
  */
-export default function BranchChip({ branch, onLaunch, onFiles }: BranchChipProps) {
+export default function BranchChip({ branch, onLaunch, onFiles, onOpenFile }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
+
+  // Every number on the card is a door: clicking it opens the file the
+  // number came from, in the reading room.
+  const peek = (relative: string, name: string) => () =>
+    onOpenFile(`${branch.path}/${relative}`, name, branch.name);
+  const peekInbox = peek(".ai_mail.local/inbox.json", "inbox.json");
+  const peekTodos = peek(".trinity/local.json", "local.json");
+  const peekDashboard = peek("DASHBOARD.local.json", "DASHBOARD.local.json");
 
   const chipClass = [
     "baud-chip",
@@ -56,15 +66,25 @@ export default function BranchChip({ branch, onLaunch, onFiles }: BranchChipProp
         {badge ? <span className={`baud-badge ${badgeClass}`}>{badge}</span> : null}
       </header>
 
-      <p className="baud-chip-summary" title={summary}>
+      <button
+        type="button"
+        className="baud-chip-summary"
+        title={`${summary} - click for DASHBOARD.local.json`}
+        onClick={peekDashboard}
+      >
         {summary}
-      </p>
+      </button>
 
       <div className="baud-chip-figures">
-        <Figure label="mail" value={branch.new_mail} alert={branch.new_mail > 0} />
-        <Figure label="open" value={branch.opened_mail} />
-        <Figure label="plans" value={branch.active_plans} />
-        <Figure label="todos" value={branch.todo_count} />
+        <Figure
+          label="mail"
+          value={branch.new_mail}
+          alert={branch.new_mail > 0}
+          onClick={peekInbox}
+        />
+        <Figure label="open" value={branch.opened_mail} onClick={peekInbox} />
+        <Figure label="plans" value={branch.active_plans} onClick={peekDashboard} />
+        <Figure label="todos" value={branch.todo_count} onClick={peekTodos} />
       </div>
 
       <footer className="baud-chip-foot">
@@ -110,11 +130,26 @@ export default function BranchChip({ branch, onLaunch, onFiles }: BranchChipProp
   );
 }
 
-function Figure({ label, value, alert }: { label: string; value: number; alert?: boolean }) {
+function Figure({
+  label,
+  value,
+  alert,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  alert?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <span className={`baud-figure ${alert ? "baud-figure-alert" : ""}`}>
+    <button
+      type="button"
+      className={`baud-figure ${alert ? "baud-figure-alert" : ""}`}
+      title={`open the file behind '${label}'`}
+      onClick={onClick}
+    >
       <span className="baud-figure-value">{value}</span>
       <span className="baud-figure-label">{label}</span>
-    </span>
+    </button>
   );
 }
