@@ -68,6 +68,9 @@ export default function FileView({ path }: { path: string }) {
               lineNumbers(),
               highlightSpecialChars(),
               drawSelection(),
+              // Wrap long lines - this is a reading pane, and the fleet's
+              // JSON dashboards live on very long single lines.
+              EditorView.lineWrapping,
               EditorState.readOnly.of(true),
               EditorView.editable.of(false),
               oneDark,

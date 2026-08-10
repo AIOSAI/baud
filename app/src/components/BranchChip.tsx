@@ -51,8 +51,6 @@ export default function BranchChip({ branch, onLaunch, onFiles, onOpenFile }: Br
   const badge = branch.dispatched ? "dispatched" : branch.interactive ? "live" : null;
   const badgeClass = branch.dispatched ? "baud-badge-dispatched" : "baud-badge-live";
 
-  const summary = branch.summary || (branch.is_citizen ? "no status reported" : "not a citizen");
-
   // Two ways back into a conversation: `-c` for interactive history, and
   // `--resume <id>` for a branch whose only transcripts are headless dispatch
   // runs. Either way the operator gets a resume button.
@@ -66,15 +64,9 @@ export default function BranchChip({ branch, onLaunch, onFiles, onOpenFile }: Br
         {badge ? <span className={`baud-badge ${badgeClass}`}>{badge}</span> : null}
       </header>
 
-      <button
-        type="button"
-        className="baud-chip-summary"
-        title={`${summary} - click for DASHBOARD.local.json`}
-        onClick={peekDashboard}
-      >
-        {summary}
-      </button>
-
+      {/* No summary line: the dashboard's summary string is generated from
+          the same counts the figures below already show - it was the same
+          info twice (Patrick-caught 2026-08-09). Dashboard opens via plans. */}
       <div className="baud-chip-figures">
         <Figure
           label="mail"

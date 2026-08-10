@@ -275,31 +275,6 @@ body {
   color: var(--baud-green);
 }
 
-/* The branch's own status line, clamped to two lines so cards stay even.
-   A button since m4.5: clicking it opens the dashboard file behind it. */
-.baud-chip-summary {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.6em;
-  font-family: inherit;
-  font-size: 11px;
-  line-height: 1.3;
-  text-align: left;
-  color: var(--baud-ink-dim);
-  word-break: break-word;
-  cursor: pointer;
-}
-
-.baud-chip-summary:hover {
-  color: var(--baud-ink);
-}
-
 .baud-chip-foot {
   display: flex;
   align-items: center;
