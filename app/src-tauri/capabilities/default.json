@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core defaults for the BAUD main window. Read-only fleet monitor: no shell, no filesystem plugin, no asset protocol. The only privileged surface is the custom fleet_snapshot command.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

@@ -1,0 +1,337 @@
+/* ==========================================================================
+   BAUD - machine-room theme
+   Dark by default. One stylesheet, plain CSS, --baud-* custom properties.
+   No inline styles anywhere in the app: the CSP forbids them.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --baud-bg: #070a09;
+  --baud-bg-panel: #0d1211;
+  --baud-bg-card: #101715;
+  --baud-bg-card-live: #121b16;
+
+  /* Lines */
+  --baud-line: #1c2724;
+  --baud-line-strong: #2b3a35;
+
+  /* Ink */
+  --baud-ink: #d6e2dc;
+  --baud-ink-dim: #7d8f88;
+  --baud-ink-faint: #4f5f59;
+
+  /* Signals */
+  --baud-green: #4ade80;
+  --baud-amber: #f5b544;
+  --baud-red: #ef5a5a;
+
+  /* Glows */
+  --baud-glow-green: rgba(74, 222, 128, 0.35);
+  --baud-glow-amber: rgba(245, 181, 68, 0.35);
+
+  /* Type */
+  --baud-mono: "JetBrains Mono", "IBM Plex Mono", "SF Mono", ui-monospace,
+    "DejaVu Sans Mono", Menlo, Consolas, monospace;
+
+  /* Metrics */
+  --baud-radius: 4px;
+  --baud-gap: 14px;
+  --baud-pad: 18px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--baud-bg);
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.012) 0px,
+    rgba(255, 255, 255, 0.012) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.baud-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.baud-main {
+  flex: 1;
+  padding: var(--baud-pad);
+}
+
+/* ---------------------------------------------------------------- header */
+
+.baud-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--baud-gap);
+  padding: 14px var(--baud-pad);
+  background: var(--baud-bg-panel);
+  border-bottom: 1px solid var(--baud-line-strong);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.baud-header-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.baud-wordmark {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  color: var(--baud-green);
+  text-shadow: 0 0 12px var(--baud-glow-green);
+}
+
+.baud-root {
+  font-size: 11px;
+  color: var(--baud-ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 46vw;
+}
+
+.baud-totals {
+  display: flex;
+  gap: 20px;
+}
+
+.baud-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.1;
+}
+
+.baud-total-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--baud-ink);
+}
+
+.baud-total-label {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-total-live .baud-total-value {
+  color: var(--baud-green);
+}
+
+.baud-total-alert .baud-total-value {
+  color: var(--baud-amber);
+}
+
+/* --------------------------------------------------------------- failure */
+
+.baud-failure {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: var(--baud-pad) var(--baud-pad) 0;
+  padding: 10px 12px;
+  border: 1px solid var(--baud-red);
+  border-left-width: 3px;
+  border-radius: var(--baud-radius);
+  background: rgba(239, 90, 90, 0.08);
+  color: var(--baud-ink);
+  font-size: 12px;
+  user-select: text;
+}
+
+.baud-failure-tag {
+  flex: none;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--baud-red);
+}
+
+.baud-failure-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+/* ------------------------------------------------------------------ grid */
+
+.baud-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--baud-gap);
+}
+
+.baud-empty {
+  color: var(--baud-ink-faint);
+  font-size: 12px;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ card */
+
+.baud-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 13px;
+  min-width: 0;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+}
+
+.baud-card-working {
+  border-color: var(--baud-line-strong);
+  background: var(--baud-bg-card-live);
+  box-shadow: inset 2px 0 0 var(--baud-green);
+}
+
+.baud-card-outsider {
+  opacity: 0.55;
+}
+
+.baud-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.baud-card-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--baud-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.baud-flag {
+  margin-left: auto;
+  flex: none;
+  font-weight: 700;
+  color: var(--baud-amber);
+}
+
+/* ------------------------------------------------------------------ lamp */
+
+.baud-lamp {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.baud-lamp-dim {
+  background: var(--baud-ink-faint);
+  opacity: 0.45;
+}
+
+.baud-lamp-live {
+  background: var(--baud-green);
+  animation: baud-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes baud-pulse {
+  0%,
+  100% {
+    background: var(--baud-green);
+    box-shadow: 0 0 0 0 var(--baud-glow-green);
+  }
+  50% {
+    background: var(--baud-amber);
+    box-shadow: 0 0 8px 3px var(--baud-glow-amber);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .baud-lamp-live {
+    animation: none;
+    box-shadow: 0 0 8px 2px var(--baud-glow-green);
+  }
+}
+
+/* --------------------------------------------------------------- figures */
+
+.baud-figures {
+  display: flex;
+  gap: 16px;
+}
+
+.baud-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.baud-figure-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--baud-ink);
+}
+
+.baud-figure-label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-figure-alert .baud-figure-value {
+  color: var(--baud-amber);
+}
+
+/* --------------------------------------------------------- summary/foot */
+
+.baud-summary {
+  margin: 0;
+  font-size: 11px;
+  color: var(--baud-ink-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.baud-card-foot {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--baud-ink-faint);
+}
+
+.baud-stale {
+  color: var(--baud-red);
+}
