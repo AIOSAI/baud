@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import FleetGrid from "./components/FleetGrid";
+import FleetStrip from "./components/FleetStrip";
+import Terminal from "./components/Terminal";
+import { relativeAge } from "./age";
 import type { FleetSnapshot } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
@@ -47,15 +49,16 @@ export default function App() {
   // comes back as a thrown error. Both are shown, never swallowed.
   const failure = transportError ?? snapshot?.error ?? null;
 
+  const pollStatus = transportError
+    ? "poll failing"
+    : snapshot
+      ? `polled ${relativeAge(snapshot.generated_at).label} · every ${POLL_INTERVAL_MS / 1000}s`
+      : "waiting for the first snapshot…";
+
   return (
     <div className="baud-app">
       <header className="baud-header">
-        <div className="baud-header-identity">
-          <span className="baud-wordmark">BAUD</span>
-          <span className="baud-root" title={snapshot?.aipass_root ?? ""}>
-            {snapshot?.aipass_root || "resolving AIPass root…"}
-          </span>
-        </div>
+        <span className="baud-wordmark">BAUD</span>
 
         <div className="baud-totals">
           <Total label="citizens" value={citizens} />
@@ -72,13 +75,26 @@ export default function App() {
         </div>
       ) : null}
 
-      <main className="baud-main">
-        {snapshot === null && !failure ? (
+      {snapshot === null && !failure ? (
+        <div className="baud-strip baud-strip-empty">
           <p className="baud-empty">Waiting for the first snapshot…</p>
-        ) : (
-          <FleetGrid branches={branches} />
-        )}
+        </div>
+      ) : (
+        <FleetStrip branches={branches} />
+      )}
+
+      <main className="baud-stage">
+        <Terminal />
       </main>
+
+      <footer className="baud-footer">
+        <span className="baud-footer-root" title={snapshot?.aipass_root ?? ""}>
+          {snapshot?.aipass_root || "resolving AIPass root…"}
+        </span>
+        <span className={`baud-footer-poll ${transportError ? "baud-footer-poll-alert" : ""}`}>
+          {pollStatus}
+        </span>
+      </footer>
     </div>
   );
 }

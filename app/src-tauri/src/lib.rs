@@ -1,16 +1,23 @@
 //! BAUD - the AIPass desktop fleet monitor.
 //!
-//! Milestone 1 is deliberately read-only: the frontend can call exactly one
-//! command, `fleet_snapshot`, which reads a handful of well-known files under
-//! the AIPass root and reports what it saw. Nothing here writes, spawns, or
-//! executes anything. Every fallible path degrades to a default and records the
-//! failure in the payload instead of panicking.
+//! The monitoring half is read-only by construction: `fleet_snapshot` reads a
+//! handful of well-known files under the AIPass root and reports what it saw.
+//! It writes nothing, spawns nothing, and every fallible path degrades to a
+//! default and records the failure in the payload instead of panicking.
+//!
+//! Milestone 2 adds exactly one interactive surface next to it: the `pty_*`
+//! commands in [`pty`], which run the operator's own shell. That shell can do
+//! anything the operator can - but only because the operator typed it. BAUD
+//! never drives it on its own; the fleet view still only ever reads.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 use serde_json::Value;
+use tauri::Manager;
+
+mod pty;
 
 /// Marker directory that identifies an AIPass root: `<root>/src/aipass`.
 const FLEET_RELATIVE_DIR: [&str; 2] = ["src", "aipass"];
@@ -232,7 +239,8 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
     Ok(branches)
 }
 
-/// The one and only command exposed to the frontend. Read-only by construction.
+/// The fleet view's one command. Read-only by construction: it takes no
+/// arguments, so the frontend cannot even steer where it reads.
 #[tauri::command]
 fn fleet_snapshot() -> FleetSnapshot {
     let root = match resolve_aipass_root() {
@@ -261,7 +269,27 @@ fn fleet_snapshot() -> FleetSnapshot {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![fleet_snapshot])
-        .run(tauri::generate_context!())
-        .expect("BAUD failed to start");
+        .manage(pty::PtyRegistry::default())
+        .invoke_handler(tauri::generate_handler![
+            fleet_snapshot,
+            pty::pty_create,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_kill
+        ])
+        // Closing the window must take the shell with it. Both hooks fire in
+        // the normal quit path; whichever runs first does the work, and
+        // `shutdown` on an empty registry is free.
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                pty::shutdown(&window.state::<pty::PtyRegistry>());
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("BAUD failed to start")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                pty::shutdown(&app.state::<pty::PtyRegistry>());
+            }
+        });
 }

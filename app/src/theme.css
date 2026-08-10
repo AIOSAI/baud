@@ -69,40 +69,38 @@ body {
   user-select: none;
 }
 
-/* ---------------------------------------------------------------- layout */
+/* ---------------------------------------------------------------- layout
+   Header, fleet strip, terminal, footer - one column, no page scroll. The
+   terminal is the only element that flexes, so it takes whatever the window
+   has left (roughly two thirds of the default 1280x800 window).
+   ------------------------------------------------------------------------ */
 
 .baud-app {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
-.baud-main {
-  flex: 1;
+.baud-stage {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 180px;
   padding: var(--baud-pad);
 }
 
 /* ---------------------------------------------------------------- header */
 
 .baud-header {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--baud-gap);
-  padding: 14px var(--baud-pad);
+  padding: 12px var(--baud-pad);
   background: var(--baud-bg-panel);
   border-bottom: 1px solid var(--baud-line-strong);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.baud-header-identity {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-width: 0;
 }
 
 .baud-wordmark {
@@ -111,15 +109,6 @@ body {
   letter-spacing: 0.34em;
   color: var(--baud-green);
   text-shadow: 0 0 12px var(--baud-glow-green);
-}
-
-.baud-root {
-  font-size: 11px;
-  color: var(--baud-ink-faint);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 46vw;
 }
 
 .baud-totals {
@@ -158,10 +147,11 @@ body {
 /* --------------------------------------------------------------- failure */
 
 .baud-failure {
+  flex: none;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin: var(--baud-pad) var(--baud-pad) 0;
+  margin: 12px var(--baud-pad) 0;
   padding: 10px 12px;
   border: 1px solid var(--baud-red);
   border-left-width: 3px;
@@ -184,12 +174,26 @@ body {
   word-break: break-word;
 }
 
-/* ------------------------------------------------------------------ grid */
+/* ----------------------------------------------------------------- strip
+   The fleet, compressed to one scrolling row above the terminal.
+   ------------------------------------------------------------------------ */
 
-.baud-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: var(--baud-gap);
+.baud-strip {
+  flex: none;
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  padding: 10px var(--baud-pad);
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--baud-line);
+  scrollbar-width: thin;
+  scrollbar-color: var(--baud-line-strong) transparent;
+}
+
+.baud-strip-empty {
+  align-items: center;
+  min-height: 44px;
 }
 
 .baud-empty {
@@ -198,46 +202,53 @@ body {
   margin: 0;
 }
 
-/* ------------------------------------------------------------------ card */
+/* ------------------------------------------------------------------ chip */
 
-.baud-card {
+.baud-chip {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px 13px;
-  min-width: 0;
+  justify-content: center;
+  gap: 6px;
+  width: 158px;
+  padding: 8px 10px;
   border: 1px solid var(--baud-line);
   border-radius: var(--baud-radius);
   background: var(--baud-bg-card);
 }
 
-.baud-card-working {
+.baud-chip-working {
   border-color: var(--baud-line-strong);
   background: var(--baud-bg-card-live);
   box-shadow: inset 2px 0 0 var(--baud-green);
 }
 
-.baud-card-outsider {
+.baud-chip-outsider {
   opacity: 0.55;
 }
 
-.baud-card-head {
+.baud-chip-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
-.baud-card-name {
+.baud-chip-name {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--baud-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.baud-chip-figures {
+  display: flex;
+  gap: 12px;
 }
 
 .baud-flag {
@@ -287,11 +298,6 @@ body {
 
 /* --------------------------------------------------------------- figures */
 
-.baud-figures {
-  display: flex;
-  gap: 16px;
-}
-
 .baud-figure {
   display: flex;
   align-items: baseline;
@@ -299,7 +305,7 @@ body {
 }
 
 .baud-figure-value {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--baud-ink);
 }
@@ -315,23 +321,94 @@ body {
   color: var(--baud-amber);
 }
 
-/* --------------------------------------------------------- summary/foot */
+/* -------------------------------------------------------------- terminal
+   The operator's shell, centre stage. xterm draws into .baud-terminal-host
+   and sizes itself from that box, so the box must have a definite height -
+   hence the flex chain from .baud-app down to here.
+   ------------------------------------------------------------------------ */
 
-.baud-summary {
-  margin: 0;
-  font-size: 11px;
+.baud-terminal {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 6px 8px 10px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-panel);
+}
+
+.baud-terminal-host {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  /* The rest of the app is chrome; this is the one place text is text. */
+  user-select: text;
+}
+
+.baud-terminal-curtain {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--baud-radius);
+  background: rgba(7, 10, 9, 0.82);
   color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.baud-terminal-curtain:hover,
+.baud-terminal-curtain:focus-visible {
+  color: var(--baud-ink);
+}
+
+.baud-terminal-curtain-line {
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.baud-terminal-curtain-hint {
+  max-width: 70%;
+  color: var(--baud-ink-faint);
+  font-size: 11px;
+  text-align: center;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------- footer */
+
+.baud-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--baud-gap);
+  padding: 6px var(--baud-pad);
+  border-top: 1px solid var(--baud-line);
+  background: var(--baud-bg-panel);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--baud-ink-faint);
+}
+
+.baud-footer-root {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.baud-card-foot {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--baud-ink-faint);
+.baud-footer-poll {
+  flex: none;
 }
 
-.baud-stale {
+.baud-footer-poll-alert {
   color: var(--baud-red);
 }

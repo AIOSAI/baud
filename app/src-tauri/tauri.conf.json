@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "BAUD — fleet monitor",
+        "title": "BAUD — fleet monitor & terminal",
         "width": 1280,
         "height": 800,
         "minWidth": 720,
@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
       "assetProtocol": {
         "enable": false,
         "scope": []

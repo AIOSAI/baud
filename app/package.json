@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "BAUD - the AIPass desktop fleet monitor (milestone 1: read-only)",
+  "description": "BAUD - the AIPass desktop: read-only fleet monitor + the operator's terminal",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

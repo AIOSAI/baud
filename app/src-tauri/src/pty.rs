@@ -1,0 +1,410 @@
+//! The operator's terminal.
+//!
+//! Milestone 2 gives BAUD one interactive surface: a real PTY running the
+//! user's own login shell, at the user's own privileges, in the AIPass root.
+//! It is the operator's hands - the same thing their terminal emulator would
+//! give them - and nothing about it is automation. BAUD itself still does not
+//! decide to run anything; every byte written to this shell was typed by a
+//! human.
+//!
+//! Three details are load-bearing:
+//!
+//! 1. **A pty, not a pipe.** Job control, line discipline, `$TERM` behaviour,
+//!    and interactive programs (`less`, `vim`, `claude`) all need a terminal
+//!    device on the other end.
+//! 2. **The slave is dropped after spawn.** Holding a slave handle open keeps
+//!    the master readable forever, so the reader thread would never see EOF and
+//!    the frontend would never learn that the shell exited.
+//! 3. **Teardown signals the process group, never the shell alone.** The shell
+//!    is spawned through `setsid()` (portable-pty does this so the pty can be
+//!    its controlling terminal), which makes it a session and process-group
+//!    leader with `PGID == PID`. Signalling `-PID` reaches every job it started;
+//!    signalling the bare PID orphans them, which is the classic way a terminal
+//!    emulator leaks background processes.
+
+use std::collections::HashMap;
+use std::io::{Read, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use serde::Serialize;
+use tauri::ipc::Channel;
+
+/// PTY output is read in 4KB bites - big enough that a burst of output is a
+/// handful of IPC messages, small enough that the first prompt appears at once.
+const READ_BUFFER_BYTES: usize = 4096;
+
+/// The shell used when `$SHELL` is missing or empty.
+const FALLBACK_SHELL: &str = "/bin/bash";
+
+/// How long a signalled process group gets to die politely before SIGKILL.
+const KILL_GRACE: Duration = Duration::from_millis(400);
+
+/// How long to wait for the reader thread to notice EOF and finish.
+const REAP_GRACE: Duration = Duration::from_millis(300);
+
+/// Poll step for both waits above.
+const POLL_STEP: Duration = Duration::from_millis(10);
+
+static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
+
+/// Everything the frontend hears from a session, over its own channel.
+///
+/// Output is base64 because a 4KB read can land in the middle of a multi-byte
+/// UTF-8 sequence. Lossy string conversion would replace the split character
+/// with `U+FFFD` and corrupt the stream; raw bytes let xterm's own decoder
+/// carry the partial sequence across chunks.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum PtyEvent {
+    /// One chunk of shell output.
+    Data { session: String, base64: String },
+    /// The shell is gone. Terminal state - no further data will arrive.
+    Exit { session: String },
+}
+
+/// One live shell.
+struct Session {
+    /// Kept for resize; dropping it closes the master fd.
+    master: Box<dyn MasterPty + Send>,
+    /// Keystrokes go in here.
+    writer: Box<dyn Write + Send>,
+    /// The shell process itself.
+    child: Box<dyn Child + Send + Sync>,
+    /// The shell's OS pid, which is also its process-group id (see module docs).
+    pid: Option<u32>,
+    /// The thread pumping master -> frontend. Joined on teardown.
+    reader: Option<JoinHandle<()>>,
+}
+
+/// All live shells, keyed by session id.
+///
+/// One session is the expected case - the terminal in the middle of the window.
+/// A map keeps the shape general without costing anything today.
+#[derive(Default)]
+pub struct PtyRegistry {
+    sessions: Mutex<HashMap<String, Session>>,
+}
+
+impl PtyRegistry {
+    /// A panic elsewhere must not wedge the operator's terminal, so a poisoned
+    /// lock is recovered rather than propagated.
+    fn sessions(&self) -> MutexGuard<'_, HashMap<String, Session>> {
+        self.sessions
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+fn next_session_id() -> String {
+    format!("pty-{}", NEXT_SESSION.fetch_add(1, Ordering::Relaxed))
+}
+
+/// The user's shell, or a sane fallback. Never guesses beyond that.
+fn user_shell() -> String {
+    match std::env::var("SHELL") {
+        Ok(shell) if !shell.trim().is_empty() => shell,
+        _ => FALLBACK_SHELL.to_string(),
+    }
+}
+
+// ---------------------------------------------------------------- base64
+
+const BASE64_ALPHABET: &[u8; 64] =
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/// Standard RFC 4648 base64 with padding. Hand-rolled to keep the dependency
+/// list at "one crate for the pty" - the alphabet is not a moving target.
+fn base64_encode(bytes: &[u8]) -> String {
+    let mut encoded = String::with_capacity(bytes.len().div_ceil(3) * 4);
+
+    for chunk in bytes.chunks(3) {
+        let first = u32::from(chunk[0]);
+        let second = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let third = u32::from(chunk.get(2).copied().unwrap_or(0));
+        let triple = (first << 16) | (second << 8) | third;
+
+        let symbol = |shift: u32| BASE64_ALPHABET[((triple >> shift) & 63) as usize] as char;
+
+        encoded.push(symbol(18));
+        encoded.push(symbol(12));
+        encoded.push(if chunk.len() > 1 { symbol(6) } else { '=' });
+        encoded.push(if chunk.len() > 2 { symbol(0) } else { '=' });
+    }
+
+    encoded
+}
+
+// ------------------------------------------------------------- teardown
+
+/// Signal an entire process group. Unix only; see the module docs for why the
+/// group and not the pid.
+#[cfg(unix)]
+fn signal_group(pid: u32, signal: i32) {
+    let group = pid as libc::pid_t;
+    if group <= 0 {
+        return;
+    }
+    // Safety: killpg with a group id we own. A dead group returns ESRCH, which
+    // is exactly the outcome we want anyway.
+    let _ = unsafe { libc::killpg(group, signal) };
+}
+
+/// Wait up to `grace` for the child to report an exit. Returns whether it did.
+fn wait_for_exit(child: &mut Box<dyn Child + Send + Sync>, grace: Duration) -> bool {
+    let deadline = Instant::now() + grace;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            // Unknowable state - escalating further would not help.
+            Err(_) => return true,
+            Ok(None) => {}
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(POLL_STEP);
+    }
+}
+
+/// Kill one session and reclaim everything it held.
+fn terminate(mut session: Session) {
+    #[cfg(unix)]
+    {
+        match session.pid {
+            Some(pid) => {
+                // SIGHUP is what closing a terminal window sends: shells and
+                // well-behaved jobs clean up after themselves.
+                signal_group(pid, libc::SIGHUP);
+                if !wait_for_exit(&mut session.child, KILL_GRACE) {
+                    signal_group(pid, libc::SIGKILL);
+                    let _ = wait_for_exit(&mut session.child, KILL_GRACE);
+                }
+            }
+            // No pid means no group to signal; fall back to the child itself.
+            None => {
+                let _ = session.child.kill();
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = session.child.kill();
+    }
+
+    // Reap, or the shell lingers as a zombie for the life of the app.
+    let _ = session.child.wait();
+
+    // Close our ends of the pty. With the slave already gone and the process
+    // group dead, the reader thread's next read returns EOF.
+    drop(session.writer);
+    drop(session.master);
+
+    if let Some(handle) = session.reader.take() {
+        // Bounded reap: a process that escaped the group (its own setsid) could
+        // still hold the slave open, and a blind join() would hang the caller.
+        let deadline = Instant::now() + REAP_GRACE;
+        while !handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(POLL_STEP);
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        }
+        // Otherwise the thread stays detached and exits on its own EOF.
+    }
+}
+
+/// Kill every live session. Called when the window is destroyed and again on
+/// process exit, so closing BAUD never leaves a shell running behind it.
+pub fn shutdown(registry: &PtyRegistry) {
+    let sessions: Vec<Session> = registry
+        .sessions()
+        .drain()
+        .map(|(_, session)| session)
+        .collect();
+
+    for session in sessions {
+        terminate(session);
+    }
+}
+
+// ------------------------------------------------------------- commands
+
+/// Open a shell and start streaming it. Returns the session id.
+#[tauri::command(async)]
+pub fn pty_create(
+    cols: u16,
+    rows: u16,
+    on_data: Channel<PtyEvent>,
+    registry: tauri::State<'_, PtyRegistry>,
+) -> Result<String, String> {
+    // Same resolution the fleet scan uses - the shell opens where the fleet is.
+    let root = crate::resolve_aipass_root()?;
+
+    let size = PtySize {
+        rows: rows.max(1),
+        cols: cols.max(1),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let pair = native_pty_system()
+        .openpty(size)
+        .map_err(|err| format!("could not open a pty: {err}"))?;
+
+    let shell = user_shell();
+
+    // `new_default_prog` is portable-pty's login-shell path: it runs `$SHELL`
+    // with argv[0] set to `-<name>`, the convention that tells the shell to
+    // read the login profile. Setting SHELL on the builder first is what makes
+    // it pick our resolved shell (and our fallback) rather than probing.
+    let mut command = CommandBuilder::new_default_prog();
+    command.env("SHELL", &shell);
+    command.env("TERM", "xterm-256color");
+    command.cwd(&root);
+
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|err| format!("could not start '{shell}': {err}"))?;
+
+    // Release the slave now that the shell owns it: while we hold a handle the
+    // master never reports EOF, so we would never notice the shell exiting.
+    drop(pair.slave);
+
+    let mut reader = pair
+        .master
+        .try_clone_reader()
+        .map_err(|err| format!("could not read from the pty: {err}"))?;
+    let writer = pair
+        .master
+        .take_writer()
+        .map_err(|err| format!("could not write to the pty: {err}"))?;
+
+    let pid = child.process_id();
+    let id = next_session_id();
+
+    let stream_id = id.clone();
+    let reader_thread = std::thread::spawn(move || {
+        let mut buffer = [0u8; READ_BUFFER_BYTES];
+        loop {
+            match reader.read(&mut buffer) {
+                // EOF: every slave handle is closed, so the shell is gone.
+                Ok(0) => break,
+                Ok(count) => {
+                    let event = PtyEvent::Data {
+                        session: stream_id.clone(),
+                        base64: base64_encode(&buffer[..count]),
+                    };
+                    // A closed channel means the window went away first.
+                    if on_data.send(event).is_err() {
+                        break;
+                    }
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(_) => break,
+            }
+        }
+
+        let _ = on_data.send(PtyEvent::Exit { session: stream_id });
+    });
+
+    registry.sessions().insert(
+        id.clone(),
+        Session {
+            master: pair.master,
+            writer,
+            child,
+            pid,
+            reader: Some(reader_thread),
+        },
+    );
+
+    Ok(id)
+}
+
+/// Feed keystrokes to a shell.
+#[tauri::command(async)]
+pub fn pty_write(
+    id: String,
+    data: String,
+    registry: tauri::State<'_, PtyRegistry>,
+) -> Result<(), String> {
+    let mut sessions = registry.sessions();
+    let session = sessions
+        .get_mut(&id)
+        .ok_or_else(|| format!("no live terminal session '{id}'"))?;
+
+    session
+        .writer
+        .write_all(data.as_bytes())
+        .map_err(|err| format!("could not write to terminal '{id}': {err}"))?;
+    session
+        .writer
+        .flush()
+        .map_err(|err| format!("could not flush terminal '{id}': {err}"))
+}
+
+/// Tell the shell how big its window is now.
+#[tauri::command(async)]
+pub fn pty_resize(
+    id: String,
+    cols: u16,
+    rows: u16,
+    registry: tauri::State<'_, PtyRegistry>,
+) -> Result<(), String> {
+    let sessions = registry.sessions();
+    let session = sessions
+        .get(&id)
+        .ok_or_else(|| format!("no live terminal session '{id}'"))?;
+
+    session
+        .master
+        .resize(PtySize {
+            rows: rows.max(1),
+            cols: cols.max(1),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|err| format!("could not resize terminal '{id}': {err}"))
+}
+
+/// End a session and everything it spawned. Idempotent: killing a session that
+/// already exited is a no-op, not an error.
+#[tauri::command(async)]
+pub fn pty_kill(id: String, registry: tauri::State<'_, PtyRegistry>) -> Result<(), String> {
+    // Remove first, then do the blocking work outside the lock.
+    let session = registry.sessions().remove(&id);
+
+    if let Some(session) = session {
+        terminate(session);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::base64_encode;
+
+    #[test]
+    fn base64_matches_rfc4648_vectors() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn base64_survives_a_split_utf8_sequence() {
+        // The two halves of a multi-byte character must round-trip as bytes.
+        let bytes = "é".as_bytes();
+        assert_eq!(base64_encode(&bytes[..1]), "ww==");
+        assert_eq!(base64_encode(&bytes[1..]), "qQ==");
+    }
+}
