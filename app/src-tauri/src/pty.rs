@@ -5,7 +5,8 @@
 //! It is the operator's hands - the same thing their terminal emulator would
 //! give them - and nothing about it is automation. BAUD itself still does not
 //! decide to run anything; every byte written to this shell was typed by a
-//! human.
+//! human, or is the one visible command line a card's launch button writes on
+//! the operator's explicit click.
 //!
 //! Three details are load-bearing:
 //!

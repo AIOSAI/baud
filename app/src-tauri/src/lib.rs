@@ -9,8 +9,24 @@
 //! commands in [`pty`], which run the operator's own shell. That shell can do
 //! anything the operator can - but only because the operator typed it. BAUD
 //! never drives it on its own; the fleet view still only ever reads.
+//!
+//! Milestone 3 keeps that contract: a card's launch button writes one visible
+//! command line into that same shell - and only ever on an operator click.
+//! Clicking while another session is live replaces the shell (SIGHUP, exactly
+//! what closing a terminal window does) - claude's on-disk transcript makes
+//! the interrupted conversation resumable with `-c`, which is why a single
+//! terminal can switch between agents instead of needing tabs.
+//!
+//! Milestone 4 adds the reading room: `list_dir` and `read_file_text`, the
+//! file tree and viewer behind the cards. Both are read-only and FENCED -
+//! every path the frontend sends is canonicalized and must sit inside the
+//! resolved AIPass root, so the webview can only ever read what the fleet
+//! view could already see. Writing stays impossible by construction; if an
+//! editor ever lands, it arrives as its own explicit command with its own
+//! doctrine paragraph, not as a quiet extension of these.
 
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -28,6 +44,15 @@ const PASSPORT_RELATIVE_PATH: [&str; 2] = [".trinity", "passport.json"];
 /// Presence of this lock file means the agent is dispatched and working now.
 const DISPATCH_LOCK_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", ".dispatch.lock"];
 
+/// A live claude process found on the process table.
+///
+/// `headless` is true for `claude -p`/`--print` runs - the shape every
+/// dispatched wake takes - and false for a human-driven interactive session.
+struct ClaudeSession {
+    cwd: PathBuf,
+    headless: bool,
+}
+
 /// The per-branch status file that services keep up to date.
 const DASHBOARD_FILE: &str = "DASHBOARD.local.json";
 
@@ -36,16 +61,32 @@ const DASHBOARD_FILE: &str = "DASHBOARD.local.json";
 pub struct BranchStatus {
     /// Directory name, e.g. "devpulse".
     pub name: String,
+    /// Absolute branch directory - what the launch button cds into.
+    pub path: String,
     /// `.trinity/passport.json` exists.
     pub is_citizen: bool,
-    /// `.ai_mail.local/.dispatch.lock` exists - the agent is awake right now.
-    pub working: bool,
+    /// `.ai_mail.local/.dispatch.lock` exists - a dispatched agent is working
+    /// the branch right now.
+    pub dispatched: bool,
+    /// A live interactive claude session (no `-p`) has its cwd in this branch -
+    /// someone is at the wheel.
+    pub interactive: bool,
+    /// An INTERACTIVE claude transcript exists for this directory - there is a
+    /// conversation plain `-c` will continue.
+    pub has_history: bool,
+    /// Newest transcript's session id when the only history is headless
+    /// dispatch runs: `-c` refuses those, but `--resume <id>` opens them
+    /// interactively. `None` when `has_history` is true (use `-c`) or when
+    /// there are no transcripts at all (nothing to resume).
+    pub resume_id: Option<String>,
     /// `quick_status.new_mail`, 0 when missing or unreadable.
     pub new_mail: u64,
+    /// `quick_status.opened_mail`, 0 when missing or unreadable.
+    pub opened_mail: u64,
     /// `quick_status.active_plans`, 0 when missing or unreadable.
     pub active_plans: u64,
-    /// `quick_status.action_required`, false when missing or unreadable.
-    pub action_required: bool,
+    /// `quick_status.todo_count`, 0 when missing or unreadable.
+    pub todo_count: u64,
     /// `quick_status.summary`, empty when missing or unreadable.
     pub summary: String,
     /// Top-level `last_updated`, empty when missing or unreadable.
@@ -53,14 +94,19 @@ pub struct BranchStatus {
 }
 
 impl BranchStatus {
-    fn new(name: String) -> Self {
+    fn new(name: String, path: String) -> Self {
         Self {
             name,
+            path,
             is_citizen: false,
-            working: false,
+            dispatched: false,
+            interactive: false,
+            has_history: false,
+            resume_id: None,
             new_mail: 0,
+            opened_mail: 0,
             active_plans: 0,
-            action_required: false,
+            todo_count: 0,
             summary: String::new(),
             last_updated: String::new(),
         }
@@ -142,6 +188,282 @@ fn resolve_aipass_root() -> Result<PathBuf, String> {
     ))
 }
 
+/// Classify a `/proc/<pid>/cmdline` buffer (NUL-separated argv).
+///
+/// Returns `Some(headless)` when argv[0] is a claude binary, `None` otherwise.
+/// `headless` means `-p`/`--print` is present - the shape of every dispatched
+/// wake (`claude -p ...` / `claude -c -p ...`); an interactive session never
+/// carries it.
+fn classify_claude_cmdline(cmdline: &[u8]) -> Option<bool> {
+    let mut args = cmdline.split(|byte| *byte == 0).filter(|arg| !arg.is_empty());
+
+    let argv0 = args.next()?;
+    let argv0 = String::from_utf8_lossy(argv0);
+    let binary = Path::new(argv0.as_ref()).file_name()?.to_string_lossy();
+    if binary != "claude" {
+        return None;
+    }
+
+    let headless = args.any(|arg| arg == b"-p" || arg == b"--print");
+    Some(headless)
+}
+
+/// One pass over the process table, collecting every live claude process and
+/// where it runs. Pure `/proc` reads - no processes spawned, nothing written.
+/// Any unreadable entry (raced exit, permissions) is simply skipped.
+#[cfg(target_os = "linux")]
+fn scan_claude_sessions() -> Vec<ClaudeSession> {
+    let mut sessions = Vec::new();
+
+    let entries = match fs::read_dir("/proc") {
+        Ok(entries) => entries,
+        Err(_) => return sessions,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let is_pid = name.to_string_lossy().bytes().all(|byte| byte.is_ascii_digit());
+        if !is_pid {
+            continue;
+        }
+
+        let proc_dir = entry.path();
+        let cmdline = match fs::read(proc_dir.join("cmdline")) {
+            Ok(contents) => contents,
+            Err(_) => continue,
+        };
+        let headless = match classify_claude_cmdline(&cmdline) {
+            Some(headless) => headless,
+            None => continue,
+        };
+        let cwd = match fs::read_link(proc_dir.join("cwd")) {
+            Ok(cwd) => cwd,
+            Err(_) => continue,
+        };
+
+        sessions.push(ClaudeSession { cwd, headless });
+    }
+
+    sessions
+}
+
+/// No process table to read here - branches simply never show interactive.
+#[cfg(not(target_os = "linux"))]
+fn scan_claude_sessions() -> Vec<ClaudeSession> {
+    Vec::new()
+}
+
+/// Claude Code keeps each directory's conversation transcripts under
+/// `~/.claude/projects/<munged>/`, where every non-alphanumeric character of
+/// the absolute path becomes '-'. This reproduces that munge.
+fn transcript_dir_name(branch_dir: &Path) -> String {
+    branch_dir
+        .display()
+        .to_string()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
+}
+
+/// The on-disk discriminator between session kinds. Interactive `claude -c`
+/// refuses headless (`-p`) transcripts with "No conversation found to
+/// continue" (verified live: a branch whose only history was a dispatch died
+/// on resume). Interactive sessions write `file-history-snapshot` checkpoint
+/// entries - headless runs never do - and the first one lands within the
+/// first KB, so a bounded head-read is enough to classify a file.
+const INTERACTIVE_MARKER: &str = "\"type\":\"file-history-snapshot\"";
+const MARKER_SCAN_BYTES: u64 = 64 * 1024;
+
+fn is_interactive_transcript(path: &Path) -> bool {
+    let file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return false,
+    };
+
+    let mut head = Vec::with_capacity(MARKER_SCAN_BYTES as usize);
+    if file.take(MARKER_SCAN_BYTES).read_to_end(&mut head).is_err() {
+        return false;
+    }
+
+    String::from_utf8_lossy(&head).contains(INTERACTIVE_MARKER)
+}
+
+/// How the resume button reaches this branch's conversation, if any:
+///
+/// - An INTERACTIVE `.jsonl` exists -> `(true, None)`: plain `-c` continues
+///   it (claude itself picks the newest interactive session).
+/// - Only headless dispatch `.jsonl`s exist -> `(false, Some(id))`: `-c`
+///   refuses those, but `--resume <id>` opens the newest one interactively
+///   (verified live on a dispatch-only branch).
+/// - No transcripts -> `(false, None)`: nothing to resume, fresh only.
+///
+/// Any failure to look reads as "no history" - the launch button then simply
+/// starts fresh, which is always safe.
+fn claude_history(branch_dir: &Path) -> (bool, Option<String>) {
+    let home = match std::env::var("HOME") {
+        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
+        _ => return (false, None),
+    };
+
+    let transcripts = home
+        .join(".claude")
+        .join("projects")
+        .join(transcript_dir_name(branch_dir));
+
+    claude_history_in(&transcripts)
+}
+
+fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
+    let entries = match fs::read_dir(transcripts) {
+        Ok(entries) => entries,
+        Err(_) => return (false, None),
+    };
+
+    let mut candidates: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .flatten()
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "jsonl"))
+        .map(|entry| {
+            let modified = entry
+                .metadata()
+                .and_then(|meta| meta.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            (modified, entry.path())
+        })
+        .collect();
+    candidates.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+
+    // Newest first, so the common case (a branch someone actually chats
+    // with) answers on the first file.
+    if candidates
+        .iter()
+        .any(|(_, path)| is_interactive_transcript(path))
+    {
+        return (true, None);
+    }
+
+    let newest = candidates.first().and_then(|(_, path)| {
+        path.file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+    });
+    (false, newest)
+}
+
+/// One entry in a directory listing, for the file tree.
+#[derive(Debug, Clone, Serialize)]
+pub struct DirEntryInfo {
+    pub name: String,
+    /// Absolute path - handed back to `list_dir`/`read_file_text` verbatim.
+    pub path: String,
+    pub is_dir: bool,
+}
+
+/// A file's text for the read-only viewer.
+#[derive(Debug, Clone, Serialize)]
+pub struct FileText {
+    pub path: String,
+    pub content: String,
+    /// True when the file was larger than the viewer cap and got cut.
+    pub truncated: bool,
+}
+
+/// Directories the tree never descends into - machine residue, not content.
+const NOISE_DIRS: [&str; 6] = [
+    ".git",
+    "node_modules",
+    "target",
+    "__pycache__",
+    ".venv",
+    "dist",
+];
+
+/// The viewer refuses to load more than this - it is a reading pane, not a
+/// log streamer. Larger files come back truncated with a flag.
+const VIEWER_MAX_BYTES: u64 = 512 * 1024;
+
+/// Canonicalize a frontend-supplied path and refuse anything outside the
+/// AIPass root. This is the fence under every file-access command: the
+/// webview can name paths, but only ones the fleet view already lives in.
+fn fenced_path(raw: &str) -> Result<PathBuf, String> {
+    let root = resolve_aipass_root()?
+        .canonicalize()
+        .map_err(|err| format!("could not canonicalize the AIPass root: {err}"))?;
+    let path = PathBuf::from(raw)
+        .canonicalize()
+        .map_err(|err| format!("could not resolve '{raw}': {err}"))?;
+    if !path.starts_with(&root) {
+        return Err(format!(
+            "'{}' is outside the AIPass root - refusing to read it",
+            path.display()
+        ));
+    }
+    Ok(path)
+}
+
+/// Turn raw file bytes into viewer text: binary is refused (a text pane
+/// rendering NULs helps nobody), oversized input is cut at the cap.
+fn viewer_text(mut bytes: Vec<u8>, cap: usize) -> Result<(String, bool), String> {
+    let truncated = bytes.len() > cap;
+    if truncated {
+        bytes.truncate(cap);
+    }
+    if bytes.contains(&0) {
+        return Err("binary file - nothing to view".to_string());
+    }
+    Ok((String::from_utf8_lossy(&bytes).into_owned(), truncated))
+}
+
+/// List one directory level: dirs first, then files, both alphabetical.
+/// Read-only and fenced; noise directories are filtered at the source.
+#[tauri::command]
+fn list_dir(path: String) -> Result<Vec<DirEntryInfo>, String> {
+    let dir = fenced_path(&path)?;
+    let entries = fs::read_dir(&dir)
+        .map_err(|err| format!("could not read '{}': {err}", dir.display()))?;
+
+    let mut listing: Vec<DirEntryInfo> = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let is_dir = entry.path().is_dir();
+        if is_dir && NOISE_DIRS.contains(&name.as_str()) {
+            continue;
+        }
+        listing.push(DirEntryInfo {
+            name,
+            path: entry.path().display().to_string(),
+            is_dir,
+        });
+    }
+
+    listing.sort_by(|a, b| {
+        b.is_dir
+            .cmp(&a.is_dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    Ok(listing)
+}
+
+/// Read a file for the viewer. Read-only and fenced, capped, text-only.
+#[tauri::command]
+fn read_file_text(path: String) -> Result<FileText, String> {
+    let file_path = fenced_path(&path)?;
+    let file = fs::File::open(&file_path)
+        .map_err(|err| format!("could not open '{}': {err}", file_path.display()))?;
+
+    let mut bytes = Vec::new();
+    // Read one byte past the cap so truncation is detectable without ever
+    // pulling a multi-gigabyte log into memory.
+    file.take(VIEWER_MAX_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|err| format!("could not read '{}': {err}", file_path.display()))?;
+
+    let (content, truncated) = viewer_text(bytes, VIEWER_MAX_BYTES as usize)?;
+    Ok(FileText {
+        path: file_path.display().to_string(),
+        content,
+        truncated,
+    })
+}
+
 /// Read a `quick_status` count that may be a number or a list of items.
 fn count_field(quick_status: &Value, key: &str) -> u64 {
     match quick_status.get(key) {
@@ -179,11 +501,9 @@ fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
     };
 
     status.new_mail = count_field(quick_status, "new_mail");
+    status.opened_mail = count_field(quick_status, "opened_mail");
     status.active_plans = count_field(quick_status, "active_plans");
-    status.action_required = quick_status
-        .get("action_required")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    status.todo_count = count_field(quick_status, "todo_count");
     status.summary = quick_status
         .get("summary")
         .and_then(Value::as_str)
@@ -194,10 +514,24 @@ fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
 
 /// Inspect a single branch directory. Never fails - worst case it reports a
 /// bare directory with all-default fields.
-fn read_branch(branch_dir: &Path, name: String) -> BranchStatus {
-    let mut status = BranchStatus::new(name);
+fn read_branch(branch_dir: &Path, name: String, sessions: &[ClaudeSession]) -> BranchStatus {
+    let mut status = BranchStatus::new(name, branch_dir.display().to_string());
     status.is_citizen = join_all(branch_dir, &PASSPORT_RELATIVE_PATH).is_file();
-    status.working = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
+    status.dispatched = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
+
+    // /proc reports kernel-canonical cwds; canonicalize the branch dir so a
+    // symlinked AIPASS_ROOT still matches. starts_with is component-wise, so
+    // "devpulse" never claims a session sitting in "devpulse2".
+    let canonical = branch_dir
+        .canonicalize()
+        .unwrap_or_else(|_| branch_dir.to_path_buf());
+    status.interactive = sessions
+        .iter()
+        .any(|session| !session.headless && session.cwd.starts_with(&canonical));
+    let (has_history, resume_id) = claude_history(&canonical);
+    status.has_history = has_history;
+    status.resume_id = resume_id;
+
     apply_dashboard(branch_dir, &mut status);
     status
 }
@@ -208,6 +542,9 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
 
     let entries = fs::read_dir(&fleet_dir)
         .map_err(|err| format!("could not read '{}': {err}", fleet_dir.display()))?;
+
+    // One process-table pass shared by every branch in this snapshot.
+    let sessions = scan_claude_sessions();
 
     let mut branches: Vec<BranchStatus> = Vec::new();
 
@@ -232,7 +569,7 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
             continue;
         }
 
-        branches.push(read_branch(&entry.path(), name));
+        branches.push(read_branch(&entry.path(), name, &sessions));
     }
 
     branches.sort_by(|a, b| a.name.cmp(&b.name));
@@ -272,6 +609,8 @@ pub fn run() {
         .manage(pty::PtyRegistry::default())
         .invoke_handler(tauri::generate_handler![
             fleet_snapshot,
+            list_dir,
+            read_file_text,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
@@ -292,4 +631,88 @@ pub fn run() {
                 pty::shutdown(&app.state::<pty::PtyRegistry>());
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(args: &[&str]) -> Vec<u8> {
+        let mut buffer = Vec::new();
+        for arg in args {
+            buffer.extend_from_slice(arg.as_bytes());
+            buffer.push(0);
+        }
+        buffer
+    }
+
+    #[test]
+    fn interactive_session_is_claude_and_not_headless() {
+        let cmdline = argv(&[
+            "/home/op/.local/bin/claude",
+            "--name",
+            "devpulse",
+            "--permission-mode",
+            "bypassPermissions",
+        ]);
+        assert_eq!(classify_claude_cmdline(&cmdline), Some(false));
+    }
+
+    #[test]
+    fn bare_and_continue_sessions_are_interactive() {
+        assert_eq!(classify_claude_cmdline(&argv(&["claude"])), Some(false));
+        assert_eq!(classify_claude_cmdline(&argv(&["claude", "-c"])), Some(false));
+    }
+
+    #[test]
+    fn dispatched_wake_shapes_are_headless() {
+        // The two exact shapes ai_mail's wake spawns: `-p` fresh, `-c -p` continue.
+        let fresh = argv(&["claude", "-p", "do the work", "--output-format", "json"]);
+        let cont = argv(&["claude", "-c", "-p", "do the work", "--output-format", "json"]);
+        assert_eq!(classify_claude_cmdline(&fresh), Some(true));
+        assert_eq!(classify_claude_cmdline(&cont), Some(true));
+        assert_eq!(
+            classify_claude_cmdline(&argv(&["claude", "--print", "one-shot"])),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn interactive_marker_separates_session_kinds() {
+        // Real line shapes from both populations: interactive sessions carry
+        // checkpoint entries, headless dispatch transcripts never do.
+        let interactive = r#"{"type":"file-history-snapshot","snapshot":{}}"#;
+        let headless = r#"{"type":"queue-operation","operation":"dequeue","sessionId":"x"}"#;
+        assert!(interactive.contains(INTERACTIVE_MARKER));
+        assert!(!headless.contains(INTERACTIVE_MARKER));
+    }
+
+    #[test]
+    fn transcript_dir_name_munges_like_claude() {
+        // Both '/' and '_' become '-': verified against real transcript dirs
+        // (ai_mail lives under "-...-src-aipass-ai-mail").
+        assert_eq!(
+            transcript_dir_name(Path::new("/home/op/Projects/AIPass/src/aipass/ai_mail")),
+            "-home-op-Projects-AIPass-src-aipass-ai-mail"
+        );
+    }
+
+    #[test]
+    fn viewer_text_refuses_binary_and_flags_truncation() {
+        assert!(viewer_text(b"\x7fELF\x00\x01".to_vec(), 1024).is_err());
+        assert_eq!(
+            viewer_text(b"plain text".to_vec(), 1024).unwrap(),
+            ("plain text".to_string(), false)
+        );
+        let (cut, truncated) = viewer_text(b"0123456789".to_vec(), 4).unwrap();
+        assert_eq!((cut.as_str(), truncated), ("0123", true));
+    }
+
+    #[test]
+    fn non_claude_processes_are_ignored() {
+        assert_eq!(classify_claude_cmdline(&argv(&["tmux", "new-session"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["/usr/bin/claudette"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&[])), None);
+        assert_eq!(classify_claude_cmdline(b""), None);
+    }
 }

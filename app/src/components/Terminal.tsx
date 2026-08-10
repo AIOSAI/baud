@@ -1,9 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
+
+/**
+ * What the rest of the app may do to the terminal: replace the shell and hand
+ * the new one a single command line. Replacing rather than appending is what
+ * makes the launch button a SWITCH: whatever ran before (another agent's
+ * claude, a stuck command) gets SIGHUP - the same thing closing a terminal
+ * window does - and claude's on-disk transcript makes that resumable.
+ */
+export interface TerminalHandle {
+  launch(command: string): void;
+}
 
 /** Mirrors `PtyEvent` in src-tauri/src/pty.rs. */
 type PtyEvent =
@@ -55,18 +73,48 @@ function describe(err: unknown): string {
 
 /**
  * The operator's shell. One PTY, the user's own privileges, opened in the
- * AIPass root. BAUD types nothing into it - a human does.
+ * AIPass root. Every byte comes from the human: typed keystrokes, or the one
+ * visible command line `run()` writes when they click a card's launch button.
  */
-export default function Terminal() {
+const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [generation, setGeneration] = useState(0);
   const [phase, setPhase] = useState<Phase>("opening");
   const [failure, setFailure] = useState<string | null>(null);
 
+  // Mirrors of the effect's locals, so launch() can reach the live session.
+  const sessionRef = useRef<string | null>(null);
+  const termRef = useRef<XTerm | null>(null);
+  // A command waiting for the next shell to open; consumed exactly once.
+  const pendingRef = useRef<string | null>(null);
+
   const restart = useCallback(() => {
     setFailure(null);
     setPhase("opening");
     setGeneration((current) => current + 1);
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      launch(command: string) {
+        pendingRef.current = command;
+        // Bumping the generation tears the old shell down (SIGHUP to its whole
+        // process group) and opens a fresh one, which then runs the command.
+        // This also revives a dead terminal for free.
+        restart();
+      },
+    }),
+    [restart],
+  );
+
+  // The kill button: end the current shell without starting another. Same
+  // SIGHUP teardown a closed terminal window gets - a running claude stays
+  // resumable from its transcript. The exit event then raises the curtain.
+  const kill = useCallback(() => {
+    const id = sessionRef.current;
+    if (!id) return;
+    void invoke("pty_kill", { id }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -102,6 +150,8 @@ export default function Terminal() {
 
     measure();
 
+    termRef.current = term;
+
     const channel = new Channel<PtyEvent>();
     channel.onmessage = (event) => {
       if (disposed) return;
@@ -109,6 +159,7 @@ export default function Terminal() {
         term.write(decodeChunk(event.base64));
         return;
       }
+      sessionRef.current = null;
       setPhase("ended");
     };
 
@@ -147,11 +198,22 @@ export default function Terminal() {
           return;
         }
         sessionId = id;
+        sessionRef.current = id;
         // A shell that dies instantly can report its exit before this resolves,
         // so never promote a session the channel already buried.
         setPhase((current) => (current === "ended" ? current : "live"));
         term.focus();
         pushSize();
+
+        // The launch command, if one is staged. The pty's input buffer holds
+        // it until the shell finishes its profile and reads - no race.
+        const pending = pendingRef.current;
+        if (pending) {
+          pendingRef.current = null;
+          void invoke("pty_write", { id, data: `${pending}\n` }).catch((err) => {
+            if (!disposed) setFailure(describe(err));
+          });
+        }
       })
       .catch((err) => {
         if (disposed) return;
@@ -161,6 +223,8 @@ export default function Terminal() {
 
     return () => {
       disposed = true;
+      sessionRef.current = null;
+      termRef.current = null;
       window.cancelAnimationFrame(frame);
       observer.disconnect();
       keystrokes.dispose();
@@ -172,6 +236,17 @@ export default function Terminal() {
   return (
     <section className="baud-terminal" aria-label="operator shell">
       <div className="baud-terminal-host" ref={hostRef} />
+
+      {phase === "live" ? (
+        <button
+          type="button"
+          className="baud-terminal-kill"
+          title="kill this shell - a running claude stays resumable"
+          onClick={kill}
+        >
+          ✕ kill
+        </button>
+      ) : null}
 
       {phase === "ended" ? (
         <button type="button" className="baud-terminal-curtain" onClick={restart}>
@@ -185,4 +260,6 @@ export default function Terminal() {
       ) : null}
     </section>
   );
-}
+});
+
+export default Terminal;

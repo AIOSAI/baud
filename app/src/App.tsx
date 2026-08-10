@@ -1,16 +1,79 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import FleetStrip from "./components/FleetStrip";
-import Terminal from "./components/Terminal";
+import type { LaunchMode } from "./components/BranchChip";
+import FileTree from "./components/FileTree";
+import FileView from "./components/FileView";
+import Terminal, { type TerminalHandle } from "./components/Terminal";
 import { relativeAge } from "./age";
-import type { FleetSnapshot } from "./types";
+import type { BranchStatus, FleetSnapshot } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
+
+/** A file open in the reading room. The path doubles as the tab id. */
+interface FileTab {
+  path: string;
+  name: string;
+  branch: string;
+}
+
+/** The terminal's reserved tab id - never closable, never a real path. */
+const TERMINAL_TAB = "terminal";
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
   const [transportError, setTransportError] = useState<string | null>(null);
+  const terminalRef = useRef<TerminalHandle>(null);
+
+  // The reading room: which branch's tree is docked, which files are open,
+  // which pane is on top. The terminal is ALWAYS mounted - switching tabs
+  // hides it (claude keeps streaming underneath), never unmounts it.
+  const [treeBranch, setTreeBranch] = useState<BranchStatus | null>(null);
+  const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
+  const [activeTab, setActiveTab] = useState<string>(TERMINAL_TAB);
+
+  const toggleTree = useCallback((branch: BranchStatus) => {
+    setTreeBranch((current) => (current?.name === branch.name ? null : branch));
+  }, []);
+
+  const openFile = useCallback((path: string, name: string, branch: string) => {
+    setFileTabs((current) =>
+      current.some((tab) => tab.path === path) ? current : [...current, { path, name, branch }],
+    );
+    setActiveTab(path);
+  }, []);
+
+  const closeFile = useCallback((path: string) => {
+    setFileTabs((current) => current.filter((tab) => tab.path !== path));
+    setActiveTab((current) => (current === path ? TERMINAL_TAB : current));
+  }, []);
+
+  // The launch buttons: one visible command line into a fresh shell, only
+  // ever on the operator's click. Clicking while another agent is up SWITCHES
+  // - the old shell dies (resumable via its transcript), the new one opens.
+  // The operator picks the mode. Resume takes whichever door exists: `-c` for
+  // interactive history, `--resume <id>` when only headless dispatch
+  // transcripts do (`-c` refuses those). Single-quoted so odd paths survive
+  // the shell. `command claude` skips the bashrc boot shim (@hooks
+  // session_boot): its continue/new menu is redundant here - the button press
+  // already made that choice.
+  const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
+    const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
+    const resume =
+      mode !== "resume"
+        ? ""
+        : branch.has_history
+          ? " -c"
+          : branch.resume_id
+            ? ` --resume ${quote(branch.resume_id)}`
+            : "";
+    terminalRef.current?.launch(
+      `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
+    );
+    // A launch is a statement of intent: bring the terminal forward.
+    setActiveTab(TERMINAL_TAB);
+  }, []);
 
   const poll = useCallback(async (alive: () => boolean) => {
     try {
@@ -41,7 +104,8 @@ export default function App() {
 
   const branches = snapshot?.branches ?? [];
   const citizens = branches.filter((branch) => branch.is_citizen).length;
-  const working = branches.filter((branch) => branch.working).length;
+  const dispatched = branches.filter((branch) => branch.dispatched).length;
+  const interactive = branches.filter((branch) => branch.interactive).length;
   const unread = branches.reduce((total, branch) => total + branch.new_mail, 0);
   const plans = branches.reduce((total, branch) => total + branch.active_plans, 0);
 
@@ -62,7 +126,8 @@ export default function App() {
 
         <div className="baud-totals">
           <Total label="citizens" value={citizens} />
-          <Total label="working" value={working} tone="live" />
+          <Total label="dispatched" value={dispatched} tone={dispatched > 0 ? "alert" : undefined} />
+          <Total label="interactive" value={interactive} tone={interactive > 0 ? "live" : undefined} />
           <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
           <Total label="plans" value={plans} />
         </div>
@@ -80,11 +145,68 @@ export default function App() {
           <p className="baud-empty">Waiting for the first snapshot…</p>
         </div>
       ) : (
-        <FleetStrip branches={branches} />
+        <FleetStrip branches={branches} onLaunch={launch} onFiles={toggleTree} />
       )}
 
       <main className="baud-stage">
-        <Terminal />
+        {treeBranch ? (
+          <FileTree
+            branch={treeBranch}
+            onOpen={openFile}
+            onClose={() => setTreeBranch(null)}
+          />
+        ) : null}
+
+        <section className="baud-workbench">
+          {fileTabs.length > 0 ? (
+            <nav className="baud-tabbar">
+              <button
+                type="button"
+                className={`baud-tab ${activeTab === TERMINAL_TAB ? "baud-tab-active" : ""}`}
+                onClick={() => setActiveTab(TERMINAL_TAB)}
+              >
+                terminal
+              </button>
+              {fileTabs.map((tab) => (
+                <span
+                  key={tab.path}
+                  className={`baud-tab ${activeTab === tab.path ? "baud-tab-active" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="baud-tab-name"
+                    title={tab.path}
+                    onClick={() => setActiveTab(tab.path)}
+                  >
+                    {tab.branch}/{tab.name}
+                  </button>
+                  <button
+                    type="button"
+                    className="baud-tab-close"
+                    title="close"
+                    onClick={() => closeFile(tab.path)}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </nav>
+          ) : null}
+
+          <div
+            className={`baud-pane ${activeTab === TERMINAL_TAB ? "" : "baud-pane-hidden"}`}
+          >
+            <Terminal ref={terminalRef} />
+          </div>
+          {fileTabs.map((tab) => (
+            <div
+              key={tab.path}
+              className={`baud-pane ${activeTab === tab.path ? "" : "baud-pane-hidden"}`}
+            >
+              <FileView path={tab.path} />
+            </div>
+          ))}
+        </section>
       </main>
 
       <footer className="baud-footer">

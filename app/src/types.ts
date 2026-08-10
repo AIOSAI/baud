@@ -1,11 +1,16 @@
 /** Mirrors `BranchStatus` in src-tauri/src/lib.rs. */
 export interface BranchStatus {
   name: string;
+  path: string;
   is_citizen: boolean;
-  working: boolean;
+  dispatched: boolean;
+  interactive: boolean;
+  has_history: boolean;
+  resume_id: string | null;
   new_mail: number;
+  opened_mail: number;
   active_plans: number;
-  action_required: boolean;
+  todo_count: number;
   summary: string;
   last_updated: string;
 }
@@ -16,4 +21,18 @@ export interface FleetSnapshot {
   generated_at: string;
   error: string | null;
   branches: BranchStatus[];
+}
+
+/** Mirrors `DirEntryInfo` in src-tauri/src/lib.rs. */
+export interface DirEntryInfo {
+  name: string;
+  path: string;
+  is_dir: boolean;
+}
+
+/** Mirrors `FileText` in src-tauri/src/lib.rs. */
+export interface FileText {
+  path: string;
+  content: string;
+  truncated: boolean;
 }
