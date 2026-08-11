@@ -249,12 +249,19 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     });
   }, [room]);
 
-  // A slash-command chip: the command line plus Enter, exactly as if the
-  // operator typed it - because they clicked for it.
+  // A slash-command chip: the command, a beat, then Enter - exactly as if
+  // the operator typed it, because they clicked for it. Enter is `\r`
+  // (what a keyboard sends), NOT `\n`: claude's raw-mode input treats a
+  // linefeed as text, which left the command sitting unsubmitted in the
+  // box (Patrick-caught on the first live click, 2026-08-10). The beat
+  // lets the slash palette settle on the exact match before the submit.
   const sendCommand = useCallback((cmd: string) => {
     const id = sessionRef.current;
     if (!id) return;
-    void invoke("pty_write", { id, data: `${cmd}\n` }).catch(() => {});
+    void invoke("pty_write", { id, data: cmd }).catch(() => {});
+    window.setTimeout(() => {
+      void invoke("pty_write", { id, data: "\r" }).catch(() => {});
+    }, 150);
     termRef.current?.focus();
   }, []);
 
