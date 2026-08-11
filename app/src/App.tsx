@@ -78,15 +78,17 @@ export default function App() {
     setActiveTab((current) => (current === path ? TERMINAL_TAB : current));
   }, []);
 
-  // The launch buttons: one visible command line into a fresh shell, only
-  // ever on the operator's click. Clicking while another agent is up SWITCHES
-  // - the old shell dies (resumable via its transcript), the new one opens.
-  // The operator picks the mode. Resume takes whichever door exists: `-c` for
-  // interactive history, `--resume <id>` when only headless dispatch
+  // The launch buttons since m6: a window into the branch's ROOM. Switching
+  // cards detaches the old room (it keeps running) and attaches the next.
+  // The claude command line is staged for rooms that can take it - freshly
+  // created, or sitting at a prompt with no live claude (`typeIfAttached`);
+  // an attach onto a live claude types nothing, because the "input" would
+  // land in claude's message box. Resume takes whichever door exists: `-c`
+  // for interactive history, `--resume <id>` when only headless dispatch
   // transcripts do (`-c` refuses those). Single-quoted so odd paths survive
   // the shell. `command claude` skips the bashrc boot shim (@hooks
-  // session_boot): its continue/new menu is redundant here - the button press
-  // already made that choice.
+  // session_boot): its continue/new menu is redundant here - the button
+  // press already made that choice.
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
     const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
     const resume =
@@ -97,9 +99,12 @@ export default function App() {
           : branch.resume_id
             ? ` --resume ${quote(branch.resume_id)}`
             : "";
-    terminalRef.current?.launch(
-      `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
-    );
+    terminalRef.current?.launch({
+      room: branch.name,
+      cwd: branch.path,
+      command: `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
+      typeIfAttached: !branch.interactive,
+    });
     // A launch is a statement of intent: bring the terminal forward.
     setActiveTab(TERMINAL_TAB);
   }, []);

@@ -7,6 +7,7 @@ export interface BranchStatus {
   interactive: boolean;
   has_history: boolean;
   resume_id: string | null;
+  has_room: boolean;
   new_mail: number;
   opened_mail: number;
   active_plans: number;
@@ -41,4 +42,10 @@ export interface FileText {
 export interface GitChanges {
   files: string[];
   count: number;
+}
+
+/** Mirrors `SpawnResult` in src-tauri/src/pty.rs. */
+export interface SpawnResult {
+  id: string;
+  created: boolean;
 }

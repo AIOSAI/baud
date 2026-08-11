@@ -22,6 +22,16 @@
 //!    leader with `PGID == PID`. Signalling `-PID` reaches every job it started;
 //!    signalling the bare PID orphans them, which is the classic way a terminal
 //!    emulator leaks background processes.
+//!
+//! Milestone 6 (rooms): when a spawn names a room, the process on the pty is
+//! not a shell but a tmux CLIENT - `tmux new-session -A` attaching to (or
+//! creating) the branch's persistent session. Everything above still holds,
+//! with one beautiful consequence: the SIGHUP teardown that used to kill the
+//! agent now merely kills the client, which IS a detach. The agent, its
+//! claude, and its jobs live in the tmux server's process tree, not ours -
+//! switching cards and closing BAUD stop being lethal by construction. The
+//! explicit `room_kill` command (lib.rs) is the only door that actually ends
+//! a session.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -51,6 +61,16 @@ const REAP_GRACE: Duration = Duration::from_millis(300);
 const POLL_STEP: Duration = Duration::from_millis(10);
 
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
+
+/// What `pty_create` hands back: the stream id, and whether a named room was
+/// CREATED by this spawn or merely attached to. The frontend types the staged
+/// claude command only into a room it just created (or one with no live
+/// claude) - typing into an existing session would land in claude's input box.
+#[derive(Debug, Clone, Serialize)]
+pub struct SpawnResult {
+    pub id: String,
+    pub created: bool,
+}
 
 /// Everything the frontend hears from a session, over its own channel.
 ///
@@ -235,14 +255,30 @@ pub fn shutdown(registry: &PtyRegistry) {
 
 // ------------------------------------------------------------- commands
 
-/// Open a shell and start streaming it. Returns the session id.
+/// Does this room already exist on the tmux server? No server = no room.
+fn room_exists(room: &str) -> bool {
+    std::process::Command::new("tmux")
+        // `=` pins an exact name; without it tmux prefix-matches targets.
+        .args(["has-session", "-t", &format!("={room}")])
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+/// Open a terminal and start streaming it.
+///
+/// With `room` set, the pty runs a tmux client attached to the branch's
+/// persistent session (created on first visit, `-c cwd`); without it, the
+/// operator's plain login shell in the AIPass root - the scratch terminal.
 #[tauri::command(async)]
 pub fn pty_create(
     cols: u16,
     rows: u16,
+    room: Option<String>,
+    cwd: Option<String>,
     on_data: Channel<PtyEvent>,
     registry: tauri::State<'_, PtyRegistry>,
-) -> Result<String, String> {
+) -> Result<SpawnResult, String> {
     // Same resolution the fleet scan uses - the shell opens where the fleet is.
     let root = crate::resolve_aipass_root()?;
 
@@ -259,19 +295,51 @@ pub fn pty_create(
 
     let shell = user_shell();
 
-    // `new_default_prog` is portable-pty's login-shell path: it runs `$SHELL`
-    // with argv[0] set to `-<name>`, the convention that tells the shell to
-    // read the login profile. Setting SHELL on the builder first is what makes
-    // it pick our resolved shell (and our fallback) rather than probing.
-    let mut command = CommandBuilder::new_default_prog();
+    // Sanitize through the same door the fleet scan uses, so the session the
+    // client attaches to is exactly the one `has_room` reports.
+    let room = room.map(|name| crate::room_name(&name));
+    let created = match &room {
+        Some(name) => !room_exists(name),
+        None => true,
+    };
+
+    let mut command = match &room {
+        Some(name) => {
+            // The room's window: a tmux client. `-A` attaches or creates in
+            // one verb; `-c` seats a NEW session in the branch dir (ignored on
+            // attach); mouse on so the wheel scrolls history like any
+            // terminal. The chained set-option is idempotent across attaches.
+            let start_dir = cwd.as_deref().unwrap_or_else(|| root.to_str().unwrap_or("."));
+            let mut tmux = CommandBuilder::new("tmux");
+            tmux.args([
+                "new-session",
+                "-A",
+                "-s",
+                name,
+                "-c",
+                start_dir,
+                ";",
+                "set-option",
+                "mouse",
+                "on",
+            ]);
+            tmux
+        }
+        // `new_default_prog` is portable-pty's login-shell path: it runs
+        // `$SHELL` with argv[0] set to `-<name>`, the convention that tells
+        // the shell to read the login profile. Setting SHELL on the builder
+        // first is what makes it pick our resolved shell (and our fallback)
+        // rather than probing.
+        None => CommandBuilder::new_default_prog(),
+    };
     command.env("SHELL", &shell);
     command.env("TERM", "xterm-256color");
     command.cwd(&root);
 
-    let child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|err| format!("could not start '{shell}': {err}"))?;
+    let child = pair.slave.spawn_command(command).map_err(|err| {
+        let what = if room.is_some() { "tmux (rooms need it installed)" } else { &shell };
+        format!("could not start {what}: {err}")
+    })?;
 
     // Release the slave now that the shell owns it: while we hold a handle the
     // master never reports EOF, so we would never notice the shell exiting.
@@ -325,7 +393,7 @@ pub fn pty_create(
         },
     );
 
-    Ok(id)
+    Ok(SpawnResult { id, created })
 }
 
 /// Feed keystrokes to a shell.
@@ -374,8 +442,9 @@ pub fn pty_resize(
         .map_err(|err| format!("could not resize terminal '{id}': {err}"))
 }
 
-/// End a session and everything it spawned. Idempotent: killing a session that
-/// already exited is a no-op, not an error.
+/// End what is ON the pty. For a plain shell that is the shell and its jobs;
+/// for a room that is only the tmux CLIENT - the session survives, so this is
+/// a detach. Idempotent: killing one that already exited is a no-op.
 #[tauri::command(async)]
 pub fn pty_kill(id: String, registry: tauri::State<'_, PtyRegistry>) -> Result<(), String> {
     // Remove first, then do the blocking work outside the lock.

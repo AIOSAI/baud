@@ -49,10 +49,36 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   starts a new one. Resume picks the right door automatically: `claude -c`
   when interactive history exists, `claude --resume <id>` when the only
   transcripts are headless dispatch runs (`-c` refuses those). A citizen
-  with no transcripts at all shows a single `▸ claude`. `files` docks the
-  branch's file tree.
+  with no transcripts at all shows a single `▸ claude`. When the room holds
+  a live session, both collapse into a single `▸ attach`. `files` docks
+  the branch's file tree.
 
 Strip order: dispatched first, then interactive, then alphabetical.
+
+### Rooms
+
+Every agent's session lives in a persistent tmux session — its **room**
+(`baud-<branch>`), owned by the tmux server, not by this window. BAUD's
+terminal is only a window INTO the room:
+
+- **Open a card** — attach (`tmux new-session -A`; the room is created on
+  first visit, seated in the branch dir, mouse scrolling on).
+- **Switch cards** — detach one room, attach the next. The agent you left
+  keeps working; nothing is cancelled mid-turn.
+- **Close BAUD** — every room just loses its window. Sessions, monitors,
+  and builds keep running.
+- **Come back** — attach again: same process, same scrollback. No respawn
+  means no transcript forks and no resume roulette.
+- **`⇠ detach` / `✕ end room`** — the terminal's corner buttons in a room.
+  Ending the room (`tmux kill-session`) is the ONE way a session actually
+  dies. The scratch shell (no card) keeps its plain `✕ kill`.
+
+The staged claude command is typed only where it lands at a prompt: into a
+room just created, or one with no live claude. Attaching to a live claude
+types nothing — your click lands you mid-conversation, exactly as left.
+
+A card whose room exists but holds nothing live wears a quiet `room` tag;
+a live one shows `live` as before.
 
 ### The reading room
 
@@ -130,6 +156,7 @@ resulting green lamps like any others.
 | other figures | the branch's `DASHBOARD.local.json` `quick_status` |
 | files / viewer | `list_dir` + `read_file_text`, fenced to the AIPass root |
 | changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
+| room | `tmux list-sessions` (one call per snapshot) — the only tmux verbs BAUD runs are `new-session -A`, `list-sessions`, `kill-session` on the end-room click, and `set-option mouse on` |
 
 Every fallible read degrades to a default and records the failure in the
 payload — one bad file never takes down the snapshot.

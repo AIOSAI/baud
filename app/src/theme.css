@@ -282,6 +282,12 @@ body {
   color: var(--baud-green);
 }
 
+/* A parked room: something is waiting behind the card, nothing is running.
+   Quiet on purpose - it is furniture, not an alert. */
+.baud-badge-room {
+  color: var(--baud-ink-faint);
+}
+
 .baud-chip-foot {
   display: flex;
   align-items: center;
@@ -717,6 +723,29 @@ button.baud-tab {
   color: var(--baud-red);
   background: rgba(239, 90, 90, 0.08);
   opacity: 1;
+}
+
+/* m6: the corner holds a row now - detach + end room in a room, plain kill
+   in the scratch shell. The wrapper takes over the absolute anchor. */
+.baud-terminal-actions {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+}
+
+.baud-terminal-actions .baud-terminal-kill {
+  position: static;
+}
+
+/* Detaching parts on friendly terms - green hover, not a kill's red. */
+.baud-terminal-detach:hover,
+.baud-terminal-detach:focus-visible {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+  background: rgba(74, 222, 128, 0.08);
 }
 
 .baud-terminal-curtain {

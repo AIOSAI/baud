@@ -13,20 +13,38 @@ import { Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 /**
- * What the rest of the app may do to the terminal: replace the shell and hand
- * the new one a single command line. Replacing rather than appending is what
- * makes the launch button a SWITCH: whatever ran before (another agent's
- * claude, a stuck command) gets SIGHUP - the same thing closing a terminal
- * window does - and claude's on-disk transcript makes that resumable.
+ * A launch since m6 is an ATTACH: the pty runs a tmux client into the
+ * branch's persistent room. Switching cards replaces the client (SIGHUP =
+ * detach - the room and whatever runs in it survive), and the staged command
+ * is typed only where it can land at a prompt: into a room this spawn just
+ * created, or one the fleet scan says has no live claude. `typeIfAttached`
+ * carries that second judgment from the card's snapshot.
  */
+export interface LaunchSpec {
+  /** Branch name - the backend derives the tmux session name from it. */
+  room: string;
+  /** Branch directory a NEW room starts in (ignored on attach). */
+  cwd: string;
+  /** The one visible claude command line the click asked for. */
+  command: string;
+  /** Type the command even when the room already existed (no live claude). */
+  typeIfAttached: boolean;
+}
+
 export interface TerminalHandle {
-  launch(command: string): void;
+  launch(spec: LaunchSpec): void;
 }
 
 /** Mirrors `PtyEvent` in src-tauri/src/pty.rs. */
 type PtyEvent =
   | { kind: "data"; session: string; base64: string }
   | { kind: "exit"; session: string };
+
+/** Mirrors `SpawnResult` in src-tauri/src/pty.rs. */
+interface SpawnResult {
+  id: string;
+  created: boolean;
+}
 
 type Phase = "opening" | "live" | "ended";
 
@@ -85,8 +103,10 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
   // Mirrors of the effect's locals, so launch() can reach the live session.
   const sessionRef = useRef<string | null>(null);
   const termRef = useRef<XTerm | null>(null);
-  // A command waiting for the next shell to open; consumed exactly once.
-  const pendingRef = useRef<string | null>(null);
+  // A launch waiting for the next spawn; consumed exactly once.
+  const pendingRef = useRef<LaunchSpec | null>(null);
+  // The room the CURRENT pty is a window into - null for the scratch shell.
+  const [room, setRoom] = useState<string | null>(null);
 
   const restart = useCallback(() => {
     setFailure(null);
@@ -97,25 +117,36 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
   useImperativeHandle(
     ref,
     () => ({
-      launch(command: string) {
-        pendingRef.current = command;
-        // Bumping the generation tears the old shell down (SIGHUP to its whole
-        // process group) and opens a fresh one, which then runs the command.
-        // This also revives a dead terminal for free.
+      launch(spec: LaunchSpec) {
+        pendingRef.current = spec;
+        // Bumping the generation tears the old pty down. For a room client
+        // that SIGHUP is a detach - the previous agent keeps running - and
+        // the new spawn attaches to the next room. Also revives a dead
+        // terminal for free.
         restart();
       },
     }),
     [restart],
   );
 
-  // The kill button: end the current shell without starting another. Same
-  // SIGHUP teardown a closed terminal window gets - a running claude stays
-  // resumable from its transcript. The exit event then raises the curtain.
+  // Detach (room) / kill (scratch shell): end what is on the pty. A room and
+  // everything inside it survives - only the window closes. The exit event
+  // then raises the curtain.
   const kill = useCallback(() => {
     const id = sessionRef.current;
     if (!id) return;
     void invoke("pty_kill", { id }).catch(() => {});
   }, []);
+
+  // The one door that actually ENDS a room (Patrick ruling 2026-08-10).
+  // tmux kills the session; our client dies with it, which raises the
+  // curtain through the normal exit event.
+  const endRoom = useCallback(() => {
+    if (!room) return;
+    void invoke("room_kill", { branchName: room }).catch((err) => {
+      setFailure(describe(err));
+    });
+  }, [room]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -186,14 +217,23 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
     });
     observer.observe(host);
 
-    void invoke<string>("pty_create", {
+    // The staged launch, if any, is consumed by THIS spawn: its room shapes
+    // the pty_create call, and the created-flag decides whether the command
+    // gets typed.
+    const spec = pendingRef.current;
+    pendingRef.current = null;
+    setRoom(spec?.room ?? null);
+
+    void invoke<SpawnResult>("pty_create", {
       cols: term.cols,
       rows: term.rows,
+      room: spec?.room ?? null,
+      cwd: spec?.cwd ?? null,
       onData: channel,
     })
-      .then((id) => {
+      .then(({ id, created }) => {
         if (disposed) {
-          // Unmounted mid-flight: kill the shell we just asked for.
+          // Unmounted mid-flight: kill the client we just asked for.
           void invoke("pty_kill", { id }).catch(() => {});
           return;
         }
@@ -205,12 +245,12 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
         term.focus();
         pushSize();
 
-        // The launch command, if one is staged. The pty's input buffer holds
-        // it until the shell finishes its profile and reads - no race.
-        const pending = pendingRef.current;
-        if (pending) {
-          pendingRef.current = null;
-          void invoke("pty_write", { id, data: `${pending}\n` }).catch((err) => {
+        // Type the claude command only where it lands at a prompt: a room
+        // this spawn created, or one the card's snapshot said holds no live
+        // claude. Typing into an existing claude would fill its input box.
+        // The pty's input buffer holds it until the shell reads - no race.
+        if (spec && (created || spec.typeIfAttached)) {
+          void invoke("pty_write", { id, data: `${spec.command}\n` }).catch((err) => {
             if (!disposed) setFailure(describe(err));
           });
         }
@@ -238,23 +278,46 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
       <div className="baud-terminal-host" ref={hostRef} />
 
       {phase === "live" ? (
-        <button
-          type="button"
-          className="baud-terminal-kill"
-          title="kill this shell - a running claude stays resumable"
-          onClick={kill}
-        >
-          ✕ kill
-        </button>
+        <span className="baud-terminal-actions">
+          {room ? (
+            <>
+              <button
+                type="button"
+                className="baud-terminal-kill baud-terminal-detach"
+                title={`detach - the ${room} room keeps running without a window`}
+                onClick={kill}
+              >
+                ⇠ detach
+              </button>
+              <button
+                type="button"
+                className="baud-terminal-kill"
+                title={`END the ${room} room - kills its session and everything inside`}
+                onClick={endRoom}
+              >
+                ✕ end room
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="baud-terminal-kill"
+              title="kill this shell - a running claude stays resumable"
+              onClick={kill}
+            >
+              ✕ kill
+            </button>
+          )}
+        </span>
       ) : null}
 
       {phase === "ended" ? (
         <button type="button" className="baud-terminal-curtain" onClick={restart}>
           <span className="baud-terminal-curtain-line">
-            {failure ? "terminal unavailable" : "session ended"}
+            {failure ? "terminal unavailable" : room ? "window closed" : "session ended"}
           </span>
           <span className="baud-terminal-curtain-hint">
-            {failure ?? "click to start a new shell"}
+            {failure ?? "click to open a scratch shell - or pick a card"}
           </span>
         </button>
       ) : null}

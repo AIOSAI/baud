@@ -85,8 +85,20 @@ export default function BranchChip({
       ? "baud-lamp-interactive"
       : "baud-lamp-dim";
 
-  const badge = branch.dispatched ? "dispatched" : branch.interactive ? "live" : null;
-  const badgeClass = branch.dispatched ? "baud-badge-dispatched" : "baud-badge-live";
+  // Room (m6): a parked tmux session with nothing live inside still deserves
+  // a quiet tag - there is a scrollback and a shell waiting behind the card.
+  const badge = branch.dispatched
+    ? "dispatched"
+    : branch.interactive
+      ? "live"
+      : branch.has_room
+        ? "room"
+        : null;
+  const badgeClass = branch.dispatched
+    ? "baud-badge-dispatched"
+    : branch.interactive
+      ? "baud-badge-live"
+      : "baud-badge-room";
 
   // Two ways back into a conversation: `-c` for interactive history, and
   // `--resume <id>` for a branch whose only transcripts are headless dispatch
@@ -145,28 +157,43 @@ export default function BranchChip({
             >
               files
             </button>
-            {canResume ? (
+            {branch.has_room && branch.interactive ? (
+              /* A live session in the room: every door is the same door -
+                 attach and pick up mid-scroll. No command gets typed. */
               <button
                 type="button"
                 className="baud-chip-launch"
-                title={
-                  branch.has_history
-                    ? `cd ${branch.path} and continue the claude conversation`
-                    : `cd ${branch.path} and reopen the last dispatch transcript`
-                }
+                title="attach to the live session in this room"
                 onClick={() => onLaunch(branch, "resume")}
               >
-                ▸ resume
+                ▸ attach
               </button>
-            ) : null}
-            <button
-              type="button"
-              className={`baud-chip-launch ${canResume ? "baud-chip-launch-quiet" : ""}`}
-              title={`cd ${branch.path} and start a fresh claude`}
-              onClick={() => onLaunch(branch, "fresh")}
-            >
-              {canResume ? "fresh" : "▸ claude"}
-            </button>
+            ) : (
+              <>
+                {canResume ? (
+                  <button
+                    type="button"
+                    className="baud-chip-launch"
+                    title={
+                      branch.has_history
+                        ? `cd ${branch.path} and continue the claude conversation`
+                        : `cd ${branch.path} and reopen the last dispatch transcript`
+                    }
+                    onClick={() => onLaunch(branch, "resume")}
+                  >
+                    ▸ resume
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={`baud-chip-launch ${canResume ? "baud-chip-launch-quiet" : ""}`}
+                  title={`cd ${branch.path} and start a fresh claude`}
+                  onClick={() => onLaunch(branch, "fresh")}
+                >
+                  {canResume ? "fresh" : "▸ claude"}
+                </button>
+              </>
+            )}
           </span>
         ) : null}
       </footer>

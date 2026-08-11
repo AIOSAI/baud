@@ -35,6 +35,16 @@
 //! `quick_status` copy: dashboards only move on service writes and mail
 //! events never trigger one, so the cached counts drift - 12 of 17 cards
 //! were wrong when checked (Patrick-caught 2026-08-09). Source over cache.
+//!
+//! Milestone 6 gives every agent a ROOM (Patrick ruling 2026-08-10): a
+//! persistent tmux session named `baud-<branch>`, owned by the tmux server,
+//! not by this window. BAUD's terminal becomes a window INTO the room -
+//! opening a card attaches (creating on first visit), switching cards
+//! detaches, closing BAUD detaches everything. Sessions, monitors, and
+//! builds keep running; the fork-on-resume and cancel-on-switch failure
+//! modes disappear because there is no respawn - only reattach. The only
+//! tmux verbs in this codebase: `new-session -A`, `list-sessions`,
+//! `kill-session` (the explicit "end room" click), `set-option mouse`.
 
 use std::fs;
 use std::io::Read;
@@ -58,6 +68,10 @@ const DISPATCH_LOCK_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", ".dispatch.loc
 
 /// The mailbox itself - mail counts come from here, never the dashboard.
 const INBOX_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", "inbox.json"];
+
+/// Every room BAUD creates carries this prefix, so `list-sessions` can tell
+/// BAUD's rooms from the operator's own tmux sessions.
+const ROOM_PREFIX: &str = "baud-";
 
 /// A live claude process found on the process table.
 ///
@@ -94,6 +108,9 @@ pub struct BranchStatus {
     /// interactively. `None` when `has_history` is true (use `-c`) or when
     /// there are no transcripts at all (nothing to resume).
     pub resume_id: Option<String>,
+    /// A `baud-<branch>` tmux session exists - the agent has a living room
+    /// to attach to, whether or not anything is running inside it.
+    pub has_room: bool,
     /// Messages with status "new" in `.ai_mail.local/inbox.json`, 0 when the
     /// mailbox is missing or unreadable.
     pub new_mail: u64,
@@ -119,6 +136,7 @@ impl BranchStatus {
             interactive: false,
             has_history: false,
             resume_id: None,
+            has_room: false,
             new_mail: 0,
             opened_mail: 0,
             active_plans: 0,
@@ -552,6 +570,65 @@ fn count_field(quick_status: &Value, key: &str) -> u64 {
     }
 }
 
+/// The tmux session name for a branch's room.
+///
+/// tmux target syntax gives `.` and `:` meanings of their own, so anything
+/// outside `[A-Za-z0-9_-]` becomes `-`. Exact-match lookups use the `=`
+/// target prefix everywhere, so a sanitized name can never glob another.
+pub fn room_name(branch_name: &str) -> String {
+    let safe: String = branch_name
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("{ROOM_PREFIX}{safe}")
+}
+
+/// Every live tmux session name. No server (or no tmux) reads as no rooms -
+/// same quiet doctrine as the mailbox and the git figure.
+fn list_rooms() -> std::collections::HashSet<String> {
+    let output = Command::new("tmux")
+        .args(["list-sessions", "-F", "#{session_name}"])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty())
+            .collect(),
+        _ => std::collections::HashSet::new(),
+    }
+}
+
+/// End a branch's room for real - the ONE way a room dies (Patrick ruling
+/// 2026-08-10: detach everywhere else). Killing a room that is already gone
+/// is the goal state, not an error.
+#[tauri::command]
+fn room_kill(branch_name: String) -> Result<(), String> {
+    let room = room_name(&branch_name);
+    let output = Command::new("tmux")
+        .args(["kill-session", "-t", &format!("={room}")])
+        .output()
+        .map_err(|err| format!("could not run tmux: {err}"))?;
+
+    // "session not found" exits non-zero; that is idempotent success. Any
+    // other failure is reported honestly.
+    if output.status.success() {
+        return Ok(());
+    }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    if stderr.contains("can't find session") || stderr.contains("no server") {
+        return Ok(());
+    }
+    Err(format!("could not end room '{room}': {}", stderr.trim()))
+}
+
 /// Count mailbox messages by status straight from `inbox.json`.
 ///
 /// Closed mail is archived out of the file, so the inbox only ever holds
@@ -620,7 +697,12 @@ fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
 
 /// Inspect a single branch directory. Never fails - worst case it reports a
 /// bare directory with all-default fields.
-fn read_branch(branch_dir: &Path, name: String, sessions: &[ClaudeSession]) -> BranchStatus {
+fn read_branch(
+    branch_dir: &Path,
+    name: String,
+    sessions: &[ClaudeSession],
+    rooms: &std::collections::HashSet<String>,
+) -> BranchStatus {
     let mut status = BranchStatus::new(name, branch_dir.display().to_string());
     status.is_citizen = join_all(branch_dir, &PASSPORT_RELATIVE_PATH).is_file();
     status.dispatched = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
@@ -638,6 +720,8 @@ fn read_branch(branch_dir: &Path, name: String, sessions: &[ClaudeSession]) -> B
     status.has_history = has_history;
     status.resume_id = resume_id;
 
+    status.has_room = rooms.contains(&room_name(&status.name));
+
     apply_dashboard(branch_dir, &mut status);
     let (new_mail, opened_mail) = mail_counts_in(branch_dir);
     status.new_mail = new_mail;
@@ -654,6 +738,8 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
 
     // One process-table pass shared by every branch in this snapshot.
     let sessions = scan_claude_sessions();
+    // One tmux round-trip shared by every card in this snapshot.
+    let rooms = list_rooms();
 
     let mut branches: Vec<BranchStatus> = Vec::new();
 
@@ -678,7 +764,7 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
             continue;
         }
 
-        branches.push(read_branch(&entry.path(), name, &sessions));
+        branches.push(read_branch(&entry.path(), name, &sessions, &rooms));
     }
 
     branches.sort_by(|a, b| a.name.cmp(&b.name));
@@ -722,14 +808,17 @@ pub fn run() {
             read_file_text,
             git_changes,
             git_diff_text,
+            room_kill,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill
         ])
-        // Closing the window must take the shell with it. Both hooks fire in
-        // the normal quit path; whichever runs first does the work, and
-        // `shutdown` on an empty registry is free.
+        // Closing the window takes the pty processes with it: a plain shell
+        // dies, a room's tmux client dies - which is a DETACH, the session
+        // lives on (m6). Both hooks fire in the normal quit path; whichever
+        // runs first does the work, and `shutdown` on an empty registry is
+        // free.
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 pty::shutdown(&window.state::<pty::PtyRegistry>());
@@ -893,6 +982,36 @@ mod tests {
         fs::write(mailbox.join("inbox.json"), "not json").unwrap();
         assert_eq!(mail_counts_in(&dir), (0, 0));
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn room_names_are_tmux_safe() {
+        assert_eq!(room_name("devpulse"), "baud-devpulse");
+        assert_eq!(room_name("ai_mail"), "baud-ai_mail");
+        // '.' and ':' carry tmux target syntax; anything odd flattens to '-'.
+        assert_eq!(room_name("AIPASS.admin"), "baud-AIPASS-admin");
+        assert_eq!(room_name("a:b c"), "baud-a-b-c");
+    }
+
+    #[test]
+    fn rooms_are_listed_while_alive_and_killable() {
+        // A real throwaway tmux session - the machine runs on tmux (the whole
+        // rooms doctrine leans on it), so exercise the actual verbs.
+        let branch = format!("roomtest-{}", std::process::id());
+        let room = room_name(&branch);
+        let spawned = Command::new("tmux")
+            .args(["new-session", "-d", "-s", &room])
+            .output()
+            .expect("tmux must be runnable for the rooms test");
+        assert!(spawned.status.success(), "could not create test room");
+
+        assert!(list_rooms().contains(&room), "live room missing from list");
+
+        room_kill(branch.clone()).expect("ending a live room must succeed");
+        assert!(!list_rooms().contains(&room), "room survived room_kill");
+
+        // Ending a room that is already gone is idempotent success.
+        room_kill(branch).expect("ending a dead room must be a no-op");
     }
 
     #[test]
