@@ -4,6 +4,8 @@ import { EditorState } from "@codemirror/state";
 import {
   EditorView,
   drawSelection,
+  highlightActiveLine,
+  highlightActiveLineGutter,
   highlightSpecialChars,
   lineNumbers,
 } from "@codemirror/view";
@@ -40,7 +42,7 @@ function describe(err: unknown): string {
   return String(err);
 }
 
-export default function FileView({ path }: { path: string }) {
+export default function FileView({ path, line }: { path: string; line?: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -73,6 +75,9 @@ export default function FileView({ path }: { path: string }) {
               EditorView.lineWrapping,
               EditorState.readOnly.of(true),
               EditorView.editable.of(false),
+              // The active-line wash only exists when a terminal link asked
+              // for a specific line - plain file views stay uniform.
+              line ? [highlightActiveLine(), highlightActiveLineGutter()] : [],
               oneDark,
               baudChrome,
               language,
@@ -80,6 +85,16 @@ export default function FileView({ path }: { path: string }) {
           }),
           parent: host,
         });
+
+        // A `path:123` link lands ON its line: cursor there, scrolled to
+        // centre. Clamped - output can cite a line the file no longer has.
+        if (line && line > 0) {
+          const target = view.state.doc.line(Math.min(line, view.state.doc.lines));
+          view.dispatch({
+            selection: { anchor: target.from },
+            effects: EditorView.scrollIntoView(target.from, { y: "center" }),
+          });
+        }
 
         if (file.truncated) setNotice("truncated - the viewer caps at 512 KB");
       })
@@ -91,7 +106,7 @@ export default function FileView({ path }: { path: string }) {
       disposed = true;
       view?.destroy();
     };
-  }, [path]);
+  }, [path, line]);
 
   return (
     <div className="baud-view">

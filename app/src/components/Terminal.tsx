@@ -7,8 +7,10 @@ import {
   useState,
 } from "react";
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { WebLinksAddon } from "@xterm/addon-web-links";
+import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
 
@@ -33,6 +35,51 @@ export interface LaunchSpec {
 
 export interface TerminalHandle {
   launch(spec: LaunchSpec): void;
+}
+
+interface TerminalProps {
+  /**
+   * A ctrl+clicked file path in the output, already resolved and fenced by
+   * the backend - the reading room takes it from here. `line` carries a
+   * `:123` suffix when the mention had one.
+   */
+  onOpenFile: (path: string, line: number | null) => void;
+}
+
+/**
+ * What a file mention looks like in terminal output: a slashed path
+ * (absolute or relative) or a bare filename with an extension, optionally
+ * carrying a `:123` line suffix. Deliberately loose - every candidate still
+ * has to RESOLVE to a real file inside the fence before it becomes a link,
+ * so a false match here costs nothing.
+ */
+const PATH_CANDIDATE = /(?:\/?[\w.+-]+(?:\/[\w.+-]+)+|[\w+-][\w.+-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?::\d+)?/g;
+
+interface PathMention {
+  /** 0-based column of the match in the row's text. */
+  index: number;
+  /** The exact matched text - the underline covers all of it. */
+  raw: string;
+  path: string;
+  line: number | null;
+}
+
+function pathMentions(text: string): PathMention[] {
+  const mentions: PathMention[] = [];
+  for (const match of text.matchAll(PATH_CANDIDATE)) {
+    const raw = match[0];
+    const parts = /^(.*?)(?::(\d+))?$/.exec(raw);
+    // A sentence ending in a path leaves its full stop on the match.
+    const path = (parts?.[1] ?? raw).replace(/\.+$/, "");
+    if (!path) continue;
+    mentions.push({
+      index: match.index ?? 0,
+      raw,
+      path,
+      line: parts?.[2] ? Number(parts[2]) : null,
+    });
+  }
+  return mentions;
 }
 
 /** Mirrors `PtyEvent` in src-tauri/src/pty.rs. */
@@ -94,7 +141,10 @@ function describe(err: unknown): string {
  * AIPass root. Every byte comes from the human: typed keystrokes, or the one
  * visible command line `run()` writes when they click a card's launch button.
  */
-const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
+const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
+  { onOpenFile },
+  ref,
+) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [generation, setGeneration] = useState(0);
   const [phase, setPhase] = useState<Phase>("opening");
@@ -107,6 +157,14 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
   const pendingRef = useRef<LaunchSpec | null>(null);
   // The room the CURRENT pty is a window into - null for the scratch shell.
   const [room, setRoom] = useState<string | null>(null);
+  // Where relative paths in the output resolve: the seated room's branch
+  // dir, or null (= the AIPass root) for the scratch shell. Best effort -
+  // the shell can cd away, but claude cites repo-relative or absolute paths.
+  const cwdRef = useRef<string | null>(null);
+  // The prop, ref'd so the link provider (created once per pty) never goes
+  // stale against a re-rendering parent.
+  const onOpenFileRef = useRef(onOpenFile);
+  onOpenFileRef.current = onOpenFile;
 
   const restart = useCallback(() => {
     setFailure(null);
@@ -163,10 +221,103 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
       fontSize: FONT_SIZE,
       scrollback: SCROLLBACK_LINES,
       theme: terminalTheme(host),
+      // Claude wraps its file citations in OSC 8 hyperlinks (file:// URIs).
+      // Without a handler xterm silently DROPS non-http links - no hover, no
+      // click - and anything that does fire escapes to the OS. This handler
+      // claims the layer: file:// goes to the reading room through the same
+      // fence as everything else, http(s) to the system browser, both only
+      // on the ctrl-chord. Every other scheme is ignored on purpose.
+      linkHandler: {
+        allowNonHttpProtocols: true,
+        activate: (event, uri, range) => {
+          if (!event.ctrlKey && !event.metaKey) return;
+          if (uri.startsWith("file://")) {
+            let path: string;
+            try {
+              path = decodeURIComponent(new URL(uri).pathname);
+            } catch {
+              return;
+            }
+            // The URI carries no line number, but the visible citation often
+            // does - inside the link text (`foo.py:42`) or right after it.
+            const row = term.buffer.active.getLine(range.end.y - 1);
+            const rowText = row?.translateToString(true) ?? "";
+            const inLink = /:(\d+)$/.exec(rowText.slice(range.start.x - 1, range.end.x));
+            const afterLink = /^:(\d+)/.exec(rowText.slice(range.end.x));
+            const line = inLink ? Number(inLink[1]) : afterLink ? Number(afterLink[1]) : null;
+            void invoke<(string | null)[]>("resolve_paths", {
+              base: cwdRef.current,
+              candidates: [path],
+            })
+              .then(([target]) => {
+                if (target && !disposed) onOpenFileRef.current(target, line);
+              })
+              .catch(() => {});
+          } else if (/^https?:\/\//.test(uri)) {
+            void openUrl(uri).catch((err) => {
+              if (!disposed) setFailure(describe(err));
+            });
+          }
+        },
+      },
     });
 
     const fit = new FitAddon();
     term.loadAddon(fit);
+
+    // Ctrl+click links, IDE-style. Plain clicks stay tmux's (mouse mode is
+    // on in rooms) - only the ctrl-chord activates. URLs go to the system
+    // browser through the opener plugin's url-only grant.
+    term.loadAddon(
+      new WebLinksAddon((event, uri) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        void openUrl(uri).catch((err) => {
+          if (!disposed) setFailure(describe(err));
+        });
+      }),
+    );
+
+    // File paths become links only if the backend resolves them to a real
+    // file inside the fence - hover asks, per line, and an unresolvable
+    // mention simply never underlines. Ctrl+click opens it in the reading
+    // room beside the live terminal, at the cited line.
+    const fileLinks = term.registerLinkProvider({
+      provideLinks(row, callback) {
+        const bufferLine = term.buffer.active.getLine(row - 1);
+        if (!bufferLine) return callback(undefined);
+        const mentions = pathMentions(bufferLine.translateToString(true));
+        if (mentions.length === 0) return callback(undefined);
+
+        void invoke<(string | null)[]>("resolve_paths", {
+          base: cwdRef.current,
+          candidates: mentions.map((mention) => mention.path),
+        })
+          .then((resolved) => {
+            const links = mentions.flatMap((mention, i): ILink[] => {
+              const target = resolved[i];
+              if (!target) return [];
+              return [
+                {
+                  // 1-based columns, end inclusive - web-links' convention.
+                  range: {
+                    start: { x: mention.index + 1, y: row },
+                    end: { x: mention.index + mention.raw.length, y: row },
+                  },
+                  text: mention.raw,
+                  activate: (event) => {
+                    if (event.ctrlKey || event.metaKey) {
+                      onOpenFileRef.current(target, mention.line);
+                    }
+                  },
+                },
+              ];
+            });
+            callback(links.length > 0 ? links : undefined);
+          })
+          .catch(() => callback(undefined));
+      },
+    });
+
     term.open(host);
 
     const measure = () => {
@@ -223,6 +374,7 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
     const spec = pendingRef.current;
     pendingRef.current = null;
     setRoom(spec?.room ?? null);
+    cwdRef.current = spec?.cwd ?? null;
 
     void invoke<SpawnResult>("pty_create", {
       cols: term.cols,
@@ -267,6 +419,7 @@ const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref) {
       termRef.current = null;
       window.cancelAnimationFrame(frame);
       observer.disconnect();
+      fileLinks.dispose();
       keystrokes.dispose();
       if (sessionId) void invoke("pty_kill", { id: sessionId }).catch(() => {});
       term.dispose();

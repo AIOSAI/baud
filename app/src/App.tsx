@@ -25,6 +25,8 @@ interface FileTab {
   kind: "file" | "diff";
   /** The branch directory a diff tab reads - unused by file tabs. */
   dir?: string;
+  /** Jump target from a ctrl+clicked `path:line` mention in the terminal. */
+  line?: number;
 }
 
 /** The terminal's reserved tab id - never closable, never a real path. */
@@ -34,6 +36,8 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
   const [transportError, setTransportError] = useState<string | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
+  // The latest snapshot, reachable from stable callbacks (openFromTerminal).
+  const snapshotRef = useRef<FleetSnapshot | null>(null);
 
   // The reading room: which branch's tree is docked, which files are open,
   // which pane is on top. The terminal is ALWAYS mounted - switching tabs
@@ -46,14 +50,37 @@ export default function App() {
     setTreeBranch((current) => (current?.name === branch.name ? null : branch));
   }, []);
 
-  const openFile = useCallback((path: string, name: string, branch: string) => {
-    setFileTabs((current) =>
-      current.some((tab) => tab.path === path)
-        ? current
-        : [...current, { path, name, branch, kind: "file" as const }],
-    );
-    setActiveTab(path);
-  }, []);
+  const openFile = useCallback(
+    (path: string, name: string, branch: string, line?: number | null) => {
+      setFileTabs((current) => {
+        const existing = current.some((tab) => tab.path === path);
+        if (!existing) {
+          return [...current, { path, name, branch, kind: "file" as const, line: line ?? undefined }];
+        }
+        // Re-opening with a NEW line moves the open tab there; without one,
+        // the tab just comes forward as it is.
+        return line == null
+          ? current
+          : current.map((tab) => (tab.path === path ? { ...tab, line } : tab));
+      });
+      setActiveTab(path);
+    },
+    [],
+  );
+
+  // A ctrl+clicked path in the terminal arrives resolved and absolute; the
+  // tab's branch label is whichever branch's directory contains it (deepest
+  // wins - branch trees nest), or plain "aipass" outside any branch.
+  const openFromTerminal = useCallback(
+    (path: string, line: number | null) => {
+      const name = path.split("/").pop() ?? path;
+      const owner = (snapshotRef.current?.branches ?? [])
+        .filter((branch) => path.startsWith(`${branch.path}/`))
+        .sort((a, b) => b.path.length - a.path.length)[0];
+      openFile(path, name, owner?.name ?? "aipass", line);
+    },
+    [openFile],
+  );
 
   const openDiff = useCallback((branch: BranchStatus) => {
     const id = `diff:${branch.path}`;
@@ -114,6 +141,7 @@ export default function App() {
     try {
       const next = await invoke<FleetSnapshot>("fleet_snapshot");
       if (!alive()) return;
+      snapshotRef.current = next;
       setSnapshot(next);
       setTransportError(null);
     } catch (err) {
@@ -240,7 +268,7 @@ export default function App() {
           <div
             className={`baud-pane ${activeTab === TERMINAL_TAB ? "" : "baud-pane-hidden"}`}
           >
-            <Terminal ref={terminalRef} />
+            <Terminal ref={terminalRef} onOpenFile={openFromTerminal} />
           </div>
           {fileTabs.map((tab) => (
             <div
@@ -250,7 +278,7 @@ export default function App() {
               {tab.kind === "diff" ? (
                 <DiffView dir={tab.dir ?? ""} active={activeTab === tab.path} />
               ) : (
-                <FileView path={tab.path} />
+                <FileView path={tab.path} line={tab.line} />
               )}
             </div>
           ))}

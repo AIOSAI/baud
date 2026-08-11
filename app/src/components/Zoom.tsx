@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 /**
- * Whole-window zoom (m7): browser-style ctrl +/- for a webview that ships
+ * Whole-window zoom: browser-style ctrl +/- for a webview that ships
  * with none. The webview's zoom factor scales everything — cards, tabs and
  * the terminal together (xterm's DOM renderer re-fits through the normal
  * ResizeObserver path, so the shell learns its new column count for free).

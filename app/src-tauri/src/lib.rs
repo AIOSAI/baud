@@ -498,6 +498,35 @@ fn read_file_text(path: String) -> Result<FileText, String> {
     })
 }
 
+/// Resolve path candidates a terminal line mentioned into openable files.
+/// Absolute candidates are tried as given; relative ones against `base` (the
+/// seated room's branch dir), then the AIPass root. First attempt that
+/// canonicalizes to a regular file inside the fence wins; everything else is
+/// None - the terminal only underlines what will actually open.
+#[tauri::command]
+fn resolve_paths(base: Option<String>, candidates: Vec<String>) -> Vec<Option<String>> {
+    candidates
+        .iter()
+        .map(|candidate| resolve_candidate(base.as_deref(), candidate))
+        .collect()
+}
+
+fn resolve_candidate(base: Option<&str>, candidate: &str) -> Option<String> {
+    let raw = Path::new(candidate);
+    let attempts: Vec<PathBuf> = if raw.is_absolute() {
+        vec![raw.to_path_buf()]
+    } else {
+        base.iter()
+            .map(|dir| Path::new(dir).join(raw))
+            .chain(resolve_aipass_root().ok().map(|root| root.join(raw)))
+            .collect()
+    };
+    attempts.into_iter().find_map(|attempt| {
+        let path = fenced_path(&attempt.display().to_string()).ok()?;
+        path.is_file().then(|| path.display().to_string())
+    })
+}
+
 /// Uncommitted edits in one branch's subtree, straight from local git.
 #[derive(Debug, Clone, Serialize)]
 pub struct GitChanges {
@@ -802,10 +831,31 @@ fn fleet_snapshot() -> FleetSnapshot {
 pub fn run() {
     tauri::Builder::default()
         .manage(pty::PtyRegistry::default())
+        // The opener plugin exists for exactly one gesture: ctrl+clicked URLs
+        // in the terminal open in the default browser. Its capability grant
+        // is url-only - no reveal-in-dir, no open-path.
+        .plugin(tauri_plugin_opener::init())
+        // The main window IS the app - it never browses. Refusing every
+        // navigation off the app's own origin means no stray link, script,
+        // or window.open can turn the fleet view into a file:// directory
+        // listing or an arbitrary web page. (Links the operator ctrl+clicks
+        // go through the reading room or the system browser instead.)
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("navigation-fence")
+                .on_navigation(|_webview, url| {
+                    let host = url.host_str().unwrap_or("");
+                    url.scheme() == "tauri"
+                        || host == "localhost"
+                        || host == "127.0.0.1"
+                        || host == "tauri.localhost"
+                })
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             fleet_snapshot,
             list_dir,
             read_file_text,
+            resolve_paths,
             git_changes,
             git_diff_text,
             room_kill,
@@ -1020,5 +1070,50 @@ mod tests {
         assert_eq!(classify_claude_cmdline(&argv(&["/usr/bin/claudette"])), None);
         assert_eq!(classify_claude_cmdline(&argv(&[])), None);
         assert_eq!(classify_claude_cmdline(b""), None);
+    }
+
+    #[test]
+    fn resolve_paths_only_links_real_fenced_files() {
+        // The suite runs inside the AIPass tree, so the fence and the root
+        // fallback are exercised against the real thing.
+        let root = resolve_aipass_root()
+            .expect("tests run inside an AIPass tree")
+            .canonicalize()
+            .expect("root canonicalizes");
+        let readme = root.join("README.md");
+        assert!(readme.is_file(), "test expects the AIPass root README");
+
+        let hits = resolve_paths(
+            None,
+            vec![
+                readme.display().to_string(),   // absolute, real
+                "README.md".to_string(),        // relative -> root fallback
+                "/etc/passwd".to_string(),      // real file OUTSIDE the fence
+                "no/such/file.xyz".to_string(), // nonexistent
+                "projects".to_string(),         // a directory, not a file
+            ],
+        );
+
+        assert_eq!(hits[0].as_deref(), Some(readme.display().to_string().as_str()));
+        assert_eq!(hits[1].as_deref(), Some(readme.display().to_string().as_str()));
+        assert_eq!(hits[2], None, "the fence must hold");
+        assert_eq!(hits[3], None);
+        assert_eq!(hits[4], None, "directories do not open in the viewer");
+    }
+
+    #[test]
+    fn resolve_paths_prefers_the_seated_branch_dir() {
+        // `README.md` is ambiguous: the seated room's copy must win over the
+        // AIPass root's.
+        let root = resolve_aipass_root().unwrap().canonicalize().unwrap();
+        let base = root.join("projects").join("baud");
+        assert!(base.join("README.md").is_file(), "test expects baud's README");
+
+        let hits = resolve_paths(Some(base.display().to_string()), vec!["README.md".to_string()]);
+        let hit = hits[0].as_deref().expect("baud README resolves");
+        assert!(
+            hit.ends_with("projects/baud/README.md"),
+            "expected the seated dir's file, got {hit}"
+        );
     }
 }

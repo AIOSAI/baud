@@ -23,6 +23,7 @@ chrono = "0.4"
 # The operator's terminal: a real PTY, not a pipe. Line discipline, job
 # control, and $TERM behaviour all depend on it.
 portable-pty = "0.9"
+tauri-plugin-opener = "2.5.4"
 
 # Unix teardown signals the shell's whole process group, not just the shell
 # PID - orphaned children are the classic terminal-emulator leak.

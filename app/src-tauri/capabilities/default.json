@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core defaults for the BAUD main window - custom command invokes and channels, plus the webview zoom setter for the header's zoom control. No shell plugin, no filesystem plugin, no asset protocol. The privileged surface is exactly five custom commands: the read-only fleet_snapshot, and pty_create / pty_write / pty_resize / pty_kill for the operator's own terminal.",
+  "description": "Core defaults for the BAUD main window - the app's own command invokes and channels, the webview zoom setter for the header's zoom control, and URL-opening in the default browser for ctrl+clicked terminal links (deliberately NOT the opener's reveal-in-dir or open-path). No shell plugin, no filesystem plugin, no asset protocol. Every file-reading command is fenced to the AIPass root and read-only; the pty commands drive the operator's own terminal.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:webview:allow-set-webview-zoom"]
+  "permissions": [
+    "core:default",
+    "core:webview:allow-set-webview-zoom",
+    "opener:allow-open-url",
+    "opener:allow-default-urls"
+  ]
 }

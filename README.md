@@ -95,6 +95,20 @@ else in the branch. Open files live in tabs beside the terminal — the
 terminal never unmounts, hidden panes are just display-hidden, so claude
 keeps streaming underneath while you read.
 
+**Ctrl+click in the terminal** is a door too, IDE-style, on two layers.
+Claude wraps its file citations in OSC 8 hyperlinks (`file://` URIs) —
+BAUD's link handler claims those, so they underline on hover and open in a
+reading-room tab instead of escaping to the OS file manager (xterm's
+default drops non-http links entirely: no hover, no click). Plain-text
+paths in any output (grep, pytest, absolute, repo-relative, `path:123`
+citations) get the same treatment through a resolver: a mention only
+becomes a link if it names a real file inside the fence (seated room's
+branch dir first, then the AIPass root), so a dead path never underlines.
+Both open jumped to the cited line. URLs open in the system browser. Plain
+clicks stay tmux's — only the ctrl-chord activates, so claude cites
+`file.py:42`, one ctrl+click, and you're reading it beside the live
+terminal.
+
 The changes badge opens the same kind of tab holding the branch's full
 uncommitted diff in patch syntax. Diff tabs refetch every time they come
 back to the front (a diff goes stale the moment the agent keeps working);
@@ -162,6 +176,7 @@ resulting green lamps like any others.
 | other figures | the branch's `DASHBOARD.local.json` `quick_status` |
 | files / viewer | `list_dir` + `read_file_text`, fenced to the AIPass root |
 | changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
+| terminal links | claude's OSC 8 `file://` hyperlinks (claimed by the app's link handler) + plain-text paths, both through the fenced `resolve_paths` command (seated branch dir, then root — only real files link); URLs through the opener plugin's url-only grant, never reveal-in-dir |
 | room | `tmux list-sessions` (one call per snapshot) — the only tmux verbs BAUD runs are `new-session -A`, `list-sessions`, `kill-session` on the end-room click, and `set-option mouse on` |
 
 Every fallible read degrades to a default and records the failure in the
