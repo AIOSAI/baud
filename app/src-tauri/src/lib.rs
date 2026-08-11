@@ -30,6 +30,11 @@
 //! verb - `diff` - scoped to the card's directory. Diff is a read: it looks
 //! at the working files and reports, touching nothing. No write verb exists
 //! in this codebase; committing stays where it belongs, in the terminal.
+//!
+//! Mail counts read the mailbox itself (`inbox.json`), not the dashboard's
+//! `quick_status` copy: dashboards only move on service writes and mail
+//! events never trigger one, so the cached counts drift - 12 of 17 cards
+//! were wrong when checked (Patrick-caught 2026-08-09). Source over cache.
 
 use std::fs;
 use std::io::Read;
@@ -50,6 +55,9 @@ const PASSPORT_RELATIVE_PATH: [&str; 2] = [".trinity", "passport.json"];
 
 /// Presence of this lock file means the agent is dispatched and working now.
 const DISPATCH_LOCK_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", ".dispatch.lock"];
+
+/// The mailbox itself - mail counts come from here, never the dashboard.
+const INBOX_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", "inbox.json"];
 
 /// A live claude process found on the process table.
 ///
@@ -86,9 +94,10 @@ pub struct BranchStatus {
     /// interactively. `None` when `has_history` is true (use `-c`) or when
     /// there are no transcripts at all (nothing to resume).
     pub resume_id: Option<String>,
-    /// `quick_status.new_mail`, 0 when missing or unreadable.
+    /// Messages with status "new" in `.ai_mail.local/inbox.json`, 0 when the
+    /// mailbox is missing or unreadable.
     pub new_mail: u64,
-    /// `quick_status.opened_mail`, 0 when missing or unreadable.
+    /// Messages with status "opened" in the same mailbox, 0 when missing.
     pub opened_mail: u64,
     /// `quick_status.active_plans`, 0 when missing or unreadable.
     pub active_plans: u64,
@@ -543,7 +552,37 @@ fn count_field(quick_status: &Value, key: &str) -> u64 {
     }
 }
 
+/// Count mailbox messages by status straight from `inbox.json`.
+///
+/// Closed mail is archived out of the file, so the inbox only ever holds
+/// "new" and "opened" messages. A missing or malformed file reads as an
+/// empty mailbox - same quiet-zero doctrine as the git figure.
+fn mail_counts_in(branch_dir: &Path) -> (u64, u64) {
+    let raw = match fs::read_to_string(join_all(branch_dir, &INBOX_RELATIVE_PATH)) {
+        Ok(contents) => contents,
+        Err(_) => return (0, 0),
+    };
+    let document: Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => return (0, 0),
+    };
+
+    let (mut new_mail, mut opened_mail) = (0, 0);
+    if let Some(messages) = document.get("messages").and_then(Value::as_array) {
+        for message in messages {
+            match message.get("status").and_then(Value::as_str) {
+                Some("new") => new_mail += 1,
+                Some("opened") => opened_mail += 1,
+                _ => {}
+            }
+        }
+    }
+    (new_mail, opened_mail)
+}
+
 /// Overlay whatever `DASHBOARD.local.json` has to say onto a branch status.
+///
+/// Mail counts are NOT taken from here - see [`mail_counts_in`].
 ///
 /// A missing, unreadable, or malformed file leaves the defaults in place - one
 /// bad JSON file must never take down the whole snapshot.
@@ -569,8 +608,6 @@ fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
         _ => return,
     };
 
-    status.new_mail = count_field(quick_status, "new_mail");
-    status.opened_mail = count_field(quick_status, "opened_mail");
     status.active_plans = count_field(quick_status, "active_plans");
     status.todo_count = count_field(quick_status, "todo_count");
     status.summary = quick_status
@@ -602,6 +639,9 @@ fn read_branch(branch_dir: &Path, name: String, sessions: &[ClaudeSession]) -> B
     status.resume_id = resume_id;
 
     apply_dashboard(branch_dir, &mut status);
+    let (new_mail, opened_mail) = mail_counts_in(branch_dir);
+    status.new_mail = new_mail;
+    status.opened_mail = opened_mail;
     status
 }
 
@@ -827,6 +867,32 @@ mod tests {
         let _ = fs::remove_dir_all(repo.join(".git"));
         assert_eq!(git_changes_in(&repo).count, 0);
         let _ = fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn mail_counts_come_from_the_mailbox_not_the_dashboard() {
+        let dir = std::env::temp_dir().join(format!("baud-mail-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let mailbox = dir.join(".ai_mail.local");
+        fs::create_dir_all(&mailbox).unwrap();
+
+        // No inbox file at all: quiet zeros.
+        assert_eq!(mail_counts_in(&dir), (0, 0));
+
+        // Real shape: counts follow message status, unknown statuses ignored.
+        fs::write(
+            mailbox.join("inbox.json"),
+            r#"{"unread_count": 9, "messages": [
+                {"status": "new"}, {"status": "new"},
+                {"status": "opened"}, {"status": "weird"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(mail_counts_in(&dir), (2, 1));
+
+        // Malformed JSON: quiet zeros, never an error.
+        fs::write(mailbox.join("inbox.json"), "not json").unwrap();
+        assert_eq!(mail_counts_in(&dir), (0, 0));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

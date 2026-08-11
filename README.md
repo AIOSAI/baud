@@ -36,8 +36,9 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   Steady green = interactive (a live human-driven claude has its cwd in
   this branch — found by walking `/proc`, `-p`/`--print` runs excluded).
   Dim = idle.
-- **Figures** — mail / open / plans / todos from the branch's
-  `DASHBOARD.local.json`, plus its summary line and how fresh it is.
+- **Figures** — mail counted live from the branch's `inbox.json`; open /
+  plans / todos from its `DASHBOARD.local.json`, plus its summary line and
+  how fresh it is.
 - **Git figure** — a permanent `⎇ git` count of uncommitted files,
   straight from the installed `git` binary (`git diff HEAD`, scoped and
   `--relative` to the branch dir — every `src/aipass` branch shares one
@@ -125,7 +126,8 @@ resulting green lamps like any others.
 | dispatched | `.ai_mail.local/.dispatch.lock` exists |
 | interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
 | resume kind | `~/.claude/projects/<munged-path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries; headless dispatch runs never do |
-| figures | the branch's `DASHBOARD.local.json` `quick_status` |
+| mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12/17 cards were wrong, 2026-08-10) |
+| other figures | the branch's `DASHBOARD.local.json` `quick_status` |
 | files / viewer | `list_dir` + `read_file_text`, fenced to the AIPass root |
 | changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
 
