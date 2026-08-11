@@ -347,7 +347,11 @@ export default function App() {
           <div
             className={`baud-pane ${activeTab === TERMINAL_TAB ? "" : "baud-pane-hidden"}`}
           >
-            <Terminal ref={terminalRef} onOpenFile={openFromTerminal} />
+            <Terminal
+              ref={terminalRef}
+              onOpenFile={openFromTerminal}
+              liveBranches={branches.filter((b) => b.interactive).map((b) => b.name)}
+            />
           </div>
           {fileTabs.map((tab) => (
             <div

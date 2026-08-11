@@ -247,6 +247,17 @@ body {
   color: var(--baud-ink);
 }
 
+/* Slash-command chips (terminal corner): the memory rituals made visible.
+   Quieter than the kill buttons - routine verbs, not destructive ones. */
+.baud-terminal-cmd {
+  color: var(--baud-ink-dim);
+}
+
+.baud-terminal-cmd:hover,
+.baud-terminal-cmd:focus-visible {
+  color: var(--baud-green);
+}
+
 /* Header tools (m8): camera and the notifications bell. Same quiet family
    as the zoom controls - present, discoverable, never shouting. */
 .baud-tool-btn {

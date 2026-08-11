@@ -176,6 +176,17 @@ shell with their own privileges. A `✕ kill` button sits in the corner
 while a shell is live: same SIGHUP closing a terminal window sends, so a
 running claude stays resumable from its transcript.
 
+When the attached room holds a live claude, **slash-command chips** join
+the corner buttons: `/memo` (quick memory update — banks the conversation
+so far, keeps going), `/prep` (session wrap-up — memories saved, plans
+reconciled, close safely after), `/compact` (compress context and
+continue). One click types and submits the command; the hover text
+teaches what each ritual is for — slash commands are invisible culture
+otherwise, and a new operator has no way to discover `/prep` exists.
+`/clear` is deliberately NOT a button: the one that discards a
+conversation keeps its typing friction. The chips only render where a
+chat box exists to receive them — never into a bare shell prompt.
+
 ## The seat model (read this before extending)
 
 BAUD has **one PTY — one seat**, but since rooms (m6) the seat is a

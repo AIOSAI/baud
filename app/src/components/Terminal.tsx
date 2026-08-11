@@ -51,7 +51,36 @@ interface TerminalProps {
    * `:123` suffix when the mention had one.
    */
   onOpenFile: (path: string, line: number | null) => void;
+  /**
+   * Branch names whose card shows a live interactive claude - the fleet
+   * snapshot's knowledge, handed down so the slash-command chips only
+   * render where a chat box actually exists to receive them.
+   */
+  liveBranches: string[];
 }
+
+/**
+ * The memory rituals as one-click chips (Patrick idea 2026-08-10): slash
+ * commands are invisible culture - a new operator has no way to discover
+ * /prep exists, let alone when to use it. The hover text IS the teaching.
+ * Sent WITH the newline - one click runs the command, that is the point.
+ * /clear stays typed on purpose: deliberate friction on the one that
+ * discards a conversation.
+ */
+const SLASH_COMMANDS: { cmd: string; hint: string }[] = [
+  {
+    cmd: "/memo",
+    hint: "quick memory update - the agent banks what you just discussed and keeps going. Light, casual, use it whenever",
+  },
+  {
+    cmd: "/prep",
+    hint: "session wrap-up - memories saved, plans reconciled, loose ends written down. Do this before closing for the day",
+  },
+  {
+    cmd: "/compact",
+    hint: "compress the conversation to free context - the agent re-grounds itself and continues. Survivable by design",
+  },
+];
 
 /**
  * What a file mention looks like in terminal output: a slashed path
@@ -149,7 +178,7 @@ function describe(err: unknown): string {
  * visible command line `run()` writes when they click a card's launch button.
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { onOpenFile },
+  { onOpenFile, liveBranches },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -219,6 +248,15 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       setFailure(describe(err));
     });
   }, [room]);
+
+  // A slash-command chip: the command line plus Enter, exactly as if the
+  // operator typed it - because they clicked for it.
+  const sendCommand = useCallback((cmd: string) => {
+    const id = sessionRef.current;
+    if (!id) return;
+    void invoke("pty_write", { id, data: `${cmd}\n` }).catch(() => {});
+    termRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -446,6 +484,19 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
       {phase === "live" ? (
         <span className="baud-terminal-actions">
+          {room && liveBranches.includes(room)
+            ? SLASH_COMMANDS.map(({ cmd, hint }) => (
+                <button
+                  key={cmd}
+                  type="button"
+                  className="baud-terminal-kill baud-terminal-cmd"
+                  title={hint}
+                  onClick={() => sendCommand(cmd)}
+                >
+                  {cmd}
+                </button>
+              ))
+            : null}
           {room ? (
             <>
               <button
