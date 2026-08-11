@@ -18,10 +18,19 @@ export interface BranchStatus {
 
 /** Mirrors `FleetSnapshot` in src-tauri/src/lib.rs. */
 export interface FleetSnapshot {
-  aipass_root: string;
+  project: string;
+  root: string;
   generated_at: string;
   error: string | null;
   branches: BranchStatus[];
+}
+
+/** Mirrors `ProjectListing` in src-tauri/src/lib.rs. */
+export interface ProjectListing {
+  name: string;
+  root: string;
+  anchor: boolean;
+  active: boolean;
 }
 
 /** Mirrors `DirEntryInfo` in src-tauri/src/lib.rs. */

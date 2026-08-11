@@ -6,6 +6,7 @@ import type { LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
+import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
 import { relativeAge } from "./age";
@@ -70,14 +71,15 @@ export default function App() {
 
   // A ctrl+clicked path in the terminal arrives resolved and absolute; the
   // tab's branch label is whichever branch's directory contains it (deepest
-  // wins - branch trees nest), or plain "aipass" outside any branch.
+  // wins - branch trees nest), or the seated project outside any branch.
   const openFromTerminal = useCallback(
     (path: string, line: number | null) => {
       const name = path.split("/").pop() ?? path;
       const owner = (snapshotRef.current?.branches ?? [])
         .filter((branch) => path.startsWith(`${branch.path}/`))
         .sort((a, b) => b.path.length - a.path.length)[0];
-      openFile(path, name, owner?.name ?? "aipass", line);
+      const fallback = snapshotRef.current?.project.toLowerCase() || "project";
+      openFile(path, name, owner?.name ?? fallback, line);
     },
     [openFile],
   );
@@ -165,6 +167,19 @@ export default function App() {
     };
   }, [poll]);
 
+  // A project switch moves the fence, so the reading room empties: old tabs
+  // and the docked tree point where the backend now rightly refuses to read.
+  // The terminal stays untouched - an attached room keeps running (rooms
+  // doctrine: only "end room" kills), and the scratch shell is the
+  // operator's own business. Then poll immediately so the new fleet appears
+  // without waiting out the 5s tick.
+  const reseat = useCallback(() => {
+    setFileTabs([]);
+    setTreeBranch(null);
+    setActiveTab(TERMINAL_TAB);
+    void poll(() => true);
+  }, [poll]);
+
   const branches = snapshot?.branches ?? [];
   const citizens = branches.filter((branch) => branch.is_citizen).length;
   const dispatched = branches.filter((branch) => branch.dispatched).length;
@@ -185,7 +200,10 @@ export default function App() {
   return (
     <div className="baud-app">
       <header className="baud-header">
-        <span className="baud-wordmark">BAUD</span>
+        <div className="baud-header-brand">
+          <span className="baud-wordmark">BAUD</span>
+          <ProjectSwitch project={snapshot?.project ?? null} onSwitched={reseat} />
+        </div>
 
         <div className="baud-header-side">
           <div className="baud-totals">
@@ -286,8 +304,8 @@ export default function App() {
       </main>
 
       <footer className="baud-footer">
-        <span className="baud-footer-root" title={snapshot?.aipass_root ?? ""}>
-          {snapshot?.aipass_root || "resolving AIPass root…"}
+        <span className="baud-footer-root" title={snapshot?.root ?? ""}>
+          {snapshot?.root || "resolving project root…"}
         </span>
         <span className={`baud-footer-poll ${transportError ? "baud-footer-poll-alert" : ""}`}>
           {pollStatus}

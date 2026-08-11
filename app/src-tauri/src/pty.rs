@@ -278,9 +278,13 @@ pub fn pty_create(
     cwd: Option<String>,
     on_data: Channel<PtyEvent>,
     registry: tauri::State<'_, PtyRegistry>,
+    seat: tauri::State<'_, crate::ActiveProject>,
 ) -> Result<SpawnResult, String> {
-    // Same resolution the fleet scan uses - the shell opens where the fleet is.
-    let root = crate::resolve_aipass_root()?;
+    // Same resolution the fleet scan uses - the shell opens where the fleet
+    // is seated, and a room name gets the same project scope the card's
+    // badge was computed with.
+    let project = crate::active_project(&seat)?;
+    let root = project.root.clone();
 
     let size = PtySize {
         rows: rows.max(1),
@@ -297,7 +301,8 @@ pub fn pty_create(
 
     // Sanitize through the same door the fleet scan uses, so the session the
     // client attaches to is exactly the one `has_room` reports.
-    let room = room.map(|name| crate::room_name(&name));
+    let scope = project.room_scope();
+    let room = room.map(|name| crate::room_name(scope.as_deref(), &name));
     let created = match &room {
         Some(name) => !room_exists(name),
         None => true,

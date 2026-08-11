@@ -18,6 +18,8 @@ cd app && npm run tauri dev           # dev mode with hot reload
 ```
 
 Run it from anywhere inside an AIPass tree, or point it with `AIPASS_ROOT`.
+That tree is BAUD's **anchor**; the header's project switcher can then seat
+the view in any other project (see The project switcher below).
 Rebuild the release binary after code changes: `cd app && npm run tauri build`.
 
 ## The window
@@ -32,6 +34,28 @@ included — browser-style `ctrl +` / `ctrl -` / `ctrl 0` and ctrl+scroll
 work too, even with the terminal focused (zoom keys belong to the app, not
 the shell). The level persists across restarts; clicking the percentage
 resets it.
+
+### The project switcher
+
+The chip beside the wordmark names the project the fleet view is **seated**
+in; clicking it lists every project BAUD discovered and reseats on click —
+no restart, no second window.
+
+A **project** is a directory sealed by a `<NAME>_REGISTRY.json` in its root
+— the filename stem is the canonical name, and the registry's own
+`branches[].path` entries name the fleet dir (no layout guessing). BAUD's
+census: the anchor tree it launched from, `projects/*` nested inside it,
+and the anchor's sibling directories. A seal with no branch paths, or a
+legacy flat layout whose branches sit at the project root, simply never
+makes the menu.
+
+The discovery is **backend-owned**: the frontend picks a NAME from the
+backend's own census — there is deliberately no way to hand BAUD a path
+from the webview, so seating in a project never weakens the read fence, it
+only moves it. Reseating moves the whole read surface at once — fleet scan,
+file fence, new shells — and empties the reading room (open tabs point
+where the fence now rightly refuses to read). The terminal is untouched: an
+attached room keeps running, and the scratch shell is the operator's own.
 
 ### Cards
 
@@ -64,8 +88,10 @@ Strip order: dispatched first, then interactive, then alphabetical.
 ### Rooms
 
 Every agent's session lives in a persistent tmux session — its **room**
-(`baud-<branch>`), owned by the tmux server, not by this window. BAUD's
-terminal is only a window INTO the room:
+(`baud-<branch>`; in a seated non-anchor project `baud-<project>-<branch>`,
+so two projects' same-named branches can never attach to each other's
+sessions), owned by the tmux server, not by this window. BAUD's terminal is
+only a window INTO the room:
 
 - **Open a card** — attach (`tmux new-session -A`; the room is created on
   first visit, seated in the branch dir, mouse scrolling on).
@@ -103,7 +129,8 @@ default drops non-http links entirely: no hover, no click). Plain-text
 paths in any output (grep, pytest, absolute, repo-relative, `path:123`
 citations) get the same treatment through a resolver: a mention only
 becomes a link if it names a real file inside the fence (seated room's
-branch dir first, then the AIPass root), so a dead path never underlines.
+branch dir first, then the seated project's root), so a dead path never
+underlines.
 Both open jumped to the cited line. URLs open in the system browser. Plain
 clicks stay tmux's — only the ctrl-chord activates, so claude cites
 `file.py:42`, one ctrl+click, and you're reading it beside the live
@@ -113,9 +140,10 @@ The changes badge opens the same kind of tab holding the branch's full
 uncommitted diff in patch syntax. Diff tabs refetch every time they come
 back to the front (a diff goes stale the moment the agent keeps working);
 file tabs load once. Everything is read-only and fenced: the backend
-canonicalizes every requested path and refuses anything outside the AIPass
-root, viewers cap at 512 KB, binaries are refused. There are no write
-commands in the codebase — committing stays in the terminal, through drone.
+canonicalizes every requested path and refuses anything outside the seated
+project's root, viewers cap at 512 KB, binaries are refused. There are no
+write commands in the codebase — committing stays in the terminal, through
+drone.
 
 ### Terminal
 
@@ -174,7 +202,8 @@ resulting green lamps like any others.
 | resume kind | `~/.claude/projects/<munged-path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries; headless dispatch runs never do |
 | mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12/17 cards were wrong, 2026-08-10) |
 | other figures | the branch's `DASHBOARD.local.json` `quick_status` |
-| files / viewer | `list_dir` + `read_file_text`, fenced to the AIPass root |
+| projects | sealed `<NAME>_REGISTRY.json` census: the anchor, its `projects/*`, its siblings — fleet dir from the registry's own `branches[].path` |
+| files / viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
 | changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
 | terminal links | claude's OSC 8 `file://` hyperlinks (claimed by the app's link handler) + plain-text paths, both through the fenced `resolve_paths` command (seated branch dir, then root — only real files link); URLs through the opener plugin's url-only grant, never reveal-in-dir |
 | room | `tmux list-sessions` (one call per snapshot) — the only tmux verbs BAUD runs are `new-session -A`, `list-sessions`, `kill-session` on the end-room click, and `set-option mouse on` |

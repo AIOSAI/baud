@@ -45,11 +45,23 @@
 //! modes disappear because there is no respawn - only reattach. The only
 //! tmux verbs in this codebase: `new-session -A`, `list-sessions`,
 //! `kill-session` (the explicit "end room" click), `set-option mouse`.
+//!
+//! Milestone 7 makes the fleet view SEATABLE: a sealed `<NAME>_REGISTRY.json`
+//! marks a directory as a project, and BAUD can seat its whole read surface -
+//! fleet scan, fence, new shells - in any project it discovered ITSELF: the
+//! anchor tree it launched from, `projects/*` nested inside it, and the
+//! anchor's sibling directories. The frontend never names a path; it picks
+//! from the backend's census by NAME, so where BAUD reads stays backend-owned
+//! even with a switcher in the header. Rooms in a non-anchor project carry
+//! the project in their session name (`baud-<project>-<branch>`) so two
+//! projects' same-named branches can never attach to each other's sessions;
+//! anchor rooms keep the plain names they have always had.
 
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 
 use serde::Serialize;
 use serde_json::Value;
@@ -150,20 +162,23 @@ impl BranchStatus {
 /// A full read of the fleet at one instant.
 #[derive(Debug, Clone, Serialize)]
 pub struct FleetSnapshot {
-    /// Resolved AIPass root, for display. Empty when resolution failed.
-    pub aipass_root: String,
+    /// The seated project's canonical name. Empty when resolution failed.
+    pub project: String,
+    /// The seated project's root, for display. Empty when resolution failed.
+    pub root: String,
     /// ISO-8601 UTC timestamp of this snapshot.
     pub generated_at: String,
     /// Human-readable reason the snapshot is empty or partial.
     pub error: Option<String>,
-    /// One entry per directory under `<root>/src/aipass/`.
+    /// One entry per directory under the seated project's fleet dir.
     pub branches: Vec<BranchStatus>,
 }
 
 impl FleetSnapshot {
     fn failed(error: String) -> Self {
         Self {
-            aipass_root: String::new(),
+            project: String::new(),
+            root: String::new(),
             generated_at: now_iso8601(),
             error: Some(error),
             branches: Vec::new(),
@@ -220,6 +235,208 @@ fn resolve_aipass_root() -> Result<PathBuf, String> {
          containing 'src/aipass' (searched upward from '{}')",
         cwd.display()
     ))
+}
+
+/// The seal that turns a directory into a project: `<NAME>_REGISTRY.json` in
+/// its root. The filename stem IS the canonical project name - the same
+/// convention the wider ecosystem resolves external projects by.
+const REGISTRY_SUFFIX: &str = "_REGISTRY.json";
+
+/// Where a project keeps nested projects (AIPass keeps baud itself here).
+const PROJECTS_SUBDIR: &str = "projects";
+
+/// One project BAUD can seat its read surface in.
+#[derive(Debug, Clone, Serialize)]
+pub struct Project {
+    /// Canonical name from the registry filename: `VERA-STUDIO_REGISTRY.json`
+    /// seals "VERA-STUDIO".
+    pub name: String,
+    /// Absolute project root - the fence while this project is seated.
+    pub root: PathBuf,
+    /// Absolute directory the branch cards come from.
+    pub fleet_dir: PathBuf,
+    /// True for the anchor - the AIPass tree BAUD resolved at launch.
+    pub anchor: bool,
+}
+
+impl Project {
+    /// The room-name scope for this project's branches: anchor rooms keep
+    /// their historical plain names, everyone else's carry the project.
+    pub(crate) fn room_scope(&self) -> Option<String> {
+        (!self.anchor).then(|| self.name.to_lowercase())
+    }
+}
+
+/// One row of the switcher menu.
+#[derive(Debug, Clone, Serialize)]
+pub struct ProjectListing {
+    pub name: String,
+    pub root: String,
+    pub anchor: bool,
+    pub active: bool,
+}
+
+/// Which project the fleet view, the fence, and new shells follow.
+///
+/// `None` means the anchor. Only [`project_switch`] ever writes it, and only
+/// to a project the backend discovered itself - the frontend cannot steer
+/// BAUD into an arbitrary directory by name or by path.
+#[derive(Default)]
+pub struct ActiveProject(Mutex<Option<Project>>);
+
+/// The registry file sealing `dir`, if any. Legacy trees can carry several;
+/// the lexically first wins so the answer never depends on readdir order.
+fn registry_in(dir: &Path) -> Option<PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    let mut seals: Vec<PathBuf> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .file_name()
+                    .map(|name| {
+                        let name = name.to_string_lossy();
+                        name.len() > REGISTRY_SUFFIX.len() && name.ends_with(REGISTRY_SUFFIX)
+                    })
+                    .unwrap_or(false)
+        })
+        .collect();
+    seals.sort();
+    seals.into_iter().next()
+}
+
+/// Read a sealed directory into a [`Project`].
+///
+/// The fleet dir comes from the registry's own branch paths (the parent of
+/// the first `branches[].path`), not from name-munging - registries are the
+/// truth about their own layout. Reads as `None` when the seal is missing,
+/// the registry lists no branch paths, the branches sit at the project root
+/// itself (legacy flat layouts BAUD cannot card), or the fleet dir is gone
+/// from disk.
+fn project_from_dir(dir: &Path, anchor: bool) -> Option<Project> {
+    let registry = registry_in(dir)?;
+    let file_name = registry.file_name()?.to_string_lossy().into_owned();
+    let name = file_name.strip_suffix(REGISTRY_SUFFIX)?.to_string();
+
+    let raw = fs::read_to_string(&registry).ok()?;
+    let document: Value = serde_json::from_str(&raw).ok()?;
+
+    let first_branch_path = document
+        .get("branches")
+        .and_then(Value::as_array)?
+        .iter()
+        .find_map(|branch| branch.get("path").and_then(Value::as_str))
+        .map(Path::new)?;
+
+    let fleet_relative = first_branch_path.parent()?;
+    if fleet_relative.as_os_str().is_empty() {
+        return None;
+    }
+    let fleet_dir = dir.join(fleet_relative);
+    if !fleet_dir.is_dir() {
+        return None;
+    }
+
+    Some(Project {
+        name,
+        root: dir.to_path_buf(),
+        fleet_dir,
+        anchor,
+    })
+}
+
+/// The anchor as a project. An anchor tree whose registry is unreadable or
+/// unsealed still seats - `resolve_aipass_root` already proved `src/aipass`
+/// exists, so the classic layout is the honest fallback.
+fn anchor_project() -> Result<Project, String> {
+    let root = resolve_aipass_root()?;
+    Ok(project_from_dir(&root, true).unwrap_or_else(|| Project {
+        name: "AIPASS".to_string(),
+        fleet_dir: join_all(&root, &FLEET_RELATIVE_DIR),
+        root,
+        anchor: true,
+    }))
+}
+
+/// Every project BAUD can seat: the anchor, its nested `projects/*`, and its
+/// sibling directories. Anchor first, the rest alphabetical; deduped on the
+/// canonical root so the anchor never lists twice from the sibling scan.
+fn discover_projects(anchor: &Project) -> Vec<Project> {
+    let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    seen.insert(
+        anchor
+            .root
+            .canonicalize()
+            .unwrap_or_else(|_| anchor.root.clone()),
+    );
+
+    let mut projects = vec![anchor.clone()];
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    for parent in [Some(anchor.root.join(PROJECTS_SUBDIR)), anchor.root.parent().map(Path::to_path_buf)]
+        .into_iter()
+        .flatten()
+    {
+        if let Ok(entries) = fs::read_dir(&parent) {
+            candidates.extend(entries.flatten().map(|entry| entry.path()).filter(|path| path.is_dir()));
+        }
+    }
+
+    let mut found: Vec<Project> = candidates
+        .into_iter()
+        .filter(|dir| seen.insert(dir.canonicalize().unwrap_or_else(|_| dir.clone())))
+        .filter_map(|dir| project_from_dir(&dir, false))
+        .collect();
+    found.sort_by(|a, b| a.name.cmp(&b.name));
+    projects.extend(found);
+    projects
+}
+
+/// The seated project, defaulting to the anchor. Every command that reads
+/// the filesystem resolves through here.
+pub(crate) fn active_project(state: &ActiveProject) -> Result<Project, String> {
+    let seated = state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clone();
+    match seated {
+        Some(project) => Ok(project),
+        None => anchor_project(),
+    }
+}
+
+/// The switcher menu: every discovered project, the seated one flagged.
+#[tauri::command]
+fn list_projects(state: tauri::State<'_, ActiveProject>) -> Result<Vec<ProjectListing>, String> {
+    let anchor = anchor_project()?;
+    let active = active_project(&state)?;
+    Ok(discover_projects(&anchor)
+        .into_iter()
+        .map(|project| ProjectListing {
+            active: project.root == active.root,
+            name: project.name,
+            root: project.root.display().to_string(),
+            anchor: project.anchor,
+        })
+        .collect())
+}
+
+/// Seat the fleet view in a discovered project. The name must match the
+/// census exactly - there is deliberately no way to hand this command a path.
+#[tauri::command]
+fn project_switch(name: String, state: tauri::State<'_, ActiveProject>) -> Result<(), String> {
+    let anchor = anchor_project()?;
+    let project = discover_projects(&anchor)
+        .into_iter()
+        .find(|project| project.name == name)
+        .ok_or_else(|| format!("no discovered project named '{name}'"))?;
+
+    *state
+        .0
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(project);
+    Ok(())
 }
 
 /// Classify a `/proc/<pid>/cmdline` buffer (NUL-separated argv).
@@ -415,18 +632,19 @@ const NOISE_DIRS: [&str; 6] = [
 const VIEWER_MAX_BYTES: u64 = 512 * 1024;
 
 /// Canonicalize a frontend-supplied path and refuse anything outside the
-/// AIPass root. This is the fence under every file-access command: the
-/// webview can name paths, but only ones the fleet view already lives in.
-fn fenced_path(raw: &str) -> Result<PathBuf, String> {
-    let root = resolve_aipass_root()?
+/// seated project's root. This is the fence under every file-access command:
+/// the webview can name paths, but only ones the fleet view already lives in
+/// - and when the operator switches projects, the fence moves WITH the seat.
+fn fenced_path_in(root: &Path, raw: &str) -> Result<PathBuf, String> {
+    let root = root
         .canonicalize()
-        .map_err(|err| format!("could not canonicalize the AIPass root: {err}"))?;
+        .map_err(|err| format!("could not canonicalize the project root: {err}"))?;
     let path = PathBuf::from(raw)
         .canonicalize()
         .map_err(|err| format!("could not resolve '{raw}': {err}"))?;
     if !path.starts_with(&root) {
         return Err(format!(
-            "'{}' is outside the AIPass root - refusing to read it",
+            "'{}' is outside the seated project - refusing to read it",
             path.display()
         ));
     }
@@ -449,8 +667,8 @@ fn viewer_text(mut bytes: Vec<u8>, cap: usize) -> Result<(String, bool), String>
 /// List one directory level: dirs first, then files, both alphabetical.
 /// Read-only and fenced; noise directories are filtered at the source.
 #[tauri::command]
-fn list_dir(path: String) -> Result<Vec<DirEntryInfo>, String> {
-    let dir = fenced_path(&path)?;
+fn list_dir(path: String, state: tauri::State<'_, ActiveProject>) -> Result<Vec<DirEntryInfo>, String> {
+    let dir = fenced_path_in(&active_project(&state)?.root, &path)?;
     let entries = fs::read_dir(&dir)
         .map_err(|err| format!("could not read '{}': {err}", dir.display()))?;
 
@@ -478,8 +696,8 @@ fn list_dir(path: String) -> Result<Vec<DirEntryInfo>, String> {
 
 /// Read a file for the viewer. Read-only and fenced, capped, text-only.
 #[tauri::command]
-fn read_file_text(path: String) -> Result<FileText, String> {
-    let file_path = fenced_path(&path)?;
+fn read_file_text(path: String, state: tauri::State<'_, ActiveProject>) -> Result<FileText, String> {
+    let file_path = fenced_path_in(&active_project(&state)?.root, &path)?;
     let file = fs::File::open(&file_path)
         .map_err(|err| format!("could not open '{}': {err}", file_path.display()))?;
 
@@ -500,29 +718,38 @@ fn read_file_text(path: String) -> Result<FileText, String> {
 
 /// Resolve path candidates a terminal line mentioned into openable files.
 /// Absolute candidates are tried as given; relative ones against `base` (the
-/// seated room's branch dir), then the AIPass root. First attempt that
-/// canonicalizes to a regular file inside the fence wins; everything else is
-/// None - the terminal only underlines what will actually open.
+/// seated room's branch dir), then the seated project's root. First attempt
+/// that canonicalizes to a regular file inside the fence wins; everything
+/// else is None - the terminal only underlines what will actually open.
 #[tauri::command]
-fn resolve_paths(base: Option<String>, candidates: Vec<String>) -> Vec<Option<String>> {
+fn resolve_paths(
+    base: Option<String>,
+    candidates: Vec<String>,
+    state: tauri::State<'_, ActiveProject>,
+) -> Result<Vec<Option<String>>, String> {
+    let root = active_project(&state)?.root;
+    Ok(resolve_paths_in(&root, base.as_deref(), &candidates))
+}
+
+fn resolve_paths_in(root: &Path, base: Option<&str>, candidates: &[String]) -> Vec<Option<String>> {
     candidates
         .iter()
-        .map(|candidate| resolve_candidate(base.as_deref(), candidate))
+        .map(|candidate| resolve_candidate(root, base, candidate))
         .collect()
 }
 
-fn resolve_candidate(base: Option<&str>, candidate: &str) -> Option<String> {
+fn resolve_candidate(root: &Path, base: Option<&str>, candidate: &str) -> Option<String> {
     let raw = Path::new(candidate);
     let attempts: Vec<PathBuf> = if raw.is_absolute() {
         vec![raw.to_path_buf()]
     } else {
         base.iter()
             .map(|dir| Path::new(dir).join(raw))
-            .chain(resolve_aipass_root().ok().map(|root| root.join(raw)))
+            .chain(std::iter::once(root.join(raw)))
             .collect()
     };
     attempts.into_iter().find_map(|attempt| {
-        let path = fenced_path(&attempt.display().to_string()).ok()?;
+        let path = fenced_path_in(root, &attempt.display().to_string()).ok()?;
         path.is_file().then(|| path.display().to_string())
     })
 }
@@ -579,14 +806,14 @@ fn git_diff_in(dir: &Path) -> Result<FileText, String> {
 
 /// Count a branch's uncommitted files for the card badge. Fenced, read-only.
 #[tauri::command]
-fn git_changes(path: String) -> Result<GitChanges, String> {
-    Ok(git_changes_in(&fenced_path(&path)?))
+fn git_changes(path: String, state: tauri::State<'_, ActiveProject>) -> Result<GitChanges, String> {
+    Ok(git_changes_in(&fenced_path_in(&active_project(&state)?.root, &path)?))
 }
 
 /// The diff behind the badge, for the changes tab. Fenced, read-only.
 #[tauri::command]
-fn git_diff_text(path: String) -> Result<FileText, String> {
-    git_diff_in(&fenced_path(&path)?)
+fn git_diff_text(path: String, state: tauri::State<'_, ActiveProject>) -> Result<FileText, String> {
+    git_diff_in(&fenced_path_in(&active_project(&state)?.root, &path)?)
 }
 
 /// Read a `quick_status` count that may be a number or a list of items.
@@ -604,18 +831,27 @@ fn count_field(quick_status: &Value, key: &str) -> u64 {
 /// tmux target syntax gives `.` and `:` meanings of their own, so anything
 /// outside `[A-Za-z0-9_-]` becomes `-`. Exact-match lookups use the `=`
 /// target prefix everywhere, so a sanitized name can never glob another.
-pub fn room_name(branch_name: &str) -> String {
-    let safe: String = branch_name
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    format!("{ROOM_PREFIX}{safe}")
+///
+/// `scope` is the seated project's mark for non-anchor projects (m7): scoped
+/// rooms (`baud-vera-studio-vera`) keep two projects' same-named branches
+/// out of each other's sessions, while anchor rooms keep the plain
+/// `baud-<branch>` names that predate the switcher.
+pub fn room_name(scope: Option<&str>, branch_name: &str) -> String {
+    let sanitize = |text: &str| -> String {
+        text.chars()
+            .map(|ch| {
+                if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                    ch
+                } else {
+                    '-'
+                }
+            })
+            .collect()
+    };
+    match scope {
+        Some(project) => format!("{ROOM_PREFIX}{}-{}", sanitize(project), sanitize(branch_name)),
+        None => format!("{ROOM_PREFIX}{}", sanitize(branch_name)),
+    }
 }
 
 /// Every live tmux session name. No server (or no tmux) reads as no rooms -
@@ -637,10 +873,15 @@ fn list_rooms() -> std::collections::HashSet<String> {
 
 /// End a branch's room for real - the ONE way a room dies (Patrick ruling
 /// 2026-08-10: detach everywhere else). Killing a room that is already gone
-/// is the goal state, not an error.
+/// is the goal state, not an error. The room is the SEATED project's - the
+/// same scoping the card's badge and attach button used.
 #[tauri::command]
-fn room_kill(branch_name: String) -> Result<(), String> {
-    let room = room_name(&branch_name);
+fn room_kill(branch_name: String, state: tauri::State<'_, ActiveProject>) -> Result<(), String> {
+    let project = active_project(&state)?;
+    room_kill_named(&room_name(project.room_scope().as_deref(), &branch_name))
+}
+
+fn room_kill_named(room: &str) -> Result<(), String> {
     let output = Command::new("tmux")
         .args(["kill-session", "-t", &format!("={room}")])
         .output()
@@ -731,6 +972,7 @@ fn read_branch(
     name: String,
     sessions: &[ClaudeSession],
     rooms: &std::collections::HashSet<String>,
+    room_scope: Option<&str>,
 ) -> BranchStatus {
     let mut status = BranchStatus::new(name, branch_dir.display().to_string());
     status.is_citizen = join_all(branch_dir, &PASSPORT_RELATIVE_PATH).is_file();
@@ -749,7 +991,7 @@ fn read_branch(
     status.has_history = has_history;
     status.resume_id = resume_id;
 
-    status.has_room = rooms.contains(&room_name(&status.name));
+    status.has_room = rooms.contains(&room_name(room_scope, &status.name));
 
     apply_dashboard(branch_dir, &mut status);
     let (new_mail, opened_mail) = mail_counts_in(branch_dir);
@@ -758,11 +1000,12 @@ fn read_branch(
     status
 }
 
-/// Scan `<root>/src/aipass/*/` - visible directories only.
-fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
-    let fleet_dir = join_all(root, &FLEET_RELATIVE_DIR);
+/// Scan the seated project's fleet dir - visible directories only.
+fn scan_fleet(project: &Project) -> Result<Vec<BranchStatus>, String> {
+    let fleet_dir = &project.fleet_dir;
+    let room_scope = project.room_scope();
 
-    let entries = fs::read_dir(&fleet_dir)
+    let entries = fs::read_dir(fleet_dir)
         .map_err(|err| format!("could not read '{}': {err}", fleet_dir.display()))?;
 
     // One process-table pass shared by every branch in this snapshot.
@@ -793,7 +1036,13 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
             continue;
         }
 
-        branches.push(read_branch(&entry.path(), name, &sessions, &rooms));
+        branches.push(read_branch(
+            &entry.path(),
+            name,
+            &sessions,
+            &rooms,
+            room_scope.as_deref(),
+        ));
     }
 
     branches.sort_by(|a, b| a.name.cmp(&b.name));
@@ -801,25 +1050,28 @@ fn scan_fleet(root: &Path) -> Result<Vec<BranchStatus>, String> {
 }
 
 /// The fleet view's one command. Read-only by construction: it takes no
-/// arguments, so the frontend cannot even steer where it reads.
+/// path arguments, so the frontend cannot steer where it reads - it can only
+/// pick a seat from the backend's own census via [`project_switch`].
 #[tauri::command]
-fn fleet_snapshot() -> FleetSnapshot {
-    let root = match resolve_aipass_root() {
-        Ok(root) => root,
+fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
+    let project = match active_project(&state) {
+        Ok(project) => project,
         Err(error) => return FleetSnapshot::failed(error),
     };
 
-    let root_display = root.display().to_string();
+    let (name, root_display) = (project.name.clone(), project.root.display().to_string());
 
-    match scan_fleet(&root) {
+    match scan_fleet(&project) {
         Ok(branches) => FleetSnapshot {
-            aipass_root: root_display,
+            project: name,
+            root: root_display,
             generated_at: now_iso8601(),
             error: None,
             branches,
         },
         Err(error) => FleetSnapshot {
-            aipass_root: root_display,
+            project: name,
+            root: root_display,
             generated_at: now_iso8601(),
             error: Some(error),
             branches: Vec::new(),
@@ -831,6 +1083,7 @@ fn fleet_snapshot() -> FleetSnapshot {
 pub fn run() {
     tauri::Builder::default()
         .manage(pty::PtyRegistry::default())
+        .manage(ActiveProject::default())
         // The opener plugin exists for exactly one gesture: ctrl+clicked URLs
         // in the terminal open in the default browser. Its capability grant
         // is url-only - no reveal-in-dir, no open-path.
@@ -853,6 +1106,8 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             fleet_snapshot,
+            list_projects,
+            project_switch,
             list_dir,
             read_file_text,
             resolve_paths,
@@ -1036,11 +1291,35 @@ mod tests {
 
     #[test]
     fn room_names_are_tmux_safe() {
-        assert_eq!(room_name("devpulse"), "baud-devpulse");
-        assert_eq!(room_name("ai_mail"), "baud-ai_mail");
+        assert_eq!(room_name(None, "devpulse"), "baud-devpulse");
+        assert_eq!(room_name(None, "ai_mail"), "baud-ai_mail");
         // '.' and ':' carry tmux target syntax; anything odd flattens to '-'.
-        assert_eq!(room_name("AIPASS.admin"), "baud-AIPASS-admin");
-        assert_eq!(room_name("a:b c"), "baud-a-b-c");
+        assert_eq!(room_name(None, "AIPASS.admin"), "baud-AIPASS-admin");
+        assert_eq!(room_name(None, "a:b c"), "baud-a-b-c");
+    }
+
+    #[test]
+    fn external_rooms_carry_the_project_scope() {
+        // Anchor rooms keep their historical plain names; a seated external
+        // project marks its rooms so same-named branches can never collide.
+        assert_eq!(room_name(Some("vera-studio"), "vera"), "baud-vera-studio-vera");
+        assert_eq!(room_name(Some("chess"), "chess"), "baud-chess-chess");
+        // The scope is sanitized through the same charset as the branch.
+        assert_eq!(room_name(Some("a.b:c"), "x"), "baud-a-b-c-x");
+
+        let anchor = Project {
+            name: "AIPASS".into(),
+            root: PathBuf::from("/x"),
+            fleet_dir: PathBuf::from("/x/src/aipass"),
+            anchor: true,
+        };
+        assert_eq!(anchor.room_scope(), None);
+        let external = Project {
+            name: "VERA-STUDIO".into(),
+            anchor: false,
+            ..anchor
+        };
+        assert_eq!(external.room_scope().as_deref(), Some("vera-studio"));
     }
 
     #[test]
@@ -1048,7 +1327,7 @@ mod tests {
         // A real throwaway tmux session - the machine runs on tmux (the whole
         // rooms doctrine leans on it), so exercise the actual verbs.
         let branch = format!("roomtest-{}", std::process::id());
-        let room = room_name(&branch);
+        let room = room_name(None, &branch);
         let spawned = Command::new("tmux")
             .args(["new-session", "-d", "-s", &room])
             .output()
@@ -1057,11 +1336,11 @@ mod tests {
 
         assert!(list_rooms().contains(&room), "live room missing from list");
 
-        room_kill(branch.clone()).expect("ending a live room must succeed");
+        room_kill_named(&room).expect("ending a live room must succeed");
         assert!(!list_rooms().contains(&room), "room survived room_kill");
 
         // Ending a room that is already gone is idempotent success.
-        room_kill(branch).expect("ending a dead room must be a no-op");
+        room_kill_named(&room).expect("ending a dead room must be a no-op");
     }
 
     #[test]
@@ -1070,6 +1349,111 @@ mod tests {
         assert_eq!(classify_claude_cmdline(&argv(&["/usr/bin/claudette"])), None);
         assert_eq!(classify_claude_cmdline(&argv(&[])), None);
         assert_eq!(classify_claude_cmdline(b""), None);
+    }
+
+    #[test]
+    fn sealed_dirs_read_as_projects() {
+        let base = std::env::temp_dir().join(format!("baud-seal-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+
+        // A modern sealed project: the registry's own branch paths name the
+        // fleet dir; the filename stem names the project.
+        let vera = base.join("Vera-Studio");
+        fs::create_dir_all(vera.join("src/vera_studio/vera")).unwrap();
+        fs::write(
+            vera.join("VERA-STUDIO_REGISTRY.json"),
+            r#"{"metadata":{},"branches":[{"name":"VERA","path":"src/vera_studio/vera"}]}"#,
+        )
+        .unwrap();
+        let project = project_from_dir(&vera, false).expect("sealed dir reads as a project");
+        assert_eq!(project.name, "VERA-STUDIO");
+        assert_eq!(project.fleet_dir, vera.join("src/vera_studio"));
+        assert!(!project.anchor);
+
+        // No seal: not a project.
+        let bare = base.join("bare");
+        fs::create_dir_all(&bare).unwrap();
+        assert!(project_from_dir(&bare, false).is_none());
+
+        // Sealed but no branch paths: nothing to card, not switchable.
+        let empty = base.join("empty");
+        fs::create_dir_all(&empty).unwrap();
+        fs::write(empty.join("EMPTY_REGISTRY.json"), r#"{"branches":[]}"#).unwrap();
+        assert!(project_from_dir(&empty, false).is_none());
+
+        // Legacy flat layout - branches sit at the root itself: unswitchable.
+        let flat = base.join("flat");
+        fs::create_dir_all(flat.join("devpulse")).unwrap();
+        fs::write(
+            flat.join("FLAT_REGISTRY.json"),
+            r#"{"branches":[{"path":"devpulse"}]}"#,
+        )
+        .unwrap();
+        assert!(project_from_dir(&flat, false).is_none());
+
+        // Two seals in one dir (legacy trees): the lexically first wins.
+        let twin = base.join("twin");
+        fs::create_dir_all(twin.join("src/twin/one")).unwrap();
+        for seal in ["B_REGISTRY.json", "A_REGISTRY.json"] {
+            fs::write(twin.join(seal), r#"{"branches":[{"path":"src/twin/one"}]}"#).unwrap();
+        }
+        assert_eq!(project_from_dir(&twin, false).unwrap().name, "A");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn discovery_covers_anchor_nested_and_siblings_without_duplicates() {
+        let base = std::env::temp_dir().join(format!("baud-disco-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+
+        let seal = |dir: &Path, name: &str, fleet: &str| {
+            fs::create_dir_all(dir.join(fleet).join("one")).unwrap();
+            fs::write(
+                dir.join(format!("{name}_REGISTRY.json")),
+                format!(r#"{{"branches":[{{"path":"{fleet}/one"}}]}}"#),
+            )
+            .unwrap();
+        };
+
+        let anchor_dir = base.join("AIPass");
+        seal(&anchor_dir, "AIPASS", "src/aipass");
+        seal(&anchor_dir.join("projects").join("baud"), "BAUD", "src/baud");
+        seal(&base.join("Vera-Studio"), "VERA-STUDIO", "src/vera_studio");
+        // A sibling with no seal is not a project and never listed.
+        fs::create_dir_all(base.join("scratch")).unwrap();
+
+        let anchor = project_from_dir(&anchor_dir, true).expect("anchor seals");
+        let names: Vec<String> = discover_projects(&anchor)
+            .into_iter()
+            .map(|project| project.name)
+            .collect();
+        // Anchor first (never duplicated by the sibling scan), rest sorted.
+        assert_eq!(names, vec!["AIPASS", "BAUD", "VERA-STUDIO"]);
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_fence_follows_the_given_root() {
+        let base = std::env::temp_dir().join(format!("baud-fence-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (yard_a, yard_b) = (base.join("a"), base.join("b"));
+        fs::create_dir_all(&yard_a).unwrap();
+        fs::create_dir_all(&yard_b).unwrap();
+        fs::write(yard_a.join("mine.txt"), "a").unwrap();
+        fs::write(yard_b.join("theirs.txt"), "b").unwrap();
+
+        let mine = yard_a.join("mine.txt").display().to_string();
+        let theirs = yard_b.join("theirs.txt").display().to_string();
+
+        // Seated in A: A's file opens, B's is refused. Reseat in B: reversed.
+        assert!(fenced_path_in(&yard_a, &mine).is_ok());
+        assert!(fenced_path_in(&yard_a, &theirs).is_err());
+        assert!(fenced_path_in(&yard_b, &theirs).is_ok());
+        assert!(fenced_path_in(&yard_b, &mine).is_err());
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
@@ -1083,9 +1467,10 @@ mod tests {
         let readme = root.join("README.md");
         assert!(readme.is_file(), "test expects the AIPass root README");
 
-        let hits = resolve_paths(
+        let hits = resolve_paths_in(
+            &root,
             None,
-            vec![
+            &[
                 readme.display().to_string(),   // absolute, real
                 "README.md".to_string(),        // relative -> root fallback
                 "/etc/passwd".to_string(),      // real file OUTSIDE the fence
@@ -1109,7 +1494,11 @@ mod tests {
         let base = root.join("projects").join("baud");
         assert!(base.join("README.md").is_file(), "test expects baud's README");
 
-        let hits = resolve_paths(Some(base.display().to_string()), vec!["README.md".to_string()]);
+        let hits = resolve_paths_in(
+            &root,
+            Some(base.display().to_string()).as_deref(),
+            &["README.md".to_string()],
+        );
         let hit = hits[0].as_deref().expect("baud README resolves");
         assert!(
             hit.ends_with("projects/baud/README.md"),
