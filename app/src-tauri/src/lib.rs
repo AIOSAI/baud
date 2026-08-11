@@ -68,6 +68,7 @@ use serde_json::Value;
 use tauri::Manager;
 
 mod pty;
+mod screenshot;
 
 /// Marker directory that identifies an AIPass root: `<root>/src/aipass`.
 const FLEET_RELATIVE_DIR: [&str; 2] = ["src", "aipass"];
@@ -123,6 +124,10 @@ pub struct BranchStatus {
     /// A `baud-<branch>` tmux session exists - the agent has a living room
     /// to attach to, whether or not anything is running inside it.
     pub has_room: bool,
+    /// Sub-agents running inside this branch's live claude session(s) right
+    /// now - unmatched Agent/Task spawn calls in recent transcripts. See
+    /// [`count_inflight_subagents`].
+    pub subagents: u64,
     /// Messages with status "new" in `.ai_mail.local/inbox.json`, 0 when the
     /// mailbox is missing or unreadable.
     pub new_mail: u64,
@@ -149,6 +154,7 @@ impl BranchStatus {
             has_history: false,
             resume_id: None,
             has_room: false,
+            subagents: 0,
             new_mail: 0,
             opened_mail: 0,
             active_plans: 0,
@@ -599,6 +605,161 @@ fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
     (false, newest)
 }
 
+/// Sub-agents are invisible to the process table: they run INSIDE the parent
+/// claude process, so m2.5's `/proc` scan can never see one. The truth lives
+/// in the session transcript - spawning a sub-agent leaves an assistant
+/// `tool_use` block (name "Agent"; "Task" in older sessions) whose
+/// `tool_result` only lands when the sub-agent finishes. Unmatched spawn
+/// calls = sub-agents running right now. Proven live 2026-08-10 against a
+/// dispatched @hooks session: 2 unmatched calls, 2 `subagents/*.jsonl` files
+/// growing beside the parent transcript.
+///
+/// Only sessions with recent writes are consulted (see
+/// [`SUBAGENT_LIVENESS_SECS`]) - a parent BLOCKED on a synchronous sub-agent
+/// writes nothing itself while the sub-agent's own file grows, so liveness
+/// checks the parent's mtime AND its `<session>/subagents/` dir (the same
+/// blind spot devpulse's watchdog false-fired on, 2026-08-08). A session that
+/// crashed mid-spawn can overcount until the window closes behind it; the
+/// window is the self-heal.
+const SUBAGENT_LIVENESS_SECS: u64 = 900;
+/// Spawn calls sit near the end of a live transcript: a parent waiting on
+/// sub-agents appends nothing past the spawning turn, so a bounded tail read
+/// is enough. A `tool_use` inside the tail always has its `tool_result` at or
+/// after it, never before - the pairing cannot be split by the cut.
+const SUBAGENT_TAIL_BYTES: u64 = 256 * 1024;
+
+/// Count unmatched Agent/Task `tool_use` calls in a transcript tail.
+///
+/// Sidechain lines (`"isSidechain":true` - the sub-agents' own turns in older
+/// transcript layouts) are skipped so a sub-agent's tool calls never inflate
+/// the parent's count. Malformed lines are skipped - the first line of a tail
+/// read is usually a mid-line cut.
+fn count_inflight_subagents(tail: &str) -> u64 {
+    let mut spawned: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for line in tail.lines() {
+        let entry: Value = match serde_json::from_str(line) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if entry.get("isSidechain").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
+        let blocks = match entry
+            .get("message")
+            .and_then(|message| message.get("content"))
+            .and_then(Value::as_array)
+        {
+            Some(blocks) => blocks,
+            None => continue,
+        };
+        for block in blocks {
+            match block.get("type").and_then(Value::as_str) {
+                Some("tool_use") => {
+                    let name = block.get("name").and_then(Value::as_str).unwrap_or("");
+                    if name == "Agent" || name == "Task" {
+                        if let Some(id) = block.get("id").and_then(Value::as_str) {
+                            spawned.insert(id.to_string());
+                        }
+                    }
+                }
+                Some("tool_result") => {
+                    if let Some(id) = block.get("tool_use_id").and_then(Value::as_str) {
+                        resolved.insert(id.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    spawned.difference(&resolved).count() as u64
+}
+
+/// True when the file behind `path` was modified within `window_secs`.
+fn modified_within(path: &Path, window_secs: u64) -> bool {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|elapsed| elapsed.as_secs() <= window_secs)
+}
+
+/// True when any `.jsonl` directly under `dir` was modified within the window.
+fn any_jsonl_modified_within(dir: &Path, window_secs: u64) -> bool {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return false,
+    };
+    entries.flatten().any(|entry| {
+        let path = entry.path();
+        path.extension().is_some_and(|ext| ext == "jsonl") && modified_within(&path, window_secs)
+    })
+}
+
+/// Sub-agents running under this branch's live claude session(s), summed
+/// across every recently-active transcript. Any failure to look reads as 0 -
+/// the card then simply shows no sub badge, which is always safe.
+fn subagent_count(branch_dir: &Path) -> u64 {
+    let home = match std::env::var("HOME") {
+        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
+        _ => return 0,
+    };
+    let transcripts = home
+        .join(".claude")
+        .join("projects")
+        .join(transcript_dir_name(branch_dir));
+    subagent_count_in(&transcripts)
+}
+
+fn subagent_count_in(transcripts: &Path) -> u64 {
+    let entries = match fs::read_dir(transcripts) {
+        Ok(entries) => entries,
+        Err(_) => return 0,
+    };
+
+    let mut count = 0;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.extension().is_some_and(|ext| ext == "jsonl") {
+            continue;
+        }
+        // Liveness: the parent wrote recently, or its sub-agents did.
+        let session_dir = path.with_extension("").join("subagents");
+        if !modified_within(&path, SUBAGENT_LIVENESS_SECS)
+            && !any_jsonl_modified_within(&session_dir, SUBAGENT_LIVENESS_SECS)
+        {
+            continue;
+        }
+        count += count_inflight_subagents(&read_tail(&path, SUBAGENT_TAIL_BYTES));
+    }
+    count
+}
+
+/// The last `max_bytes` of a file as lossy UTF-8, empty on any failure.
+fn read_tail(path: &Path, max_bytes: u64) -> String {
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => return String::new(),
+    };
+    let len = match file.metadata() {
+        Ok(meta) => meta.len(),
+        Err(_) => return String::new(),
+    };
+    if len > max_bytes {
+        use std::io::Seek;
+        if file.seek(std::io::SeekFrom::Start(len - max_bytes)).is_err() {
+            return String::new();
+        }
+    }
+    let mut tail = Vec::with_capacity(max_bytes.min(len) as usize);
+    if file.read_to_end(&mut tail).is_err() {
+        return String::new();
+    }
+    String::from_utf8_lossy(&tail).into_owned()
+}
+
 /// One entry in a directory listing, for the file tree.
 #[derive(Debug, Clone, Serialize)]
 pub struct DirEntryInfo {
@@ -990,6 +1151,7 @@ fn read_branch(
     let (has_history, resume_id) = claude_history(&canonical);
     status.has_history = has_history;
     status.resume_id = resume_id;
+    status.subagents = subagent_count(&canonical);
 
     status.has_room = rooms.contains(&room_name(room_scope, &status.name));
 
@@ -1114,6 +1276,7 @@ pub fn run() {
             git_changes,
             git_diff_text,
             room_kill,
+            screenshot::screenshot_capture,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
@@ -1190,6 +1353,94 @@ mod tests {
         let headless = r#"{"type":"queue-operation","operation":"dequeue","sessionId":"x"}"#;
         assert!(interactive.contains(INTERACTIVE_MARKER));
         assert!(!headless.contains(INTERACTIVE_MARKER));
+    }
+
+    // Real line shapes from a live dispatched session (2026-08-10, @hooks
+    // running two research sub-agents): spawn is an assistant `tool_use`
+    // named "Agent", completion is a user `tool_result` echoing the id.
+    fn spawn_line(id: &str) -> String {
+        format!(
+            r#"{{"type":"assistant","isSidechain":false,"message":{{"content":[{{"type":"tool_use","id":"{id}","name":"Agent","input":{{"description":"research"}}}}]}}}}"#
+        )
+    }
+
+    fn result_line(id: &str) -> String {
+        format!(
+            r#"{{"type":"user","isSidechain":false,"message":{{"content":[{{"type":"tool_result","tool_use_id":"{id}","content":"done"}}]}}}}"#
+        )
+    }
+
+    #[test]
+    fn unmatched_spawns_are_running_subagents() {
+        // Two out, one back: exactly one still running.
+        let tail = format!(
+            "{}\n{}\n{}\n",
+            spawn_line("toolu_01aaa"),
+            spawn_line("toolu_01bbb"),
+            result_line("toolu_01aaa")
+        );
+        assert_eq!(count_inflight_subagents(&tail), 1);
+    }
+
+    #[test]
+    fn resolved_spawns_and_other_tools_count_zero() {
+        // A finished sub-agent and an in-flight Bash call: neither is a
+        // running sub-agent.
+        let bash = r#"{"type":"assistant","isSidechain":false,"message":{"content":[{"type":"tool_use","id":"toolu_01ccc","name":"Bash","input":{}}]}}"#;
+        let tail = format!(
+            "{}\n{}\n{bash}\n",
+            spawn_line("toolu_01aaa"),
+            result_line("toolu_01aaa")
+        );
+        assert_eq!(count_inflight_subagents(&tail), 0);
+    }
+
+    #[test]
+    fn task_name_and_sidechain_rules_hold() {
+        // Older sessions spawn via "Task" - still a sub-agent. A sidechain's
+        // own spawn-shaped line is the sub-agent talking, not the parent.
+        let task = r#"{"type":"assistant","isSidechain":false,"message":{"content":[{"type":"tool_use","id":"toolu_01ddd","name":"Task","input":{}}]}}"#;
+        let sidechain = r#"{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"tool_use","id":"toolu_01eee","name":"Agent","input":{}}]}}"#;
+        let tail = format!("{task}\n{sidechain}\n");
+        assert_eq!(count_inflight_subagents(&tail), 1);
+    }
+
+    #[test]
+    fn malformed_and_cut_lines_are_skipped() {
+        // A tail read usually opens mid-line; garbage must read as zero, and
+        // a cut first line must not hide the intact spawn after it.
+        let cut = r#"ge":{"content":[{"type":"tool_use","id":"toolu_01fff","name":"Agent"}]}}"#;
+        assert_eq!(count_inflight_subagents("not json at all\n"), 0);
+        let tail = format!("{cut}\n{}\n", spawn_line("toolu_01ggg"));
+        assert_eq!(count_inflight_subagents(&tail), 1);
+    }
+
+    #[test]
+    fn subagent_count_ties_to_recent_transcripts_only() {
+        // A real throwaway transcripts dir: one stale session mid-spawn (a
+        // crash last week must not light today's card) and one fresh.
+        let dir = std::env::temp_dir().join(format!("baud-sub-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let stale = dir.join("old-session.jsonl");
+        fs::write(&stale, spawn_line("toolu_01old")).unwrap();
+        let last_week = std::time::SystemTime::now()
+            - std::time::Duration::from_secs(SUBAGENT_LIVENESS_SECS * 4);
+        let times = fs::FileTimes::new().set_modified(last_week);
+        fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_times(times)
+            .unwrap();
+
+        let live = dir.join("live-session.jsonl");
+        fs::write(&live, format!("{}\n{}\n", spawn_line("toolu_01one"), spawn_line("toolu_01two")))
+            .unwrap();
+
+        assert_eq!(subagent_count_in(&dir), 2);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

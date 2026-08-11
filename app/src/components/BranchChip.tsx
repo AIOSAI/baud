@@ -111,6 +111,17 @@ export default function BranchChip({
         <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
         <h2 className="baud-chip-name">{branch.name}</h2>
         {badge ? <span className={`baud-badge ${badgeClass}`}>{badge}</span> : null}
+        {/* Sub-agents are invisible to the process table (they run inside the
+            parent claude) - this count comes from the session transcript:
+            spawn calls still waiting on their results. */}
+        {branch.subagents > 0 ? (
+          <span
+            className="baud-badge baud-badge-subagents"
+            title={`${branch.subagents} sub-agent(s) running inside this session`}
+          >
+            {branch.subagents} sub
+          </span>
+        ) : null}
       </header>
 
       {/* No summary line: the dashboard's summary string is generated from

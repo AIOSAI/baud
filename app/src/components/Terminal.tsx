@@ -35,6 +35,13 @@ export interface LaunchSpec {
 
 export interface TerminalHandle {
   launch(spec: LaunchSpec): void;
+  /**
+   * Type text into the live pty as if the operator had - because they did:
+   * every call traces to a click (camera button) or a drop gesture. The text
+   * is inserted WITHOUT a newline; sending stays the operator's keystroke.
+   * Returns false when there is no live session to type into.
+   */
+  typeText(text: string): boolean;
 }
 
 interface TerminalProps {
@@ -182,6 +189,13 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         // the new spawn attaches to the next room. Also revives a dead
         // terminal for free.
         restart();
+      },
+      typeText(text: string) {
+        const id = sessionRef.current;
+        if (!id) return false;
+        void invoke("pty_write", { id, data: text }).catch(() => {});
+        termRef.current?.focus();
+        return true;
       },
     }),
     [restart],

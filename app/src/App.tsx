@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 
+import Camera from "./components/Camera";
 import FleetStrip from "./components/FleetStrip";
 import type { LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
@@ -139,6 +141,41 @@ export default function App() {
     setActiveTab(TERMINAL_TAB);
   }, []);
 
+  // Deliver file paths INTO the chat box (m8): quoted only when they need
+  // it, wrapped in spaces so they join whatever the operator was typing,
+  // never submitted - Enter stays the operator's keystroke. Used by the
+  // camera button and the drop handler alike.
+  const deliverPaths = useCallback((paths: string[]) => {
+    if (paths.length === 0) return;
+    const quote = (text: string) =>
+      /[\s'"]/.test(text) ? `'${text.replace(/'/g, `'\\''`)}'` : text;
+    const typed = terminalRef.current?.typeText(` ${paths.map(quote).join(" ")} `) ?? false;
+    // The delivery's whole point is the chat box - bring it forward.
+    if (typed) setActiveTab(TERMINAL_TAB);
+  }, []);
+
+  // Drag-drop (m8): dropped files become their paths in the chat box - the
+  // same thing dropping onto a real terminal does. The webview intercepts
+  // the drop (so the navigation fence never sees a file:// load) and hands
+  // us real filesystem paths.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let mounted = true;
+    void getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (event.payload.type !== "drop") return;
+        deliverPaths(event.payload.paths ?? []);
+      })
+      .then((fn) => {
+        if (mounted) unlisten = fn;
+        else fn();
+      });
+    return () => {
+      mounted = false;
+      unlisten?.();
+    };
+  }, [deliverPaths]);
+
   const poll = useCallback(async (alive: () => boolean) => {
     try {
       const next = await invoke<FleetSnapshot>("fleet_snapshot");
@@ -213,6 +250,30 @@ export default function App() {
             <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
             <Total label="plans" value={plans} />
           </div>
+          <Camera onCaptured={(path) => deliverPaths([path])} />
+          {/* Notifications bell - a PLACEHOLDER on purpose (Patrick
+              2026-08-10): the reminder that BAUD-native notifications are
+              coming. It renders, it explains itself, it does nothing yet. */}
+          <button
+            type="button"
+            className="baud-tool-btn baud-tool-btn-placeholder"
+            title="notifications - placeholder, the bell gets wired later"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </button>
           <Zoom />
         </div>
       </header>

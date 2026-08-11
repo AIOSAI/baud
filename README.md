@@ -35,6 +35,25 @@ work too, even with the terminal focused (zoom keys belong to the app, not
 the shell). The level persists across restarts; clicking the percentage
 resets it.
 
+The **camera button** beside it takes a screenshot without leaving the
+conversation: one click opens the compositor's own picker (region, window,
+or whole screen — the XDG portal's interactive mode, the one door Wayland
+allows anyone), the capture is copied to `~/Pictures/BAUD/`, and its path
+is typed straight into the chat box — Claude reads images by path, so the
+operator just presses Enter. Amber while the picker is open, red when a
+capture failed or was cancelled (the tooltip says why). BAUD ships its own
+portal client — no external screenshot binaries, which is the
+self-contained doctrine for going cross-platform later.
+
+**Dropping a file** anywhere on the window does the same thing from the
+other direction: its path (quoted if it needs it) lands in the chat box,
+exactly what dropping onto a real terminal does. Screenshots taken outside
+BAUD drag in; screenshots taken inside print themselves.
+
+The **bell** between them is a placeholder on purpose — the visible
+reminder that BAUD-native notifications are planned. It renders, it
+explains itself on hover, it does nothing yet.
+
 ### The project switcher
 
 The chip beside the wordmark names the project the fleet view is **seated**
@@ -66,6 +85,11 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   Steady green = interactive (a live human-driven claude has its cwd in
   this branch — found by walking `/proc`, `-p`/`--print` runs excluded).
   Dim = idle.
+- **Sub badge** — an amber `N sub` in the header while the branch's live
+  session has sub-agents out. Sub-agents are invisible to the process
+  table (they run *inside* the parent claude), so the count comes from the
+  session transcript: spawn calls still waiting on their results. Worn
+  only when N > 0.
 - **Figures** — mail counted live from the branch's `inbox.json`; open /
   plans / todos from its `DASHBOARD.local.json`, plus its summary line and
   how fresh it is.
@@ -154,28 +178,28 @@ running claude stays resumable from its transcript.
 
 ## The seat model (read this before extending)
 
-BAUD has **one PTY — one seat**. A card click is a SWITCH by design: the
-current seat's whole process group gets SIGHUP (shell, claude, everything),
-a fresh shell opens, and the new agent sits down. Transcripts on disk make
-every eviction resumable, which is why one terminal can hop between agents
-instead of needing tabs.
+BAUD has **one PTY — one seat**, but since rooms (m6) the seat is a
+*window*, not a cage: a card click SIGHUPs the pty's process group, and
+for a room client that teardown is a **detach by construction** — the
+agent lives in the tmux server's process tree and keeps working. Rooms run
+in parallel; attention is singular. One terminal hops between agents
+because every room keeps its own scrollback and process alive behind the
+curtain.
 
 Consequences worth knowing:
 
-- Agents launched from BAUD are **mortal** — exactly one BAUD-hosted agent
-  is ever alive.
-- Agents living in **tmux rooms** are outside the blast radius entirely
-  (different process tree; BAUD has no code path into tmux). Their lamps
-  burn green through any amount of card-clicking.
-- There is **no "max agents" constant anywhere in the code**. A "3 green
-  lamps, third seat recycles" pattern is pure arithmetic: N tmux rooms + 1
-  BAUD seat. Kill a room, the max drops; open more rooms, it climbs.
+- Agents in **rooms are immortal to card-clicking** — only the `✕ end
+  room` button (`tmux kill-session`) actually ends one.
+- The **scratch shell** (no card) is the one mortal seat: its `✕ kill` is
+  a real SIGHUP kill, same as closing a terminal window — a claude running
+  there stays resumable from its transcript.
+- There is **no "max agents" constant anywhere in the code**. N rooms + 1
+  seat is pure arithmetic; open more rooms and the fleet grows.
 
-**Scaling path** (not built, deliberately): give cards their own tmux rooms
-— click = create-or-attach `tmux` session per branch, switch = detach
-instead of kill. Every agent becomes always-on and the seat limit
-disappears. The current one-seat model is a choice (cheap, simple, one
-claude's worth of RAM), not a ceiling.
+(Historical note: before m6 the seat itself was the cage — every card
+click killed the previous agent. This section described that model long
+after rooms shipped; truth restored 2026-08-10, the same night @hooks
+found the identical disease in its own README.)
 
 ## The two launch doors
 
@@ -207,6 +231,9 @@ resulting green lamps like any others.
 | changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
 | terminal links | claude's OSC 8 `file://` hyperlinks (claimed by the app's link handler) + plain-text paths, both through the fenced `resolve_paths` command (seated branch dir, then root — only real files link); URLs through the opener plugin's url-only grant, never reveal-in-dir |
 | room | `tmux list-sessions` (one call per snapshot) — the only tmux verbs BAUD runs are `new-session -A`, `list-sessions`, `kill-session` on the end-room click, and `set-option mouse on` |
+| sub badge | the session transcript's tail: `Agent`/`Task` spawn calls with no result yet, summed over transcripts active in the last 15 min — sub-agents never appear in `/proc`, they run inside the parent claude |
+| camera | the XDG Desktop Portal (`org.freedesktop.portal.Screenshot`, interactive) via BAUD's own client — the capture is copied to `~/Pictures/BAUD/` and its path typed into the chat box, never submitted |
+| dropped files | the webview's drag-drop event (real filesystem paths) — quoted and typed into the chat box, Enter stays the operator's |
 
 Every fallible read degrades to a default and records the failure in the
 payload — one bad file never takes down the snapshot.

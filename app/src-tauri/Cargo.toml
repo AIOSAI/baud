@@ -30,6 +30,9 @@ tauri-plugin-opener = "2.5.4"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.12.3", default-features = false, features = ["tokio"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

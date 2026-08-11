@@ -247,6 +247,40 @@ body {
   color: var(--baud-ink);
 }
 
+/* Header tools (m8): camera and the notifications bell. Same quiet family
+   as the zoom controls - present, discoverable, never shouting. */
+.baud-tool-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--baud-ink-faint);
+  padding: 0 7px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.baud-tool-btn:hover {
+  color: var(--baud-ink);
+}
+
+/* A capture request is out - the system picker owns the screen. */
+.baud-tool-btn-busy {
+  color: var(--baud-amber);
+  cursor: progress;
+}
+
+/* The last capture failed or was cancelled; the title says why. */
+.baud-tool-btn-failed {
+  color: var(--baud-red);
+}
+
+/* The bell renders but is not wired yet - deliberately fainter than its
+   working neighbours, a reminder rather than a control. */
+.baud-tool-btn-placeholder {
+  cursor: help;
+  opacity: 0.55;
+}
+
 .baud-zoom-failed {
   color: var(--baud-amber);
 }
@@ -421,6 +455,17 @@ body {
    Quiet on purpose - it is furniture, not an alert. */
 .baud-badge-room {
   color: var(--baud-ink-faint);
+}
+
+/* Sub-agents out: deeper churn than the state badge alone shows. Sits after
+   the state badge when both are worn - the sibling rule resets the auto
+   margin that would otherwise spread them apart. */
+.baud-badge-subagents {
+  color: var(--baud-amber);
+}
+
+.baud-badge + .baud-badge {
+  margin-left: 8px;
 }
 
 .baud-chip-foot {

@@ -8,6 +8,7 @@ export interface BranchStatus {
   has_history: boolean;
   resume_id: string | null;
   has_room: boolean;
+  subagents: number;
   new_mail: number;
   opened_mail: number;
   active_plans: number;
