@@ -27,6 +27,12 @@ interactive / unread mail / plans), the fleet strip, the operator terminal
 (the only element that flexes), and a footer with the resolved root and
 poll status. The fleet re-scans every 5 seconds.
 
+The header's zoom chip (`− 100% +`) scales the whole window, terminal
+included — browser-style `ctrl +` / `ctrl -` / `ctrl 0` and ctrl+scroll
+work too, even with the terminal focused (zoom keys belong to the app, not
+the shell). The level persists across restarts; clicking the percentage
+resets it.
+
 ### Cards
 
 One citizen, one card. The card IS the report — nothing hides in tooltips:

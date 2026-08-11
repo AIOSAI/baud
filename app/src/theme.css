@@ -111,9 +111,56 @@ body {
   text-shadow: 0 0 12px var(--baud-glow-green);
 }
 
+.baud-header-side {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
 .baud-totals {
   display: flex;
   gap: 20px;
+}
+
+/* Zoom chip: - 100% + · the whole window scales, buttons or ctrl keys. */
+.baud-zoom {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--baud-line);
+  border-radius: 6px;
+  padding: 1px 2px;
+}
+
+.baud-zoom-btn,
+.baud-zoom-level {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+}
+
+.baud-zoom-btn {
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 0 7px;
+}
+
+.baud-zoom-level {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  min-width: 36px;
+  text-align: center;
+  padding: 0 2px;
+}
+
+.baud-zoom-btn:hover,
+.baud-zoom-level:hover {
+  color: var(--baud-ink);
+}
+
+.baud-zoom-failed {
+  color: var(--baud-amber);
 }
 
 .baud-total {

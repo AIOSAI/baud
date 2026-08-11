@@ -7,6 +7,7 @@ import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
+import Zoom from "./components/Zoom";
 import { relativeAge } from "./age";
 import type { BranchStatus, FleetSnapshot } from "./types";
 
@@ -158,12 +159,15 @@ export default function App() {
       <header className="baud-header">
         <span className="baud-wordmark">BAUD</span>
 
-        <div className="baud-totals">
-          <Total label="citizens" value={citizens} />
-          <Total label="dispatched" value={dispatched} tone={dispatched > 0 ? "alert" : undefined} />
-          <Total label="interactive" value={interactive} tone={interactive > 0 ? "live" : undefined} />
-          <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
-          <Total label="plans" value={plans} />
+        <div className="baud-header-side">
+          <div className="baud-totals">
+            <Total label="citizens" value={citizens} />
+            <Total label="dispatched" value={dispatched} tone={dispatched > 0 ? "alert" : undefined} />
+            <Total label="interactive" value={interactive} tone={interactive > 0 ? "live" : undefined} />
+            <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
+            <Total label="plans" value={plans} />
+          </div>
+          <Zoom />
         </div>
       </header>
 
