@@ -626,7 +626,24 @@ const SUBAGENT_LIVENESS_SECS: u64 = 900;
 /// sub-agents appends nothing past the spawning turn, so a bounded tail read
 /// is enough. A `tool_use` inside the tail always has its `tool_result` at or
 /// after it, never before - the pairing cannot be split by the cut.
+///
+/// ASYNC agents break both assumptions (found live 2026-08-11: a 23-minute
+/// sweep agent never lit the badge): their `tool_result` is a launch ack that
+/// lands INSTANTLY, so the pair looks closed the whole run, and the parent
+/// keeps working, so the spawn scrolls out of any tail window. Pair-matching
+/// cannot see them at all. Their truth is on disk instead - see
+/// [`async_agents_running`].
 const SUBAGENT_TAIL_BYTES: u64 = 256 * 1024;
+
+/// An async agent writes its own `subagents/agent-<id>.jsonl` continuously
+/// while it works and goes quiet when it finishes or dies - there is no
+/// persistent "done" record anywhere (the completion notification scrolls out
+/// of the parent tail like everything else). A file written within this window
+/// counts as running; a finished or crashed agent drops off as the window
+/// closes behind it - the same self-heal-by-window doctrine as
+/// [`SUBAGENT_LIVENESS_SECS`]. Sized to ride out one long model call, which
+/// writes nothing until it returns.
+const AGENT_FILE_ACTIVE_SECS: u64 = 180;
 
 /// Count unmatched Agent/Task `tool_use` calls in a transcript tail.
 ///
@@ -634,7 +651,12 @@ const SUBAGENT_TAIL_BYTES: u64 = 256 * 1024;
 /// transcript layouts) are skipped so a sub-agent's tool calls never inflate
 /// the parent's count. Malformed lines are skipped - the first line of a tail
 /// read is usually a mid-line cut.
-fn count_inflight_subagents(tail: &str) -> u64 {
+///
+/// `meta_ids` are spawns owned by [`async_agents_running`] (their
+/// `agent-<id>.meta.json` names the spawning toolUseId): those are counted by
+/// file freshness over there, so they are excluded here - an async spawn still
+/// inside the tail must not count twice.
+fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::HashSet<String>) -> u64 {
     let mut spawned: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -660,7 +682,9 @@ fn count_inflight_subagents(tail: &str) -> u64 {
                     let name = block.get("name").and_then(Value::as_str).unwrap_or("");
                     if name == "Agent" || name == "Task" {
                         if let Some(id) = block.get("id").and_then(Value::as_str) {
-                            spawned.insert(id.to_string());
+                            if !meta_ids.contains(id) {
+                                spawned.insert(id.to_string());
+                            }
                         }
                     }
                 }
@@ -675,6 +699,45 @@ fn count_inflight_subagents(tail: &str) -> u64 {
     }
 
     spawned.difference(&resolved).count() as u64
+}
+
+/// Async agents running under one session, straight from disk.
+///
+/// Every agent spawn drops `subagents/agent-<id>.meta.json` naming its
+/// `toolUseId`; the agent's own `agent-<id>.jsonl` grows beside it while it
+/// works (761KB over a live 23-minute run when this was built). Running =
+/// that file wrote within [`AGENT_FILE_ACTIVE_SECS`]. Returns the meta
+/// toolUseIds too, so the tail counter can exclude these spawns instead of
+/// counting them twice. Any read failure reads as nothing-running - same
+/// fail-quiet rule as the rest of the card.
+fn async_agents_running(session_dir: &Path) -> (std::collections::HashSet<String>, u64) {
+    let mut meta_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut running = 0;
+    let entries = match fs::read_dir(session_dir) {
+        Ok(entries) => entries,
+        Err(_) => return (meta_ids, 0),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(name) => name,
+            None => continue,
+        };
+        let Some(stem) = name.strip_prefix("agent-").and_then(|n| n.strip_suffix(".meta.json")) else {
+            continue;
+        };
+        if let Some(id) = fs::read_to_string(&path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .and_then(|meta| meta.get("toolUseId").and_then(Value::as_str).map(String::from))
+        {
+            meta_ids.insert(id);
+        }
+        if modified_within(&session_dir.join(format!("agent-{stem}.jsonl")), AGENT_FILE_ACTIVE_SECS) {
+            running += 1;
+        }
+    }
+    (meta_ids, running)
 }
 
 /// True when the file behind `path` was modified within `window_secs`.
@@ -732,7 +795,11 @@ fn subagent_count_in(transcripts: &Path) -> u64 {
         {
             continue;
         }
-        count += count_inflight_subagents(&read_tail(&path, SUBAGENT_TAIL_BYTES));
+        // Two species, two truths: async agents by their files growing on
+        // disk, blocking agents by the unmatched spawn pair in the tail.
+        let (meta_ids, running_async) = async_agents_running(&session_dir);
+        count += running_async;
+        count += count_inflight_subagents(&read_tail(&path, SUBAGENT_TAIL_BYTES), &meta_ids);
     }
     count
 }
@@ -1370,6 +1437,45 @@ mod tests {
         )
     }
 
+    fn no_meta() -> std::collections::HashSet<String> {
+        std::collections::HashSet::new()
+    }
+
+    #[test]
+    fn meta_owned_spawns_are_excluded_from_tail_count() {
+        // An async spawn still visible in the tail is counted by its file over
+        // in async_agents_running - the tail must not count it a second time.
+        let tail = format!("{}\n{}\n", spawn_line("toolu_01async"), spawn_line("toolu_01sync"));
+        let meta: std::collections::HashSet<String> = ["toolu_01async".to_string()].into();
+        assert_eq!(count_inflight_subagents(&tail, &meta), 1);
+    }
+
+    #[test]
+    fn async_agents_counted_by_file_freshness() {
+        // A real throwaway subagents dir: one agent writing now (running), one
+        // long quiet (finished) - and both meta ids handed back for exclusion.
+        let dir = std::env::temp_dir().join(format!("baud-async-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        fs::write(dir.join("agent-live1.meta.json"), r#"{"toolUseId":"toolu_01live"}"#).unwrap();
+        fs::write(dir.join("agent-live1.jsonl"), "{}\n").unwrap();
+
+        fs::write(dir.join("agent-done1.meta.json"), r#"{"toolUseId":"toolu_01done"}"#).unwrap();
+        let quiet = dir.join("agent-done1.jsonl");
+        fs::write(&quiet, "{}\n").unwrap();
+        let long_ago =
+            std::time::SystemTime::now() - std::time::Duration::from_secs(AGENT_FILE_ACTIVE_SECS * 4);
+        let times = fs::FileTimes::new().set_modified(long_ago);
+        fs::File::options().write(true).open(&quiet).unwrap().set_times(times).unwrap();
+
+        let (meta_ids, running) = async_agents_running(&dir);
+        assert_eq!(running, 1);
+        assert!(meta_ids.contains("toolu_01live"));
+        assert!(meta_ids.contains("toolu_01done"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn unmatched_spawns_are_running_subagents() {
         // Two out, one back: exactly one still running.
@@ -1379,7 +1485,7 @@ mod tests {
             spawn_line("toolu_01bbb"),
             result_line("toolu_01aaa")
         );
-        assert_eq!(count_inflight_subagents(&tail), 1);
+        assert_eq!(count_inflight_subagents(&tail, &no_meta()), 1);
     }
 
     #[test]
@@ -1392,7 +1498,7 @@ mod tests {
             spawn_line("toolu_01aaa"),
             result_line("toolu_01aaa")
         );
-        assert_eq!(count_inflight_subagents(&tail), 0);
+        assert_eq!(count_inflight_subagents(&tail, &no_meta()), 0);
     }
 
     #[test]
@@ -1402,7 +1508,7 @@ mod tests {
         let task = r#"{"type":"assistant","isSidechain":false,"message":{"content":[{"type":"tool_use","id":"toolu_01ddd","name":"Task","input":{}}]}}"#;
         let sidechain = r#"{"type":"assistant","isSidechain":true,"message":{"content":[{"type":"tool_use","id":"toolu_01eee","name":"Agent","input":{}}]}}"#;
         let tail = format!("{task}\n{sidechain}\n");
-        assert_eq!(count_inflight_subagents(&tail), 1);
+        assert_eq!(count_inflight_subagents(&tail, &no_meta()), 1);
     }
 
     #[test]
@@ -1410,9 +1516,9 @@ mod tests {
         // A tail read usually opens mid-line; garbage must read as zero, and
         // a cut first line must not hide the intact spawn after it.
         let cut = r#"ge":{"content":[{"type":"tool_use","id":"toolu_01fff","name":"Agent"}]}}"#;
-        assert_eq!(count_inflight_subagents("not json at all\n"), 0);
+        assert_eq!(count_inflight_subagents("not json at all\n", &no_meta()), 0);
         let tail = format!("{cut}\n{}\n", spawn_line("toolu_01ggg"));
-        assert_eq!(count_inflight_subagents(&tail), 1);
+        assert_eq!(count_inflight_subagents(&tail, &no_meta()), 1);
     }
 
     #[test]
