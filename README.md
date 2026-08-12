@@ -126,10 +126,10 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   this branch (`drone @prax monitor run <branch>`) — same no-keyboard
   doctrine as the header lights, one card wide. Re-clicking brings the
   open pane forward; closing is the tab's ✕ or the pane's corner.
-  *Known gap, honest:* prax currently accepts the branch argument but does
-  not filter by it yet — every watch pane shows all-branch output until
-  @prax lands the scoping (dispatched 2026-08-11); BAUD's side of the
-  contract is already the documented one.
+  (The scoping is real end to end: @prax implemented the branch filter the
+  same evening BAUD started asking for it, and the monitor's banner names
+  the active scope — "scoped to DEVPULSE" — instead of claiming
+  all-branches. Verified live 2026-08-11.)
 - **? (help)** — beside the name: a **tier-1 inquiry terminal**. A real
   shell opens in the branch dir with `drone @<branch> --help` already run,
   and the keyboard is deliberately ON — the point is continuing the
