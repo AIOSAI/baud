@@ -350,7 +350,13 @@ pub fn pty_create(
     };
     command.env("SHELL", &shell);
     command.env("TERM", "xterm-256color");
-    command.cwd(&root);
+    // Where a room-less shell opens: the caller's stated dir (the help
+    // button seats its inquiry terminal in the branch, m9 phase 4), or the
+    // project root - the scratch shell's home. Rooms pass cwd to tmux above.
+    match &cwd {
+        Some(dir) if room.is_none() => command.cwd(dir),
+        _ => command.cwd(&root),
+    };
 
     let child = pair.slave.spawn_command(command).map_err(|err| {
         let what = if room.is_some() { "tmux (rooms need it installed)" } else { &shell };

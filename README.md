@@ -130,6 +130,14 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   not filter by it yet — every watch pane shows all-branch output until
   @prax lands the scoping (dispatched 2026-08-11); BAUD's side of the
   contract is already the documented one.
+- **? (help)** — beside the name: a **tier-1 inquiry terminal**. A real
+  shell opens in the branch dir with `drone @<branch> --help` already run,
+  and the keyboard is deliberately ON — the point is continuing the
+  investigation with follow-up commands. There is no filter on what can be
+  typed, because a typed-input filter would be theater (quoting, aliases
+  and scripts route around any keyword list); the framing does the work,
+  same as the scratch shell. A hard fence, when wanted, is tier 2's
+  isolation-by-construction, not a keyword list.
 
 Strip order: dispatched first, then interactive, then alphabetical.
 

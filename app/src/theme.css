@@ -525,6 +525,36 @@ body {
   margin-left: 8px;
 }
 
+/* m9: the help door - a quiet ? beside the name (tier-1 inquiry terminal:
+   real shell in the branch, help pre-run, keyboard ON). Rightmost when no
+   state badge is worn; a small step after one when it is. */
+.baud-chip-help {
+  margin-left: auto;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--baud-line);
+  border-radius: 50%;
+  background: none;
+  color: var(--baud-ink-faint);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.baud-chip-help:hover {
+  color: var(--baud-green);
+  border-color: var(--baud-green);
+}
+
+.baud-badge ~ .baud-chip-help {
+  margin-left: 8px;
+}
+
 .baud-chip-foot {
   display: flex;
   align-items: center;

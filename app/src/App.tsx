@@ -8,6 +8,7 @@ import type { LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
+import InquiryPane from "./components/InquiryPane";
 import MonitorPane from "./components/MonitorPane";
 import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
@@ -27,8 +28,8 @@ interface FileTab {
   path: string;
   name: string;
   branch: string;
-  kind: "file" | "diff" | "monitor";
-  /** The branch directory a diff tab reads - unused by other kinds. */
+  kind: "file" | "diff" | "monitor" | "inquiry";
+  /** The branch directory a diff tab reads or an inquiry shell opens in. */
   dir?: string;
   /** Jump target from a ctrl+clicked `path:line` mention in the terminal. */
   line?: number;
@@ -178,6 +179,27 @@ export default function App() {
     },
     [],
   );
+
+  // The card's help button (m9 phase 4): a tier-1 inquiry terminal - real
+  // shell, real keyboard, seated in the branch with the help already run.
+  // Same door semantics as watch: re-click brings the open one forward.
+  const helpBranch = useCallback((branch: BranchStatus) => {
+    const id = `help:${branch.name}`;
+    setFileTabs((current) => {
+      if (current.some((tab) => tab.path === id)) return current;
+      return [
+        ...current,
+        {
+          path: id,
+          name: "help",
+          branch: branch.name,
+          kind: "inquiry" as const,
+          dir: branch.path,
+        },
+      ];
+    });
+    setActiveTab(id);
+  }, []);
 
   // The card's watch button (m9 phase 3): this branch's activity alone.
   // Re-clicking an open one brings its tab forward - cards are doors, not
@@ -400,6 +422,7 @@ export default function App() {
           onOpenFile={openFile}
           onOpenDiff={openDiff}
           onMonitor={monitorBranch}
+          onHelp={helpBranch}
         />
       )}
 
@@ -468,6 +491,12 @@ export default function App() {
                 <MonitorPane
                   target={tab.target ?? null}
                   label={`${tab.branch} ${tab.name}`}
+                  onExited={() => closeFile(tab.path)}
+                />
+              ) : tab.kind === "inquiry" ? (
+                <InquiryPane
+                  branch={tab.branch}
+                  cwd={tab.dir ?? ""}
                   onExited={() => closeFile(tab.path)}
                 />
               ) : (

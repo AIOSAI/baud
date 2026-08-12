@@ -22,6 +22,8 @@ interface BranchChipProps {
   onOpenDiff: (branch: BranchStatus) => void;
   /** Operator clicked watch: open this branch's scoped monitor pane. */
   onMonitor: (branch: BranchStatus) => void;
+  /** Operator clicked ?: open a help terminal seated in this branch. */
+  onHelp: (branch: BranchStatus) => void;
 }
 
 /**
@@ -40,6 +42,7 @@ export default function BranchChip({
   onOpenFile,
   onOpenDiff,
   onMonitor,
+  onHelp,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
@@ -124,6 +127,19 @@ export default function BranchChip({
           >
             {branch.subagents} sub
           </span>
+        ) : null}
+        {/* Tier-1 (m9 phase 4): a real terminal seated in this branch with
+            the agent's help already run - keyboard ON, the operator keeps
+            investigating (Patrick ruling: blocking it defeats the point). */}
+        {branch.is_citizen ? (
+          <button
+            type="button"
+            className="baud-chip-help"
+            title={`open a terminal in ${branch.name} with 'drone @${branch.name} --help' run - and keep typing`}
+            onClick={() => onHelp(branch)}
+          >
+            ?
+          </button>
         ) : null}
       </header>
 
