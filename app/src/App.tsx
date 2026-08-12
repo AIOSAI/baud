@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
+import Bell from "./components/Bell";
 import Camera from "./components/Camera";
 import FleetStrip from "./components/FleetStrip";
 import type { LaunchMode } from "./components/BranchChip";
@@ -376,29 +377,9 @@ export default function App() {
             );
           })}
           <Camera onCaptured={(path) => deliverPaths([path])} />
-          {/* Notifications bell - a PLACEHOLDER on purpose (Patrick
-              2026-08-10): the reminder that BAUD-native notifications are
-              coming. It renders, it explains itself, it does nothing yet. */}
-          <button
-            type="button"
-            className="baud-tool-btn baud-tool-btn-placeholder"
-            title="notifications - placeholder, the bell gets wired later"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-          </button>
+          {/* The bell, wired (m10): desktop toasts are retired - ai_mail's
+              notification feed lands here instead. */}
+          <Bell project={snapshot?.project ?? null} />
           <Zoom />
         </div>
       </header>

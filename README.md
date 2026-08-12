@@ -50,9 +50,19 @@ other direction: its path (quoted if it needs it) lands in the chat box,
 exactly what dropping onto a real terminal does. Screenshots taken outside
 BAUD drag in; screenshots taken inside print themselves.
 
-The **bell** between them is a placeholder on purpose — the visible
-reminder that BAUD-native notifications are planned. It renders, it
-explains itself on hover, it does nothing yet.
+The **bell** between them is the notification center (m10). Desktop toasts
+are retired ecosystem-wide — ai_mail appends every notification event
+(mail delivered, agent waking, dispatch finished or bounced) to
+`.aipass/notifications.jsonl` at the project root, and the bell renders
+that feed: an amber count badge while anything is uncleared, a scrollable
+shade on click. Rows click to expand from their two-line preview to the
+full text. Nothing clears itself — events stay until the operator clicks
+**clear**, which wipes the lot in one click (a local marker per project;
+the feed file itself is never written by BAUD — its only writer is
+ai_mail, and the mailbox stays the real record). A missing or empty feed
+is a quiet bell, not an error. The old always-in-your-face OS toasts are
+gone by construction: the D-Bus and notify-send paths no longer exist in
+the tree.
 
 The **prax toggle** beside the totals is a traffic light for prax mission
 control: click it and it turns green while a live, read-only view of every

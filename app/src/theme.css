@@ -285,11 +285,165 @@ body {
   color: var(--baud-red);
 }
 
-/* The bell renders but is not wired yet - deliberately fainter than its
-   working neighbours, a reminder rather than a control. */
-.baud-tool-btn-placeholder {
-  cursor: help;
-  opacity: 0.55;
+/* The bell, wired (m10): desktop toasts are retired, ai_mail's feed lands
+   here. The wrap anchors the shade; the badge only exists while something
+   is genuinely unread - the bell never decorates itself. */
+.baud-bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.baud-bell-alert {
+  color: var(--baud-amber);
+}
+
+.baud-bell-badge {
+  position: absolute;
+  top: -6px;
+  right: -2px;
+  background: var(--baud-amber);
+  color: var(--baud-bg);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+/* The shade: a glance, not a tab. Anchored under the bell, scrolls on its
+   own, closes on click-away or Escape. */
+.baud-bell-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 360px;
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  padding: 6px;
+  z-index: 30;
+}
+
+/* The shade's one control row: the count, and CLEAR - the operator's
+   button, the only thing that ever empties the list. */
+.baud-bell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 8px;
+  border-bottom: 1px solid var(--baud-line-strong);
+}
+
+.baud-bell-head-label {
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.baud-bell-clear {
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.baud-bell-clear:hover {
+  color: var(--baud-ink);
+  border-color: var(--baud-amber);
+}
+
+.baud-bell-empty {
+  margin: 0;
+  padding: 14px 10px;
+  color: var(--baud-ink-faint);
+  font-size: 11px;
+}
+
+.baud-bell-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--baud-line);
+  cursor: pointer;
+}
+
+.baud-bell-row:hover {
+  background: var(--baud-bg-card);
+}
+
+.baud-bell-row:last-child {
+  border-bottom: none;
+}
+
+/* One dot per kind - mail green, dispatch amber, wake dim green pulseless;
+   anything the feed grows later lands faint until it earns a color. */
+.baud-bell-kind {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--baud-ink-faint);
+  align-self: center;
+}
+
+.baud-bell-kind-mail {
+  background: var(--baud-green);
+}
+
+.baud-bell-kind-dispatch {
+  background: var(--baud-amber);
+}
+
+.baud-bell-kind-wake {
+  background: var(--baud-line-strong);
+  border: 1px solid var(--baud-green);
+}
+
+.baud-bell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.baud-bell-title {
+  color: var(--baud-ink);
+  font-size: 11px;
+}
+
+.baud-bell-body {
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Click to read the whole thing: the clamp comes off and newlines the
+   event carried render as written. */
+.baud-bell-row-open .baud-bell-body {
+  display: block;
+  -webkit-line-clamp: none;
+  white-space: pre-line;
+  overflow: visible;
+}
+
+.baud-bell-meta {
+  flex: none;
+  color: var(--baud-ink-faint);
+  font-size: 9px;
+  white-space: nowrap;
 }
 
 /* m9: the prax monitor toggle - Patrick's traffic light. Red dot = off,

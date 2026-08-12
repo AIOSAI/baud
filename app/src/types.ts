@@ -59,3 +59,12 @@ export interface SpawnResult {
   id: string;
   created: boolean;
 }
+
+/** Mirrors `NotificationEvent` in src-tauri/src/notifications.rs. */
+export interface NotificationEvent {
+  ts: string;
+  kind: string;
+  title: string;
+  body: string;
+  source: string;
+}

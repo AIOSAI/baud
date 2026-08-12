@@ -67,6 +67,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::Manager;
 
+mod notifications;
 mod pty;
 mod screenshot;
 
@@ -1348,7 +1349,8 @@ pub fn run() {
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,
-            pty::monitor_create
+            pty::monitor_create,
+            notifications::notifications_read
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session
