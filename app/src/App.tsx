@@ -39,8 +39,33 @@ interface FileTab {
 /** The terminal's reserved tab id - never closable, never a real path. */
 const TERMINAL_TAB = "terminal";
 
-/** The header toggle's tab id: one prax mission-control pane, ever. */
-const PRAX_MONITOR_TAB = "monitor:prax";
+/**
+ * The header's tier-0 monitor toggles (m9), one traffic light each. The
+ * `id` doubles as the tab path, so "is it live" is one lookup and every
+ * close door resets the light through the same closeFile.
+ */
+const MONITOR_TOGGLES = [
+  {
+    id: "monitor:prax",
+    target: null,
+    branch: "prax",
+    name: "monitor",
+    label: "prax",
+    onTitle: "prax mission control is live - click to close the monitor",
+    offTitle: "open prax mission control - a read-only live view of every branch",
+  },
+  {
+    id: "monitor:commons",
+    target: "commons",
+    branch: "commons",
+    name: "feed",
+    label: "commons",
+    onTitle: "the commons feed is live - click to close it",
+    offTitle: "open the commons live feed - posts, comments, votes, read-only",
+  },
+] as const;
+
+type MonitorSpec = (typeof MONITOR_TOGGLES)[number];
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
@@ -117,29 +142,30 @@ export default function App() {
     setActiveTab((current) => (current === path ? TERMINAL_TAB : current));
   }, []);
 
-  // The header's prax toggle (m9): green while its pane lives, off when it
+  // A header monitor toggle (m9): green while its pane lives, off when it
   // does not - and "lives" is literally "the tab exists", so a pane killed
   // by its corner button or a monitor that dies on its own resets the
   // toggle through the same closeFile door. No second state to drift.
-  const praxLive = fileTabs.some((tab) => tab.path === PRAX_MONITOR_TAB);
-
-  const togglePrax = useCallback(() => {
-    if (praxLive) {
-      closeFile(PRAX_MONITOR_TAB);
-      return;
-    }
-    setFileTabs((current) => [
-      ...current,
-      {
-        path: PRAX_MONITOR_TAB,
-        name: "monitor",
-        branch: "prax",
-        kind: "monitor" as const,
-        target: null,
-      },
-    ]);
-    setActiveTab(PRAX_MONITOR_TAB);
-  }, [praxLive, closeFile]);
+  // Opening half only - the closing half is closeFile, same as every tab.
+  const openMonitor = useCallback(
+    (spec: MonitorSpec) => {
+      setFileTabs((current) => {
+        if (current.some((tab) => tab.path === spec.id)) return current;
+        return [
+          ...current,
+          {
+            path: spec.id,
+            name: spec.name,
+            branch: spec.branch,
+            kind: "monitor" as const,
+            target: spec.target,
+          },
+        ];
+      });
+      setActiveTab((current) => (current === spec.id ? current : spec.id));
+    },
+    [],
+  );
 
   // The launch buttons since m6: a window into the branch's ROOM. Switching
   // cards detaches the old room (it keeps running) and attaches the next.
@@ -281,19 +307,21 @@ export default function App() {
             <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
             <Total label="plans" value={plans} />
           </div>
-          <button
-            type="button"
-            className={`baud-monitor-toggle ${praxLive ? "baud-monitor-toggle-live" : ""}`}
-            title={
-              praxLive
-                ? "prax mission control is live - click to close the monitor"
-                : "open prax mission control - a read-only live view of every branch"
-            }
-            onClick={togglePrax}
-          >
-            <span className="baud-monitor-dot" aria-hidden="true" />
-            prax
-          </button>
+          {MONITOR_TOGGLES.map((spec) => {
+            const live = fileTabs.some((tab) => tab.path === spec.id);
+            return (
+              <button
+                key={spec.id}
+                type="button"
+                className={`baud-monitor-toggle ${live ? "baud-monitor-toggle-live" : ""}`}
+                title={live ? spec.onTitle : spec.offTitle}
+                onClick={() => (live ? closeFile(spec.id) : openMonitor(spec))}
+              >
+                <span className="baud-monitor-dot" aria-hidden="true" />
+                {spec.label}
+              </button>
+            );
+          })}
           <Camera onCaptured={(path) => deliverPaths([path])} />
           {/* Notifications bell - a PLACEHOLDER on purpose (Patrick
               2026-08-10): the reminder that BAUD-native notifications are
