@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { relativeAge } from "../age";
+import { helpCommand } from "./InquiryPane";
 import type { BranchStatus, GitChanges } from "../types";
 
 export type LaunchMode = "resume" | "fresh";
@@ -135,7 +136,7 @@ export default function BranchChip({
           <button
             type="button"
             className="baud-chip-help"
-            title={`open a terminal in ${branch.name} with 'drone @${branch.name} --help' run - and keep typing`}
+            title={`open a terminal in ${branch.name} with '${helpCommand(branch.name)}' run - and keep typing`}
             onClick={() => onHelp(branch)}
           >
             ?

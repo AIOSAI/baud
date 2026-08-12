@@ -42,6 +42,16 @@ interface InquiryPaneProps {
   onExited: () => void;
 }
 
+/**
+ * The help command a branch answers to. `aipass` is the ecosystem's one
+ * exception (Patrick-caught 2026-08-11): the user's front-door CLI with its
+ * own binary - drone cannot resolve @aipass, so its card asks the binary
+ * itself. Everyone else speaks through drone.
+ */
+export function helpCommand(branch: string): string {
+  return branch === "aipass" ? "aipass --help" : `drone @${branch} --help`;
+}
+
 const FONT_SIZE = 13;
 const SCROLLBACK_LINES = 5000;
 
@@ -159,7 +169,7 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
         // The one visible command line the click asked for - typed into the
         // fresh shell's input buffer, exactly what the operator would have
         // typed by hand.
-        void invoke("pty_write", { id, data: `drone @${branch} --help\n` }).catch((err) => {
+        void invoke("pty_write", { id, data: `${helpCommand(branch)}\n` }).catch((err) => {
           if (!disposed) setFailure(err instanceof Error ? err.message : String(err));
         });
       })
