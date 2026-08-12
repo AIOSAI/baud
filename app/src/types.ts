@@ -68,3 +68,47 @@ export interface NotificationEvent {
   body: string;
   source: string;
 }
+
+/** Mirrors `AgentSettings` in src-tauri/src/settings.rs - null means the key
+ *  is absent from the file, which is a real state: claude decides. */
+export interface AgentSettings {
+  model: string | null;
+  auto_compact_enabled: boolean | null;
+  auto_compact_window: number | null;
+}
+
+/**
+ * Mirrors `AgentSettingsPatch` - three states per field, so "leave it alone"
+ * and "unset it" can never be confused:
+ *   absent -> the key is not touched
+ *   null   -> the key is REMOVED from the file
+ *   value  -> the key is set
+ */
+export interface AgentSettingsPatch {
+  model?: string | null;
+  auto_compact_enabled?: boolean | null;
+  auto_compact_window?: number | null;
+}
+
+/**
+ * BAUD's own interface settings (m11 phase 6), per project in
+ * `.aipass/baud.settings.json`. The backend stores this document OPAQUE - it
+ * merges keys and hands them back - so this shape is the frontend's contract
+ * with itself, and every key is optional because "absent" is the honest state
+ * of a file nobody has saved yet. `interfacePrefs` in InterfaceSettings.tsx is
+ * the one place absence (or a hand-edited nonsense value) becomes a default.
+ *
+ * Hook sounds are deliberately NOT here: their flag file in the temp dir is
+ * the single source of truth, and a mirror would drift the moment @hooks or
+ * another window flipped it.
+ */
+export interface BaudSettings {
+  /** Branch name to open a seat for at startup; null/absent = open nothing. */
+  startup_agent?: string | null;
+  /** Fleet snapshot and bell poll cadence, milliseconds. */
+  poll_interval_ms?: number;
+  /** How many feed events the bell keeps - reader-side, the feed is ai_mail's. */
+  bell_max_events?: number;
+  /** Chime when a poll brings genuinely new events. */
+  bell_sound?: boolean;
+}

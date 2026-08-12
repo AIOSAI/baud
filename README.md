@@ -1,273 +1,359 @@
 # BAUD
 
-The AIPass machine room. A Tauri desktop app that watches the whole agent
-fleet at a glance and puts every agent one click away — launch, switch,
-resume, kill — all through a single operator terminal.
+BAUD is the AIPass desktop: one window that holds the whole citizen fleet and
+puts every agent one click away. It is a Tauri 2 application — a Rust backend
+in `app/src-tauri/`, a React + TypeScript frontend in `app/src/` — and Linux is
+the platform it actually works on (the activity scan reads `/proc`, the camera
+button speaks XDG portal; on other targets those two degrade to "nothing
+running" and an honest error).
 
-BAUD is a **pure reader** of the ecosystem: agents publish their own state
-(dashboards, locks, transcripts), BAUD only looks. Its one interactive
-surface is the operator's own shell, and every byte that shell runs was
-either typed by the operator or is the one visible command line a card's
-launch button writes on their explicit click.
+Three sentences of doctrine, because everything else follows from them:
 
-## Launch
+- **The fleet view reads.** `fleet_snapshot` takes no path arguments, writes
+  nothing, and every fallible read degrades to a default instead of failing the
+  snapshot.
+- **The terminal is the operator.** The seat is one PTY running the operator's
+  own shell at their own privileges. BAUD types into a terminal only on a click,
+  and only the command lines documented below. (Two other pane kinds run their
+  own PTYs: monitor panes, which have no keyboard at all, and help shells, which
+  do.)
+- **BAUD edits config, it does not own it.** Two commands write files
+  (`agent_settings_write`, `baud_settings_write`) plus one flag file
+  (`hooks_sound_set`). Everything they touch belongs to someone else, so the
+  writes are surgical and refuse rather than guess.
+
+## Running it
 
 ```
-app/src-tauri/target/release/baud     # standalone release binary
-cd app && npm run tauri dev           # dev mode with hot reload
+cd app && npm run tauri dev
 ```
 
-Run it from anywhere inside an AIPass tree, or point it with `AIPASS_ROOT`.
-That tree is BAUD's **anchor**; the header's project switcher can then seat
-the view in any other project (see The project switcher below).
-Rebuild the release binary after code changes: `cd app && npm run tauri build`.
+That is where the current app lives. `npm run tauri dev` starts Vite on port
+1420 (pinned, `strictPort`) and runs a debug build of the Rust binary in a Tauri
+window: frontend edits hot-reload, Rust edits rebuild and restart the app.
+
+BAUD resolves its **anchor** without hardcoding anything: `AIPASS_ROOT` when it
+is set (and it must contain `src/aipass`, or BAUD reports that instead of
+guessing), otherwise the first ancestor of the working directory that contains
+`src/aipass`. From there the header's project switcher can seat the view in any
+other project BAUD discovered.
+
+**The release binary is stale.** `app/src-tauri/target/release/baud` exists and
+was built 2026-08-11 19:39 — before the notification bell and before the
+settings work. `grep -a notifications_read` and `grep -a baud_settings_read` on
+that binary both come back empty, while `monitor_create` and `room_kill` are
+present: it is the m9-era app. `npm run tauri build` rebuilds it (and runs
+`tsc && vite build` first). Note that `bundle.active` is `false` in
+`tauri.conf.json`, so a build produces the binary, not installers.
 
 ## The window
 
-One column, no page scroll: header totals (citizens / dispatched /
-interactive / unread mail / plans), the fleet strip, the operator terminal
-(the only element that flexes), and a footer with the resolved root and
-poll status. The fleet re-scans every 5 seconds.
+One column, no page scroll: header, fleet strip, workbench (the only element
+that flexes), footer.
 
-The header's zoom chip (`− 100% +`) scales the whole window, terminal
-included — browser-style `ctrl +` / `ctrl -` / `ctrl 0` and ctrl+scroll
-work too, even with the terminal focused (zoom keys belong to the app, not
-the shell). The level persists across restarts; clicking the percentage
-resets it.
+**Header, left to right.** The `BAUD` wordmark and the project chip; then the
+totals (citizens, dispatched, interactive, unread mail, plans), two monitor
+traffic lights (`prax`, `commons`), the camera, the bell, BAUD's own settings
+gear, and the zoom chip.
 
-The **camera button** beside it takes a screenshot without leaving the
-conversation: one click opens the compositor's own picker (region, window,
-or whole screen — the XDG portal's interactive mode, the one door Wayland
-allows anyone), the capture is copied to `~/Pictures/BAUD/`, and its path
-is typed straight into the chat box — Claude reads images by path, so the
-operator just presses Enter. Amber while the picker is open, red when a
-capture failed or was cancelled (the tooltip says why). BAUD ships its own
-portal client — no external screenshot binaries, which is the
-self-contained doctrine for going cross-platform later.
+**Footer.** The resolved project root, and the poll status — how long ago the
+last snapshot landed and the current cadence.
 
-**Dropping a file** anywhere on the window does the same thing from the
-other direction: its path (quoted if it needs it) lands in the chat box,
-exactly what dropping onto a real terminal does. Screenshots taken outside
-BAUD drag in; screenshots taken inside print themselves.
+The fleet polls every 5 seconds by default; the interface settings can move that
+to 2, 10 or 30 seconds, and the change takes effect on the spot. The per-card
+git figure keeps its own slower 15-second tick, which is not configurable — a
+subprocess per card per tick is real work and uncommitted-file counts do not
+move second to second.
 
-The **bell** between them is the notification center (m10). Desktop toasts
-are retired ecosystem-wide — ai_mail appends every notification event
-(mail delivered, agent waking, dispatch finished or bounced) to
-`.aipass/notifications.jsonl` at the project root, and the bell renders
-that feed: an amber count badge while anything is uncleared, a scrollable
-shade on click. Rows click to expand from their two-line preview to the
-full text. Nothing clears itself — events stay until the operator clicks
-**clear**, which wipes the lot in one click (a local marker per project;
-the feed file itself is never written by BAUD — its only writer is
-ai_mail, and the mailbox stays the real record). A missing or empty feed
-is a quiet bell, not an error. The old always-in-your-face OS toasts are
-gone by construction: the D-Bus and notify-send paths no longer exist in
-the tree.
+**Zoom.** The `− 100% +` chip scales the whole window, terminal included;
+`ctrl +` / `ctrl -` / `ctrl 0` and ctrl+scroll do the same, captured at the
+window so they beat the focused shell. The level persists in `localStorage`;
+clicking the percentage resets it.
 
-The **prax toggle** beside the totals is a traffic light for prax mission
-control: click it and it turns green while a live, read-only view of every
-branch's activity (`drone @prax monitor run`) opens as a workbench tab;
-click again and the light goes red as the monitor dies with its tab. Any
-door closes it — the toggle, the tab's ✕, the pane's corner button, or the
-monitor process ending on its own — and the light follows, because the
-light IS the tab's existence, not a second piece of state.
+**The project switcher.** The chip beside the wordmark names the project the
+fleet view is seated in. A project is a directory sealed by a
+`<NAME>_REGISTRY.json`: the filename stem is the canonical name, and the fleet
+directory is the parent of the registry's own first `branches[].path` — no
+layout guessing. BAUD's census is the anchor, its `projects/*`, and the anchor's
+siblings; a seal that lists no branch paths, or whose branches sit at the
+project root, never makes the menu. Discovery is backend-owned: the frontend
+picks a NAME from the census and there is deliberately no way to hand the
+webview-facing commands a path, so seating elsewhere moves the read fence rather
+than weakening it. Reseating empties the reading room (its tabs point where the
+fence now refuses to read), closes any open settings panel, re-reads BAUD's
+settings from the new root, and re-polls immediately. The terminal is untouched.
 
-Monitor panes are **tier-0 aux panes** (the first of the auxiliary-pane
-tiers): a pane of glass, not a seat. No keyboard reaches them — xterm's
-stdin is disabled in the pane, and the backend refuses `pty_write` for any
-read-only session no matter who asks, which is the honest enforcement
-(filtering what can be typed is theater; wiring no stdin at all is a
-fact). The one operator terminal stays the only seat of agency. The
-monitor command itself is backend-composed from a fixed shape — the
-frontend picks a target, never writes a command line.
+## Cards
 
-### The project switcher
+One citizen, one card. Strip order: dispatched first, then interactive, then
+alphabetical. The strip scrolls sideways rather than wrapping, so the workbench
+below never loses height as the fleet grows.
 
-The chip beside the wordmark names the project the fleet view is **seated**
-in; clicking it lists every project BAUD discovered and reseats on click —
-no restart, no second window.
+- **Lamp** — amber pulse: dispatched (`.ai_mail.local/.dispatch.lock` exists).
+  Steady green: interactive (a live claude with no `-p`/`--print` has its cwd
+  inside the branch). Dim: neither.
+- **Badge** — `dispatched`, `live`, or a quiet `room` when a tmux room exists
+  with nothing live in it.
+- **Sub badge** — amber `N sub` while sub-agents are running inside the branch's
+  session. Sub-agents never appear in the process table (they run inside the
+  parent claude), so the count comes off disk: async agents by the freshness of
+  their own `subagents/agent-<id>.jsonl` (180-second window), blocking agents by
+  `Agent`/`Task` spawn calls with no matching result in the transcript tail.
+  Only transcripts written in the last 15 minutes are consulted.
+- **`?`** — opens a help terminal for this branch (see *Help terminals*).
+- **Gear** — opens this branch's settings panel (see *Settings*).
+- **Figures** — every number is a door. `mail` and `open` are counted live from
+  `.ai_mail.local/inbox.json` and open it; `plans` comes from
+  `DASHBOARD.local.json` and opens it; `todos` comes from the dashboard too but
+  opens `.trinity/local.json`; `⎇ git` is a count of uncommitted files and opens
+  the diff tab. The dashboard's summary line is deliberately not on the card —
+  it restated the same figures.
+- **Age** — `updated <age>`, from the dashboard's `last_updated`, styled stale
+  when it gets old.
+- **Buttons** — `files` docks the branch's file tree. `watch` opens a read-only
+  monitor pane scoped to this branch. Then the launch door: a branch whose room
+  holds a live interactive claude shows a single `▸ attach`; otherwise `▸ resume`
+  (when there is anything to resume) beside `fresh`, or a single `▸ claude` when
+  the branch has no transcripts at all.
 
-A **project** is a directory sealed by a `<NAME>_REGISTRY.json` in its root
-— the filename stem is the canonical name, and the registry's own
-`branches[].path` entries name the fleet dir (no layout guessing). BAUD's
-census: the anchor tree it launched from, `projects/*` nested inside it,
-and the anchor's sibling directories. A seal with no branch paths, or a
-legacy flat layout whose branches sit at the project root, simply never
-makes the menu.
+The `?`, the gear and the button row render only for citizens — a directory
+without `.trinity/passport.json` gets a card, but no doors.
 
-The discovery is **backend-owned**: the frontend picks a NAME from the
-backend's own census — there is deliberately no way to hand BAUD a path
-from the webview, so seating in a project never weakens the read fence, it
-only moves it. Reseating moves the whole read surface at once — fleet scan,
-file fence, new shells — and empties the reading room (open tabs point
-where the fence now rightly refuses to read). The terminal is untouched: an
-attached room keeps running, and the scratch shell is the operator's own.
+**What a launch button actually types**, one visible line, on the click:
 
-### Cards
+```
+cd '<branch dir>' && command claude --permission-mode bypassPermissions [-c | --resume <id>]
+```
 
-One citizen, one card. The card IS the report — nothing hides in tooltips:
+`command claude` skips the `~/.bashrc` boot shim — which intercepts `claude` and
+`claude --permission-mode …` inside a `.trinity` directory and routes them
+through @hooks' `session_boot` attach-first menu — because the button press
+already answered that menu's question. Resume picks its own door: `-c`
+when an interactive transcript exists, `--resume <id>` when the only history is
+headless dispatch runs, which `-c` refuses. No model flag is ever passed; models
+are set in the branch's own settings file (see *Settings*).
 
-- **Lamp** — the ground truth of activity. Amber pulse = dispatched (the
-  machine is churning on a wake; `.ai_mail.local/.dispatch.lock` exists).
-  Steady green = interactive (a live human-driven claude has its cwd in
-  this branch — found by walking `/proc`, `-p`/`--print` runs excluded).
-  Dim = idle.
-- **Sub badge** — an amber `N sub` in the header while the branch's live
-  session has sub-agents out. Sub-agents are invisible to the process
-  table (they run *inside* the parent claude), so the count comes from the
-  session transcript: spawn calls still waiting on their results. Worn
-  only when N > 0.
-- **Figures** — mail counted live from the branch's `inbox.json`; open /
-  plans / todos from its `DASHBOARD.local.json`, plus its summary line and
-  how fresh it is.
-- **Git figure** — a permanent `⎇ git` count of uncommitted files,
-  straight from the installed `git` binary (`git diff HEAD`, scoped and
-  `--relative` to the branch dir — every `src/aipass` branch shares one
-  repo, and a card only ever speaks about its own subtree). Dim zero when
-  the tree is clean, amber when anything is uncommitted. Clicking it opens
-  the diff tab.
-- **Buttons** — `▸ resume` continues the branch's conversation, `fresh`
-  starts a new one. Resume picks the right door automatically: `claude -c`
-  when interactive history exists, `claude --resume <id>` when the only
-  transcripts are headless dispatch runs (`-c` refuses those). A citizen
-  with no transcripts at all shows a single `▸ claude`. When the room holds
-  a live session, both collapse into a single `▸ attach`. `files` docks
-  the branch's file tree. `watch` opens a tier-0 monitor pane scoped to
-  this branch (`drone @prax monitor run <branch>`) — same no-keyboard
-  doctrine as the header lights, one card wide. Re-clicking brings the
-  open pane forward; closing is the tab's ✕ or the pane's corner.
-  (The scoping is real end to end: @prax implemented the branch filter the
-  same evening BAUD started asking for it, and the monitor's banner names
-  the active scope — "scoped to DEVPULSE" — instead of claiming
-  all-branches. Verified live 2026-08-11.)
-- **? (help)** — beside the name: a **tier-1 inquiry terminal**. A real
-  shell opens in the branch dir with `drone @<branch> --help` already run,
-  and the keyboard is deliberately ON — the point is continuing the
-  investigation with follow-up commands. There is no filter on what can be
-  typed, because a typed-input filter would be theater (quoting, aliases
-  and scripts route around any keyword list); the framing does the work,
-  same as the scratch shell. A hard fence, when wanted, is tier 2's
-  isolation-by-construction, not a keyword list.
+## Rooms and the seat model
 
-Strip order: dispatched first, then interactive, then alphabetical.
+Every agent's session lives in a persistent tmux room — `baud-<branch>`, or
+`baud-<project>-<branch>` in a seated non-anchor project, so two projects'
+same-named branches can never attach to each other's sessions. The room belongs
+to the tmux server, not to this window; BAUD's terminal is a window into it.
 
-### Rooms
-
-Every agent's session lives in a persistent tmux session — its **room**
-(`baud-<branch>`; in a seated non-anchor project `baud-<project>-<branch>`,
-so two projects' same-named branches can never attach to each other's
-sessions), owned by the tmux server, not by this window. BAUD's terminal is
-only a window INTO the room:
-
-- **Open a card** — attach (`tmux new-session -A`; the room is created on
-  first visit, seated in the branch dir, mouse scrolling on).
-- **Switch cards** — detach one room, attach the next. The agent you left
-  keeps working; nothing is cancelled mid-turn.
-- **Close BAUD** — every room just loses its window. Sessions, monitors,
-  and builds keep running.
-- **Come back** — attach again: same process, same scrollback. No respawn
-  means no transcript forks and no resume roulette.
+- **Open a card** — `tmux new-session -A -s <room> -c <branch dir>`, chained
+  with `set-option mouse on`. Creates on first visit, attaches after that.
+- **Switch cards** — the old client is SIGHUPed, which for a tmux client is a
+  detach. The agent you left keeps working.
+- **Close BAUD** — every room loses its window. Sessions, monitors and builds
+  keep running.
 - **`⇠ detach` / `✕ end room`** — the terminal's corner buttons in a room.
-  Ending the room (`tmux kill-session`) is the ONE way a session actually
-  dies. The scratch shell (no card) keeps its plain `✕ kill`.
+  `end room` (`tmux kill-session`) is the ONE door that actually ends a session.
+  The scratch shell (no card) keeps a plain `✕ kill`, which is a real SIGHUP to
+  the process group — a claude running there stays resumable from its transcript.
 
-The staged claude command is typed only where it lands at a prompt: into a
-room just created, or one with no live claude. Attaching to a live claude
-types nothing — your click lands you mid-conversation, exactly as left.
+The staged claude command is typed only where it can land at a prompt: into a
+room this spawn just created, or one the snapshot says holds no live claude.
+Attaching to a live claude types nothing — the click lands you mid-conversation.
 
-A card whose room exists but holds nothing live wears a quiet `room` tag;
-a live one shows `live` as before.
+**One PTY, one seat.** Rooms run in parallel; attention is singular. There is no
+"max agents" constant anywhere in the code: N rooms plus one seat is arithmetic.
 
-### The reading room
+The tmux verbs in this codebase are exactly: `new-session -A`, `list-sessions`,
+`has-session`, `kill-session`, `set-option mouse`. Room lookups use tmux's `=`
+exact-match prefix, and room names sanitize everything outside `[A-Za-z0-9_-]`
+to `-`.
 
-Every number on a card is a door: clicking a figure opens the file the
-number came from (inbox, dashboard, todos) in a read-only CodeMirror pane,
-and the `files` button docks a lazy directory tree for browsing anything
-else in the branch. Open files live in tabs beside the terminal — the
-terminal never unmounts, hidden panes are just display-hidden, so claude
+Two other doors create sessions BAUD does not own and simply observes: a typed
+`claude` in a branch directory (the boot shim, which execs claude inside its own
+tmux room), and the Telegram bot fleet, which builds `telegram-<branch>`
+sessions to wake agents from a phone.
+
+## The terminal
+
+A real PTY running `$SHELL` (falling back to `/bin/bash`) through portable-pty's
+login-shell path, opened in the seated project's root. Output streams to
+xterm.js base64-encoded, because a 4KB read can split a multi-byte character and
+only raw bytes let xterm's decoder stitch it back together. Teardown signals the
+whole process group — SIGHUP, 400ms of grace, then SIGKILL — so background jobs
+are not orphaned. Scrollback is 5000 lines.
+
+**Slash-command chips.** When the attached room's branch shows a live
+interactive claude, `/memo`, `/prep` and `/compact` appear beside the corner
+buttons. One click types the command, waits 150ms for the slash palette to
+settle, then sends `\r` (a carriage return — claude's raw-mode input treats a
+linefeed as text). The hover text explains what each ritual is for. `/clear` is
+deliberately not a chip: the command that discards a conversation keeps its
+typing friction.
+
+**Ctrl+click is a door**, on two layers. Claude wraps file citations in OSC 8
+`file://` hyperlinks, and BAUD's link handler claims them (xterm drops non-http
+links entirely by default). Plain-text paths in any output go through the
+`resolve_paths` command: a mention only underlines if it resolves to a real file
+inside the fence — the seated room's branch directory first, then the project
+root. Both open in a reading-room tab at the cited line. URLs go to the system
+browser through the opener plugin's url-only grant. Plain clicks stay tmux's;
+only the ctrl-chord activates.
+
+**Dropping a file** anywhere on the window puts its path (quoted if it needs it)
+into the chat box, unsubmitted — the same thing dropping onto a real terminal
+does.
+
+## The workbench
+
+Open files, diffs, monitors and help shells live as tabs beside the terminal.
+The terminal is never unmounted — hidden panes are display-hidden, so claude
 keeps streaming underneath while you read.
 
-**Ctrl+click in the terminal** is a door too, IDE-style, on two layers.
-Claude wraps its file citations in OSC 8 hyperlinks (`file://` URIs) —
-BAUD's link handler claims those, so they underline on hover and open in a
-reading-room tab instead of escaping to the OS file manager (xterm's
-default drops non-http links entirely: no hover, no click). Plain-text
-paths in any output (grep, pytest, absolute, repo-relative, `path:123`
-citations) get the same treatment through a resolver: a mention only
-becomes a link if it names a real file inside the fence (seated room's
-branch dir first, then the seated project's root), so a dead path never
-underlines.
-Both open jumped to the cited line. URLs open in the system browser. Plain
-clicks stay tmux's — only the ctrl-chord activates, so claude cites
-`file.py:42`, one ctrl+click, and you're reading it beside the live
-terminal.
+**The reading room.** Card figures and ctrl+clicked paths open read-only
+CodeMirror panes; the `files` button docks a lazily-loaded directory tree.
+The git badge opens the branch's full uncommitted diff in patch syntax, and diff
+tabs refetch every time they return to the front (a diff goes stale the moment
+the agent keeps working); file tabs load once. Every path the frontend sends is
+canonicalized and must sit inside the seated project's root, viewers cap at
+512 KB and flag the truncation, binaries are refused, and the tree skips `.git`,
+`node_modules`, `target`, `__pycache__`, `.venv`, `dist`.
 
-The changes badge opens the same kind of tab holding the branch's full
-uncommitted diff in patch syntax. Diff tabs refetch every time they come
-back to the front (a diff goes stale the moment the agent keeps working);
-file tabs load once. Everything is read-only and fenced: the backend
-canonicalizes every requested path and refuses anything outside the seated
-project's root, viewers cap at 512 KB, binaries are refused. There are no
-write commands in the codebase — committing stays in the terminal, through
-drone.
+**Monitor panes (read-only).** The header's two traffic lights open
+`drone @prax monitor run` (mission control, all branches) and
+`drone @prax monitor run commons` (the live social feed); a card's `watch`
+button opens `drone @prax monitor run <branch>` in its own `watch:<branch>` tab.
+A light is green exactly while its tab exists, so the toggle, the tab's `✕`, the
+pane's corner button and the monitor dying on its own all reset it through the
+same door.
 
-### Terminal
+These panes have no keyboard, and the enforcement is doubled: xterm runs with
+`disableStdin`, and the backend's `pty_write` refuses any session flagged
+read-only. The command is composed backend-side from a fixed shape — the
+frontend passes a target token, never a command line — and the token must match
+`[a-z0-9_,-]+`, which is unit-tested against shell-smuggling shapes. Monitors
+spawn through the login shell (`-l -c`) so `drone` resolves from the operator's
+own PATH.
 
-The operator's shell, centre stage — a real PTY running the user's own
-shell with their own privileges. A `✕ kill` button sits in the corner
-while a shell is live: same SIGHUP closing a terminal window sends, so a
-running claude stays resumable from its transcript.
+**Help terminals.** The `?` on a card opens a real shell seated in that branch
+with the branch's help command already run — `drone @<branch> --help`, except
+for `aipass`, which is the ecosystem's one routing exception and asks its own
+binary (`aipass --help`). The keyboard is deliberately ON: the point is
+continuing the investigation. There is no filter on what can be typed, because a
+typed-input filter would be theater; the framing does the work, exactly as it
+does for the scratch shell. Typing `exit`, or the pane's `✕ kill`, closes the
+tab.
 
-When the attached room holds a live claude, **slash-command chips** join
-the corner buttons: `/memo` (quick memory update — banks the conversation
-so far, keeps going), `/prep` (session wrap-up — memories saved, plans
-reconciled, close safely after), `/compact` (compress context and
-continue). One click types and submits the command; the hover text
-teaches what each ritual is for — slash commands are invisible culture
-otherwise, and a new operator has no way to discover `/prep` exists.
-`/clear` is deliberately NOT a button: the one that discards a
-conversation keeps its typing friction. The chips only render where a
-chat box exists to receive them — never into a bare shell prompt.
+## The bell
 
-## The seat model (read this before extending)
+ai_mail appends every notification event — mail delivered, agent waking,
+dispatch finished — to `<project root>/.aipass/notifications.jsonl`, one JSON
+object per line (`ts`, `kind`, `title`, `body`, `source`). Desktop toasts are
+retired: ai_mail's notifier (`notify.py` 2.0.0, "Notification Feed Writer") has
+no D-Bus and no notify-send path left in it, and no fallback that still toasts.
 
-BAUD has **one PTY — one seat**, but since rooms (m6) the seat is a
-*window*, not a cage: a card click SIGHUPs the pty's process group, and
-for a room client that teardown is a **detach by construction** — the
-agent lives in the tmux server's process tree and keeps working. Rooms run
-in parallel; attention is singular. One terminal hops between agents
-because every room keeps its own scrollback and process alive behind the
-curtain.
+BAUD only reads that feed. The backend tails the last 256 KB, skips lines that
+do not parse (a torn trailing write or a truncated first line must never take
+the bell down), and returns at most 200 events; the bell then keeps as many as
+the interface settings say. A missing feed is a quiet bell, not an error.
 
-Consequences worth knowing:
+Nothing clears itself. The badge stays until the operator clicks **clear**,
+which wipes the lot in one click. Clearing is local — a cleared-up-to timestamp
+in `localStorage`, keyed per project — so the feed file is never written by
+BAUD, and two BAUD windows never fight over read flags. Rows click to expand
+from their two-line preview to the whole event.
 
-- Agents in **rooms are immortal to card-clicking** — only the `✕ end
-  room` button (`tmux kill-session`) actually ends one.
-- The **scratch shell** (no card) is the one mortal seat: its `✕ kill` is
-  a real SIGHUP kill, same as closing a terminal window — a claude running
-  there stays resumable from its transcript.
-- There is **no "max agents" constant anywhere in the code**. N rooms + 1
-  seat is pure arithmetic; open more rooms and the fleet grows.
+The chime, when enabled, is synthesized with the Web Audio API — two short sine
+notes — because the CSP allows no external assets and a sound file shipped
+beside the binary is a sound that eventually goes missing. It fires only when a
+poll brings an event newer than the previous poll's newest; the first list after
+launch is history, not news.
 
-(Historical note: before m6 the seat itself was the cage — every card
-click killed the previous agent. This section described that model long
-after rooms shipped; truth restored 2026-08-10, the same night @hooks
-found the identical disease in its own README.)
+## Settings
 
-## The two launch doors
+Two gears, two files, one doctrine: **BAUD is an editor of operator-owned
+config, never its owner.**
 
-- **Typed `claude` in a branch dir** goes through the AIPass boot shim
-  (`~/.bashrc` function → @hooks `session_boot`): a continue/new menu,
-  then claude execs **inside a tmux room** named after the branch. Those
-  sessions survive closed windows, closed editors, everything short of
-  `tmux kill-session`.
-- **BAUD's card buttons** run `command claude ...` — the bash builtin
-  skips the shim function, because the button press already answered the
-  menu's question. Zero-touch, but seat-hosted (mortal).
+### The card gear — one agent's claude settings
 
-The Telegram bot fleet is a third door that builds its own
-`telegram-<branch>` rooms to wake agents from a phone; BAUD just sees the
-resulting green lamps like any others.
+Writes `<branch>/.claude/settings.local.json`, claude's own file. Operators keep
+permission blocks, MCP server lists, hooks and env in there, so the write is
+surgical: the existing document is parsed, exactly three keys are touched, and
+every other key is handed back untouched.
+
+| Panel row | Key on disk |
+| --- | --- |
+| model | `model` |
+| auto-compact | `autoCompactEnabled` |
+| threshold | `autoCompactWindow` |
+
+The patch is three-state, so "leave it alone" and "unset it" can never be
+confused: a field absent from the patch is not touched, a field explicitly
+`null` REMOVES the key, a field with a value sets it. Choosing **Inherit** for
+the model is the null case — the key is deleted, not blanked. The panel sends a
+field only when the operator's value differs from what the file effectively says
+today (the file's value, or claude's own default when the key is absent), so an
+untouched slider stamps nothing.
+
+Failure mode is refusal. A settings file that exists but does not parse as a
+JSON object errors out and nothing is written — losing a deny-rule to a settings
+toggle is the worst bug this file could ship, and overwriting what we cannot
+read is never the safer choice. Writes land through a temp file in the same
+directory and a rename, so a reader never sees a half-file. One cosmetic
+consequence: keys come out sorted, so untouched keys keep their values but can
+change line order.
+
+Model strings pass through opaque — which model ids exist is claude's business
+and it changes without us. A model the file already carries that the panel does
+not list stays listed verbatim rather than rendering as Inherit. BAUD never
+passes a model on the command line — it writes the key in claude's own settings
+file, and claude reads that file when a session starts in the branch, so the
+choice is not tied to BAUD's launch button.
+
+The threshold slider runs 100k–1M in 50k steps and shows 350k when the file is
+silent — that is a reading of claude's default, not a value the operator chose.
+The `memory caps` row is a disabled placeholder and writes nothing.
+
+### The header gear — BAUD's own interface
+
+Writes `<project root>/.aipass/baud.settings.json`, per seated project. The
+backend treats the document as opaque: a shallow top-level merge, `null` removes
+a key, and it hands the whole document back as written.
+
+| Row | Key | Default when absent |
+| --- | --- | --- |
+| startup agent | `startup_agent` | none — BAUD opens nothing |
+| poll every | `poll_interval_ms` | 5000 (menu: 2s/5s/10s/30s, accepted range 1s–300s) |
+| bell keeps | `bell_max_events` | 200 (menu: 50/100/200, accepted range 1–500) |
+| bell chime | `bell_sound` | off |
+
+Absence and nonsense both fall back to the default — the file is
+operator-editable by hand, and the app must keep running rather than poll every
+0 ms. A stored value the menu does not offer stays listed instead of being
+silently rewritten.
+
+**Startup agent** fires once per app run, as soon as the first snapshot and the
+settings have both landed, and only if the operator has not already picked a
+card. It goes through the same `launch` door a card click uses, with the card's
+own judgment: a live room attaches, a branch with history resumes, anything else
+starts fresh. A named agent with no card in the seated project is a console
+warning, not a fault banner.
+
+**Hook sounds** is the one row that is not a setting of ours, and the panel says
+so. AIPass hook sounds are muted by the existence of a flag file named
+`aipass-hooks-muted` in the OS temp directory (@hooks' own switch: the file
+exists = muted). BAUD is a second hand on that same switch — it flips on click
+rather than on save, both directions are idempotent, the state is read live on
+open because a shell or another window may have flipped it, and nothing about it
+is mirrored into `baud.settings.json` where it would drift. The flag lives in
+the temp directory, so it resets on reboot; that is the flag's design, not ours.
+
+## The camera
+
+One click opens the compositor's own screenshot picker — region,
+window or full screen — through the XDG Desktop Portal's interactive mode. On
+Wayland no application may read screen pixels directly, and the portal is the
+one sanctioned door; BAUD ships its own portal client (`ashpd`, pure Rust over
+D-Bus) rather than shelling out to a screenshot binary. The capture is copied to
+`~/Pictures/BAUD/baud-<stamp>.png` and its path is typed into the chat box,
+unsubmitted — claude reads images by path, so the path is the delivery, and
+Enter stays the operator's. The button goes quiet while a request is out and
+carries the failure (including a cancelled picker) in its tooltip. On non-Linux
+targets the command returns an honest error.
 
 ## How BAUD reads the fleet
 
@@ -276,36 +362,136 @@ resulting green lamps like any others.
 | citizen | `.trinity/passport.json` exists |
 | dispatched | `.ai_mail.local/.dispatch.lock` exists |
 | interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
-| resume kind | `~/.claude/projects/<munged-path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries; headless dispatch runs never do |
-| mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12/17 cards were wrong, 2026-08-10) |
-| other figures | the branch's `DASHBOARD.local.json` `quick_status` |
-| projects | sealed `<NAME>_REGISTRY.json` census: the anchor, its `projects/*`, its siblings — fleet dir from the registry's own `branches[].path` |
-| files / viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
-| changes badge + diff | the installed `git` binary, `diff HEAD --relative` scoped to the branch dir — the only git verb BAUD ever runs |
-| terminal links | claude's OSC 8 `file://` hyperlinks (claimed by the app's link handler) + plain-text paths, both through the fenced `resolve_paths` command (seated branch dir, then root — only real files link); URLs through the opener plugin's url-only grant, never reveal-in-dir |
-| room | `tmux list-sessions` (one call per snapshot) — the only tmux verbs BAUD runs are `new-session -A`, `list-sessions`, `kill-session` on the end-room click, and `set-option mouse on` |
-| sub badge | the session transcript's tail: `Agent`/`Task` spawn calls with no result yet, summed over transcripts active in the last 15 min — sub-agents never appear in `/proc`, they run inside the parent claude |
-| camera | the XDG Desktop Portal (`org.freedesktop.portal.Screenshot`, interactive) via BAUD's own client — the capture is copied to `~/Pictures/BAUD/` and its path typed into the chat box, never submitted |
-| dropped files | the webview's drag-drop event (real filesystem paths) — quoted and typed into the chat box, Enter stays the operator's |
+| resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
+| sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
+| mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12 of 17 cards were wrong when checked, 2026-08-10) |
+| plans / todos / age | the branch's `DASHBOARD.local.json` |
+| room | one `tmux list-sessions` per snapshot |
+| git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory — the only git verb BAUD runs |
+| projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |
+| files and viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
+| terminal links | OSC 8 `file://` hyperlinks and plain-text mentions, both through the fenced `resolve_paths` |
+| notifications | `<project root>/.aipass/notifications.jsonl`, written by ai_mail |
+| hook sounds | the `aipass-hooks-muted` flag file in the OS temp dir |
 
-Every fallible read degrades to a default and records the failure in the
-payload — one bad file never takes down the snapshot.
+Every fallible read degrades to a default and records the failure in the payload
+— one bad file never takes down the snapshot.
+
+## The command surface
+
+`invoke_handler` in `app/src-tauri/src/lib.rs` is the canonical inventory —
+22 commands, and nothing reaches the backend that is not on this list:
+
+```
+fleet_snapshot  list_projects  project_switch
+list_dir  read_file_text  resolve_paths  git_changes  git_diff_text
+room_kill  screenshot_capture
+pty_create  pty_write  pty_resize  pty_kill  monitor_create
+notifications_read
+agent_settings_read  agent_settings_write
+baud_settings_read  baud_settings_write
+hooks_sound_get  hooks_sound_set
+```
+
+Everything BAUD writes, in full: the two settings files, the hooks mute flag,
+the screenshot copy in `~/Pictures/BAUD/`, and bytes into a PTY. There is no
+write path to any file the reading room can show you.
+
+The capability grant (`app/src-tauri/capabilities/default.json`) is
+`core:default`, the webview zoom setter, and the opener's URL-only permissions —
+no shell plugin, no filesystem plugin, no asset protocol. A navigation fence
+plugin refuses any navigation off the app's own origin, so no stray link or
+`window.open` can turn the fleet view into a `file://` directory listing.
+
+## Layout
+
+```
+projects/baud/
+├── app/                        the desktop application
+│   ├── src/                    React + TypeScript frontend
+│   │   ├── App.tsx             window shell, tabs, launch, startup agent
+│   │   ├── components/         cards, terminal, panes, panels, header tools
+│   │   ├── types.ts            hand-kept mirrors of the Rust structs
+│   │   ├── age.ts              relative-age formatting
+│   │   └── theme.css           the entire palette and layout, one plain CSS file
+│   ├── src-tauri/src/
+│   │   ├── lib.rs              fleet scan, projects, files, git, rooms, command registry
+│   │   ├── pty.rs              terminals and monitor panes
+│   │   ├── notifications.rs    the bell's feed reader
+│   │   ├── settings.rs         the two config writers and the hooks flag
+│   │   ├── screenshot.rs       the XDG portal client
+│   │   └── main.rs             thin binary entry
+│   ├── src-tauri/capabilities/ the permission grant
+│   ├── dist/                   vite output (build artifact, not tracked)
+│   └── README.md               a milestone-2-era description of the app; this file supersedes it
+├── src/baud/baud/              @baud — the project's resident agent
+├── tests/                      placeholder README only
+├── BAUD_REGISTRY.json          the project seal
+├── CLAUDE.md, AGENTS.md        agent startup instructions
+├── .claude/, .aipass/          agent settings, prompt tiers, hooks
+└── README.md                   this file
+```
+
+**`src/` is not old app code.** It is the AIPass agent scaffold for @baud, the
+project's resident citizen: `apps/baud.py` is the standard auto-discovery CLI
+entry point reached as `drone @baud`, with `apps/modules/` and `apps/handlers/`
+still empty. `BAUD_REGISTRY.json` names `src/baud/baud` as its one branch, which
+makes `src/baud` this project's fleet directory — seat BAUD in the BAUD project
+and you get exactly one card.
+
+**`tests/` is a placeholder.** Its README says so: BAUD's real tests live with
+their stack, in `app/src-tauri/`. There is no Python surface here and no
+frontend test runner installed.
+
+**`CLAUDE.md` and `AGENTS.md`** carry the same startup protocol for the agent
+working in this directory (read `.trinity/`, use drone, keep memories current);
+they are agent instructions, not documentation of the app.
 
 ## Development
 
-Stack: Tauri 2 (Rust backend, `portable-pty`) + React/TypeScript
-(`xterm.js`) + one plain CSS file. Frontend types in `app/src/types.ts`
-mirror the Rust structs in `app/src-tauri/src/lib.rs` — keep them in sync
-by hand.
+Stack: Tauri 2 with `portable-pty` and `ashpd` on the Rust side; React 19,
+xterm.js and CodeMirror 6 on the frontend; one plain stylesheet. There are no
+inline styles anywhere — the CSP forbids them — and `theme.css` is the single
+source of the palette, which the terminal panes read back out of the stylesheet
+so no second palette can drift.
 
-Checks (all expected clean before a build):
+`app/src/types.ts` mirrors the Rust structs by hand. Change one, change the
+other.
+
+Checks, all expected clean:
 
 ```
-cd app/src-tauri && cargo test      # unit tests; compiling IS the Rust type check
+cd app/src-tauri && cargo test      # 49 unit tests; compiling IS the Rust type check
 cd app/src-tauri && cargo clippy    # lints
 cd app && npx tsc --noEmit          # TypeScript type check
+cd app && npm run build             # tsc && vite build - the frontend must actually build
 ```
 
-There is no seedgo audit lane for this repo yet — BAUD is Rust+TS while
-seedgo speaks AIPass Python. Until a per-language diagnostics story exists
-for `projects/`, the three commands above are the audit.
+There is no seedgo audit lane for this repo: seedgo's checks target AIPass
+Python branches, and BAUD is Rust and TypeScript. The four commands above are
+the audit.
+
+## How it got here
+
+Eleven milestones over three days, 2026-08-09 to 2026-08-11:
+
+| | |
+| --- | --- |
+| m1 | Tauri 2 fleet monitor, read-only |
+| m2 | the terminal in the middle — PTY layer, xterm, centre-stage layout |
+| m2.5–m4 | zero-touch switching, resume everywhere, kill button, the reading room |
+| m4.5 | click-through figures — every card number opens its source file |
+| m5 | the git changes figure and the diff tab |
+| m6 | rooms — per-branch tmux sessions; the terminal becomes a window into one |
+| m7 | the project switcher — seat the fleet view in any sealed project |
+| m8 | the camera, drag-drop paths, and the sub-agent badge |
+| m9 | auxiliary panes — the monitor toggles, per-card watch, the help door |
+| m10 | the notification bell; desktop toasts retired |
+| m11 | settings — the per-agent gear and BAUD's own interface gear |
+
+Along the way: whole-window zoom, ctrl+click terminal links, slash-command
+chips, and the mail-count fix that reads the mailbox instead of the dashboard's
+cache.
+
+At the time of writing, m11 lives in the working tree and is not yet committed;
+`git log --oneline -1` ends at the m10 bell.

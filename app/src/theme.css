@@ -709,6 +709,35 @@ body {
   margin-left: 8px;
 }
 
+/* m11: the settings gear, a second quiet circle beside the help door. It
+   follows ? on every citizen card, so the auto margin is only its fallback -
+   whatever sits left of it has already pushed the row right. */
+.baud-chip-gear {
+  margin-left: auto;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--baud-line);
+  border-radius: 50%;
+  background: none;
+  color: var(--baud-ink-faint);
+  cursor: pointer;
+}
+
+.baud-chip-gear:hover {
+  color: var(--baud-green);
+  border-color: var(--baud-green);
+}
+
+.baud-chip-help ~ .baud-chip-gear,
+.baud-badge ~ .baud-chip-gear {
+  margin-left: 5px;
+}
+
 .baud-chip-foot {
   display: flex;
   align-items: center;
@@ -859,6 +888,255 @@ body {
 .baud-figure-git .baud-figure-label {
   color: var(--baud-amber);
   opacity: 0.65;
+}
+
+/* -------------------------------------------------------- agent settings
+   m11: what the card's gear opens. A centered overlay, not a Bell-style
+   anchored shade - the fleet strip clips vertically (overflow-y: hidden) and
+   scrolls sideways, so a panel hung under a card would be cut off and would
+   ride away with the scroll. The scrim doubles as the click-away surface and
+   guarantees the one-panel rule: it covers every other gear on screen.
+   ------------------------------------------------------------------------ */
+
+.baud-settings-scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  /* Above the bell's shade (30) - a modal outranks a glance. */
+  z-index: 40;
+}
+
+.baud-settings-panel {
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px 10px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.6);
+}
+
+.baud-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--baud-line-strong);
+}
+
+.baud-settings-title {
+  color: var(--baud-ink);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.baud-settings-close {
+  background: none;
+  border: none;
+  color: var(--baud-ink-faint);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.baud-settings-close:hover {
+  color: var(--baud-ink);
+}
+
+.baud-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+}
+
+/* Off, not gone: a disabled control still shows what the file says. */
+.baud-settings-row-off .baud-settings-label,
+.baud-settings-row-off .baud-settings-readout {
+  opacity: 0.5;
+}
+
+.baud-settings-label {
+  flex: none;
+  width: 92px;
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.baud-settings-select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.baud-settings-select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The auto-compact switch: a rail and a knob, green while compaction is on. */
+.baud-settings-switch {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: 9px;
+  background: var(--baud-bg-card);
+  cursor: pointer;
+}
+
+.baud-settings-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.baud-settings-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--baud-ink-faint);
+  transition:
+    left 0.12s ease,
+    background 0.12s ease;
+}
+
+.baud-settings-switch-on {
+  border-color: var(--baud-green);
+}
+
+.baud-settings-switch-on .baud-settings-knob {
+  left: 18px;
+  background: var(--baud-green);
+  box-shadow: 0 0 6px 0 var(--baud-glow-green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .baud-settings-knob {
+    transition: none;
+  }
+}
+
+.baud-settings-state {
+  color: var(--baud-ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.baud-settings-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--baud-green);
+  cursor: pointer;
+}
+
+.baud-settings-slider:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.baud-settings-readout {
+  flex: none;
+  width: 42px;
+  text-align: right;
+  color: var(--baud-ink);
+  font-size: 11px;
+}
+
+/* Placeholder, honestly labelled: nothing behind it yet. */
+.baud-settings-soon {
+  color: var(--baud-ink-faint);
+  font-size: 10px;
+}
+
+/* BAUD's own panel (m11 phase 6): same furniture, longer labels - "startup
+   agent" and "hook sounds" need the room the agent panel's don't. */
+.baud-interface-panel .baud-settings-label {
+  width: 104px;
+}
+
+/* A footnote on a row, not a state: what the operator needs to know about
+   the control they are looking at ("resets on reboot"). */
+.baud-settings-hint {
+  color: var(--baud-ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.baud-settings-error {
+  margin: 0;
+  color: var(--baud-red);
+  font-size: 10px;
+  word-break: break-word;
+}
+
+.baud-settings-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--baud-line-strong);
+}
+
+.baud-settings-note {
+  color: var(--baud-ink-faint);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.baud-settings-note-saved {
+  color: var(--baud-green);
+}
+
+.baud-settings-save {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: transparent;
+  color: var(--baud-green);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.baud-settings-save:hover:enabled,
+.baud-settings-save:focus-visible:enabled {
+  border-color: var(--baud-green);
+  background: rgba(74, 222, 128, 0.08);
+  box-shadow: 0 0 6px 0 var(--baud-glow-green);
+}
+
+/* Nothing to write is not a failure - it is the resting state. */
+.baud-settings-save:disabled {
+  color: var(--baud-ink-faint);
+  border-color: var(--baud-line);
+  cursor: default;
 }
 
 /* ------------------------------------------------------------- workbench

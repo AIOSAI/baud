@@ -22,9 +22,6 @@ import type { NotificationEvent } from "../types";
  * body lines, expanded shows everything the event carried.
  */
 
-/** The feed only moves when mail moves - the dashboard tick's pace is fine. */
-const BELL_POLL_MS = 5000;
-
 /** How events introduce themselves: a color per kind, dim for the unknown. */
 const KIND_TONES: Record<string, string> = {
   mail: "baud-bell-kind-mail",
@@ -32,16 +29,70 @@ const KIND_TONES: Record<string, string> = {
   dispatch: "baud-bell-kind-dispatch",
 };
 
+/**
+ * The chime (m11 phase 6), synthesized rather than played: the CSP allows no
+ * external assets, and a notification sound that needs a file shipped beside
+ * the binary is a sound that eventually goes missing. Two short sine notes,
+ * quiet on purpose - this sits behind a toggle that is OFF by default, and an
+ * operator who turns it on wants a hint, not an alarm.
+ */
+const CHIME_NOTES: { hz: number; delay: number }[] = [
+  { hz: 784, delay: 0 },
+  { hz: 1046.5, delay: 0.085 },
+];
+const CHIME_GAIN = 0.045;
+const CHIME_DECAY = 0.12;
+
+/** One context for the app's life - browsers cap how many may exist. */
+let audio: AudioContext | null = null;
+
+function chime() {
+  try {
+    const Ctor =
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return;
+    audio ??= new Ctor();
+    const ctx = audio;
+    // A context created before any gesture starts suspended; the operator's
+    // click on the toggle is that gesture, so this resumes rather than fails.
+    void ctx.resume().catch(() => {});
+    const base = ctx.currentTime + 0.01;
+    for (const { hz, delay } of CHIME_NOTES) {
+      const start = base + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = hz;
+      // Exponential ramps only - a linear attack on a sine clicks.
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(CHIME_GAIN, start + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + CHIME_DECAY);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + CHIME_DECAY + 0.02);
+    }
+  } catch {
+    // A machine with no audio device is not a reason to break the bell.
+  }
+}
+
 interface BellProps {
   /** Seated project name - scopes the cleared-up-to marker. */
   project: string | null;
+  /** Feed poll cadence, from BAUD's interface settings (m11 phase 6). */
+  pollMs: number;
+  /** Reader-side retention: how many events this bell keeps at all. */
+  maxEvents: number;
+  /** Chime when a poll brings events newer than the last batch. */
+  sound: boolean;
 }
 
 function clearedKey(project: string | null): string {
   return `baud-bell-cleared:${project ?? "project"}`;
 }
 
-export default function Bell({ project }: BellProps) {
+export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [open, setOpen] = useState(false);
   const [clearedUpTo, setClearedUpTo] = useState<string>(() =>
@@ -49,6 +100,13 @@ export default function Bell({ project }: BellProps) {
   );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const wrapRef = useRef<HTMLDivElement>(null);
+  // The toggle, ref'd: the poll closure must see the CURRENT setting without
+  // the interval being torn down and rebuilt every time it flips.
+  const soundRef = useRef(sound);
+  soundRef.current = sound;
+  // The newest timestamp this bell has seen. `null` until the first poll
+  // lands, and that first list is history, not news - it never chimes.
+  const newestRef = useRef<string | null>(null);
 
   // Reseating swaps the feed AND the marker - each project keeps its own.
   useEffect(() => {
@@ -56,6 +114,8 @@ export default function Bell({ project }: BellProps) {
     setEvents([]);
     setExpanded(new Set());
     setOpen(false);
+    // Another project's feed is another history: its newest event is not news.
+    newestRef.current = null;
   }, [project]);
 
   useEffect(() => {
@@ -63,7 +123,16 @@ export default function Bell({ project }: BellProps) {
     const refresh = () => {
       invoke<NotificationEvent[]>("notifications_read")
         .then((next) => {
-          if (mounted) setEvents(next);
+          if (!mounted) return;
+          // Retention is reader-side: the feed file is ai_mail's alone, and
+          // the tail is what a bell is for. File order is append order.
+          const kept = next.slice(-maxEvents);
+          setEvents(kept);
+          const newest = kept.length > 0 ? kept[kept.length - 1].ts : "";
+          const previous = newestRef.current;
+          newestRef.current = newest;
+          // ISO timestamps compare as strings, same as the cleared marker.
+          if (previous !== null && newest > previous && soundRef.current) chime();
         })
         .catch(() => {
           // A failed poll keeps the last good list - the badge never
@@ -71,12 +140,12 @@ export default function Bell({ project }: BellProps) {
         });
     };
     refresh();
-    const timer = window.setInterval(refresh, BELL_POLL_MS);
+    const timer = window.setInterval(refresh, pollMs);
     return () => {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [project]);
+  }, [project, pollMs, maxEvents]);
 
   // Click-away and Escape both close - the shade is a glance, not a tab.
   useEffect(() => {

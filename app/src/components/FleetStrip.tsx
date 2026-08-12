@@ -11,6 +11,8 @@ interface FleetStripProps {
   onMonitor: (branch: BranchStatus) => void;
   /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
+  /** Operator clicked the gear: open this branch's settings panel (m11). */
+  onSettings: (branch: BranchStatus) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -36,6 +38,7 @@ export default function FleetStrip({
   onOpenDiff,
   onMonitor,
   onHelp,
+  onSettings,
 }: FleetStripProps) {
   if (branches.length === 0) {
     return (
@@ -57,6 +60,7 @@ export default function FleetStrip({
           onOpenDiff={onOpenDiff}
           onMonitor={onMonitor}
           onHelp={onHelp}
+          onSettings={onSettings}
         />
       ))}
     </div>

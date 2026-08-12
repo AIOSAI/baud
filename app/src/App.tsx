@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
+import AgentSettings from "./components/AgentSettings";
 import Bell from "./components/Bell";
 import Camera from "./components/Camera";
 import FleetStrip from "./components/FleetStrip";
+import InterfaceSettings, { interfacePrefs } from "./components/InterfaceSettings";
 import type { LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
@@ -15,9 +17,19 @@ import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
 import { relativeAge } from "./age";
-import type { BranchStatus, FleetSnapshot } from "./types";
+import type { BaudSettings, BranchStatus, FleetSnapshot } from "./types";
 
-const POLL_INTERVAL_MS = 5000;
+/**
+ * Which door a card click would take for this branch - BranchChip's own
+ * judgment, mirrored here so the startup agent (m11 phase 6) opens exactly
+ * what a click on its card would: a live room ATTACHES (nothing is typed), a
+ * branch with interactive history or a dispatch transcript RESUMES, anything
+ * else starts fresh.
+ */
+function cardMode(branch: BranchStatus): LaunchMode {
+  const live = branch.has_room && branch.interactive;
+  return live || branch.has_history || branch.resume_id !== null ? "resume" : "fresh";
+}
 
 /**
  * One workbench tab. A `file` tab views the file at `path`; a `diff` tab
@@ -87,6 +99,10 @@ export default function App() {
   const terminalRef = useRef<TerminalHandle>(null);
   // The latest snapshot, reachable from stable callbacks (openFromTerminal).
   const snapshotRef = useRef<FleetSnapshot | null>(null);
+  // The startup agent's one shot (m11 phase 6), and whether the operator has
+  // already taken a seat - either one spends it.
+  const startupRef = useRef(false);
+  const seatedRef = useRef(false);
 
   // The reading room: which branch's tree is docked, which files are open,
   // which pane is on top. The terminal is ALWAYS mounted - switching tabs
@@ -94,6 +110,33 @@ export default function App() {
   const [treeBranch, setTreeBranch] = useState<BranchStatus | null>(null);
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeTab, setActiveTab] = useState<string>(TERMINAL_TAB);
+
+  // The gear panel (m11): one agent at a time, owned here rather than by the
+  // card, so two cards can never have a panel open at once. Not a tab - it is
+  // a modal glance over the whole app, and it closes with itself.
+  const [settingsAgent, setSettingsAgent] = useState<string | null>(null);
+  const openSettings = useCallback(
+    (branch: BranchStatus) => setSettingsAgent(branch.name),
+    [],
+  );
+  const closeSettings = useCallback(() => setSettingsAgent(null), []);
+
+  // BAUD's own settings (m11 phase 6): the header gear. `null` means the read
+  // has not landed yet - the app runs on defaults until it does, and the
+  // startup agent waits for it rather than firing on a guess.
+  const [baudSettings, setBaudSettings] = useState<BaudSettings | null>(null);
+  const [interfaceOpen, setInterfaceOpen] = useState(false);
+  const prefs = interfacePrefs(baudSettings);
+
+  // Per project - the settings file lives under the seated root, so a switch
+  // re-reads it. A failed read settles on `{}`: defaults, and nothing hangs.
+  const loadSettings = useCallback(() => {
+    invoke<BaudSettings>("baud_settings_read")
+      .then(setBaudSettings)
+      .catch(() => setBaudSettings({}));
+  }, []);
+
+  useEffect(loadSettings, [loadSettings]);
 
   const toggleTree = useCallback((branch: BranchStatus) => {
     setTreeBranch((current) => (current?.name === branch.name ? null : branch));
@@ -233,6 +276,8 @@ export default function App() {
   // session_boot): its continue/new menu is redundant here - the button
   // press already made that choice.
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
+    // A seat exists from here on - the startup agent stands down (m11 p6).
+    seatedRef.current = true;
     const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
     const resume =
       mode !== "resume"
@@ -251,6 +296,26 @@ export default function App() {
     // A launch is a statement of intent: bring the terminal forward.
     setActiveTab(TERMINAL_TAB);
   }, []);
+
+  // The startup agent (m11 phase 6): ONCE per app run, as soon as the first
+  // snapshot and the settings have both landed, BAUD opens the seat the
+  // operator named - through `launch`, the very door a card click uses, with
+  // the card's own attach/resume/fresh judgment. The attempt is marked spent
+  // whatever the outcome, so a later snapshot can never re-fire it, and an
+  // operator who already picked a card outranks the preference. A named agent
+  // with no card here is a quiet console line: a missing branch is not a fault
+  // worth a FAULT banner over.
+  useEffect(() => {
+    if (startupRef.current || !snapshot || !baudSettings) return;
+    startupRef.current = true;
+    if (!prefs.startupAgent || seatedRef.current) return;
+    const branch = snapshot.branches.find((item) => item.name === prefs.startupAgent);
+    if (!branch) {
+      console.warn(`startup agent '${prefs.startupAgent}' has no card here - opening nothing`);
+      return;
+    }
+    launch(branch, cardMode(branch));
+  }, [snapshot, baudSettings, prefs.startupAgent, launch]);
 
   // Deliver file paths INTO the chat box (m8): quoted only when they need
   // it, wrapped in spaces so they join whatever the operator was typing,
@@ -307,13 +372,16 @@ export default function App() {
     const alive = () => mounted;
 
     void poll(alive);
-    const timer = window.setInterval(() => void poll(alive), POLL_INTERVAL_MS);
+    // The snapshot poll is frontend-driven (one interval, one command), so
+    // the interface setting reaches it directly - a new cadence rebuilds the
+    // timer and takes effect on the spot.
+    const timer = window.setInterval(() => void poll(alive), prefs.pollMs);
 
     return () => {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [poll]);
+  }, [poll, prefs.pollMs]);
 
   // A project switch moves the fence, so the reading room empties: old tabs
   // and the docked tree point where the backend now rightly refuses to read.
@@ -325,8 +393,14 @@ export default function App() {
     setFileTabs([]);
     setTreeBranch(null);
     setActiveTab(TERMINAL_TAB);
+    // A panel pointed at a branch of the old project has nothing to write to.
+    setSettingsAgent(null);
+    setInterfaceOpen(false);
+    // Interface settings live under the seated root - the new project has
+    // its own file, and possibly its own answers.
+    loadSettings();
     void poll(() => true);
-  }, [poll]);
+  }, [poll, loadSettings]);
 
   const branches = snapshot?.branches ?? [];
   const citizens = branches.filter((branch) => branch.is_citizen).length;
@@ -342,7 +416,7 @@ export default function App() {
   const pollStatus = transportError
     ? "poll failing"
     : snapshot
-      ? `polled ${relativeAge(snapshot.generated_at).label} · every ${POLL_INTERVAL_MS / 1000}s`
+      ? `polled ${relativeAge(snapshot.generated_at).label} · every ${prefs.pollMs / 1000}s`
       : "waiting for the first snapshot…";
 
   return (
@@ -378,8 +452,37 @@ export default function App() {
           })}
           <Camera onCaptured={(path) => deliverPaths([path])} />
           {/* The bell, wired (m10): desktop toasts are retired - ai_mail's
-              notification feed lands here instead. */}
-          <Bell project={snapshot?.project ?? null} />
+              notification feed lands here instead. Its cadence, retention and
+              chime come from BAUD's own settings (m11 phase 6). */}
+          <Bell
+            project={snapshot?.project ?? null}
+            pollMs={prefs.pollMs}
+            maxEvents={prefs.bellMax}
+            sound={prefs.bellSound}
+          />
+          {/* BAUD's gear, sibling to the cards' (m11 phase 6): this one is
+              about the interface itself, not any one agent. */}
+          <button
+            type="button"
+            className="baud-tool-btn"
+            title="BAUD settings - startup agent, poll cadence, bell behaviour, hook sounds"
+            onClick={() => setInterfaceOpen(true)}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3.4" />
+              <path d="M20.2 14.6a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3.4a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.3a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
+          </button>
           <Zoom />
         </div>
       </header>
@@ -404,8 +507,22 @@ export default function App() {
           onOpenDiff={openDiff}
           onMonitor={monitorBranch}
           onHelp={helpBranch}
+          onSettings={openSettings}
         />
       )}
+
+      {settingsAgent ? (
+        <AgentSettings agent={settingsAgent} onClose={closeSettings} />
+      ) : null}
+
+      {interfaceOpen ? (
+        <InterfaceSettings
+          agents={branches.map((branch) => branch.name)}
+          settings={baudSettings ?? {}}
+          onSaved={setBaudSettings}
+          onClose={() => setInterfaceOpen(false)}
+        />
+      ) : null}
 
       <main className="baud-stage">
         {treeBranch ? (

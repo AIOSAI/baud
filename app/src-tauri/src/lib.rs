@@ -56,6 +56,13 @@
 //! the project in their session name (`baud-<project>-<branch>`) so two
 //! projects' same-named branches can never attach to each other's sessions;
 //! anchor rooms keep the plain names they have always had.
+//!
+//! Milestone 11 breaks the read-only streak on purpose: [`settings`] writes
+//! two config files - claude's `<branch>/.claude/settings.local.json` and
+//! BAUD's own `.aipass/baud.settings.json`. It touches only the keys it
+//! declares, refuses to write at all when the existing file does not parse,
+//! and replaces files by rename so a reader never sees a half-write. No
+//! other command in this codebase writes anything.
 
 use std::fs;
 use std::io::Read;
@@ -70,6 +77,7 @@ use tauri::Manager;
 mod notifications;
 mod pty;
 mod screenshot;
+mod settings;
 
 /// Marker directory that identifies an AIPass root: `<root>/src/aipass`.
 const FLEET_RELATIVE_DIR: [&str; 2] = ["src", "aipass"];
@@ -1350,7 +1358,13 @@ pub fn run() {
             pty::pty_resize,
             pty::pty_kill,
             pty::monitor_create,
-            notifications::notifications_read
+            notifications::notifications_read,
+            settings::agent_settings_read,
+            settings::agent_settings_write,
+            settings::baud_settings_read,
+            settings::baud_settings_write,
+            settings::hooks_sound_get,
+            settings::hooks_sound_set
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session

@@ -25,6 +25,8 @@ interface BranchChipProps {
   onMonitor: (branch: BranchStatus) => void;
   /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
+  /** Operator clicked the gear: open this branch's settings panel (m11). */
+  onSettings: (branch: BranchStatus) => void;
 }
 
 /**
@@ -44,6 +46,7 @@ export default function BranchChip({
   onOpenDiff,
   onMonitor,
   onHelp,
+  onSettings,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
@@ -140,6 +143,32 @@ export default function BranchChip({
             onClick={() => onHelp(branch)}
           >
             ?
+          </button>
+        ) : null}
+        {/* m11: this branch's own settings - model, auto-compact, context
+            threshold. The panel writes claude's settings.local.json, so it
+            only exists for branches that are actually citizens. */}
+        {branch.is_citizen ? (
+          <button
+            type="button"
+            className="baud-chip-gear"
+            title={`${branch.name}'s settings - model, auto-compact, context threshold`}
+            onClick={() => onSettings(branch)}
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="3.4" />
+              <path d="M20.2 14.6a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3.4a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.3a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z" />
+            </svg>
           </button>
         ) : null}
       </header>
