@@ -20,6 +20,8 @@ interface BranchChipProps {
   onOpenFile: (path: string, name: string, branch: string) => void;
   /** Operator clicked the changes badge: open this branch's diff tab. */
   onOpenDiff: (branch: BranchStatus) => void;
+  /** Operator clicked watch: open this branch's scoped monitor pane. */
+  onMonitor: (branch: BranchStatus) => void;
 }
 
 /**
@@ -37,6 +39,7 @@ export default function BranchChip({
   onFiles,
   onOpenFile,
   onOpenDiff,
+  onMonitor,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
@@ -167,6 +170,17 @@ export default function BranchChip({
               onClick={() => onFiles(branch)}
             >
               files
+            </button>
+            {/* Tier-0, scoped (m9): this branch's prax activity alone, in a
+                read-only pane. A window, never a seat - same doctrine as the
+                header lights, one card wide. */}
+            <button
+              type="button"
+              className="baud-chip-launch baud-chip-launch-quiet"
+              title={`watch ${branch.name}'s live activity - read-only monitor pane`}
+              onClick={() => onMonitor(branch)}
+            >
+              watch
             </button>
             {branch.has_room && branch.interactive ? (
               /* A live session in the room: every door is the same door -

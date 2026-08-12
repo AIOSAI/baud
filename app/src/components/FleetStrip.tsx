@@ -7,6 +7,8 @@ interface FleetStripProps {
   onFiles: (branch: BranchStatus) => void;
   onOpenFile: (path: string, name: string, branch: string) => void;
   onOpenDiff: (branch: BranchStatus) => void;
+  /** Operator clicked watch: open this branch's scoped monitor pane. */
+  onMonitor: (branch: BranchStatus) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -30,6 +32,7 @@ export default function FleetStrip({
   onFiles,
   onOpenFile,
   onOpenDiff,
+  onMonitor,
 }: FleetStripProps) {
   if (branches.length === 0) {
     return (
@@ -49,6 +52,7 @@ export default function FleetStrip({
           onFiles={onFiles}
           onOpenFile={onOpenFile}
           onOpenDiff={onOpenDiff}
+          onMonitor={onMonitor}
         />
       ))}
     </div>

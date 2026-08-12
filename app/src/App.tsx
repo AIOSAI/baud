@@ -39,6 +39,16 @@ interface FileTab {
 /** The terminal's reserved tab id - never closable, never a real path. */
 const TERMINAL_TAB = "terminal";
 
+/** What a tier-0 monitor pane needs to exist as a tab (m9). */
+interface MonitorSpec {
+  /** Doubles as the tab path - one pane per id, ever. */
+  id: string;
+  /** Backend target token: null = all branches, else commons/branch list. */
+  target: string | null;
+  branch: string;
+  name: string;
+}
+
 /**
  * The header's tier-0 monitor toggles (m9), one traffic light each. The
  * `id` doubles as the tab path, so "is it live" is one lookup and every
@@ -63,9 +73,11 @@ const MONITOR_TOGGLES = [
     onTitle: "the commons feed is live - click to close it",
     offTitle: "open the commons live feed - posts, comments, votes, read-only",
   },
-] as const;
-
-type MonitorSpec = (typeof MONITOR_TOGGLES)[number];
+] as const satisfies readonly (MonitorSpec & {
+  label: string;
+  onTitle: string;
+  offTitle: string;
+})[];
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
@@ -165,6 +177,25 @@ export default function App() {
       setActiveTab((current) => (current === spec.id ? current : spec.id));
     },
     [],
+  );
+
+  // The card's watch button (m9 phase 3): this branch's activity alone.
+  // Re-clicking an open one brings its tab forward - cards are doors, not
+  // toggles; closing stays with the tab's own ✕ and the pane's corner.
+  // Own `watch:` namespace: the prax CARD's scoped pane and the header's
+  // mission-control pane are different panes and must never share a tab.
+  // (Quirk, accepted: prax maps the `commons` target to the social feed,
+  // so the commons card's watch shows the feed, not technical logs.)
+  const monitorBranch = useCallback(
+    (branch: BranchStatus) => {
+      openMonitor({
+        id: `watch:${branch.name}`,
+        target: branch.name,
+        branch: branch.name,
+        name: "watch",
+      });
+    },
+    [openMonitor],
   );
 
   // The launch buttons since m6: a window into the branch's ROOM. Switching
@@ -368,6 +399,7 @@ export default function App() {
           onFiles={toggleTree}
           onOpenFile={openFile}
           onOpenDiff={openDiff}
+          onMonitor={monitorBranch}
         />
       )}
 

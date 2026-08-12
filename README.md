@@ -122,7 +122,14 @@ One citizen, one card. The card IS the report — nothing hides in tooltips:
   transcripts are headless dispatch runs (`-c` refuses those). A citizen
   with no transcripts at all shows a single `▸ claude`. When the room holds
   a live session, both collapse into a single `▸ attach`. `files` docks
-  the branch's file tree.
+  the branch's file tree. `watch` opens a tier-0 monitor pane scoped to
+  this branch (`drone @prax monitor run <branch>`) — same no-keyboard
+  doctrine as the header lights, one card wide. Re-clicking brings the
+  open pane forward; closing is the tab's ✕ or the pane's corner.
+  *Known gap, honest:* prax currently accepts the branch argument but does
+  not filter by it yet — every watch pane shows all-branch output until
+  @prax lands the scoping (dispatched 2026-08-11); BAUD's side of the
+  contract is already the documented one.
 
 Strip order: dispatched first, then interactive, then alphabetical.
 
