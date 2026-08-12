@@ -54,6 +54,23 @@ The **bell** between them is a placeholder on purpose — the visible
 reminder that BAUD-native notifications are planned. It renders, it
 explains itself on hover, it does nothing yet.
 
+The **prax toggle** beside the totals is a traffic light for prax mission
+control: click it and it turns green while a live, read-only view of every
+branch's activity (`drone @prax monitor run`) opens as a workbench tab;
+click again and the light goes red as the monitor dies with its tab. Any
+door closes it — the toggle, the tab's ✕, the pane's corner button, or the
+monitor process ending on its own — and the light follows, because the
+light IS the tab's existence, not a second piece of state.
+
+Monitor panes are **tier-0 aux panes** (the first of the auxiliary-pane
+tiers): a pane of glass, not a seat. No keyboard reaches them — xterm's
+stdin is disabled in the pane, and the backend refuses `pty_write` for any
+read-only session no matter who asks, which is the honest enforcement
+(filtering what can be typed is theater; wiring no stdin at all is a
+fact). The one operator terminal stays the only seat of agency. The
+monitor command itself is backend-composed from a fixed shape — the
+frontend picks a target, never writes a command line.
+
 ### The project switcher
 
 The chip beside the wordmark names the project the fleet view is **seated**

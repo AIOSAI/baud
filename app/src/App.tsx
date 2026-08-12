@@ -8,6 +8,7 @@ import type { LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
+import MonitorPane from "./components/MonitorPane";
 import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
@@ -18,22 +19,28 @@ const POLL_INTERVAL_MS = 5000;
 
 /**
  * One workbench tab. A `file` tab views the file at `path`; a `diff` tab
- * shows the branch dir's uncommitted git diff, with `path` carrying a
- * synthetic `diff:` id so the two kinds can never collide on one file.
+ * shows the branch dir's uncommitted git diff; a `monitor` tab holds a
+ * tier-0 read-only monitor pane (m9). Non-file kinds carry synthetic
+ * `diff:` / `monitor:` ids so the kinds can never collide on one path.
  */
 interface FileTab {
   path: string;
   name: string;
   branch: string;
-  kind: "file" | "diff";
-  /** The branch directory a diff tab reads - unused by file tabs. */
+  kind: "file" | "diff" | "monitor";
+  /** The branch directory a diff tab reads - unused by other kinds. */
   dir?: string;
   /** Jump target from a ctrl+clicked `path:line` mention in the terminal. */
   line?: number;
+  /** What a monitor tab watches - null is prax mission control. */
+  target?: string | null;
 }
 
 /** The terminal's reserved tab id - never closable, never a real path. */
 const TERMINAL_TAB = "terminal";
+
+/** The header toggle's tab id: one prax mission-control pane, ever. */
+const PRAX_MONITOR_TAB = "monitor:prax";
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
@@ -109,6 +116,30 @@ export default function App() {
     setFileTabs((current) => current.filter((tab) => tab.path !== path));
     setActiveTab((current) => (current === path ? TERMINAL_TAB : current));
   }, []);
+
+  // The header's prax toggle (m9): green while its pane lives, off when it
+  // does not - and "lives" is literally "the tab exists", so a pane killed
+  // by its corner button or a monitor that dies on its own resets the
+  // toggle through the same closeFile door. No second state to drift.
+  const praxLive = fileTabs.some((tab) => tab.path === PRAX_MONITOR_TAB);
+
+  const togglePrax = useCallback(() => {
+    if (praxLive) {
+      closeFile(PRAX_MONITOR_TAB);
+      return;
+    }
+    setFileTabs((current) => [
+      ...current,
+      {
+        path: PRAX_MONITOR_TAB,
+        name: "monitor",
+        branch: "prax",
+        kind: "monitor" as const,
+        target: null,
+      },
+    ]);
+    setActiveTab(PRAX_MONITOR_TAB);
+  }, [praxLive, closeFile]);
 
   // The launch buttons since m6: a window into the branch's ROOM. Switching
   // cards detaches the old room (it keeps running) and attaches the next.
@@ -250,6 +281,19 @@ export default function App() {
             <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
             <Total label="plans" value={plans} />
           </div>
+          <button
+            type="button"
+            className={`baud-monitor-toggle ${praxLive ? "baud-monitor-toggle-live" : ""}`}
+            title={
+              praxLive
+                ? "prax mission control is live - click to close the monitor"
+                : "open prax mission control - a read-only live view of every branch"
+            }
+            onClick={togglePrax}
+          >
+            <span className="baud-monitor-dot" aria-hidden="true" />
+            prax
+          </button>
           <Camera onCaptured={(path) => deliverPaths([path])} />
           {/* Notifications bell - a PLACEHOLDER on purpose (Patrick
               2026-08-10): the reminder that BAUD-native notifications are
@@ -360,6 +404,12 @@ export default function App() {
             >
               {tab.kind === "diff" ? (
                 <DiffView dir={tab.dir ?? ""} active={activeTab === tab.path} />
+              ) : tab.kind === "monitor" ? (
+                <MonitorPane
+                  target={tab.target ?? null}
+                  label={`${tab.branch} ${tab.name}`}
+                  onExited={() => closeFile(tab.path)}
+                />
               ) : (
                 <FileView path={tab.path} line={tab.line} />
               )}

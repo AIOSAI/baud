@@ -32,6 +32,15 @@
 //! switching cards and closing BAUD stop being lethal by construction. The
 //! explicit `room_kill` command (lib.rs) is the only door that actually ends
 //! a session.
+//!
+//! Milestone 9 (monitor panes): a second KIND of session - `monitor_create`
+//! runs a read-only observer (`drone @prax monitor run ...`) on its own pty.
+//! Tier-0 doctrine (DPLAN-0284): keyword-filtering what can be typed is
+//! theater, so the enforcement is that nothing can be typed AT ALL. The
+//! session is flagged `read_only` and `pty_write` refuses it - the no-stdin
+//! line holds in the backend even if some future frontend wires a keyboard
+//! by mistake. The command itself is backend-chosen from a fixed shape; the
+//! frontend picks a target from the fleet, never a command line.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -40,7 +49,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtyPair, PtySize};
 use serde::Serialize;
 use tauri::ipc::Channel;
 
@@ -99,6 +108,8 @@ struct Session {
     pid: Option<u32>,
     /// The thread pumping master -> frontend. Joined on teardown.
     reader: Option<JoinHandle<()>>,
+    /// A tier-0 monitor pane: `pty_write` refuses it (see module docs).
+    read_only: bool,
 }
 
 /// All live shells, keyed by session id.
@@ -346,8 +357,24 @@ pub fn pty_create(
         format!("could not start {what}: {err}")
     })?;
 
-    // Release the slave now that the shell owns it: while we hold a handle the
-    // master never reports EOF, so we would never notice the shell exiting.
+    let id = stream_session(pair, child, on_data, &registry, false)?;
+
+    Ok(SpawnResult { id, created })
+}
+
+/// Wire a freshly spawned pty into the registry: release the slave, start
+/// the reader thread pumping master -> frontend, file the session under a
+/// new id. Shared by the operator shell and the monitor panes - the only
+/// difference between the two kinds is `read_only`.
+fn stream_session(
+    pair: PtyPair,
+    child: Box<dyn Child + Send + Sync>,
+    on_data: Channel<PtyEvent>,
+    registry: &PtyRegistry,
+    read_only: bool,
+) -> Result<String, String> {
+    // Release the slave now that the child owns it: while we hold a handle the
+    // master never reports EOF, so we would never notice the process exiting.
     drop(pair.slave);
 
     let mut reader = pair
@@ -367,7 +394,7 @@ pub fn pty_create(
         let mut buffer = [0u8; READ_BUFFER_BYTES];
         loop {
             match reader.read(&mut buffer) {
-                // EOF: every slave handle is closed, so the shell is gone.
+                // EOF: every slave handle is closed, so the process is gone.
                 Ok(0) => break,
                 Ok(count) => {
                     let event = PtyEvent::Data {
@@ -395,10 +422,77 @@ pub fn pty_create(
             child,
             pid,
             reader: Some(reader_thread),
+            read_only,
         },
     );
 
-    Ok(SpawnResult { id, created })
+    Ok(id)
+}
+
+/// Charset fence for a monitor target: a branch list (`seedgo,cli`) or the
+/// `commons` feed keyword. Anything outside it is refused - the frontend
+/// picks targets off the fleet snapshot, it never composes command lines.
+fn valid_monitor_target(target: &str) -> bool {
+    !target.is_empty()
+        && target.chars().all(|ch| {
+            ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '_' | '-' | ',')
+        })
+}
+
+/// Open a tier-0 monitor pane: `drone @prax monitor run [target]` on its own
+/// pty, streamed like any session but flagged read-only (m9, see module
+/// docs). No target = mission control, all branches; `commons` = the live
+/// social feed; a branch list scopes to those branches (the per-card door).
+///
+/// The command runs through the operator's login shell (`-l -c`) so `drone`
+/// resolves from the same PATH their own terminal would use, seated in the
+/// project root - the same place the scratch shell opens.
+#[tauri::command(async)]
+pub fn monitor_create(
+    cols: u16,
+    rows: u16,
+    target: Option<String>,
+    on_data: Channel<PtyEvent>,
+    registry: tauri::State<'_, PtyRegistry>,
+    seat: tauri::State<'_, crate::ActiveProject>,
+) -> Result<String, String> {
+    let project = crate::active_project(&seat)?;
+
+    if let Some(name) = &target {
+        if !valid_monitor_target(name) {
+            return Err(format!("not a monitor target: '{name}'"));
+        }
+    }
+
+    let size = PtySize {
+        rows: rows.max(1),
+        cols: cols.max(1),
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let pair = native_pty_system()
+        .openpty(size)
+        .map_err(|err| format!("could not open a pty: {err}"))?;
+
+    let shell = user_shell();
+    let monitor = match &target {
+        Some(name) => format!("exec drone @prax monitor run {name}"),
+        None => "exec drone @prax monitor run".to_string(),
+    };
+
+    let mut command = CommandBuilder::new(&shell);
+    command.args(["-l", "-c", &monitor]);
+    command.env("SHELL", &shell);
+    command.env("TERM", "xterm-256color");
+    command.cwd(&project.root);
+
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|err| format!("could not start the monitor: {err}"))?;
+
+    stream_session(pair, child, on_data, &registry, true)
 }
 
 /// Feed keystrokes to a shell.
@@ -412,6 +506,13 @@ pub fn pty_write(
     let session = sessions
         .get_mut(&id)
         .ok_or_else(|| format!("no live terminal session '{id}'"))?;
+
+    // The tier-0 line: a monitor pane has no keyboard, even for a caller
+    // that found its session id. Refusal here is what makes the frontend's
+    // missing stdin wiring a fact rather than a convention.
+    if session.read_only {
+        return Err(format!("'{id}' is a read-only monitor pane - nothing types into it"));
+    }
 
     session
         .writer
@@ -464,7 +565,27 @@ pub fn pty_kill(id: String, registry: tauri::State<'_, PtyRegistry>) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::base64_encode;
+    use super::{base64_encode, valid_monitor_target};
+
+    #[test]
+    fn monitor_targets_are_branch_lists_or_commons() {
+        assert!(valid_monitor_target("commons"));
+        assert!(valid_monitor_target("seedgo"));
+        assert!(valid_monitor_target("seedgo,cli,ai_mail"));
+        assert!(valid_monitor_target("vera-studio"));
+    }
+
+    #[test]
+    fn monitor_target_fence_refuses_command_shapes() {
+        // Anything that could smuggle shell syntax past the fixed command.
+        assert!(!valid_monitor_target(""));
+        assert!(!valid_monitor_target("seedgo; rm -rf /"));
+        assert!(!valid_monitor_target("$(whoami)"));
+        assert!(!valid_monitor_target("seedgo cli"));
+        assert!(!valid_monitor_target("SEEDGO"));
+        assert!(!valid_monitor_target("../etc"));
+        assert!(!valid_monitor_target("run --relay"));
+    }
 
     #[test]
     fn base64_matches_rfc4648_vectors() {

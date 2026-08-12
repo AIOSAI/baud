@@ -1347,7 +1347,8 @@ pub fn run() {
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
-            pty::pty_kill
+            pty::pty_kill,
+            pty::monitor_create
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session

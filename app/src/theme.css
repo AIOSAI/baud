@@ -292,6 +292,52 @@ body {
   opacity: 0.55;
 }
 
+/* m9: the prax monitor toggle - Patrick's traffic light. Red dot = off,
+   green dot = the mission-control pane is live in a tab below. The state
+   is derived from the tab's existence, so whichever door closes the pane
+   (this button, the tab's ✕, the pane's corner, the monitor dying) the
+   light goes red with it. */
+.baud-monitor-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: none;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.baud-monitor-toggle:hover {
+  color: var(--baud-ink);
+  border-color: var(--baud-line-strong);
+}
+
+.baud-monitor-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--baud-red);
+  opacity: 0.55;
+}
+
+.baud-monitor-toggle-live {
+  color: var(--baud-green);
+  border-color: var(--baud-green);
+}
+
+.baud-monitor-toggle-live .baud-monitor-dot {
+  background: var(--baud-green);
+  opacity: 1;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.7);
+}
+
 .baud-zoom-failed {
   color: var(--baud-amber);
 }
@@ -929,6 +975,27 @@ button.baud-tab {
 
 .baud-terminal-actions .baud-terminal-kill {
   position: static;
+}
+
+/* m9: a monitor pane that failed to spawn says WHY, in the pane itself -
+   the same fault language as the header banner, floated over the glass. */
+.baud-monitor-failure {
+  position: absolute;
+  top: 34px;
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--baud-red);
+  border-left-width: 3px;
+  border-radius: var(--baud-radius);
+  background: rgba(239, 90, 90, 0.08);
+  color: var(--baud-ink);
+  font-size: 12px;
+  user-select: text;
 }
 
 /* Detaching parts on friendly terms - green hover, not a kill's red. */
