@@ -8,8 +8,10 @@ description: >
 inputs:
   extra-packages:
     description: >
-      Space-separated extra apt packages. CI passes `tmux`, which its live
-      rooms tests genuinely need; the release build does not.
+      Space-separated extra apt packages. Both callers pass `tmux` today: CI
+      for the live rooms tests, and the release lane because it runs that same
+      suite as a gate before it ships a binary. A build that only compiles
+      would need none.
     required: false
     default: ""
 

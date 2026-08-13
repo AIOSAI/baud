@@ -2026,16 +2026,40 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    /// A throwaway stand-in for a seated project, built from nothing: a root
+    /// with its own README, a `projects/baud/README.md` for the seated-dir
+    /// case to prefer, a directory to prove directories never open, and one
+    /// real file deliberately OUTSIDE the fence.
+    ///
+    /// These two tests used to reach for the live AIPass tree through
+    /// `resolve_aipass_root()`, which only ever worked because this repo
+    /// happens to be cloned inside that tree - CI's bare checkout proved the
+    /// assumption false on its first run. `resolve_paths_in` takes its root as
+    /// an argument, so a fixture is all this needs: no ambient tree, and no
+    /// `AIPASS_ROOT` either, which as a process-wide env var would race the
+    /// other tests running alongside these on their own threads.
+    ///
+    /// Returns `(base, root)` - `base` to delete, `root` canonicalized because
+    /// the fence compares canonical paths.
+    fn resolve_fixture(tag: &str) -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!("baud-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let seated = base.join("root").join("projects").join("baud");
+        fs::create_dir_all(&seated).unwrap();
+        fs::write(base.join("root").join("README.md"), "root readme\n").unwrap();
+        fs::write(seated.join("README.md"), "seated readme\n").unwrap();
+        // Outside the fence by construction: a sibling of the root, not under it.
+        fs::write(base.join("outside.txt"), "not yours to open\n").unwrap();
+        let root = base.join("root").canonicalize().unwrap();
+        (base, root)
+    }
+
     #[test]
     fn resolve_paths_only_links_real_fenced_files() {
-        // The suite runs inside the AIPass tree, so the fence and the root
-        // fallback are exercised against the real thing.
-        let root = resolve_aipass_root()
-            .expect("tests run inside an AIPass tree")
-            .canonicalize()
-            .expect("root canonicalizes");
+        let (base, root) = resolve_fixture("resolve-test");
         let readme = root.join("README.md");
-        assert!(readme.is_file(), "test expects the AIPass root README");
+        let outside = base.join("outside.txt");
+        assert!(outside.is_file(), "the fixture's out-of-fence file must be real");
 
         let hits = resolve_paths_in(
             &root,
@@ -2043,7 +2067,7 @@ mod tests {
             &[
                 readme.display().to_string(),   // absolute, real
                 "README.md".to_string(),        // relative -> root fallback
-                "/etc/passwd".to_string(),      // real file OUTSIDE the fence
+                outside.display().to_string(),  // real file OUTSIDE the fence
                 "no/such/file.xyz".to_string(), // nonexistent
                 "projects".to_string(),         // a directory, not a file
             ],
@@ -2054,25 +2078,28 @@ mod tests {
         assert_eq!(hits[2], None, "the fence must hold");
         assert_eq!(hits[3], None);
         assert_eq!(hits[4], None, "directories do not open in the viewer");
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
     fn resolve_paths_prefers_the_seated_branch_dir() {
         // `README.md` is ambiguous: the seated room's copy must win over the
-        // AIPass root's.
-        let root = resolve_aipass_root().unwrap().canonicalize().unwrap();
-        let base = root.join("projects").join("baud");
-        assert!(base.join("README.md").is_file(), "test expects baud's README");
+        // project root's.
+        let (base, root) = resolve_fixture("seated-test");
+        let seated = root.join("projects").join("baud");
 
         let hits = resolve_paths_in(
             &root,
-            Some(base.display().to_string()).as_deref(),
+            Some(seated.display().to_string()).as_deref(),
             &["README.md".to_string()],
         );
-        let hit = hits[0].as_deref().expect("baud README resolves");
+        let hit = hits[0].as_deref().expect("the seated dir's README resolves");
         assert!(
             hit.ends_with("projects/baud/README.md"),
             "expected the seated dir's file, got {hit}"
         );
+
+        let _ = fs::remove_dir_all(&base);
     }
 }

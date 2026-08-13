@@ -525,6 +525,15 @@ action, `.github/actions/linux-tauri-deps`, which the release workflow uses too
 — the lane that tests a build and the lane that ships one cannot disagree about
 what the build needs.
 
+**The suite assumes no surrounding ecosystem.** Every test builds the tree it
+needs in a temp directory; none reaches for the live AIPass root, and none sets
+`AIPASS_ROOT`, which as a process-wide variable would race the tests running
+beside it. That is not a preference, it is a bug BAUD already paid for: the
+maiden CI run went red on two path-resolution tests that passed here only
+because this repo happens to be cloned inside the AIPass tree. To check the
+property by hand, run the test binary from outside that tree — `cd /tmp && env
+-u AIPASS_ROOT <target/debug/deps/baud_lib-*>` — and expect the same green.
+
 ## Versions and releases
 
 BAUD is versioned with semantic versioning. The current version is **0.1.0**,
