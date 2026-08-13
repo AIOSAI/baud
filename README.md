@@ -464,7 +464,12 @@ projects/baud/
 │   └── README.md               a milestone-2-era description of the app; this file supersedes it
 ├── src/baud/baud/              @baud — the project's resident agent
 ├── tests/                      placeholder README only
+├── .github/
+│   ├── workflows/ci.yml        the audit lane, run by a robot
+│   ├── workflows/release.yml   tag push -> tested build -> published release
+│   └── actions/                the Ubuntu build deps, shared by both workflows
 ├── BAUD_REGISTRY.json          the project seal
+├── LICENSE                     MIT, mirroring the AIPass repo's own
 ├── CLAUDE.md, AGENTS.md        agent startup instructions
 ├── .claude/, .aipass/          agent settings, prompt tiers, hooks
 └── README.md                   this file
@@ -499,7 +504,7 @@ other.
 Checks, all expected clean:
 
 ```
-cd app/src-tauri && cargo test      # 49 unit tests; compiling IS the Rust type check
+cd app/src-tauri && cargo test      # 52 unit tests; compiling IS the Rust type check
 cd app/src-tauri && cargo clippy    # lints
 cd app && npx tsc --noEmit          # TypeScript type check
 cd app && npm run build             # tsc && vite build - the frontend must actually build
@@ -508,6 +513,52 @@ cd app && npm run build             # tsc && vite build - the frontend must actu
 There is no seedgo audit lane for this repo: seedgo's checks target AIPass
 Python branches, and BAUD is Rust and TypeScript. The four commands above are
 the audit.
+
+`.github/workflows/ci.yml` runs those same four as a robot on every push to
+`main` and every pull request — two parallel jobs (`frontend`, `rust`) on a
+pinned `ubuntu-24.04`, with clippy's warnings denied rather than merely
+printed. The runner installs Tauri v2's Ubuntu prerequisites and **tmux**,
+because two of the Rust tests spawn real detached tmux sessions; they are not
+skipped when tmux is absent, they fail, so a green run always means the rooms
+doctrine was actually exercised. Those prerequisites live in one composite
+action, `.github/actions/linux-tauri-deps`, which the release workflow uses too
+— the lane that tests a build and the lane that ships one cannot disagree about
+what the build needs.
+
+## Versions and releases
+
+BAUD is versioned with semantic versioning. The current version is **0.1.0**,
+declared in three files that must always agree — change one, change all three:
+
+```
+app/package.json                  "version": "0.1.0"
+app/src-tauri/Cargo.toml          version = "0.1.0"
+app/src-tauri/tauri.conf.json     "version": "0.1.0"   <- what the built binary reports
+```
+
+While the repo is private the version stays on `0.x`, and the leading zero is
+the honest part: the operator-facing surface can still move.
+
+| bump | when |
+| --- | --- |
+| patch — `0.1.1` | a fix, or a change the operator cannot see |
+| minor — `0.2.0` | a new operator-visible capability; a milestone landing is the usual trigger |
+| major — `1.0.0` | breaking what the operator already relies on. `1.0.0` is also the going-public line |
+
+**A release is the compatibility pin.** BAUD ships packaged with AIPass as one
+unit, and that unit pulls the latest AIPass release. So the release — not a
+version range in a manifest — is the statement of which BAUD and which AIPass
+are known to work together (Patrick's ruling, 2026-08-12).
+
+**Cutting a release is one human step.** Tags are `v<version>`, so this one is
+`v0.1.0`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`
+does the rest: it runs the test suite, builds with `npm run tauri build` (the
+same command the Development section calls the deploy), and publishes a GitHub
+release named after the tag with `baud-v<version>-linux-x86_64` and a
+`SHA256SUMS.txt` attached. It tests before it ships on purpose: a tag can be
+pointed at any commit, and "it was probably green on main" is not evidence.
+
+@baud has no git write, so @devpulse pushes the tag.
 
 ## How it got here
 
@@ -533,6 +584,6 @@ Along the way: whole-window zoom, ctrl+click terminal links, slash-command
 chips, and the mail-count fix that reads the mailbox instead of the dashboard's
 cache.
 
-All eleven milestones are committed; `git log --oneline -1` ends at the m11
-settings arc (`5d340b7`). m12 is in the working tree, uncommitted — @baud has
-no git write; @devpulse commits this project.
+All twelve milestones are committed; `git log --oneline -1` ends at the m12
+room-end arc (`f8b3f16`). @baud has no git write; @devpulse commits this
+project.

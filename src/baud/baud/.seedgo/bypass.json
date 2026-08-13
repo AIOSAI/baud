@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2026-08-12T20:22:20.104285",
+    "description": "Standards bypass configuration for this branch"
+  },
+  "bypass": [],
+  "notes": {
+    "usage": "Add entries to 'bypass' list to exclude specific violations",
+    "example": {
+      "file": "apps/modules/logger.py",
+      "standard": "cli",
+      "lines": [
+        146,
+        177
+      ],
+      "reason": "Circular dependency - logger cannot import CLI"
+    },
+    "fields": {
+      "file": "Relative path from branch root (required)",
+      "standard": "Standard name: cli, imports, naming, etc. (required)",
+      "lines": "Optional - specific line numbers to bypass",
+      "functions": "Optional - list of function names for name-scoped bypass (required for unused_function)",
+      "reason": "Required - why this bypass exists"
+    }
+  }
+}

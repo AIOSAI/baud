@@ -1,0 +1,98 @@
+name: Release
+
+# Releases are routine, not ceremony (Patrick's ruling, 2026-08-12): AIPass
+# bumps constantly and BAUD ships packaged with it, so the cut must be a robot's
+# job from day one. The only human step, forever, is `drone @git tag vX.Y.Z` —
+# everything below happens because that tag landed.
+#
+# What gets attached is the real shipping binary, not a lookalike: `npm run
+# tauri build` is the same command the README documents as the deploy, and
+# `bundle.active` is false in tauri.conf.json, so it produces
+# app/src-tauri/target/release/baud rather than installers.
+on:
+  push:
+    tags: ["v*"]
+
+# Creating the release and uploading the asset is the only write this repo's
+# automation does.
+permissions:
+  contents: write
+
+# Never cancel a release mid-flight — a half-published tag is worse than a slow
+# one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: build and publish
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # tmux is requested here too, unlike a plain build, because this job runs
+      # the test suite before it ships anything — see the gate below.
+      - uses: ./.github/actions/linux-tauri-deps
+        with:
+          extra-packages: tmux
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            app/src-tauri/target
+          # A separate key from ci.yml: this job fills target/ with a release
+          # profile (lto, one codegen unit) that the debug lane never builds.
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('app/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-release-
+
+      - run: npm ci
+        working-directory: app
+
+      # The gate: never ship a binary that has not passed its own suite. A tag
+      # is normally cut from a commit CI already proved green on main, but a tag
+      # can be pointed anywhere, and "it was probably green" is not evidence.
+      # This costs runner minutes, not human steps — the ruling was about
+      # ceremony, and there is none here. Drop this step if a release ever needs
+      # to be faster than it needs to be honest.
+      - run: cargo test --locked
+        working-directory: app/src-tauri
+
+      # `beforeBuildCommand` runs `npm run build` (tsc && vite build) first, so
+      # this single command covers the frontend type check and bundle as well.
+      - run: npm run tauri build
+        working-directory: app
+
+      # Name the asset after the tag: a bare `baud` file downloaded from three
+      # different releases is three indistinguishable files on disk.
+      - name: Stage the binary
+        run: |
+          binary=app/src-tauri/target/release/baud
+          test -x "$binary"
+          cp "$binary" "baud-${GITHUB_REF_NAME}-linux-x86_64"
+          ls -lh "baud-${GITHUB_REF_NAME}-linux-x86_64"
+          sha256sum "baud-${GITHUB_REF_NAME}-linux-x86_64" | tee SHA256SUMS.txt
+
+      # `gh` is preinstalled on the runner, so the publish step needs no
+      # third-party action and no token beyond the one this workflow was given.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            "baud-${GITHUB_REF_NAME}-linux-x86_64" \
+            SHA256SUMS.txt

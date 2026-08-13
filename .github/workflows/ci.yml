@@ -1,0 +1,99 @@
+name: CI
+
+# BAUD's own audit lane, run by a robot. These are the same four checks the
+# README documents for a human — cargo test, cargo clippy, tsc, vite build. If
+# this file and that section ever disagree, one of them is lying; fix both.
+#
+# Two jobs, not one: the Rust compile is the long pole (tauri pulls a large
+# dependency tree) and the frontend has nothing to wait for. The Rust build
+# does NOT need the vite output — `dist/` is gitignored and absent on a fresh
+# checkout, and the crate compiles without it (verified locally by building
+# with dist/ moved away), so the jobs are genuinely independent.
+on:
+  # Only `main` exists today and @devpulse pushes it directly, so push+PR here
+  # is full coverage without double-running a same-repo pull request.
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same ref cancels the stale in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  frontend:
+    name: frontend (tsc + vite build)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      # `ci`, not `install`: the committed package-lock is the pin, and a lock
+      # that has drifted from package.json should fail the build, not be fixed
+      # silently under the robot.
+      - run: npm ci
+      - run: npx tsc --noEmit
+      # `npm run build` is `tsc && vite build` — the type check above is the
+      # documented lane's own step, and the build proves the bundle is real.
+      - run: npm run build
+
+  rust:
+    name: rust (test + clippy)
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: app/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri's Ubuntu prerequisites live in one composite action shared with
+      # release.yml, so the lane that tests a build and the lane that ships one
+      # can never disagree about what the build needs.
+      #
+      # tmux is not a convenience here. Two tests spawn real detached tmux
+      # sessions and assert on what the scan reads back — they are deliberately
+      # NOT gated or skipped, because a skipped test would let CI report green
+      # on a runner where the rooms doctrine was never exercised. tmux runs
+      # headless (`new-session -d` needs no TTY and no display), so if these
+      # fail it is a real failure, not an environment artifact.
+      - uses: ./.github/actions/linux-tauri-deps
+        with:
+          extra-packages: tmux
+
+      # The runner image ships stable Rust; ask for clippy explicitly so a
+      # missing component fails here with a clear message instead of inside
+      # the lint step.
+      - name: Ensure clippy is present
+        run: rustup component add clippy
+
+      - uses: actions/cache@v4
+        with:
+          # Cache paths are workspace-relative — `defaults.run.working-directory`
+          # does not apply to action inputs.
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            app/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('app/src-tauri/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # `--locked` because Cargo.lock is committed: a build that would rewrite
+      # the lock is a change to review, not something CI resolves quietly.
+      - run: cargo test --locked
+      # Compiling IS the Rust type check; clippy adds the lints, and CI denies
+      # what a human is merely shown.
+      - run: cargo clippy --all-targets --locked -- -D warnings
