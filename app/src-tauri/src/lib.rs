@@ -57,6 +57,19 @@
 //! projects' same-named branches can never attach to each other's sessions;
 //! anchor rooms keep the plain names they have always had.
 //!
+//! Milestone 12 answers the room-end ruling (Patrick, 2026-08-12): an ended
+//! room stays dead until the operator opens the card again. The half of that
+//! which lives here is the OUTSIDE session - a live claude sitting in a tmux
+//! session BAUD never created (@hooks' boot shim names them `aipass-<branch>`,
+//! the Telegram fleet `telegram-<branch>`). The old room lookup only ever
+//! asked "does `baud-<branch>` exist", so those agents were immortal from the
+//! UI: `end room` targeted a session that did not exist and silently did
+//! nothing while the card truthfully showed the agent alive. The snapshot now
+//! reads panes, not just session names, and a branch whose own room is absent
+//! reports the outside session that holds its claude. The card's doors act on
+//! whichever session is actually there - BAUD still CREATES only its own
+//! rooms.
+//!
 //! Milestone 11 breaks the read-only streak on purpose: [`settings`] writes
 //! two config files - claude's `<branch>/.claude/settings.local.json` and
 //! BAUD's own `.aipass/baud.settings.json`. It touches only the keys it
@@ -133,6 +146,12 @@ pub struct BranchStatus {
     /// A `baud-<branch>` tmux session exists - the agent has a living room
     /// to attach to, whether or not anything is running inside it.
     pub has_room: bool,
+    /// A live claude sitting in a tmux session BAUD did NOT create, with its
+    /// pane seated in this branch - the boot shim's `aipass-<branch>`, a
+    /// `telegram-<branch>` wake, a hand-rolled session. Only ever set when
+    /// the branch's own room is absent, so the card knows which session its
+    /// doors will act on. `None` is the ordinary case (m12).
+    pub outside_room: Option<String>,
     /// Sub-agents running inside this branch's live claude session(s) right
     /// now - unmatched Agent/Task spawn calls in recent transcripts. See
     /// [`count_inflight_subagents`].
@@ -163,6 +182,7 @@ impl BranchStatus {
             has_history: false,
             resume_id: None,
             has_room: false,
+            outside_room: None,
             subagents: 0,
             new_mail: 0,
             opened_mail: 0,
@@ -1091,31 +1111,122 @@ pub fn room_name(scope: Option<&str>, branch_name: &str) -> String {
     }
 }
 
-/// Every live tmux session name. No server (or no tmux) reads as no rooms -
-/// same quiet doctrine as the mailbox and the git figure.
-fn list_rooms() -> std::collections::HashSet<String> {
-    let output = Command::new("tmux")
-        .args(["list-sessions", "-F", "#{session_name}"])
-        .output();
+/// The command name tmux reports for a pane running a claude session. An
+/// install that shows up as something else (a node shim, a wrapper script)
+/// simply never matches - that costs a card its outside-room tag, which is
+/// the same place we stood before m12. A LOOSER test would be worse: BAUD
+/// would treat the operator's own shell session as an agent's room and type
+/// into it.
+const CLAUDE_PANE_COMMAND: &str = "claude";
 
-    match output {
-        Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .map(|line| line.trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect(),
-        _ => std::collections::HashSet::new(),
+/// What one tmux round-trip tells the snapshot.
+#[derive(Debug, Default)]
+struct RoomScan {
+    /// Every live session name on the server.
+    names: std::collections::HashSet<String>,
+    /// `(session name, pane cwd)` for every pane running a claude, in the
+    /// order tmux listed them.
+    agent_panes: Vec<(String, PathBuf)>,
+}
+
+impl RoomScan {
+    /// The session holding a claude seated in `dir`, ignoring BAUD's own
+    /// rooms - those belong to a card already, and a `baud-` room whose name
+    /// does not match this branch is not this branch's business. Ties break
+    /// on the session name so two candidates always resolve the same way.
+    fn agent_session_in(&self, dir: &Path) -> Option<String> {
+        let mut found: Vec<&String> = self
+            .agent_panes
+            .iter()
+            .filter(|(name, cwd)| !name.starts_with(ROOM_PREFIX) && cwd.starts_with(dir))
+            .map(|(name, _)| name)
+            .collect();
+        found.sort();
+        found.first().map(|name| (*name).clone())
     }
 }
 
-/// End a branch's room for real - the ONE way a room dies (Patrick ruling
-/// 2026-08-10: detach everywhere else). Killing a room that is already gone
-/// is the goal state, not an error. The room is the SEATED project's - the
-/// same scoping the card's badge and attach button used.
+/// Every live tmux session, and where its claude panes are sitting. No server
+/// (or no tmux) reads as no rooms - same quiet doctrine as the mailbox and
+/// the git figure.
+///
+/// One `list-panes -a` replaces the old `list-sessions`: every session has at
+/// least one pane, so the names are all still here, and the panes are what
+/// tell an agent's session from a plain shell (m12).
+fn scan_rooms() -> RoomScan {
+    let output = Command::new("tmux")
+        .args([
+            "list-panes",
+            "-a",
+            "-F",
+            "#{session_name}\t#{pane_current_command}\t#{pane_current_path}",
+        ])
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => parse_panes(&String::from_utf8_lossy(&out.stdout)),
+        _ => RoomScan::default(),
+    }
+}
+
+/// Turn `list-panes` output into a [`RoomScan`]. Split out so the shape tmux
+/// hands us is testable without a tmux server.
+fn parse_panes(text: &str) -> RoomScan {
+    let mut scan = RoomScan::default();
+    for line in text.lines() {
+        let mut fields = line.split('\t');
+        let (Some(name), Some(command), Some(path)) =
+            (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        scan.names.insert(name.to_string());
+        if command.trim() == CLAUDE_PANE_COMMAND && !path.trim().is_empty() {
+            scan.agent_panes
+                .push((name.to_string(), PathBuf::from(path.trim())));
+        }
+    }
+    scan
+}
+
+/// The live tmux session a branch's doors act on: BAUD's own room when it
+/// exists, otherwise the outside session holding this branch's claude (m12).
+/// `None` means nothing is running for this branch - a launch would create
+/// the room, an end has nothing to do.
+pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<String> {
+    let own = room_name(project.room_scope().as_deref(), branch_name);
+    let scan = scan_rooms();
+    if scan.names.contains(&own) {
+        return Some(own);
+    }
+    // The branch dir is derived HERE, from the seated project - the frontend
+    // names a branch, never a path. A name that is not a single directory
+    // component is refused rather than resolved.
+    if branch_name.is_empty() || branch_name.contains(['/', '\\']) || branch_name.starts_with('.') {
+        return None;
+    }
+    let canonical = project.fleet_dir.join(branch_name).canonicalize().ok()?;
+    scan.agent_session_in(&canonical)
+}
+
+/// End a branch's session for real - the ONE door that ends one (Patrick
+/// ruling 2026-08-10: detach everywhere else). Killing a room that is already
+/// gone is the goal state, not an error. Since m12 this reaches the outside
+/// session too when the branch has no room of its own: the agent the card
+/// shows alive is the agent this button ends, or the operator cannot end it
+/// at all (Patrick-caught 2026-08-12, `aipass-aipass`).
 #[tauri::command]
 fn room_kill(branch_name: String, state: tauri::State<'_, ActiveProject>) -> Result<(), String> {
     let project = active_project(&state)?;
-    room_kill_named(&room_name(project.room_scope().as_deref(), &branch_name))
+    match branch_session(&project, &branch_name) {
+        Some(session) => room_kill_named(&session),
+        // Nothing live for this branch: already the goal state.
+        None => Ok(()),
+    }
 }
 
 fn room_kill_named(room: &str) -> Result<(), String> {
@@ -1208,7 +1319,7 @@ fn read_branch(
     branch_dir: &Path,
     name: String,
     sessions: &[ClaudeSession],
-    rooms: &std::collections::HashSet<String>,
+    rooms: &RoomScan,
     room_scope: Option<&str>,
 ) -> BranchStatus {
     let mut status = BranchStatus::new(name, branch_dir.display().to_string());
@@ -1229,7 +1340,14 @@ fn read_branch(
     status.resume_id = resume_id;
     status.subagents = subagent_count(&canonical);
 
-    status.has_room = rooms.contains(&room_name(room_scope, &status.name));
+    status.has_room = rooms.names.contains(&room_name(room_scope, &status.name));
+    // Only when BAUD has no room here: a card with its own room already knows
+    // which session its doors act on, and that one wins (m12).
+    status.outside_room = if status.has_room {
+        None
+    } else {
+        rooms.agent_session_in(&canonical)
+    };
 
     apply_dashboard(branch_dir, &mut status);
     let (new_mail, opened_mail) = mail_counts_in(branch_dir);
@@ -1249,7 +1367,7 @@ fn scan_fleet(project: &Project) -> Result<Vec<BranchStatus>, String> {
     // One process-table pass shared by every branch in this snapshot.
     let sessions = scan_claude_sessions();
     // One tmux round-trip shared by every card in this snapshot.
-    let rooms = list_rooms();
+    let rooms = scan_rooms();
 
     let mut branches: Vec<BranchStatus> = Vec::new();
 
@@ -1708,13 +1826,91 @@ mod tests {
             .expect("tmux must be runnable for the rooms test");
         assert!(spawned.status.success(), "could not create test room");
 
-        assert!(list_rooms().contains(&room), "live room missing from list");
+        assert!(scan_rooms().names.contains(&room), "live room missing from list");
 
         room_kill_named(&room).expect("ending a live room must succeed");
-        assert!(!list_rooms().contains(&room), "room survived room_kill");
+        assert!(!scan_rooms().names.contains(&room), "room survived room_kill");
 
         // Ending a room that is already gone is idempotent success.
         room_kill_named(&room).expect("ending a dead room must be a no-op");
+    }
+
+    #[test]
+    fn panes_parse_into_names_and_agent_panes() {
+        // The exact shape `list-panes -a` hands back, including a plain shell
+        // pane (never an agent room) and a pane tmux reported without a path.
+        let scan = parse_panes(concat!(
+            "aipass-aipass\tclaude\t/x/src/aipass/aipass\n",
+            "baud-devpulse\tclaude\t/x/src/aipass/devpulse\n",
+            "work\tbash\t/x/src/aipass/aipass\n",
+            "broken\tclaude\t\n",
+            "\n",
+        ));
+
+        assert_eq!(scan.names.len(), 4, "every session name is kept");
+        assert!(scan.names.contains("work"));
+        // Only claude panes carrying a path become candidates.
+        assert_eq!(
+            scan.agent_panes,
+            vec![
+                ("aipass-aipass".to_string(), PathBuf::from("/x/src/aipass/aipass")),
+                ("baud-devpulse".to_string(), PathBuf::from("/x/src/aipass/devpulse")),
+            ]
+        );
+    }
+
+    #[test]
+    fn outside_sessions_are_adopted_only_when_they_hold_an_agent() {
+        let scan = parse_panes(concat!(
+            "aipass-aipass\tclaude\t/x/src/aipass/aipass\n",
+            "telegram-prax\tclaude\t/x/src/aipass/prax/logs\n",
+            "baud-flow\tclaude\t/x/src/aipass/flow\n",
+            "mine\tbash\t/x/src/aipass/cli\n",
+        ));
+
+        // The boot shim's session, found by the branch its pane sits in.
+        assert_eq!(
+            scan.agent_session_in(Path::new("/x/src/aipass/aipass")).as_deref(),
+            Some("aipass-aipass")
+        );
+        // A pane deeper inside the branch still belongs to the branch.
+        assert_eq!(
+            scan.agent_session_in(Path::new("/x/src/aipass/prax")).as_deref(),
+            Some("telegram-prax")
+        );
+        // BAUD's own rooms are never "outside" - they belong to a card already.
+        assert_eq!(scan.agent_session_in(Path::new("/x/src/aipass/flow")), None);
+        // The operator's own shell is not an agent, and never gets adopted.
+        assert_eq!(scan.agent_session_in(Path::new("/x/src/aipass/cli")), None);
+        // starts_with is component-wise: "aipas" never claims "aipass".
+        assert_eq!(scan.agent_session_in(Path::new("/x/src/aipass/ai")), None);
+    }
+
+    #[test]
+    fn a_plain_shell_session_is_never_adopted_live() {
+        // The hazard this guards: adopting the operator's own tmux session
+        // would have BAUD typing a claude command line into their shell.
+        let dir = std::env::temp_dir().join(format!("baud-shelltest-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let canonical = dir.canonicalize().unwrap();
+        let session = format!("baudshell-{}", std::process::id());
+        let spawned = Command::new("tmux")
+            .args(["new-session", "-d", "-s", &session, "-c"])
+            .arg(&canonical)
+            .output()
+            .expect("tmux must be runnable for the rooms test");
+        assert!(spawned.status.success(), "could not create test session");
+
+        let scan = scan_rooms();
+        assert!(scan.names.contains(&session), "live session missing from scan");
+        assert_eq!(
+            scan.agent_session_in(&canonical),
+            None,
+            "a shell pane must never read as an agent's room"
+        );
+
+        room_kill_named(&session).expect("ending the test session must succeed");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

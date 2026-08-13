@@ -110,6 +110,19 @@ export default function BranchChip({
       ? "baud-badge-live"
       : "baud-badge-room";
 
+  // The agent is alive in a session BAUD never created (m12) - the boot
+  // shim's `aipass-<branch>`, a telegram wake. Say so on the badge rather
+  // than let the card imply BAUD owns it: the doors below reach it, and the
+  // operator should know exactly what they will attach to and end.
+  const badgeTitle = branch.outside_room
+    ? `alive in tmux session '${branch.outside_room}' - a session BAUD did not create; attach and end room reach it anyway`
+    : undefined;
+
+  // One live session for this branch, whoever made it: BAUD's own room, or
+  // the outside one. Either way the door is attach - never a second claude
+  // in the same branch.
+  const attached = (branch.has_room || branch.outside_room !== null) && branch.interactive;
+
   // Two ways back into a conversation: `-c` for interactive history, and
   // `--resume <id>` for a branch whose only transcripts are headless dispatch
   // runs. Either way the operator gets a resume button.
@@ -120,7 +133,12 @@ export default function BranchChip({
       <header className="baud-chip-head">
         <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
         <h2 className="baud-chip-name">{branch.name}</h2>
-        {badge ? <span className={`baud-badge ${badgeClass}`}>{badge}</span> : null}
+        {badge ? (
+          <span className={`baud-badge ${badgeClass}`} title={badgeTitle}>
+            {badge}
+            {branch.outside_room ? <span className="baud-badge-outside">⧉</span> : null}
+          </span>
+        ) : null}
         {/* Sub-agents are invisible to the process table (they run inside the
             parent claude) - this count comes from the session transcript:
             spawn calls still waiting on their results. */}
@@ -228,13 +246,20 @@ export default function BranchChip({
             >
               watch
             </button>
-            {branch.has_room && branch.interactive ? (
+            {attached ? (
               /* A live session in the room: every door is the same door -
-                 attach and pick up mid-scroll. No command gets typed. */
+                 attach and pick up mid-scroll. No command gets typed. Since
+                 m12 that includes a session BAUD did not create - otherwise
+                 this card offered "resume" and started a SECOND claude in a
+                 branch that already had one. */
               <button
                 type="button"
                 className="baud-chip-launch"
-                title="attach to the live session in this room"
+                title={
+                  branch.outside_room
+                    ? `attach to '${branch.outside_room}' - the live session in this branch, which BAUD did not create`
+                    : "attach to the live session in this room"
+                }
                 onClick={() => onLaunch(branch, "resume")}
               >
                 ▸ attach

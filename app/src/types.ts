@@ -8,6 +8,7 @@ export interface BranchStatus {
   has_history: boolean;
   resume_id: string | null;
   has_room: boolean;
+  outside_room: string | null;
   subagents: number;
   new_mail: number;
   opened_mail: number;
@@ -58,6 +59,7 @@ export interface GitChanges {
 export interface SpawnResult {
   id: string;
   created: boolean;
+  room: string | null;
 }
 
 /** Mirrors `NotificationEvent` in src-tauri/src/notifications.rs. */

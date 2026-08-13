@@ -38,13 +38,15 @@ guessing), otherwise the first ancestor of the working directory that contains
 `src/aipass`. From there the header's project switcher can seat the view in any
 other project BAUD discovered.
 
-**The release binary is stale.** `app/src-tauri/target/release/baud` exists and
-was built 2026-08-11 19:39 — before the notification bell and before the
-settings work. `grep -a notifications_read` and `grep -a baud_settings_read` on
-that binary both come back empty, while `monitor_create` and `room_kill` are
-present: it is the m9-era app. `npm run tauri build` rebuilds it (and runs
-`tsc && vite build` first). Note that `bundle.active` is `false` in
-`tauri.conf.json`, so a build produces the binary, not installers.
+**The release binary.** `npm run tauri build` produces
+`app/src-tauri/target/release/baud` (running `tsc && vite build` first);
+`bundle.active` is `false` in `tauri.conf.json`, so a build produces the
+binary, not installers. Last built 2026-08-12 18:52, current through m12 —
+rebuilt with the room-end fixes, because the launcher's binary is what the
+operator actually opens tomorrow. The desktop launcher
+(`~/.local/share/applications/baud.desktop`) execs this binary directly, so a
+rebuild IS the deploy; its `Path=` seats the process inside the AIPass tree,
+which is how the release app's ancestor-walk finds its anchor.
 
 ## The window
 
@@ -93,7 +95,8 @@ below never loses height as the fleet grows.
   Steady green: interactive (a live claude with no `-p`/`--print` has its cwd
   inside the branch). Dim: neither.
 - **Badge** — `dispatched`, `live`, or a quiet `room` when a tmux room exists
-  with nothing live in it.
+  with nothing live in it. A trailing `⧉` means the live session is one BAUD
+  did not create; hovering names it.
 - **Sub badge** — amber `N sub` while sub-agents are running inside the branch's
   session. Sub-agents never appear in the process table (they run inside the
   parent claude), so the count comes off disk: async agents by the freshness of
@@ -111,10 +114,11 @@ below never loses height as the fleet grows.
 - **Age** — `updated <age>`, from the dashboard's `last_updated`, styled stale
   when it gets old.
 - **Buttons** — `files` docks the branch's file tree. `watch` opens a read-only
-  monitor pane scoped to this branch. Then the launch door: a branch whose room
-  holds a live interactive claude shows a single `▸ attach`; otherwise `▸ resume`
-  (when there is anything to resume) beside `fresh`, or a single `▸ claude` when
-  the branch has no transcripts at all.
+  monitor pane scoped to this branch. Then the launch door: a branch with a live
+  interactive claude in a session — its own room, or one BAUD did not create —
+  shows a single `▸ attach`; otherwise `▸ resume` (when there is anything to
+  resume) beside `fresh`, or a single `▸ claude` when the branch has no
+  transcripts at all.
 
 The `?`, the gear and the button row render only for citizens — a directory
 without `.trinity/passport.json` gets a card, but no doors.
@@ -147,9 +151,37 @@ to the tmux server, not to this window; BAUD's terminal is a window into it.
 - **Close BAUD** — every room loses its window. Sessions, monitors and builds
   keep running.
 - **`⇠ detach` / `✕ end room`** — the terminal's corner buttons in a room.
-  `end room` (`tmux kill-session`) is the ONE door that actually ends a session.
-  The scratch shell (no card) keeps a plain `✕ kill`, which is a real SIGHUP to
-  the process group — a claude running there stays resumable from its transcript.
+  `end room` (`tmux kill-session`) is the ONE door that actually ends a session;
+  its hover text names the exact tmux session the click will kill. The scratch
+  shell (no card) keeps a plain `✕ kill`, which is a real SIGHUP to the process
+  group — a claude running there stays resumable from its transcript.
+
+**An ended room stays dead** (Patrick ruling 2026-08-12). Nothing in BAUD
+reopens it: not the next poll, not a hot reload, not the next app launch. The
+one door back is the operator opening that card again — a click on `attach`,
+`resume` or `fresh` clears the mark and the branch behaves normally from then
+on. The mark is local intent (`localStorage`, keyed per project and branch),
+recorded only after tmux confirms the kill: a room that refused to die is still
+alive, and BAUD says so instead of pretending. This exists because the ruling
+was broken the day it was made — see *The startup agent* under Settings.
+
+**Sessions BAUD did not create.** A branch whose own room is absent can still
+hold a live agent: @hooks' boot shim seats a typed `claude` in `aipass-<branch>`,
+the Telegram fleet wakes agents in `telegram-<branch>`. The snapshot reads panes,
+not just session names, so those show up as the branch's `outside_room` and the
+card's doors act on them: the badge wears a `⧉` and names the session on hover,
+the launch door reads `▸ attach` (never a second claude in a branch that already
+has one), and `✕ end room` ends that session. Before this, `end room` on such a
+card targeted a `baud-<branch>` that did not exist — a silent no-op, which is
+why @aipass looked immortal (Patrick-caught 2026-08-12).
+
+A session is a candidate only when tmux reports one of its panes running
+`claude` with its working directory inside the branch. The narrowness is the
+point: a looser test would let BAUD adopt the operator's own tmux window and
+type a claude command line into it. A claude install that reports some other
+pane command simply never matches, and the card falls back to the behaviour it
+had before. BAUD still CREATES only its own `baud-` rooms, and an existing
+`baud-<branch>` always wins over an outside session.
 
 The staged claude command is typed only where it can land at a prompt: into a
 room this spawn just created, or one the snapshot says holds no live claude.
@@ -158,15 +190,11 @@ Attaching to a live claude types nothing — the click lands you mid-conversatio
 **One PTY, one seat.** Rooms run in parallel; attention is singular. There is no
 "max agents" constant anywhere in the code: N rooms plus one seat is arithmetic.
 
-The tmux verbs in this codebase are exactly: `new-session -A`, `list-sessions`,
+The tmux verbs in this codebase are exactly: `new-session -A`, `list-panes -a`,
 `has-session`, `kill-session`, `set-option mouse`. Room lookups use tmux's `=`
 exact-match prefix, and room names sanitize everything outside `[A-Za-z0-9_-]`
-to `-`.
-
-Two other doors create sessions BAUD does not own and simply observes: a typed
-`claude` in a branch directory (the boot shim, which execs claude inside its own
-tmux room), and the Telegram bot fleet, which builds `telegram-<branch>`
-sessions to wake agents from a phone.
+to `-`. `new-session -A` is what lets one code path both create BAUD's own room
+and attach to a session someone else made.
 
 ## The terminal
 
@@ -329,9 +357,18 @@ silently rewritten.
 **Startup agent** fires once per app run, as soon as the first snapshot and the
 settings have both landed, and only if the operator has not already picked a
 card. It goes through the same `launch` door a card click uses, with the card's
-own judgment: a live room attaches, a branch with history resumes, anything else
-starts fresh. A named agent with no card in the seated project is a console
+own judgment: a live session attaches, a branch with history resumes, anything
+else starts fresh. A named agent with no card in the seated project is a console
 warning, not a fault banner.
+
+Two things hold it back, and both exist because it resurrected an ended room the
+day it shipped: BAUD is developed in the window it is used in, so every frontend
+save hot-reloads the app, and a once-per-app-run guard held in a React ref is
+re-armed by every one of those remounts. The guard now lives in `sessionStorage`
+— one shot per app RUN, not per mount — and the startup agent refuses outright
+to open a branch whose room the operator ended. `app/src/intent.ts` holds both
+marks and nothing else; it is the only place in the frontend where an operator
+decision is stored rather than derived.
 
 **Hook sounds** is the one row that is not a setting of ours, and the panel says
 so. AIPass hook sounds are muted by the existence of a flag file named
@@ -366,7 +403,7 @@ targets the command returns an honest error.
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
 | mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12 of 17 cards were wrong when checked, 2026-08-10) |
 | plans / todos / age | the branch's `DASHBOARD.local.json` |
-| room | one `tmux list-sessions` per snapshot |
+| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory — the only git verb BAUD runs |
 | projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |
 | files and viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
@@ -412,6 +449,7 @@ projects/baud/
 │   │   ├── App.tsx             window shell, tabs, launch, startup agent
 │   │   ├── components/         cards, terminal, panes, panels, header tools
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
+│   │   ├── intent.ts           operator decisions that outlive a remount
 │   │   ├── age.ts              relative-age formatting
 │   │   └── theme.css           the entire palette and layout, one plain CSS file
 │   ├── src-tauri/src/
@@ -473,7 +511,8 @@ the audit.
 
 ## How it got here
 
-Eleven milestones over three days, 2026-08-09 to 2026-08-11:
+Eleven milestones over three days, 2026-08-09 to 2026-08-11, and one ruling
+answered on the fourth:
 
 | | |
 | --- | --- |
@@ -488,10 +527,12 @@ Eleven milestones over three days, 2026-08-09 to 2026-08-11:
 | m9 | auxiliary panes — the monitor toggles, per-card watch, the help door |
 | m10 | the notification bell; desktop toasts retired |
 | m11 | settings — the per-agent gear and BAUD's own interface gear |
+| m12 | the room-end ruling — ended rooms stay dead, outside sessions surface and end |
 
 Along the way: whole-window zoom, ctrl+click terminal links, slash-command
 chips, and the mail-count fix that reads the mailbox instead of the dashboard's
 cache.
 
-At the time of writing, m11 lives in the working tree and is not yet committed;
-`git log --oneline -1` ends at the m10 bell.
+All eleven milestones are committed; `git log --oneline -1` ends at the m11
+settings arc (`5d340b7`). m12 is in the working tree, uncommitted — @baud has
+no git write; @devpulse commits this project.

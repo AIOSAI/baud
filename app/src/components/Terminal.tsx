@@ -52,6 +52,12 @@ interface TerminalProps {
    */
   onOpenFile: (path: string, line: number | null) => void;
   /**
+   * The operator ended this branch's room and tmux confirmed it (m12). App
+   * records the intent: an ended room stays dead until they open the card
+   * again, whatever a hot reload does to this component's state.
+   */
+  onRoomEnded: (branch: string) => void;
+  /**
    * Branch names whose card shows a live interactive claude - the fleet
    * snapshot's knowledge, handed down so the slash-command chips only
    * render where a chat box actually exists to receive them.
@@ -127,6 +133,7 @@ type PtyEvent =
 interface SpawnResult {
   id: string;
   created: boolean;
+  room: string | null;
 }
 
 type Phase = "opening" | "live" | "ended";
@@ -178,7 +185,7 @@ function describe(err: unknown): string {
  * visible command line `run()` writes when they click a card's launch button.
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { onOpenFile, liveBranches },
+  { onOpenFile, onRoomEnded, liveBranches },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -193,6 +200,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const pendingRef = useRef<LaunchSpec | null>(null);
   // The room the CURRENT pty is a window into - null for the scratch shell.
   const [room, setRoom] = useState<string | null>(null);
+  // The tmux session that room actually resolved to, straight from the spawn
+  // (m12): BAUD's own `baud-<branch>`, or the outside session the branch's
+  // agent was already living in. Shown on the end-room button, because the
+  // operator should never have to guess what a kill will hit.
+  const [session, setSession] = useState<string | null>(null);
   // Where relative paths in the output resolve: the seated room's branch
   // dir, or null (= the AIPass root) for the scratch shell. Best effort -
   // the shell can cd away, but claude cites repo-relative or absolute paths.
@@ -241,13 +253,17 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
   // The one door that actually ENDS a room (Patrick ruling 2026-08-10).
   // tmux kills the session; our client dies with it, which raises the
-  // curtain through the normal exit event.
+  // curtain through the normal exit event. Only a CONFIRMED kill records the
+  // "stays dead" intent (Patrick ruling 2026-08-12) - a room that refused to
+  // die is still alive, and BAUD must not pretend otherwise.
   const endRoom = useCallback(() => {
     if (!room) return;
-    void invoke("room_kill", { branchName: room }).catch((err) => {
-      setFailure(describe(err));
-    });
-  }, [room]);
+    void invoke("room_kill", { branchName: room })
+      .then(() => onRoomEnded(room))
+      .catch((err) => {
+        setFailure(describe(err));
+      });
+  }, [room, onRoomEnded]);
 
   // A slash-command chip: the command, a beat, then Enter - exactly as if
   // the operator typed it, because they clicked for it. Enter is `\r`
@@ -433,6 +449,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     const spec = pendingRef.current;
     pendingRef.current = null;
     setRoom(spec?.room ?? null);
+    setSession(null);
     cwdRef.current = spec?.cwd ?? null;
 
     void invoke<SpawnResult>("pty_create", {
@@ -442,7 +459,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       cwd: spec?.cwd ?? null,
       onData: channel,
     })
-      .then(({ id, created }) => {
+      .then(({ id, created, room: attached }) => {
         if (disposed) {
           // Unmounted mid-flight: kill the client we just asked for.
           void invoke("pty_kill", { id }).catch(() => {});
@@ -450,6 +467,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         }
         sessionId = id;
         sessionRef.current = id;
+        setSession(attached);
         // A shell that dies instantly can report its exit before this resolves,
         // so never promote a session the channel already buried.
         setPhase((current) => (current === "ended" ? current : "live"));
@@ -517,7 +535,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
               <button
                 type="button"
                 className="baud-terminal-kill"
-                title={`END the ${room} room - kills its session and everything inside`}
+                title={
+                  session
+                    ? `END the ${room} room - kills tmux session '${session}' and everything inside`
+                    : `END the ${room} room - kills its session and everything inside`
+                }
                 onClick={endRoom}
               >
                 ✕ end room

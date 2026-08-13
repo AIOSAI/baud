@@ -17,17 +17,24 @@ import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
 import { relativeAge } from "./age";
+import {
+  clearRoomEnded,
+  markRoomEnded,
+  roomEnded,
+  spendStartup,
+  startupSpent,
+} from "./intent";
 import type { BaudSettings, BranchStatus, FleetSnapshot } from "./types";
 
 /**
  * Which door a card click would take for this branch - BranchChip's own
  * judgment, mirrored here so the startup agent (m11 phase 6) opens exactly
- * what a click on its card would: a live room ATTACHES (nothing is typed), a
- * branch with interactive history or a dispatch transcript RESUMES, anything
- * else starts fresh.
+ * what a click on its card would: a live session ATTACHES (nothing is typed),
+ * a branch with interactive history or a dispatch transcript RESUMES,
+ * anything else starts fresh.
  */
 function cardMode(branch: BranchStatus): LaunchMode {
-  const live = branch.has_room && branch.interactive;
+  const live = (branch.has_room || branch.outside_room !== null) && branch.interactive;
   return live || branch.has_history || branch.resume_id !== null ? "resume" : "fresh";
 }
 
@@ -99,9 +106,11 @@ export default function App() {
   const terminalRef = useRef<TerminalHandle>(null);
   // The latest snapshot, reachable from stable callbacks (openFromTerminal).
   const snapshotRef = useRef<FleetSnapshot | null>(null);
-  // The startup agent's one shot (m11 phase 6), and whether the operator has
-  // already taken a seat - either one spends it.
-  const startupRef = useRef(false);
+  // Whether the operator has already taken a seat - that outranks the startup
+  // preference. A ref is enough for this one: a seat can only be taken after
+  // the first snapshot has landed, which is the same moment the startup shot
+  // is spent, and the SHOT survives remounts (intent.ts). The shot itself
+  // deliberately does not live here - see the startup effect below.
   const seatedRef = useRef(false);
 
   // The reading room: which branch's tree is docked, which files are open,
@@ -278,6 +287,9 @@ export default function App() {
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
     // A seat exists from here on - the startup agent stands down (m11 p6).
     seatedRef.current = true;
+    // The operator opening this card is the one door that revives an ended
+    // room (Patrick ruling 2026-08-12) - clicking it IS the resume.
+    clearRoomEnded(snapshotRef.current?.project ?? "", branch.name);
     const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
     const resume =
       mode !== "resume"
@@ -305,13 +317,26 @@ export default function App() {
   // operator who already picked a card outranks the preference. A named agent
   // with no card here is a quiet console line: a missing branch is not a fault
   // worth a FAULT banner over.
+  //
+  // The shot is spent in sessionStorage, not a ref (m12): a ref is re-armed by
+  // every hot reload, and a re-armed startup agent RESURRECTS the room the
+  // operator just ended - the exact bug Patrick caught at 18:27. Two guards,
+  // because they answer different questions: the shot says "BAUD already
+  // opened this run", the ended mark says "this agent stays dead until I open
+  // its card myself".
   useEffect(() => {
-    if (startupRef.current || !snapshot || !baudSettings) return;
-    startupRef.current = true;
+    if (!snapshot || !baudSettings || startupSpent()) return;
+    spendStartup();
     if (!prefs.startupAgent || seatedRef.current) return;
     const branch = snapshot.branches.find((item) => item.name === prefs.startupAgent);
     if (!branch) {
       console.warn(`startup agent '${prefs.startupAgent}' has no card here - opening nothing`);
+      return;
+    }
+    if (roomEnded(snapshot.project, branch.name)) {
+      console.info(
+        `startup agent '${branch.name}' stays closed - you ended its room; open its card to bring it back`,
+      );
       return;
     }
     launch(branch, cardMode(branch));
@@ -366,6 +391,18 @@ export default function App() {
       );
     }
   }, []);
+
+  // The terminal ended a room (m12). tmux has confirmed the kill, so record
+  // the intent where a hot reload cannot forget it: nothing in BAUD reopens
+  // this agent until the operator clicks its card. Then re-poll, because the
+  // fleet just changed and a dead room should not linger on a card for 5s.
+  const roomWasEnded = useCallback(
+    (branch: string) => {
+      markRoomEnded(snapshotRef.current?.project ?? "", branch);
+      void poll(() => true);
+    },
+    [poll],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -575,6 +612,7 @@ export default function App() {
             <Terminal
               ref={terminalRef}
               onOpenFile={openFromTerminal}
+              onRoomEnded={roomWasEnded}
               liveBranches={branches.filter((b) => b.interactive).map((b) => b.name)}
             />
           </div>

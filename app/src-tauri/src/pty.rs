@@ -79,6 +79,12 @@ static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 pub struct SpawnResult {
     pub id: String,
     pub created: bool,
+    /// The tmux session this pty is a window into - BAUD's own room, or the
+    /// outside session the branch's claude was already living in (m12).
+    /// `None` for the scratch shell and the help terminals, which are no
+    /// room at all. The frontend says this name out loud on the end-room
+    /// button: the operator should never have to guess what a kill will hit.
+    pub room: Option<String>,
 }
 
 /// Everything the frontend hears from a session, over its own channel.
@@ -310,10 +316,17 @@ pub fn pty_create(
 
     let shell = user_shell();
 
-    // Sanitize through the same door the fleet scan uses, so the session the
-    // client attaches to is exactly the one `has_room` reports.
+    // Resolve through the same door the fleet scan and `room_kill` use, so
+    // the session the client attaches to is exactly the one the card's badge
+    // was computed from: BAUD's own room when it exists, the branch's outside
+    // session when it does not (m12), and BAUD's own name to CREATE when
+    // nothing is running there. `new-session -A` covers both halves - it
+    // attaches to a session of that name, whoever made it, or creates it.
     let scope = project.room_scope();
-    let room = room.map(|name| crate::room_name(scope.as_deref(), &name));
+    let room = room.map(|name| {
+        crate::branch_session(&project, &name)
+            .unwrap_or_else(|| crate::room_name(scope.as_deref(), &name))
+    });
     let created = match &room {
         Some(name) => !room_exists(name),
         None => true,
@@ -365,7 +378,7 @@ pub fn pty_create(
 
     let id = stream_session(pair, child, on_data, &registry, false)?;
 
-    Ok(SpawnResult { id, created })
+    Ok(SpawnResult { id, created, room })
 }
 
 /// Wire a freshly spawned pty into the registry: release the slave, start
