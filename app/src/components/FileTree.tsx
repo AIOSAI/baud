@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { listDir } from "../host";
 
 import type { BranchStatus, DirEntryInfo } from "../types";
 
@@ -50,7 +50,7 @@ function DirLevel({
 
   useEffect(() => {
     let mounted = true;
-    invoke<DirEntryInfo[]>("list_dir", { path })
+    listDir(path)
       .then((listing) => {
         if (mounted) setEntries(listing);
       })

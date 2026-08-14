@@ -119,7 +119,7 @@ fn branch_dir(project: &crate::Project, agent: &str) -> Result<PathBuf, String> 
 /// does not parse as a JSON object is an ERROR, for readers as much as
 /// writers: showing empty fields for a file that actually sets values is a
 /// lie, and the write path must never treat unreadable as blank.
-fn read_object(path: &Path) -> Result<Map<String, Value>, String> {
+pub(crate) fn read_object(path: &Path) -> Result<Map<String, Value>, String> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
         Err(_) => return Ok(Map::new()),
@@ -144,10 +144,12 @@ fn read_object(path: &Path) -> Result<Map<String, Value>, String> {
 /// the rename stays on one filesystem and is therefore atomic), then rename
 /// over. A reader either sees the old file whole or the new one whole.
 ///
-/// Keys come out sorted - serde_json's default map is ordered, and the
-/// preserve-order feature is not on this build. Semantics are untouched;
-/// only the line order of untouched keys can move.
-fn write_atomically(path: &Path, document: &Value) -> Result<(), String> {
+/// Keys come out in FILE order: serde_json is built with `preserve_order`
+/// (m13), so a one-key change no longer reshuffles a document somebody else
+/// wrote. One representational detail survives that: a non-ASCII character
+/// escaped as `\uXXXX` in the original is rewritten as literal UTF-8. The
+/// decoded string is identical - only its spelling on disk changes.
+pub(crate) fn write_atomically(path: &Path, document: &Value) -> Result<(), String> {
     let dir = path
         .parent()
         .ok_or_else(|| format!("'{}' has no parent directory", path.display()))?;
@@ -431,6 +433,70 @@ mod tests {
         assert!(after.get("model").is_none(), "the key is gone, not nulled");
         assert!(after.get("permissions").is_some());
         assert_eq!(after["autoCompactWindow"], Value::from(350000));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// @baud's own seat as Patrick found it (2026-08-13): a file carrying ONLY
+    /// the model key, no compact keys. The write path stamps both of them onto
+    /// it without complaint - so a missing compact dial is never this layer's
+    /// doing. It was the panel above, which had no way to send the patch.
+    const MODEL_ONLY: &str = "{\n  \"model\": \"fable\"\n}\n";
+
+    #[test]
+    fn compact_keys_land_beside_a_lone_model_key() {
+        let root = settings_dir("compact-land");
+        let path = agent_file(&root);
+        fs::write(&path, MODEL_ONLY).expect("seed");
+
+        let settings = write_agent_settings_at(
+            &path,
+            &AgentSettingsPatch {
+                auto_compact_enabled: Some(Some(true)),
+                auto_compact_window: Some(Some(350_000)),
+                ..Default::default()
+            },
+        )
+        .expect("stamped");
+        assert_eq!(settings.model.as_deref(), Some("fable"), "model untouched");
+        assert_eq!(settings.auto_compact_enabled, Some(true));
+        assert_eq!(settings.auto_compact_window, Some(350_000));
+
+        let after: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read back")).expect("json");
+        assert_eq!(after["model"], Value::from("fable"));
+        assert_eq!(after["autoCompactEnabled"], Value::from(true));
+        assert_eq!(after["autoCompactWindow"], Value::from(350_000));
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The other half of the fixed panel's new vocabulary: picking Inherit
+    /// clears BOTH compact keys in one patch and leaves the model alone.
+    #[test]
+    fn inherit_clears_both_compact_keys_and_keeps_the_model() {
+        let root = settings_dir("compact-inherit");
+        let path = agent_file(&root);
+        fs::write(&path, SEEDED).expect("seed");
+        write_agent_settings_at(&path, &patch_model("fable")).expect("set model");
+
+        let settings = write_agent_settings_at(
+            &path,
+            &AgentSettingsPatch {
+                auto_compact_enabled: Some(None),
+                auto_compact_window: Some(None),
+                ..Default::default()
+            },
+        )
+        .expect("cleared");
+        assert_eq!(settings.model.as_deref(), Some("fable"));
+        assert_eq!(settings.auto_compact_enabled, None);
+        assert_eq!(settings.auto_compact_window, None);
+
+        let after: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read back")).expect("json");
+        assert!(after.get("autoCompactWindow").is_none(), "key gone, not nulled");
+        assert!(after.get("autoCompactEnabled").is_none());
+        assert_eq!(after["model"], Value::from("fable"));
+        assert!(after.get("permissions").is_some(), "operator config survives");
         let _ = fs::remove_dir_all(&root);
     }
 

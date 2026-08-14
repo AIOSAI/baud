@@ -6,8 +6,16 @@ import {
   useRef,
   useState,
 } from "react";
-import { Channel, invoke } from "@tauri-apps/api/core";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  HostChannel,
+  openExternal,
+  ptyCreate,
+  ptyKill,
+  ptyResize,
+  ptyWrite,
+  resolvePaths,
+  roomKill,
+} from "../host";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal as XTerm, type ILink } from "@xterm/xterm";
@@ -27,6 +35,11 @@ export interface LaunchSpec {
   room: string;
   /** Branch directory a NEW room starts in (ignored on attach). */
   cwd: string;
+  /**
+   * The project the branch belongs to. A room name carries its project, so
+   * a roster card from elsewhere must name its own - null means the seat's.
+   */
+  project: string | null;
   /** The one visible claude command line the click asked for. */
   command: string;
   /** Type the command even when the room already existed (no live claude). */
@@ -58,11 +71,18 @@ interface TerminalProps {
    */
   onRoomEnded: (branch: string) => void;
   /**
-   * Branch names whose card shows a live interactive claude - the fleet
-   * snapshot's knowledge, handed down so the slash-command chips only
-   * render where a chat box actually exists to receive them.
+   * Every tmux session holding a live interactive claude, machine-wide, so
+   * the slash-command chips only render where a chat box actually exists to
+   * receive them.
+   *
+   * Sessions, not branch names, and not filtered by the seat (m13): this used
+   * to be the seated project's live branches, so attaching to a room in
+   * ANOTHER project - which the seat's card list knows nothing about - made
+   * the chips silently vanish from a terminal that had a claude sitting right
+   * there in it. The pty reports the session it actually attached to; that is
+   * the thing to ask about.
    */
-  liveBranches: string[];
+  liveSessions: string[];
 }
 
 /**
@@ -129,13 +149,6 @@ type PtyEvent =
   | { kind: "data"; session: string; base64: string }
   | { kind: "exit"; session: string };
 
-/** Mirrors `SpawnResult` in src-tauri/src/pty.rs. */
-interface SpawnResult {
-  id: string;
-  created: boolean;
-  room: string | null;
-}
-
 type Phase = "opening" | "live" | "ended";
 
 const FONT_SIZE = 13;
@@ -185,7 +198,7 @@ function describe(err: unknown): string {
  * visible command line `run()` writes when they click a card's launch button.
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { onOpenFile, onRoomEnded, liveBranches },
+  { onOpenFile, onRoomEnded, liveSessions },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -200,6 +213,11 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const pendingRef = useRef<LaunchSpec | null>(null);
   // The room the CURRENT pty is a window into - null for the scratch shell.
   const [room, setRoom] = useState<string | null>(null);
+  // The project that room was resolved in. The terminal outlives any project
+  // switch by design, and a roster attach can seat it in another project
+  // entirely, so end-room must ask in the scope the attach used - never the
+  // seat's, which may have moved on since.
+  const roomProjectRef = useRef<string | null>(null);
   // The tmux session that room actually resolved to, straight from the spawn
   // (m12): BAUD's own `baud-<branch>`, or the outside session the branch's
   // agent was already living in. Shown on the end-room button, because the
@@ -234,7 +252,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       typeText(text: string) {
         const id = sessionRef.current;
         if (!id) return false;
-        void invoke("pty_write", { id, data: text }).catch(() => {});
+        void ptyWrite(id, text).catch(() => {});
         termRef.current?.focus();
         return true;
       },
@@ -248,7 +266,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const kill = useCallback(() => {
     const id = sessionRef.current;
     if (!id) return;
-    void invoke("pty_kill", { id }).catch(() => {});
+    void ptyKill(id).catch(() => {});
   }, []);
 
   // The one door that actually ENDS a room (Patrick ruling 2026-08-10).
@@ -258,7 +276,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   // die is still alive, and BAUD must not pretend otherwise.
   const endRoom = useCallback(() => {
     if (!room) return;
-    void invoke("room_kill", { branchName: room })
+    void roomKill(room, roomProjectRef.current)
       .then(() => onRoomEnded(room))
       .catch((err) => {
         setFailure(describe(err));
@@ -274,9 +292,9 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const sendCommand = useCallback((cmd: string) => {
     const id = sessionRef.current;
     if (!id) return;
-    void invoke("pty_write", { id, data: cmd }).catch(() => {});
+    void ptyWrite(id, cmd).catch(() => {});
     window.setTimeout(() => {
-      void invoke("pty_write", { id, data: "\r" }).catch(() => {});
+      void ptyWrite(id, "\r").catch(() => {});
     }, 150);
     termRef.current?.focus();
   }, []);
@@ -320,16 +338,13 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
             const inLink = /:(\d+)$/.exec(rowText.slice(range.start.x - 1, range.end.x));
             const afterLink = /^:(\d+)/.exec(rowText.slice(range.end.x));
             const line = inLink ? Number(inLink[1]) : afterLink ? Number(afterLink[1]) : null;
-            void invoke<(string | null)[]>("resolve_paths", {
-              base: cwdRef.current,
-              candidates: [path],
-            })
+            void resolvePaths(cwdRef.current, [path])
               .then(([target]) => {
                 if (target && !disposed) onOpenFileRef.current(target, line);
               })
               .catch(() => {});
           } else if (/^https?:\/\//.test(uri)) {
-            void openUrl(uri).catch((err) => {
+            void openExternal(uri).catch((err) => {
               if (!disposed) setFailure(describe(err));
             });
           }
@@ -346,7 +361,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     term.loadAddon(
       new WebLinksAddon((event, uri) => {
         if (!event.ctrlKey && !event.metaKey) return;
-        void openUrl(uri).catch((err) => {
+        void openExternal(uri).catch((err) => {
           if (!disposed) setFailure(describe(err));
         });
       }),
@@ -363,10 +378,10 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         const mentions = pathMentions(bufferLine.translateToString(true));
         if (mentions.length === 0) return callback(undefined);
 
-        void invoke<(string | null)[]>("resolve_paths", {
-          base: cwdRef.current,
-          candidates: mentions.map((mention) => mention.path),
-        })
+        void resolvePaths(
+          cwdRef.current,
+          mentions.map((mention) => mention.path),
+        )
           .then((resolved) => {
             const links = mentions.flatMap((mention, i): ILink[] => {
               const target = resolved[i];
@@ -409,7 +424,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
     termRef.current = term;
 
-    const channel = new Channel<PtyEvent>();
+    const channel = new HostChannel<PtyEvent>();
     channel.onmessage = (event) => {
       if (disposed) return;
       if (event.kind === "data") {
@@ -422,7 +437,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
     const keystrokes = term.onData((data) => {
       if (!sessionId || disposed) return;
-      void invoke("pty_write", { id: sessionId, data }).catch((err) => {
+      void ptyWrite(sessionId, data).catch((err) => {
         if (!disposed) setFailure(describe(err));
       });
     });
@@ -431,7 +446,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     // disagree about the column count and every long line wraps wrong.
     const pushSize = () => {
       if (!measure() || !sessionId || disposed) return;
-      void invoke("pty_resize", { id: sessionId, cols: term.cols, rows: term.rows }).catch(
+      void ptyResize(sessionId, term.cols, term.rows).catch(
         () => {},
       );
     };
@@ -451,18 +466,20 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     setRoom(spec?.room ?? null);
     setSession(null);
     cwdRef.current = spec?.cwd ?? null;
+    roomProjectRef.current = spec?.project ?? null;
 
-    void invoke<SpawnResult>("pty_create", {
+    void ptyCreate({
       cols: term.cols,
       rows: term.rows,
       room: spec?.room ?? null,
       cwd: spec?.cwd ?? null,
+      project: spec?.project ?? null,
       onData: channel,
     })
       .then(({ id, created, room: attached }) => {
         if (disposed) {
           // Unmounted mid-flight: kill the client we just asked for.
-          void invoke("pty_kill", { id }).catch(() => {});
+          void ptyKill(id).catch(() => {});
           return;
         }
         sessionId = id;
@@ -479,7 +496,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         // claude. Typing into an existing claude would fill its input box.
         // The pty's input buffer holds it until the shell reads - no race.
         if (spec && (created || spec.typeIfAttached)) {
-          void invoke("pty_write", { id, data: `${spec.command}\n` }).catch((err) => {
+          void ptyWrite(id, `${spec.command}\n`).catch((err) => {
             if (!disposed) setFailure(describe(err));
           });
         }
@@ -498,7 +515,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       observer.disconnect();
       fileLinks.dispose();
       keystrokes.dispose();
-      if (sessionId) void invoke("pty_kill", { id: sessionId }).catch(() => {});
+      if (sessionId) void ptyKill(sessionId).catch(() => {});
       term.dispose();
     };
   }, [generation]);
@@ -509,7 +526,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
       {phase === "live" ? (
         <span className="baud-terminal-actions">
-          {room && liveBranches.includes(room)
+          {session && liveSessions.includes(session)
             ? SLASH_COMMANDS.map(({ cmd, hint }) => (
                 <button
                   key={cmd}

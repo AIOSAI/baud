@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { agentSettingsRead, agentSettingsWrite } from "../host";
 
 import type { AgentSettings as Settings, AgentSettingsPatch } from "../types";
 
@@ -16,13 +16,21 @@ import type { AgentSettings as Settings, AgentSettingsPatch } from "../types";
  * always covers the fleet, two panels can never be open at once.
  *
  * DIRTY TRACKING is the whole reason the patch is three-state. A field is sent
- * only when the operator's value differs from what the file EFFECTIVELY says
- * today - file value if the key is there, claude's own default if it is not.
- * So an untouched slider stamps nothing: the panel showing 350k for a branch
- * whose file is silent is a reading, not a value the operator chose.
+ * only when the operator's value differs from WHAT THE FILE SAYS - and an
+ * absent key reads as absent, never as the value claude would have picked.
+ *
+ * That distinction is the m15 fix (Patrick, 2026-08-13). Every dial used to
+ * baseline an absent key against a guessed default - `?? true`, `?? 350_000` -
+ * so a silent file opened showing "on, 350k", matched the operator's intent
+ * exactly, produced no diff, and disabled save. The dial could be READ but
+ * never STAMPED. Worse, the guess was wrong: claude's real threshold follows
+ * the model, so an opus-1m seat showing "350k" was compacting near 1M, which
+ * is to say never. Absent is now its own position on all three dials, and
+ * choosing a value from it is always a genuine change.
  */
 
-/** Where the slider sits when the file says nothing - claude's own default. */
+/** Where the slider STARTS when the file is silent. Not a claimed default -
+ *  claude's own threshold tracks the model and this panel cannot know it. */
 const DEFAULT_WINDOW = 350_000;
 const WINDOW_MIN = 100_000;
 const WINDOW_MAX = 1_000_000;
@@ -56,9 +64,10 @@ interface AgentSettingsProps {
 export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
   // What the file says right now; null until the read lands (or if it failed).
   const [base, setBase] = useState<Settings | null>(null);
+  // null is "the key is absent" on every dial - a position, not a placeholder.
   const [model, setModel] = useState("");
-  const [enabled, setEnabled] = useState(true);
-  const [contextWindow, setContextWindow] = useState(DEFAULT_WINDOW);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [contextWindow, setContextWindow] = useState<number | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -75,7 +84,7 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
   // Mounting IS opening: every open re-reads, so the panel never shows a
   // stale picture of a file claude or the operator changed underneath it.
   useEffect(() => {
-    invoke<Settings>("agent_settings_read", { agent })
+    agentSettingsRead(agent)
       .then((next) => {
         if (!alive.current) return;
         adopt(next);
@@ -103,18 +112,32 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
   function adopt(next: Settings) {
     setBase(next);
     setModel(next.model ?? "");
-    setEnabled(next.auto_compact_enabled ?? true);
-    setContextWindow(next.auto_compact_window ?? DEFAULT_WINDOW);
+    setEnabled(next.auto_compact_enabled);
+    setContextWindow(next.auto_compact_window);
   }
 
-  // The effective state - the file's value, or what claude does without one.
-  const wasModel = base?.model ?? "";
-  const wasEnabled = base?.auto_compact_enabled ?? true;
-  const wasWindow = base?.auto_compact_window ?? DEFAULT_WINDOW;
+  /**
+   * Auto-compact and its threshold move together, because "on" without a
+   * threshold is the exact trap this fix exists to close: the key lands, the
+   * cutoff stays claude's, and the operator reads a number the file never
+   * carried. Turning it on therefore stamps the threshold on screen as well -
+   * disclosed as a second pending change, never silently. Inherit hands both
+   * keys back; off leaves the stored threshold alone, since a parked value is
+   * what the file says and this panel does not edit what it was not asked to.
+   */
+  function chooseEnabled(next: boolean | null) {
+    setEnabled(next);
+    if (next === true && contextWindow === null) setContextWindow(DEFAULT_WINDOW);
+    if (next === null) setContextWindow(null);
+  }
 
-  // Only genuine differences reach the wire. Inherit is the one field that
-  // maps to null (remove the key); the other two have no inherit position, so
-  // they only ever set a value.
+  // What the FILE says - absent stays absent, so it can be told from a value.
+  const wasModel = base?.model ?? "";
+  const wasEnabled = base?.auto_compact_enabled ?? null;
+  const wasWindow = base?.auto_compact_window ?? null;
+
+  // Only genuine differences reach the wire, and null on any field means
+  // REMOVE the key - the one vocabulary all three dials now share.
   const patch: AgentSettingsPatch = {};
   if (base) {
     if (model !== wasModel) patch.model = model === "" ? null : model;
@@ -134,7 +157,7 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
     if (pending === 0 || saving) return;
     setSaving(true);
     setWriteError(null);
-    invoke<Settings>("agent_settings_write", { agent, patch })
+    agentSettingsWrite(agent, patch)
       .then((next) => {
         if (!alive.current) return;
         // What came back is what is on disk - adopting it clears dirty.
@@ -185,29 +208,39 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
           </select>
         </label>
 
-        <div className="baud-settings-row">
+        {/* A select, not the old switch: a switch has two positions and this
+            dial has three. "Absent" is the one the switch could not say. */}
+        <label className="baud-settings-row">
           <span className="baud-settings-label">auto-compact</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={enabled}
-            className={`baud-settings-switch ${enabled ? "baud-settings-switch-on" : ""}`}
-            title={
-              enabled
-                ? "compaction on - claude summarizes and keeps going"
-                : "compaction off - the session runs to the context wall"
-            }
+          <select
+            className="baud-settings-select"
+            value={enabled === null ? "" : enabled ? "on" : "off"}
             disabled={!base}
-            onClick={() => setEnabled((current) => !current)}
+            title={
+              enabled === null
+                ? "no key on file - claude's own threshold applies, and it follows the model"
+                : enabled
+                  ? "compaction on - claude summarizes and keeps going"
+                  : "compaction off - the session runs to the context wall"
+            }
+            onChange={(event) =>
+              chooseEnabled(event.target.value === "" ? null : event.target.value === "on")
+            }
           >
-            <span className="baud-settings-knob" aria-hidden="true" />
-          </button>
-          <span className="baud-settings-state">{enabled ? "on" : "off"}</span>
-        </div>
+            <option value="">Inherit (claude decides)</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+          <span className="baud-settings-state">
+            {enabled === null ? "not set" : enabled ? "on" : "off"}
+          </span>
+        </label>
 
         {/* Kept visible while compaction is off: the threshold is still what
             the file says, and hiding it would read as "unset". */}
-        <label className={`baud-settings-row ${enabled ? "" : "baud-settings-row-off"}`}>
+        <label
+          className={`baud-settings-row ${contextWindow === null || enabled === false ? "baud-settings-row-off" : ""}`}
+        >
           <span className="baud-settings-label">threshold</span>
           <input
             type="range"
@@ -215,11 +248,13 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
             min={WINDOW_MIN}
             max={WINDOW_MAX}
             step={WINDOW_STEP}
-            value={contextWindow}
-            disabled={!base || !enabled}
+            value={contextWindow ?? DEFAULT_WINDOW}
+            disabled={!base || contextWindow === null}
             onChange={(event) => setContextWindow(Number(event.target.value))}
           />
-          <span className="baud-settings-readout">{thousands(contextWindow)}</span>
+          <span className="baud-settings-readout">
+            {contextWindow === null ? "not set" : thousands(contextWindow)}
+          </span>
         </label>
 
         <div className="baud-settings-row baud-settings-row-off">

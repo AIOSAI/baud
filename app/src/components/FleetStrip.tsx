@@ -9,6 +9,10 @@ interface FleetStripProps {
   onOpenDiff: (branch: BranchStatus) => void;
   /** Operator clicked watch: open this branch's scoped monitor pane. */
   onMonitor: (branch: BranchStatus) => void;
+  /** Operator clicked the terminal glyph: open a plain shell in this branch. */
+  onShell: (branch: BranchStatus) => void;
+  /** The project the view is seated in - cards from elsewhere are roster cards. */
+  seatedProject: string | null;
   /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
   /** Operator clicked the gear: open this branch's settings panel (m11). */
@@ -37,8 +41,10 @@ export default function FleetStrip({
   onOpenFile,
   onOpenDiff,
   onMonitor,
+  onShell,
   onHelp,
   onSettings,
+  seatedProject,
 }: FleetStripProps) {
   if (branches.length === 0) {
     return (
@@ -59,8 +65,10 @@ export default function FleetStrip({
           onOpenFile={onOpenFile}
           onOpenDiff={onOpenDiff}
           onMonitor={onMonitor}
+          onShell={onShell}
           onHelp={onHelp}
           onSettings={onSettings}
+          foreign={seatedProject !== null && branch.project !== seatedProject}
         />
       ))}
     </div>

@@ -288,19 +288,28 @@ fn room_exists(room: &str) -> bool {
 /// persistent session (created on first visit, `-c cwd`); without it, the
 /// operator's plain login shell in the AIPass root - the scratch terminal.
 #[tauri::command(async)]
+// Eight arguments, one over the lint. A tauri command's parameters ARE its
+// wire format - they are deserialized one-for-one from the frontend's call, so
+// grouping them into a struct would not reduce what crosses the boundary, it
+// would just add a type whose only job is to satisfy a heuristic.
+#[allow(clippy::too_many_arguments)]
 pub fn pty_create(
     cols: u16,
     rows: u16,
     room: Option<String>,
     cwd: Option<String>,
+    project: Option<String>,
     on_data: Channel<PtyEvent>,
     registry: tauri::State<'_, PtyRegistry>,
     seat: tauri::State<'_, crate::ActiveProject>,
 ) -> Result<SpawnResult, String> {
     // Same resolution the fleet scan uses - the shell opens where the fleet
     // is seated, and a room name gets the same project scope the card's
-    // badge was computed with.
-    let project = crate::active_project(&seat)?;
+    // badge was computed with. A roster card names its OWN project instead,
+    // because a room name carries its project: resolving `devpulse` under the
+    // seat's scope would miss `baud-devpulse` and create a second, empty room
+    // beside the agent the operator was trying to reach.
+    let project = crate::project_named(project.as_deref(), &seat)?;
     let root = project.root.clone();
 
     let size = PtySize {

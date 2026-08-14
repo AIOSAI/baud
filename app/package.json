@@ -5,8 +5,9 @@
   "type": "module",
   "description": "BAUD - the AIPass desktop: read-only fleet monitor + the operator's terminal",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "tokens": "node src/tokens/generate.mjs",
+    "dev": "npm run tokens && vite",
+    "build": "npm run tokens && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

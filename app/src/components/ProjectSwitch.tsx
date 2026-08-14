@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { listProjects, projectSwitch } from "../host";
 
 import type { ProjectListing } from "../types";
 
@@ -42,7 +42,7 @@ export default function ProjectSwitch({
     setListing(null);
     setFailure(null);
     try {
-      setListing(await invoke<ProjectListing[]>("list_projects"));
+      setListing(await listProjects());
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err));
     }
@@ -51,7 +51,7 @@ export default function ProjectSwitch({
   const choose = useCallback(
     async (name: string) => {
       try {
-        await invoke("project_switch", { name });
+        await projectSwitch(name);
         setOpen(false);
         onSwitched();
       } catch (err) {

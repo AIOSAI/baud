@@ -2,7 +2,11 @@
 export interface BranchStatus {
   name: string;
   path: string;
+  /** The project this branch belongs to — a roster card may not be the seat's. */
+  project: string;
   is_citizen: boolean;
+  /** Passport `identity.citizen_class` is "manager" — the project's owner. */
+  manager: boolean;
   dispatched: boolean;
   interactive: boolean;
   has_history: boolean;
@@ -25,6 +29,12 @@ export interface FleetSnapshot {
   generated_at: string;
   error: string | null;
   branches: BranchStatus[];
+  /**
+   * Every tmux session holding a live INTERACTIVE claude, machine-wide and
+   * deliberately not scoped to the seat - the terminal may be attached to a
+   * room belonging to a project the fleet view is not showing (m13).
+   */
+  live_agent_sessions: string[];
 }
 
 /** Mirrors `ProjectListing` in src-tauri/src/lib.rs. */
@@ -113,4 +123,52 @@ export interface BaudSettings {
   bell_max_events?: number;
   /** Chime when a poll brings genuinely new events. */
   bell_sound?: boolean;
+}
+
+/** Mirrors `EntryLimit` in src-tauri/src/memory.rs. */
+export interface EntryLimit {
+  key: string;
+  file: string;
+  container: string;
+  field: string;
+  max_chars: number;
+}
+
+/** Mirrors `RolloverDial` in src-tauri/src/memory.rs. */
+export interface RolloverDial {
+  group: string;
+  key: string;
+  count: number;
+  /** Absent on disk means BAUD will not create it. */
+  auto_compact_cap: number | null;
+}
+
+/** Mirrors `BranchOverride` in src-tauri/src/memory.rs. */
+export interface BranchOverride {
+  branch: string;
+  dials: RolloverDial[];
+}
+
+/**
+ * Mirrors `MemoryConfig` in src-tauri/src/memory.rs - @memory's own config
+ * file, which BAUD renders and edits but does not own (m13).
+ */
+export interface MemoryConfig {
+  path: string;
+  /** False = the caps are documentation, not enforcement. Say so, never imply teeth. */
+  enforced: boolean;
+  entry_limits: EntryLimit[];
+  rollover: RolloverDial[];
+  per_branch: BranchOverride[];
+}
+
+/** Mirrors `MemoryConfigPatch` in src-tauri/src/memory.rs. */
+export interface MemoryConfigPatch {
+  caps: { key: string; max_chars: number }[];
+  rollover: {
+    group: string;
+    key: string;
+    count?: number;
+    auto_compact_cap?: number;
+  }[];
 }

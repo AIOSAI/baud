@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { gitDiffText } from "../host";
 import { EditorState } from "@codemirror/state";
 import {
   EditorView,
@@ -11,7 +11,6 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-import type { FileText } from "../types";
 
 /**
  * The changes tab behind a card's git badge: the branch's full uncommitted
@@ -54,7 +53,7 @@ export default function DiffView({ dir, active }: { dir: string; active: boolean
     let disposed = false;
     let view: EditorView | null = null;
 
-    invoke<FileText>("git_diff_text", { path: dir })
+    gitDiffText(dir)
       .then(async (diff) => {
         if (disposed) return;
 

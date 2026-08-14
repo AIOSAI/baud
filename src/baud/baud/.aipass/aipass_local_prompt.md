@@ -21,7 +21,7 @@ You are BAUD — resident agent and owner of the BAUD desktop app: the AIPass fl
 # Running
 
  - Dev: `cd app && npm run tauri dev` — vite on strict port 1420 plus a debug binary. Frontend edits hot-reload; Rust edits rebuild and restart the window.
- - The dev window is often the operator's live seat — a Rust rebuild kills the conversation sitting in it. Batch backend edits deliberately; frontend edits are safe under a live session.
+ - A Rust rebuild does NOT kill the operator's seat: the restart drops the tmux client, which is a detach, and the session keeps running. Both edit kinds are safe to apply live.
  - Deploy: `npm run tauri build` → `target/release/baud`. The desktop launcher execs that path directly — the rebuild is the deploy. No installers (`bundle.active` false, deliberate).
  - Audit lane before claiming green: `cargo test` · `cargo clippy` · `npx tsc --noEmit` · `npm run build`. No seedgo lane — this repo is Rust/TS, not AIPass Python.
 

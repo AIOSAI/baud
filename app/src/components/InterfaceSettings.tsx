@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { baudSettingsRead, baudSettingsWrite, hooksSoundGet, hooksSoundSet } from "../host";
 
 import type { BaudSettings } from "../types";
+import MemorySettings from "./MemorySettings";
 
 /**
  * BAUD's own settings (m11 phase 6) - the header gear, sibling to the per-card
@@ -131,7 +132,7 @@ export default function InterfaceSettings({
   // Mounting IS opening: both reads happen here, so the panel never shows a
   // stale picture of a file (or a flag) changed underneath it.
   useEffect(() => {
-    invoke<BaudSettings>("baud_settings_read")
+    baudSettingsRead()
       .then((next) => {
         if (!alive.current) return;
         adopt(next);
@@ -142,7 +143,7 @@ export default function InterfaceSettings({
         if (alive.current) setReadError(message(err));
       });
 
-    invoke<boolean>("hooks_sound_get")
+    hooksSoundGet()
       .then((active) => {
         if (alive.current) setHooksActive(active);
       })
@@ -197,7 +198,7 @@ export default function InterfaceSettings({
     if (pending === 0 || saving) return;
     setSaving(true);
     setWriteError(null);
-    invoke<BaudSettings>("baud_settings_write", { patch })
+    baudSettingsWrite(patch)
       .then((next) => {
         // What came back is the whole document as written - adopting it
         // clears dirty, and the app takes the same copy.
@@ -222,7 +223,7 @@ export default function InterfaceSettings({
     const next = !previous;
     setHooksActive(next);
     setHooksError(null);
-    invoke<boolean>("hooks_sound_set", { active: next })
+    hooksSoundSet(next)
       .then((state) => {
         if (alive.current) setHooksActive(state);
       })
@@ -385,6 +386,10 @@ export default function InterfaceSettings({
             {saving ? "saving…" : "save"}
           </button>
         </footer>
+
+        {/* Another agent's file, so it carries its own save button rather than
+            riding this one - see MemorySettings for why. */}
+        <MemorySettings />
       </div>
     </div>
   );

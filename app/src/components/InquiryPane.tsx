@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { HostChannel, ptyCreate, ptyKill, ptyResize, ptyWrite } from "../host";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 
@@ -27,17 +27,17 @@ type PtyEvent =
   | { kind: "data"; session: string; base64: string }
   | { kind: "exit"; session: string };
 
-/** Mirrors `SpawnResult` in src-tauri/src/pty.rs. */
-interface SpawnResult {
-  id: string;
-  created: boolean;
-}
-
 interface InquiryPaneProps {
-  /** Branch name - shapes the pre-typed help command. */
+  /** Branch (or project) name - names the pane and its kill button. */
   branch: string;
-  /** Branch directory the shell opens in. */
+  /** Directory the shell opens in. */
   cwd: string;
+  /**
+   * One command line typed into the fresh shell, or null for a bare prompt.
+   * The caller decides: the card's `?` sends the branch's help command, the
+   * terminal buttons send nothing and hand over an empty shell.
+   */
+  command?: string | null;
   /** The shell ended - operator exit, or the corner kill. */
   onExited: () => void;
 }
@@ -79,7 +79,12 @@ function decodeChunk(base64: string): Uint8Array {
   return bytes;
 }
 
-export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps) {
+export default function InquiryPane({
+  branch,
+  cwd,
+  command = null,
+  onExited,
+}: InquiryPaneProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -117,7 +122,7 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
 
     measure();
 
-    const channel = new Channel<PtyEvent>();
+    const channel = new HostChannel<PtyEvent>();
     channel.onmessage = (event) => {
       if (disposed) return;
       if (event.kind === "data") {
@@ -131,14 +136,14 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
     // Real stdin - the tier-1 line. Every byte here is the operator's.
     const keystrokes = term.onData((data) => {
       if (!sessionId || disposed) return;
-      void invoke("pty_write", { id: sessionId, data }).catch((err) => {
+      void ptyWrite(sessionId, data).catch((err) => {
         if (!disposed) setFailure(err instanceof Error ? err.message : String(err));
       });
     });
 
     const pushSize = () => {
       if (!measure() || !sessionId || disposed) return;
-      void invoke("pty_resize", { id: sessionId, cols: term.cols, rows: term.rows }).catch(
+      void ptyResize(sessionId, term.cols, term.rows).catch(
         () => {},
       );
     };
@@ -150,7 +155,7 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
     });
     observer.observe(host);
 
-    void invoke<SpawnResult>("pty_create", {
+    void ptyCreate({
       cols: term.cols,
       rows: term.rows,
       room: null,
@@ -159,7 +164,7 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
     })
       .then(({ id }) => {
         if (disposed) {
-          void invoke("pty_kill", { id }).catch(() => {});
+          void ptyKill(id).catch(() => {});
           return;
         }
         sessionId = id;
@@ -168,10 +173,13 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
         pushSize();
         // The one visible command line the click asked for - typed into the
         // fresh shell's input buffer, exactly what the operator would have
-        // typed by hand.
-        void invoke("pty_write", { id, data: `${helpCommand(branch)}\n` }).catch((err) => {
-          if (!disposed) setFailure(err instanceof Error ? err.message : String(err));
-        });
+        // typed by hand. A terminal button asks for none, and gets a prompt
+        // and nothing else.
+        if (command) {
+          void ptyWrite(id, `${command}\n`).catch((err) => {
+            if (!disposed) setFailure(err instanceof Error ? err.message : String(err));
+          });
+        }
       })
       .catch((err) => {
         if (disposed) return;
@@ -184,10 +192,10 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
       window.cancelAnimationFrame(frame);
       observer.disconnect();
       keystrokes.dispose();
-      if (sessionId) void invoke("pty_kill", { id: sessionId }).catch(() => {});
+      if (sessionId) void ptyKill(sessionId).catch(() => {});
       term.dispose();
     };
-  }, [branch, cwd]);
+  }, [branch, cwd, command]);
 
   const kill = () => {
     const id = sessionRef.current;
@@ -195,11 +203,14 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
       onExitedRef.current();
       return;
     }
-    void invoke("pty_kill", { id }).catch(() => {});
+    void ptyKill(id).catch(() => {});
   };
 
   return (
-    <section className="baud-terminal baud-inquiry" aria-label={`${branch} help terminal`}>
+    <section
+      className="baud-terminal baud-inquiry"
+      aria-label={command ? `${branch} help terminal` : `${branch} shell`}
+    >
       <div className="baud-terminal-host" ref={hostRef} />
 
       {failure ? (
@@ -213,7 +224,7 @@ export default function InquiryPane({ branch, cwd, onExited }: InquiryPaneProps)
         <button
           type="button"
           className="baud-terminal-kill"
-          title={`kill this help shell - the ${branch} branch is untouched`}
+          title={`kill this shell - ${branch} is untouched`}
           onClick={kill}
         >
           ✕ kill

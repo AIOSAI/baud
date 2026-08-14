@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { gitChanges } from "../host";
 
 import { relativeAge } from "../age";
 import { helpCommand } from "./InquiryPane";
@@ -9,7 +9,7 @@ export type LaunchMode = "resume" | "fresh";
 
 /** Git polls slower than the dashboard: a subprocess per card per tick is
  *  real work, and uncommitted-file counts don't move second to second. */
-const GIT_POLL_MS = 15_000;
+export const GIT_POLL_MS = 15_000;
 
 interface BranchChipProps {
   branch: BranchStatus;
@@ -21,6 +21,15 @@ interface BranchChipProps {
   onOpenFile: (path: string, name: string, branch: string) => void;
   /** Operator clicked the changes badge: open this branch's diff tab. */
   onOpenDiff: (branch: BranchStatus) => void;
+  /** Operator clicked the terminal glyph: open a plain shell in this branch. */
+  onShell: (branch: BranchStatus) => void;
+  /**
+   * This card is from a project the view is NOT seated in - a roster card.
+   * Every fenced door (files, diff, figures, settings) reads under the seat's
+   * root and would simply refuse here, so a foreign card shows what it knows
+   * and offers only the doors that genuinely work from where we stand.
+   */
+  foreign: boolean;
   /** Operator clicked watch: open this branch's scoped monitor pane. */
   onMonitor: (branch: BranchStatus) => void;
   /** Operator clicked ?: open a help terminal seated in this branch. */
@@ -45,8 +54,10 @@ export default function BranchChip({
   onOpenFile,
   onOpenDiff,
   onMonitor,
+  onShell,
   onHelp,
   onSettings,
+  foreign,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
@@ -54,9 +65,12 @@ export default function BranchChip({
   // Zero (or a dir that isn't a repo) simply shows no badge.
   const [changes, setChanges] = useState<GitChanges | null>(null);
   useEffect(() => {
+    // A foreign path fails the fence by design - asking every 15 seconds
+    // would be a guaranteed rejection on a loop.
+    if (foreign) return;
     let mounted = true;
     const refresh = () => {
-      invoke<GitChanges>("git_changes", { path: branch.path })
+      gitChanges(branch.path)
         .then((next) => {
           if (mounted) setChanges(next);
         })
@@ -70,7 +84,7 @@ export default function BranchChip({
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [branch.path]);
+  }, [branch.path, foreign]);
 
   // Every number on the card is a door: clicking it opens the file the
   // number came from, in the reading room.
@@ -133,6 +147,18 @@ export default function BranchChip({
       <header className="baud-chip-head">
         <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
         <h2 className="baud-chip-name">{branch.name}</h2>
+        {/* Manager class: the project's first agent and its owner, the only
+            one holding git write, the feedback channel and watchdog. Rare by
+            construction (one per project), so a bare mark carries it and the
+            title does the teaching. */}
+        {branch.manager ? (
+          <span
+            className="baud-chip-manager"
+            title="manager — this project's owner: git write, feedback channel, watchdog"
+          >
+            ★
+          </span>
+        ) : null}
         {badge ? (
           <span className={`baud-badge ${badgeClass}`} title={badgeTitle}>
             {badge}
@@ -153,7 +179,15 @@ export default function BranchChip({
         {/* Tier-1 (m9 phase 4): a real terminal seated in this branch with
             the agent's help already run - keyboard ON, the operator keeps
             investigating (Patrick ruling: blocking it defeats the point). */}
-        {branch.is_citizen ? (
+        {/* Which tree this passport is from. Only on roster cards - on the
+            seated project's own strip it would be the same word on every
+            card, and the chip above already says it. */}
+        {foreign ? (
+          <span className="baud-chip-project" title={`seated elsewhere: this agent lives in ${branch.project}`}>
+            {branch.project}
+          </span>
+        ) : null}
+        {branch.is_citizen && !foreign ? (
           <button
             type="button"
             className="baud-chip-help"
@@ -166,7 +200,7 @@ export default function BranchChip({
         {/* m11: this branch's own settings - model, auto-compact, context
             threshold. The panel writes claude's settings.local.json, so it
             only exists for branches that are actually citizens. */}
-        {branch.is_citizen ? (
+        {branch.is_citizen && !foreign ? (
           <button
             type="button"
             className="baud-chip-gear"
@@ -194,31 +228,41 @@ export default function BranchChip({
       {/* No summary line: the dashboard's summary string is generated from
           the same counts the figures below already show - it was the same
           info twice (Patrick-caught 2026-08-09). Dashboard opens via plans. */}
+      {/* On a roster card the figures still READ true - the roster scan
+          gathered them - but they are not doors: every one opens a file
+          under the seat's fence, which would refuse. Numbers without a
+          click, rather than a click that always fails. */}
       <div className="baud-chip-figures">
         <Figure
           label="mail"
           value={branch.new_mail}
           alert={branch.new_mail > 0}
-          onClick={peekInbox}
+          onClick={foreign ? null : peekInbox}
         />
-        <Figure label="open" value={branch.opened_mail} onClick={peekInbox} />
-        <Figure label="plans" value={branch.active_plans} onClick={peekDashboard} />
-        <Figure label="todos" value={branch.todo_count} onClick={peekTodos} />
+        <Figure label="open" value={branch.opened_mail} onClick={foreign ? null : peekInbox} />
+        <Figure
+          label="plans"
+          value={branch.active_plans}
+          onClick={foreign ? null : peekDashboard}
+        />
+        <Figure label="todos" value={branch.todo_count} onClick={foreign ? null : peekTodos} />
         {/* Permanent spot (Patrick ruling 2026-08-09): a dim zero when the
             tree is clean, amber the moment anything is uncommitted. */}
-        <button
-          type="button"
-          className={`baud-figure ${(changes?.count ?? 0) > 0 ? "baud-figure-git" : ""}`}
-          title={
-            (changes?.count ?? 0) > 0
-              ? `${changes?.count} uncommitted file(s) - open the diff`
-              : "no uncommitted changes - open the (empty) diff"
-          }
-          onClick={() => onOpenDiff(branch)}
-        >
-          <span className="baud-figure-value">{changes?.count ?? 0}</span>
-          <span className="baud-figure-label">⎇ git</span>
-        </button>
+        {foreign ? null : (
+          <button
+            type="button"
+            className={`baud-figure ${(changes?.count ?? 0) > 0 ? "baud-figure-git" : ""}`}
+            title={
+              (changes?.count ?? 0) > 0
+                ? `${changes?.count} uncommitted file(s) - open the diff`
+                : "no uncommitted changes - open the (empty) diff"
+            }
+            onClick={() => onOpenDiff(branch)}
+          >
+            <span className="baud-figure-value">{changes?.count ?? 0}</span>
+            <span className="baud-figure-label">⎇ git</span>
+          </button>
+        )}
       </div>
 
       <footer className="baud-chip-foot">
@@ -227,24 +271,42 @@ export default function BranchChip({
         </span>
         {branch.is_citizen ? (
           <span className="baud-chip-buttons">
-            <button
-              type="button"
-              className="baud-chip-launch baud-chip-launch-quiet"
-              title={`browse ${branch.path}`}
-              onClick={() => onFiles(branch)}
-            >
-              files
-            </button>
+            {/* files and watch read under the seat's fence - on a roster
+                card they would refuse, so the card does not offer them. The
+                launch door and the shell below both work from anywhere. */}
+            {foreign ? null : (
+              <button
+                type="button"
+                className="baud-chip-launch baud-chip-launch-quiet"
+                title={`browse ${branch.path}`}
+                onClick={() => onFiles(branch)}
+              >
+                files
+              </button>
+            )}
             {/* Tier-0, scoped (m9): this branch's prax activity alone, in a
                 read-only pane. A window, never a seat - same doctrine as the
                 header lights, one card wide. */}
+            {foreign ? null : (
+              <button
+                type="button"
+                className="baud-chip-launch baud-chip-launch-quiet"
+                title={`watch ${branch.name}'s live activity - read-only monitor pane`}
+                onClick={() => onMonitor(branch)}
+              >
+                watch
+              </button>
+            )}
+            {/* A plain working shell seated in this branch. Not a seat for
+                the agent and not the branch's room - just a prompt already
+                cd'd where the operator was about to cd anyway. */}
             <button
               type="button"
-              className="baud-chip-launch baud-chip-launch-quiet"
-              title={`watch ${branch.name}'s live activity - read-only monitor pane`}
-              onClick={() => onMonitor(branch)}
+              className="baud-chip-launch baud-chip-launch-quiet baud-chip-shell"
+              title={`open a terminal in ${branch.path}`}
+              onClick={() => onShell(branch)}
             >
-              watch
+              ❯_
             </button>
             {attached ? (
               /* A live session in the room: every door is the same door -
@@ -306,12 +368,22 @@ function Figure({
   label: string;
   value: number;
   alert?: boolean;
-  onClick: () => void;
+  /** null on a roster card: the number is true, but its file is out of fence. */
+  onClick: (() => void) | null;
 }) {
+  const className = `baud-figure ${alert ? "baud-figure-alert" : ""}`;
+  if (!onClick) {
+    return (
+      <span className={`${className} baud-figure-flat`} title={`${label}, read from another project`}>
+        <span className="baud-figure-value">{value}</span>
+        <span className="baud-figure-label">{label}</span>
+      </span>
+    );
+  }
   return (
     <button
       type="button"
-      className={`baud-figure ${alert ? "baud-figure-alert" : ""}`}
+      className={className}
       title={`open the file behind '${label}'`}
       onClick={onClick}
     >

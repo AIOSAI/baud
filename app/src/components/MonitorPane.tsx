@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { HostChannel, monitorCreate, ptyKill, ptyResize } from "../host";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal as XTerm } from "@xterm/xterm";
 
@@ -104,7 +104,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
 
     measure();
 
-    const channel = new Channel<PtyEvent>();
+    const channel = new HostChannel<PtyEvent>();
     channel.onmessage = (event) => {
       if (disposed) return;
       if (event.kind === "data") {
@@ -117,7 +117,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
 
     const pushSize = () => {
       if (!measure() || !sessionId || disposed) return;
-      void invoke("pty_resize", { id: sessionId, cols: term.cols, rows: term.rows }).catch(
+      void ptyResize(sessionId, term.cols, term.rows).catch(
         () => {},
       );
     };
@@ -129,7 +129,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
     });
     observer.observe(host);
 
-    void invoke<string>("monitor_create", {
+    void monitorCreate({
       cols: term.cols,
       rows: term.rows,
       target,
@@ -138,7 +138,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
       .then((id) => {
         if (disposed) {
           // Unmounted mid-flight: kill the monitor we just asked for.
-          void invoke("pty_kill", { id }).catch(() => {});
+          void ptyKill(id).catch(() => {});
           return;
         }
         sessionId = id;
@@ -157,7 +157,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
       sessionRef.current = null;
       window.cancelAnimationFrame(frame);
       observer.disconnect();
-      if (sessionId) void invoke("pty_kill", { id: sessionId }).catch(() => {});
+      if (sessionId) void ptyKill(sessionId).catch(() => {});
       term.dispose();
     };
     // A monitor never re-targets in place - the toggle unmounts and remounts.
@@ -171,7 +171,7 @@ export default function MonitorPane({ target, label, onExited }: MonitorPaneProp
       onExitedRef.current();
       return;
     }
-    void invoke("pty_kill", { id }).catch(() => {});
+    void ptyKill(id).catch(() => {});
   };
 
   return (

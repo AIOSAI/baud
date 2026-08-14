@@ -1,0 +1,37 @@
+/* GENERATED from tokens.json by generate.mjs - DO NOT EDIT.
+   Change a value in tokens.json and run `npm run tokens`. */
+:root {
+  /* Surfaces */
+  --baud-bg: #070a09;
+  --baud-bg-panel: #0d1211;
+  --baud-bg-card: #101715;
+  --baud-bg-card-live: #121b16;
+
+  /* Lines */
+  --baud-line: #1c2724;
+  --baud-line-strong: #2b3a35;
+
+  /* Ink */
+  --baud-ink: #d6e2dc;
+  --baud-ink-dim: #7d8f88;
+  --baud-ink-faint: #4f5f59;
+
+  /* Signals */
+  --baud-green: #4ade80;
+  --baud-amber: #f5b544;
+  --baud-red: #ef5a5a;
+
+  /* Glows */
+  --baud-glow-green: rgba(74, 222, 128, 0.35);
+  --baud-glow-amber: rgba(245, 181, 68, 0.35);
+
+  /* Type */
+  --baud-mono: "JetBrains Mono", "IBM Plex Mono", "SF Mono", ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace;
+
+  /* Metrics */
+  --baud-radius: 4px;
+  --baud-gap: 14px;
+  --baud-pad: 18px;
+
+  color-scheme: dark;
+}

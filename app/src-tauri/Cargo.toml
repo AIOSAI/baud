@@ -18,7 +18,12 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# preserve_order keeps a parsed document in FILE order instead of sorting it.
+# Both writers here edit files that belong to someone else (claude's settings,
+# @memory's config), and without this a one-number change rewrote 310 of 364
+# lines - measured, not guessed. A surgical write has to look surgical in the
+# diff too, or nobody trusts it twice.
+serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4"
 # The operator's terminal: a real PTY, not a pipe. Line discipline, job
 # control, and $TERM behaviour all depend on it.

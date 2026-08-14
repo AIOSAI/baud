@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { notificationsRead } from "../host";
 
 import { relativeAge } from "../age";
 import type { NotificationEvent } from "../types";
@@ -121,7 +121,7 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
   useEffect(() => {
     let mounted = true;
     const refresh = () => {
-      invoke<NotificationEvent[]>("notifications_read")
+      notificationsRead()
         .then((next) => {
           if (!mounted) return;
           // Retention is reader-side: the feed file is ai_mail's alone, and

@@ -87,6 +87,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::Manager;
 
+mod memory;
 mod notifications;
 mod pty;
 mod screenshot;
@@ -125,10 +126,22 @@ const DASHBOARD_FILE: &str = "DASHBOARD.local.json";
 pub struct BranchStatus {
     /// Directory name, e.g. "devpulse".
     pub name: String,
+    /// The project this branch belongs to. Every card carries it, because a
+    /// roster card can be from a project the view is not seated in and its
+    /// doors must act in ITS scope, not the seat's - a room name carries its
+    /// project, so resolving `devpulse` under the wrong scope would attach a
+    /// session that never existed.
+    pub project: String,
     /// Absolute branch directory - what the launch button cds into.
     pub path: String,
     /// `.trinity/passport.json` exists.
     pub is_citizen: bool,
+    /// The passport's `identity.citizen_class` reads "manager" - a project's
+    /// first agent, its owner. Managers alone hold git write, the feedback
+    /// channel and watchdog; every agent spawned into a project afterwards is
+    /// not one. False for a builder, a non-citizen, and any passport BAUD
+    /// cannot read - the mark is only ever claimed when the file says so.
+    pub manager: bool,
     /// `.ai_mail.local/.dispatch.lock` exists - a dispatched agent is working
     /// the branch right now.
     pub dispatched: bool,
@@ -172,11 +185,13 @@ pub struct BranchStatus {
 }
 
 impl BranchStatus {
-    fn new(name: String, path: String) -> Self {
+    fn new(name: String, project: String, path: String) -> Self {
         Self {
             name,
+            project,
             path,
             is_citizen: false,
+            manager: false,
             dispatched: false,
             interactive: false,
             has_history: false,
@@ -207,6 +222,13 @@ pub struct FleetSnapshot {
     pub error: Option<String>,
     /// One entry per directory under the seated project's fleet dir.
     pub branches: Vec<BranchStatus>,
+    /// Every tmux session on the machine holding a live INTERACTIVE claude,
+    /// sorted. Deliberately NOT scoped to the seat: the terminal can be
+    /// attached to a room belonging to a project the fleet view is not
+    /// currently showing, and its slash-command chips have to know whether a
+    /// chat box exists there. Keyed by session name, which is what the pty
+    /// actually attached to.
+    pub live_agent_sessions: Vec<String>,
 }
 
 impl FleetSnapshot {
@@ -217,6 +239,7 @@ impl FleetSnapshot {
             generated_at: now_iso8601(),
             error: Some(error),
             branches: Vec::new(),
+            live_agent_sessions: Vec::new(),
         }
     }
 }
@@ -225,7 +248,7 @@ fn now_iso8601() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
 }
 
-fn join_all(base: &Path, parts: &[&str]) -> PathBuf {
+pub(crate) fn join_all(base: &Path, parts: &[&str]) -> PathBuf {
     let mut path = base.to_path_buf();
     for part in parts {
         path.push(part);
@@ -240,7 +263,7 @@ fn join_all(base: &Path, parts: &[&str]) -> PathBuf {
 ///    first ancestor that contains `src/aipass`.
 ///
 /// Returns a descriptive error rather than panicking or guessing.
-fn resolve_aipass_root() -> Result<PathBuf, String> {
+pub(crate) fn resolve_aipass_root() -> Result<PathBuf, String> {
     if let Ok(raw) = std::env::var("AIPASS_ROOT") {
         let candidate = raw.trim();
         if !candidate.is_empty() {
@@ -439,6 +462,27 @@ pub(crate) fn active_project(state: &ActiveProject) -> Result<Project, String> {
         Some(project) => Ok(project),
         None => anchor_project(),
     }
+}
+
+/// A project named by the frontend, or the seated one when it names none.
+///
+/// The name is matched against BAUD's own census - the same door
+/// [`project_switch`] uses - so a roster card can act in its own project's
+/// scope without any command ever accepting a path from the webview. An
+/// unknown name is an error, never a fallback to the seat: silently acting on
+/// the wrong project is how an end-room kills a session nobody asked about.
+pub(crate) fn project_named(
+    name: Option<&str>,
+    state: &ActiveProject,
+) -> Result<Project, String> {
+    let Some(wanted) = name else {
+        return active_project(state);
+    };
+    let anchor = anchor_project()?;
+    discover_projects(&anchor)
+        .into_iter()
+        .find(|project| project.name == wanted)
+        .ok_or_else(|| format!("no project named '{wanted}' in BAUD's census"))
 }
 
 /// The switcher menu: every discovered project, the seated one flagged.
@@ -1042,6 +1086,32 @@ fn git_changes_in(dir: &Path) -> GitChanges {
     GitChanges { files, count }
 }
 
+/// Every uncommitted path in the whole repository the project root sits in.
+///
+/// Deliberately NOT the same question the cards ask. A card asks "what has
+/// changed under me?" with `diff HEAD`, which sees tracked files only; this
+/// asks "what is uncommitted in this project?", which has to include files
+/// git has never seen - a brand-new module is the most interesting change in
+/// the tree, and a total that hid it would read as false calm. Hence
+/// `status --porcelain`, and `-uall` so an untracked DIRECTORY expands to its
+/// files instead of collapsing to one line.
+///
+/// Ignored files stay ignored: `target/`, `node_modules/` and `dist/` never
+/// reach the count. One line of porcelain is one path, renames included.
+fn git_project_changes_in(dir: &Path) -> GitChanges {
+    let files: Vec<String> = git_read(dir, &["status", "--porcelain", "-uall"])
+        .map(|out| {
+            out.lines()
+                .filter(|line| !line.trim().is_empty())
+                // Porcelain v1: two status columns, a space, then the path.
+                .map(|line| line.get(3..).unwrap_or(line).to_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    let count = files.len();
+    GitChanges { files, count }
+}
+
 /// The full uncommitted diff for a directory, as one patch text.
 fn git_diff_in(dir: &Path) -> Result<FileText, String> {
     let output = Command::new("git")
@@ -1065,6 +1135,15 @@ fn git_diff_in(dir: &Path) -> Result<FileText, String> {
 #[tauri::command]
 fn git_changes(path: String, state: tauri::State<'_, ActiveProject>) -> Result<GitChanges, String> {
     Ok(git_changes_in(&fenced_path_in(&active_project(&state)?.root, &path)?))
+}
+
+/// The seated project's whole-repo uncommitted count, for the header total.
+///
+/// Takes no path on purpose: the frontend cannot aim this at a directory, so
+/// the read stays pinned to whatever project the operator is seated in.
+#[tauri::command]
+fn git_project_changes(state: tauri::State<'_, ActiveProject>) -> Result<GitChanges, String> {
+    Ok(git_project_changes_in(&active_project(&state)?.root))
 }
 
 /// The diff behind the badge, for the changes tab. Fenced, read-only.
@@ -1144,6 +1223,35 @@ impl RoomScan {
         found.sort();
         found.first().map(|name| (*name).clone())
     }
+
+    /// Every session whose claude pane holds an INTERACTIVE claude, sorted and
+    /// deduplicated. BAUD's own rooms are included here - unlike
+    /// [`Self::agent_session_in`], which answers "whose room is this?" and so
+    /// must skip them, this answers "is anyone home in that session?".
+    ///
+    /// The pane command alone cannot tell an interactive claude from a
+    /// dispatched headless one - both are literally `claude` - so the process
+    /// table decides, matching a pane to a session by directory the same way
+    /// a card's `interactive` figure does.
+    fn live_agent_sessions(&self, sessions: &[ClaudeSession]) -> Vec<String> {
+        let mut found: Vec<String> = self
+            .agent_panes
+            .iter()
+            .filter(|(_, pane_cwd)| {
+                // /proc reports kernel-canonical cwds; tmux does not, so
+                // canonicalize the pane's before comparing (a symlinked tree
+                // otherwise never matches).
+                let pane = pane_cwd.canonicalize().unwrap_or_else(|_| pane_cwd.clone());
+                sessions
+                    .iter()
+                    .any(|session| !session.headless && session.cwd.starts_with(&pane))
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        found.sort();
+        found.dedup();
+        found
+    }
 }
 
 /// Every live tmux session, and where its claude panes are sitting. No server
@@ -1220,8 +1328,16 @@ pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<Str
 /// shows alive is the agent this button ends, or the operator cannot end it
 /// at all (Patrick-caught 2026-08-12, `aipass-aipass`).
 #[tauri::command]
-fn room_kill(branch_name: String, state: tauri::State<'_, ActiveProject>) -> Result<(), String> {
-    let project = active_project(&state)?;
+fn room_kill(
+    branch_name: String,
+    project: Option<String>,
+    state: tauri::State<'_, ActiveProject>,
+) -> Result<(), String> {
+    // The room this ends belongs to the card that was clicked, not to the
+    // seat: a roster attach can leave the terminal holding another project's
+    // room, and resolving the name here under the seated scope would end a
+    // session the operator never named.
+    let project = project_named(project.as_deref(), &state)?;
     match branch_session(&project, &branch_name) {
         Some(session) => room_kill_named(&session),
         // Nothing live for this branch: already the goal state.
@@ -1275,6 +1391,29 @@ fn mail_counts_in(branch_dir: &Path) -> (u64, u64) {
     (new_mail, opened_mail)
 }
 
+/// Does this branch's passport declare a manager-class citizen?
+///
+/// The value read is `identity.citizen_class == "manager"` - spawn's
+/// identity-only class, never minted from a template, so a passport either
+/// says it or the branch is not one. Every failure path (no passport,
+/// unreadable, malformed, key absent, any other class) reads as false: an
+/// ownership mark is a claim, and BAUD only makes it when the file does.
+fn is_manager(branch_dir: &Path) -> bool {
+    let raw = match fs::read_to_string(join_all(branch_dir, &PASSPORT_RELATIVE_PATH)) {
+        Ok(contents) => contents,
+        Err(_) => return false,
+    };
+    let document: Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    document
+        .get("identity")
+        .and_then(|identity| identity.get("citizen_class"))
+        .and_then(Value::as_str)
+        == Some("manager")
+}
+
 /// Overlay whatever `DASHBOARD.local.json` has to say onto a branch status.
 ///
 /// Mail counts are NOT taken from here - see [`mail_counts_in`].
@@ -1318,12 +1457,15 @@ fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
 fn read_branch(
     branch_dir: &Path,
     name: String,
+    project: &str,
     sessions: &[ClaudeSession],
     rooms: &RoomScan,
     room_scope: Option<&str>,
 ) -> BranchStatus {
-    let mut status = BranchStatus::new(name, branch_dir.display().to_string());
+    let mut status =
+        BranchStatus::new(name, project.to_owned(), branch_dir.display().to_string());
     status.is_citizen = join_all(branch_dir, &PASSPORT_RELATIVE_PATH).is_file();
+    status.manager = status.is_citizen && is_manager(branch_dir);
     status.dispatched = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
 
     // /proc reports kernel-canonical cwds; canonicalize the branch dir so a
@@ -1356,18 +1498,31 @@ fn read_branch(
     status
 }
 
-/// Scan the seated project's fleet dir - visible directories only.
-fn scan_fleet(project: &Project) -> Result<Vec<BranchStatus>, String> {
+/// Scan the seated project's fleet dir - visible directories only. Returns the
+/// cards plus the machine-wide list of sessions holding a live interactive
+/// claude, which is read off the same two scans rather than costing a third.
+fn scan_fleet(project: &Project) -> Result<(Vec<BranchStatus>, Vec<String>), String> {
+    // One process-table pass and one tmux round-trip shared by every branch.
+    let sessions = scan_claude_sessions();
+    let rooms = scan_rooms();
+    let branches = branches_of(project, &sessions, &rooms)?;
+    let live_sessions = rooms.live_agent_sessions(&sessions);
+    Ok((branches, live_sessions))
+}
+
+/// One project's cards, off scans the caller already paid for. Split out so
+/// the roster can sweep every project without re-reading `/proc` and re-asking
+/// tmux once per project.
+fn branches_of(
+    project: &Project,
+    sessions: &[ClaudeSession],
+    rooms: &RoomScan,
+) -> Result<Vec<BranchStatus>, String> {
     let fleet_dir = &project.fleet_dir;
     let room_scope = project.room_scope();
 
     let entries = fs::read_dir(fleet_dir)
         .map_err(|err| format!("could not read '{}': {err}", fleet_dir.display()))?;
-
-    // One process-table pass shared by every branch in this snapshot.
-    let sessions = scan_claude_sessions();
-    // One tmux round-trip shared by every card in this snapshot.
-    let rooms = scan_rooms();
 
     let mut branches: Vec<BranchStatus> = Vec::new();
 
@@ -1395,14 +1550,54 @@ fn scan_fleet(project: &Project) -> Result<Vec<BranchStatus>, String> {
         branches.push(read_branch(
             &entry.path(),
             name,
-            &sessions,
-            &rooms,
+            &project.name,
+            sessions,
+            rooms,
             room_scope.as_deref(),
         ));
     }
 
     branches.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(branches)
+}
+
+/// Every working agent BAUD can see, across every project in its census.
+///
+/// The roster tabs' one command, and the answer to a real operator problem:
+/// two managers in two projects, one seat, and the project chip in between.
+/// Working means a live interactive claude or a dispatch in flight - an idle
+/// room is a place, not an agent at work, and listing it would bury the two
+/// cards that matter under sixteen that do not.
+///
+/// Read-only and path-free like [`fleet_snapshot`]: it takes no arguments at
+/// all and sweeps only projects the backend discovered itself. One `/proc`
+/// pass and one tmux round-trip serve every project, so the sweep costs the
+/// same two syscall storms a single snapshot already pays.
+#[tauri::command]
+fn agent_roster() -> Result<Vec<BranchStatus>, String> {
+    let anchor = anchor_project()?;
+    let sessions = scan_claude_sessions();
+    let rooms = scan_rooms();
+
+    let mut working: Vec<BranchStatus> = discover_projects(&anchor)
+        .iter()
+        // A project whose fleet dir has gone missing is skipped, never fatal:
+        // one bad tree must not empty the roster of every other project.
+        .filter_map(|project| branches_of(project, &sessions, &rooms).ok())
+        .flatten()
+        .filter(|branch| branch.is_citizen && (branch.interactive || branch.dispatched))
+        .collect();
+
+    // Dispatched first, then live, then by project so a manager's own agents
+    // read together - the same ranking the strip uses, one level wider.
+    working.sort_by(|a, b| {
+        let rank = |branch: &BranchStatus| if branch.dispatched { 0 } else { 1 };
+        rank(a)
+            .cmp(&rank(b))
+            .then_with(|| a.project.cmp(&b.project))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    Ok(working)
 }
 
 /// The fleet view's one command. Read-only by construction: it takes no
@@ -1418,12 +1613,13 @@ fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
     let (name, root_display) = (project.name.clone(), project.root.display().to_string());
 
     match scan_fleet(&project) {
-        Ok(branches) => FleetSnapshot {
+        Ok((branches, live_agent_sessions)) => FleetSnapshot {
             project: name,
             root: root_display,
             generated_at: now_iso8601(),
             error: None,
             branches,
+            live_agent_sessions,
         },
         Err(error) => FleetSnapshot {
             project: name,
@@ -1431,12 +1627,149 @@ fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
             generated_at: now_iso8601(),
             error: Some(error),
             branches: Vec::new(),
+            live_agent_sessions: Vec::new(),
         },
+    }
+}
+
+/// What the command line asked this process to be.
+#[derive(Debug, Clone, PartialEq)]
+enum Invocation {
+    /// No headless flag - open the window, which is what BAUD normally is.
+    Window,
+    /// `--snapshot [--project <name>]` - print one fleet read and exit.
+    Snapshot { project: Option<String> },
+    /// Called wrong. Carries the line to put on stderr.
+    Usage(String),
+}
+
+/// Parse the process arguments (already stripped of argv0).
+///
+/// Only `--snapshot` opts into headless mode; anything else falls through to
+/// the window untouched, because `tauri dev` passes arguments of its own and a
+/// strict parser here would refuse to start the app. Once `--snapshot` IS
+/// present the parse turns strict: a misspelled flag then means the caller
+/// wanted data and would otherwise get a GUI, or worse, silently get a
+/// different project than they asked for.
+fn parse_invocation(args: &[String]) -> Invocation {
+    if !args.iter().any(|arg| arg == "--snapshot") {
+        return Invocation::Window;
+    }
+
+    let mut project = None;
+    let mut rest = args.iter().filter(|arg| *arg != "--snapshot");
+    while let Some(arg) = rest.next() {
+        match arg.as_str() {
+            "--project" => match rest.next() {
+                Some(name) if !name.starts_with("--") => project = Some(name.clone()),
+                _ => return Invocation::Usage("--project needs a project name".to_string()),
+            },
+            other => return Invocation::Usage(format!("unknown argument '{other}'")),
+        }
+    }
+    Invocation::Snapshot { project }
+}
+
+/// The project a headless snapshot reads: the named one, or the anchor when
+/// none is named. The window's own default is the SEATED project, which does
+/// not exist out here - there is no seat in a process with no window - so the
+/// anchor stands in, and `--project` is how a caller asks for any other.
+///
+/// An unknown name is an error and never a fallback: handing back the anchor's
+/// fleet to a caller who asked for a different project is exactly the silent
+/// wrong answer that makes a remote `kill` dangerous.
+fn snapshot_project(name: Option<&str>) -> Result<Project, String> {
+    let anchor = anchor_project()?;
+    let Some(wanted) = name else {
+        return Ok(anchor);
+    };
+    discover_projects(&anchor)
+        .into_iter()
+        .find(|project| project.name == wanted)
+        .ok_or_else(|| format!("no project named '{wanted}' in BAUD's census"))
+}
+
+/// One fleet read, with no tauri state anywhere in reach.
+///
+/// This is the whole point of the flag: the desktop app and @api's host API
+/// call the SAME `scan_fleet`, so "which agents are alive" has exactly one
+/// implementation. A second one in Python would drift, and the day it drifted
+/// neither answer would be trusted.
+fn snapshot_headless(name: Option<&str>) -> FleetSnapshot {
+    let project = match snapshot_project(name) {
+        Ok(project) => project,
+        Err(error) => return FleetSnapshot::failed(error),
+    };
+    let (project_name, root_display) = (project.name.clone(), project.root.display().to_string());
+
+    match scan_fleet(&project) {
+        Ok((branches, live_agent_sessions)) => FleetSnapshot {
+            project: project_name,
+            root: root_display,
+            generated_at: now_iso8601(),
+            error: None,
+            branches,
+            live_agent_sessions,
+        },
+        Err(error) => FleetSnapshot {
+            project: project_name,
+            root: root_display,
+            generated_at: now_iso8601(),
+            error: Some(error),
+            branches: Vec::new(),
+            live_agent_sessions: Vec::new(),
+        },
+    }
+}
+
+/// Exit code for a finished snapshot: 0 when it is a real read, 1 when the
+/// payload carries an error instead. stdout is valid JSON either way, so a
+/// caller may parse unconditionally and use the code as the cheap check.
+fn snapshot_exit_code(snapshot: &FleetSnapshot) -> i32 {
+    i32::from(snapshot.error.is_some())
+}
+
+/// Run the headless half if the command line asked for it.
+///
+/// Returns the process exit code, or `None` to mean "carry on and open the
+/// window". Errors never produce partial output: the JSON object is
+/// serialized whole before a byte reaches stdout.
+fn run_headless(args: &[String]) -> Option<i32> {
+    match parse_invocation(args) {
+        Invocation::Window => None,
+        Invocation::Usage(problem) => {
+            eprintln!("baud: {problem}");
+            eprintln!("usage: baud --snapshot [--project <name>]");
+            Some(2)
+        }
+        Invocation::Snapshot { project } => {
+            let snapshot = snapshot_headless(project.as_deref());
+            match serde_json::to_string(&snapshot) {
+                Ok(json) => {
+                    println!("{json}");
+                    if let Some(error) = &snapshot.error {
+                        eprintln!("baud: {error}");
+                    }
+                    Some(snapshot_exit_code(&snapshot))
+                }
+                // Serializing our own struct cannot realistically fail, but
+                // claiming success on an empty stdout would be a lie.
+                Err(error) => {
+                    eprintln!("baud: could not serialize the snapshot: {error}");
+                    Some(1)
+                }
+            }
+        }
     }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = run_headless(&args) {
+        std::process::exit(code);
+    }
+
     tauri::Builder::default()
         .manage(pty::PtyRegistry::default())
         .manage(ActiveProject::default())
@@ -1462,12 +1795,14 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             fleet_snapshot,
+            agent_roster,
             list_projects,
             project_switch,
             list_dir,
             read_file_text,
             resolve_paths,
             git_changes,
+            git_project_changes,
             git_diff_text,
             room_kill,
             screenshot::screenshot_capture,
@@ -1482,7 +1817,9 @@ pub fn run() {
             settings::baud_settings_read,
             settings::baud_settings_write,
             settings::hooks_sound_get,
-            settings::hooks_sound_set
+            settings::hooks_sound_set,
+            memory::memory_config_read,
+            memory::memory_config_write
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session
@@ -1506,6 +1843,109 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|arg| (*arg).to_string()).collect()
+    }
+
+    #[test]
+    fn no_snapshot_flag_opens_the_window() {
+        assert_eq!(parse_invocation(&args(&[])), Invocation::Window);
+        // tauri dev passes its own arguments - a strict parser here would
+        // refuse to start the app, so anything without --snapshot falls
+        // through untouched.
+        assert_eq!(parse_invocation(&args(&["--other", "x"])), Invocation::Window);
+    }
+
+    #[test]
+    fn snapshot_takes_an_optional_project() {
+        assert_eq!(
+            parse_invocation(&args(&["--snapshot"])),
+            Invocation::Snapshot { project: None }
+        );
+        assert_eq!(
+            parse_invocation(&args(&["--snapshot", "--project", "AIPASS"])),
+            Invocation::Snapshot {
+                project: Some("AIPASS".to_string())
+            }
+        );
+        // Order is not load-bearing.
+        assert_eq!(
+            parse_invocation(&args(&["--project", "baud", "--snapshot"])),
+            Invocation::Snapshot {
+                project: Some("baud".to_string())
+            }
+        );
+    }
+
+    /// Once --snapshot is present the parse turns strict: the caller wanted
+    /// data, so a typo must not silently hand back a different project - or a
+    /// window.
+    #[test]
+    fn a_misspelled_flag_beside_snapshot_is_a_usage_error() {
+        assert!(matches!(
+            parse_invocation(&args(&["--snapshot", "--projekt", "baud"])),
+            Invocation::Usage(_)
+        ));
+        assert!(matches!(
+            parse_invocation(&args(&["--snapshot", "--project"])),
+            Invocation::Usage(_)
+        ));
+        // A FLAG swallowed as a project name would send the read somewhere
+        // the caller never named. Deliberately not `--snapshot` here: that
+        // token is filtered out before the loop ever sees it, so it would
+        // pass for the wrong reason and prove nothing about the guard.
+        assert!(matches!(
+            parse_invocation(&args(&["--snapshot", "--project", "--verbose"])),
+            Invocation::Usage(_)
+        ));
+    }
+
+    #[test]
+    fn exit_code_reports_whether_the_payload_is_a_real_read() {
+        let good = FleetSnapshot {
+            project: "AIPASS".to_string(),
+            root: "/tmp".to_string(),
+            generated_at: now_iso8601(),
+            error: None,
+            branches: Vec::new(),
+            live_agent_sessions: Vec::new(),
+        };
+        assert_eq!(snapshot_exit_code(&good), 0);
+        assert_eq!(
+            snapshot_exit_code(&FleetSnapshot::failed("no root".to_string())),
+            1
+        );
+    }
+
+    /// The contract @api codes against: the envelope keys are exactly these,
+    /// and a failed read is still a whole JSON object rather than no output.
+    #[test]
+    fn a_failed_snapshot_still_serializes_the_full_envelope() {
+        let json = serde_json::to_value(FleetSnapshot::failed("no root".to_string()))
+            .expect("serializes");
+        for key in [
+            "project",
+            "root",
+            "generated_at",
+            "error",
+            "branches",
+            "live_agent_sessions",
+        ] {
+            assert!(json.get(key).is_some(), "envelope is missing '{key}'");
+        }
+        assert_eq!(json["branches"].as_array().map(Vec::len), Some(0));
+        assert!(json["error"].is_string(), "the reason is carried, not dropped");
+    }
+
+    #[test]
+    fn an_unknown_project_name_is_refused_rather_than_defaulted() {
+        let error = snapshot_project(Some("no-such-project-9f3a")).expect_err("refused");
+        assert!(
+            error.contains("no-such-project-9f3a"),
+            "the error names what was asked for: {error}"
+        );
+    }
 
     fn argv(args: &[&str]) -> Vec<u8> {
         let mut buffer = Vec::new();
@@ -1756,6 +2196,63 @@ mod tests {
     }
 
     #[test]
+    fn project_total_counts_new_files_the_cards_cannot_see() {
+        // The whole reason this counter exists: `diff HEAD` is blind to files
+        // git has never seen, and a brand-new module is exactly the change an
+        // operator most wants counted.
+        let repo = std::env::temp_dir().join(format!("baud-gitproj-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&repo);
+        fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| {
+            let status = Command::new("git")
+                .current_dir(&repo)
+                .args(args)
+                .output()
+                .unwrap()
+                .status;
+            assert!(status.success(), "git {args:?} failed");
+        };
+        git(&["init", "-q"]);
+        fs::write(repo.join("note.txt"), "old\n").unwrap();
+        fs::write(repo.join(".gitignore"), "target/\n").unwrap();
+        git(&["add", "."]);
+        git(&[
+            "-c",
+            "user.email=baud@test",
+            "-c",
+            "user.name=baud",
+            "commit",
+            "-q",
+            "-m",
+            "seed",
+        ]);
+        assert_eq!(git_project_changes_in(&repo).count, 0);
+
+        // One tracked edit: both counters agree.
+        fs::write(repo.join("note.txt"), "new\n").unwrap();
+        assert_eq!(git_changes_in(&repo).count, 1);
+        assert_eq!(git_project_changes_in(&repo).count, 1);
+
+        // Untracked files, one of them nested: the card figure still says 1,
+        // the project total sees all three. -uall is what expands the dir.
+        fs::write(repo.join("fresh.rs"), "// new module\n").unwrap();
+        fs::create_dir_all(repo.join("sub")).unwrap();
+        fs::write(repo.join("sub").join("deep.rs"), "// nested\n").unwrap();
+        assert_eq!(git_changes_in(&repo).count, 1);
+        assert_eq!(git_project_changes_in(&repo).count, 3);
+
+        // Ignored paths never reach the count.
+        fs::create_dir_all(repo.join("target")).unwrap();
+        fs::write(repo.join("target").join("huge.bin"), "junk\n").unwrap();
+        assert_eq!(git_project_changes_in(&repo).count, 3);
+
+        // Not a repo: quiet zero, same doctrine as every other fallible read.
+        let _ = fs::remove_dir_all(repo.join(".git"));
+        assert_eq!(git_project_changes_in(&repo).count, 0);
+        let _ = fs::remove_dir_all(&repo);
+    }
+
+    #[test]
     fn mail_counts_come_from_the_mailbox_not_the_dashboard() {
         let dir = std::env::temp_dir().join(format!("baud-mail-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -1778,6 +2275,42 @@ mod tests {
         // Malformed JSON: quiet zeros, never an error.
         fs::write(mailbox.join("inbox.json"), "not json").unwrap();
         assert_eq!(mail_counts_in(&dir), (0, 0));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn manager_mark_is_claimed_only_when_the_passport_says_so() {
+        let dir = std::env::temp_dir().join(format!("baud-mgr-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let trinity = dir.join(".trinity");
+        fs::create_dir_all(&trinity).unwrap();
+
+        // No passport at all: not a manager, not an error.
+        assert!(!is_manager(&dir));
+
+        // The real shape, both live values seen in the fleet.
+        fs::write(
+            trinity.join("passport.json"),
+            r#"{"identity": {"citizen_class": "manager", "role": "project_agent"}}"#,
+        )
+        .unwrap();
+        assert!(is_manager(&dir));
+
+        fs::write(
+            trinity.join("passport.json"),
+            r#"{"identity": {"citizen_class": "aipass_framework"}}"#,
+        )
+        .unwrap();
+        assert!(!is_manager(&dir));
+
+        // A citizen whose passport omits the key is a builder, not a manager.
+        fs::write(trinity.join("passport.json"), r#"{"identity": {}}"#).unwrap();
+        assert!(!is_manager(&dir));
+
+        // Malformed JSON reads quiet-false, never takes the snapshot down.
+        fs::write(trinity.join("passport.json"), "not json").unwrap();
+        assert!(!is_manager(&dir));
+
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1884,6 +2417,49 @@ mod tests {
         assert_eq!(scan.agent_session_in(Path::new("/x/src/aipass/cli")), None);
         // starts_with is component-wise: "aipas" never claims "aipass".
         assert_eq!(scan.agent_session_in(Path::new("/x/src/aipass/ai")), None);
+    }
+
+    #[test]
+    fn live_agent_sessions_need_an_interactive_claude_in_the_pane() {
+        // The chips' question (m13): "is anyone home in the session I am
+        // attached to?" - asked of the session, never of the seat.
+        let dir = std::env::temp_dir().join(format!("baud-livesess-{}", std::process::id()));
+        let (mine, theirs) = (dir.join("mine"), dir.join("theirs"));
+        fs::create_dir_all(&mine).unwrap();
+        fs::create_dir_all(&theirs).unwrap();
+        let (mine, theirs) = (mine.canonicalize().unwrap(), theirs.canonicalize().unwrap());
+
+        let scan = parse_panes(&format!(
+            "baud-mine\tclaude\t{}\nfar-away\tclaude\t{}\nshell\tbash\t{}\n",
+            mine.display(),
+            theirs.display(),
+            mine.display(),
+        ));
+
+        let sessions = vec![
+            ClaudeSession { cwd: mine.clone(), headless: false },
+            // A dispatched wake in the other room: a claude pane, but no chat
+            // box - typing a slash command into it would go nowhere.
+            ClaudeSession { cwd: theirs.clone(), headless: true },
+        ];
+
+        assert_eq!(
+            scan.live_agent_sessions(&sessions),
+            vec!["baud-mine".to_string()],
+            "only the session holding an INTERACTIVE claude counts"
+        );
+
+        // The same room, now seating a human-driven session: it qualifies, and
+        // it qualifies without anyone asking which project BAUD is seated in.
+        let sessions = vec![ClaudeSession { cwd: theirs, headless: false }];
+        assert_eq!(scan.live_agent_sessions(&sessions), vec!["far-away".to_string()]);
+
+        assert!(
+            scan.live_agent_sessions(&[]).is_empty(),
+            "no claude processes at all means no chips anywhere"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

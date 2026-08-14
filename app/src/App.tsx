@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges } from "./host";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import AgentSettings from "./components/AgentSettings";
@@ -7,11 +7,11 @@ import Bell from "./components/Bell";
 import Camera from "./components/Camera";
 import FleetStrip from "./components/FleetStrip";
 import InterfaceSettings, { interfacePrefs } from "./components/InterfaceSettings";
-import type { LaunchMode } from "./components/BranchChip";
+import { GIT_POLL_MS, type LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
-import InquiryPane from "./components/InquiryPane";
+import InquiryPane, { helpCommand } from "./components/InquiryPane";
 import MonitorPane from "./components/MonitorPane";
 import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
@@ -51,11 +51,39 @@ interface FileTab {
   kind: "file" | "diff" | "monitor" | "inquiry";
   /** The branch directory a diff tab reads or an inquiry shell opens in. */
   dir?: string;
+  /** What an inquiry shell types on open - absent is a bare prompt. */
+  command?: string | null;
   /** Jump target from a ctrl+clicked `path:line` mention in the terminal. */
   line?: number;
   /** What a monitor tab watches - null is prax mission control. */
   target?: string | null;
 }
+
+/**
+ * Which passports the strip shows. `current` is the seated project's fleet -
+ * the original strip, untouched. `live` and `dispatched` are census-wide
+ * filters: the same cards, gathered from every project, so the operator can
+ * reach a manager in another tree without moving the seat.
+ */
+type StripTab = "current" | "live" | "dispatched";
+
+const STRIP_TABS: { id: StripTab; label: string; hint: string }[] = [
+  {
+    id: "current",
+    label: "current project",
+    hint: "the project named in the chip above - every branch it has",
+  },
+  {
+    id: "live",
+    label: "live agents",
+    hint: "every project: agents with a live interactive claude right now",
+  },
+  {
+    id: "dispatched",
+    label: "dispatched",
+    hint: "every project: agents working a dispatch right now",
+  },
+];
 
 /** The terminal's reserved tab id - never closable, never a real path. */
 const TERMINAL_TAB = "terminal";
@@ -140,7 +168,7 @@ export default function App() {
   // Per project - the settings file lives under the seated root, so a switch
   // re-reads it. A failed read settles on `{}`: defaults, and nothing hangs.
   const loadSettings = useCallback(() => {
-    invoke<BaudSettings>("baud_settings_read")
+    baudSettingsRead()
       .then(setBaudSettings)
       .catch(() => setBaudSettings({}));
   }, []);
@@ -248,11 +276,33 @@ export default function App() {
           branch: branch.name,
           kind: "inquiry" as const,
           dir: branch.path,
+          command: helpCommand(branch.name),
         },
       ];
     });
     setActiveTab(id);
   }, []);
+
+  // The terminal buttons: a plain working shell in a tab, nothing typed.
+  // Keyed by directory rather than name, so the project shell and a branch
+  // shell can never collide on one tab and a re-click brings the open one
+  // forward - doors, not toggles, same as watch and help.
+  const openShell = useCallback((dir: string, label: string) => {
+    const id = `shell:${dir}`;
+    setFileTabs((current) => {
+      if (current.some((tab) => tab.path === id)) return current;
+      return [
+        ...current,
+        { path: id, name: "shell", branch: label, kind: "inquiry" as const, dir },
+      ];
+    });
+    setActiveTab(id);
+  }, []);
+
+  const shellBranch = useCallback(
+    (branch: BranchStatus) => openShell(branch.path, branch.name),
+    [openShell],
+  );
 
   // The card's watch button (m9 phase 3): this branch's activity alone.
   // Re-clicking an open one brings its tab forward - cards are doors, not
@@ -284,6 +334,20 @@ export default function App() {
   // the shell. `command claude` skips the bashrc boot shim (@hooks
   // session_boot): its continue/new menu is redundant here - the button
   // press already made that choice.
+  //
+  // This line is the TERMINAL SLOT (Patrick's ruling 2026-08-14): BAUD is
+  // terminal-agnostic, and everything Claude-specific about a launch lives
+  // here and nowhere deeper. AIPass does the work, BAUD is the face, and the
+  // terminal is a component wired into it - claude today, codex or a native
+  // AIPass terminal tomorrow, selected the way a model is selected. Nothing
+  // below this callback may assume which terminal it is.
+  //
+  // Deliberately NOT here: `--remote-control`. Remote Control is a
+  // Claude-native convenience like attach - real, usable when present, and
+  // never load-bearing. Wiring it into the door would make the fleet depend on
+  // one terminal's feature set, which is the dependency the slot exists to
+  // prevent. (Built and reverted the same sitting on Patrick's ruling; the
+  // verified findings live in FPLAN-0412 Phase 0.)
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
     // A seat exists from here on - the startup agent stands down (m11 p6).
     seatedRef.current = true;
@@ -302,6 +366,9 @@ export default function App() {
     terminalRef.current?.launch({
       room: branch.name,
       cwd: branch.path,
+      // The card's own project, not the seat's: a roster card is often from
+      // somewhere else, and the room name carries its project.
+      project: branch.project,
       command: `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
       typeIfAttached: !branch.interactive,
     });
@@ -379,7 +446,7 @@ export default function App() {
 
   const poll = useCallback(async (alive: () => boolean) => {
     try {
-      const next = await invoke<FleetSnapshot>("fleet_snapshot");
+      const next = await fleetSnapshot();
       if (!alive()) return;
       snapshotRef.current = next;
       setSnapshot(next);
@@ -446,6 +513,64 @@ export default function App() {
   const unread = branches.reduce((total, branch) => total + branch.new_mail, 0);
   const plans = branches.reduce((total, branch) => total + branch.active_plans, 0);
 
+  // The roster tabs. `current` is the seated project's own strip, unchanged;
+  // the other two sweep every project so two managers in two projects sit one
+  // click apart without the project chip moving. Polled only while a roster
+  // tab is open - a census-wide sweep that nobody is looking at is waste.
+  const [roster, setRoster] = useState<BranchStatus[]>([]);
+  const [stripTab, setStripTab] = useState<StripTab>("current");
+  useEffect(() => {
+    if (stripTab === "current") return;
+    let mounted = true;
+    const refresh = () => {
+      agentRoster()
+        .then((next) => {
+          if (mounted) setRoster(next);
+        })
+        .catch(() => {
+          if (mounted) setRoster([]);
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, prefs.pollMs);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [stripTab, prefs.pollMs]);
+
+  const stripBranches =
+    stripTab === "current"
+      ? branches
+      : roster.filter((branch) => (stripTab === "live" ? branch.interactive : branch.dispatched));
+
+  // Whole-project uncommitted count. Not a sum of the cards: those ask
+  // `diff HEAD` about their own subtree and cannot see files git has never
+  // seen, so a new module counts here and nowhere else. Its own slow tick at
+  // the cards' cadence - one subprocess a tick is real work - and it re-reads
+  // when the operator seats the view in another project.
+  const [projectChanges, setProjectChanges] = useState<number | null>(null);
+  const seatedRoot = snapshot?.root ?? null;
+  useEffect(() => {
+    if (seatedRoot === null) return;
+    let mounted = true;
+    const refresh = () => {
+      gitProjectChanges()
+        .then((next) => {
+          if (mounted) setProjectChanges(next.count);
+        })
+        .catch(() => {
+          if (mounted) setProjectChanges(null);
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, GIT_POLL_MS);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, [seatedRoot]);
+
   // Root resolution failure comes back inside the payload; a broken IPC call
   // comes back as a thrown error. Both are shown, never swallowed.
   const failure = transportError ?? snapshot?.error ?? null;
@@ -471,7 +596,27 @@ export default function App() {
             <Total label="interactive" value={interactive} tone={interactive > 0 ? "live" : undefined} />
             <Total label="unread mail" value={unread} tone={unread > 0 ? "alert" : undefined} />
             <Total label="plans" value={plans} />
+            <Total label="changes" value={projectChanges ?? "—"} />
           </div>
+          {/* A working shell at the seated project's root - the global one.
+              Follows the project chip: reseat, and the next click opens the
+              new root. Disabled until a snapshot names that root, because a
+              shell that guesses where it is would be worse than none. */}
+          <button
+            type="button"
+            className="baud-tool-btn"
+            title={
+              seatedRoot
+                ? `open a terminal at ${seatedRoot}`
+                : "waiting for the project root…"
+            }
+            disabled={seatedRoot === null}
+            onClick={() => {
+              if (seatedRoot) openShell(seatedRoot, snapshot?.project ?? "project");
+            }}
+          >
+            ❯_
+          </button>
           {MONITOR_TOGGLES.map((spec) => {
             const live = fileTabs.some((tab) => tab.path === spec.id);
             return (
@@ -531,18 +676,50 @@ export default function App() {
         </div>
       ) : null}
 
+      {/* Names the strip for what a card actually is: one agent's passport,
+          and which passports are on show. Always rendered, so the region is
+          labelled while the first snapshot is still in flight. */}
+      <div className="baud-section-head">
+        <span className="baud-section-label">Agent Passports</span>
+        <span className="baud-section-tabs" role="tablist" aria-label="which passports">
+          {STRIP_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={stripTab === tab.id}
+              className={`baud-section-tab${stripTab === tab.id ? " baud-section-tab-on" : ""}`}
+              title={tab.hint}
+              onClick={() => setStripTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </span>
+      </div>
+
       {snapshot === null && !failure ? (
         <div className="baud-strip baud-strip-empty">
           <p className="baud-empty">Waiting for the first snapshot…</p>
         </div>
+      ) : stripTab !== "current" && stripBranches.length === 0 ? (
+        <div className="baud-strip baud-strip-empty">
+          <p className="baud-empty">
+            {stripTab === "live"
+              ? "No agent has a live session right now, in any project."
+              : "No agent is working a dispatch right now, in any project."}
+          </p>
+        </div>
       ) : (
         <FleetStrip
-          branches={branches}
+          branches={stripBranches}
           onLaunch={launch}
           onFiles={toggleTree}
           onOpenFile={openFile}
           onOpenDiff={openDiff}
           onMonitor={monitorBranch}
+          onShell={shellBranch}
+          seatedProject={snapshot?.project ?? null}
           onHelp={helpBranch}
           onSettings={openSettings}
         />
@@ -613,7 +790,7 @@ export default function App() {
               ref={terminalRef}
               onOpenFile={openFromTerminal}
               onRoomEnded={roomWasEnded}
-              liveBranches={branches.filter((b) => b.interactive).map((b) => b.name)}
+              liveSessions={snapshot?.live_agent_sessions ?? []}
             />
           </div>
           {fileTabs.map((tab) => (
@@ -633,6 +810,7 @@ export default function App() {
                 <InquiryPane
                   branch={tab.branch}
                   cwd={tab.dir ?? ""}
+                  command={tab.command ?? null}
                   onExited={() => closeFile(tab.path)}
                 />
               ) : (
@@ -661,7 +839,9 @@ function Total({
   tone,
 }: {
   label: string;
-  value: number;
+  /** A string carries the honest unknown ("—") when a read failed; a zero
+   *  there would be a claim the tree is clean when we simply do not know. */
+  value: number | string;
   tone?: "live" | "alert";
 }) {
   const toneClass = tone ? ` baud-total-${tone}` : "";

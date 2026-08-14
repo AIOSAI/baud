@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { screenshotCapture } from "../host";
 
 /**
  * The camera button (m8): one click opens the compositor's own screenshot
@@ -25,7 +25,7 @@ export default function Camera({ onCaptured }: CameraProps) {
     if (busy) return;
     setBusy(true);
     setFailure(null);
-    invoke<string>("screenshot_capture")
+    screenshotCapture()
       .then((path) => onCaptured(path))
       .catch((err) => {
         // A cancelled picker lands here too - worth showing, never worth

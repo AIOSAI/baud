@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { readFileText } from "../host";
 import { EditorState } from "@codemirror/state";
 import {
   EditorView,
@@ -13,7 +13,6 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-import type { FileText } from "../types";
 
 /**
  * The read-only reading pane behind a file tab. CodeMirror deliberately runs
@@ -54,7 +53,7 @@ export default function FileView({ path, line }: { path: string; line?: number }
     let disposed = false;
     let view: EditorView | null = null;
 
-    invoke<FileText>("read_file_text", { path })
+    readFileText(path)
       .then(async (file) => {
         if (disposed) return;
 
