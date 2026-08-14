@@ -1679,7 +1679,17 @@ fn parse_invocation(args: &[String]) -> Invocation {
 /// fleet to a caller who asked for a different project is exactly the silent
 /// wrong answer that makes a remote `kill` dangerous.
 fn snapshot_project(name: Option<&str>) -> Result<Project, String> {
-    let anchor = anchor_project()?;
+    select_project(anchor_project()?, name)
+}
+
+/// The census half of [`snapshot_project`], split out because it takes the
+/// anchor as an argument instead of resolving one.
+///
+/// That split is the whole CI story: a test can hand this a fixture tree it
+/// built itself, while a test aimed at `snapshot_project` can only ever reach
+/// the real AIPass root - green on this machine, red on a bare runner. Same
+/// lesson as the `resolve_paths` fix in 0d88bc5, same remedy.
+fn select_project(anchor: Project, name: Option<&str>) -> Result<Project, String> {
     let Some(wanted) = name else {
         return Ok(anchor);
     };
@@ -1938,13 +1948,67 @@ mod tests {
         assert!(json["error"].is_string(), "the reason is carried, not dropped");
     }
 
+    /// A census the test owns outright: an anchor plus one nested project,
+    /// both sealed by a registry, built under a private base so the sibling
+    /// half of `discover_projects` can only ever see what was written here.
+    /// Returns the base to clean up and the anchor to select against.
+    fn census_fixture(tag: &str) -> (PathBuf, Project) {
+        let base = std::env::temp_dir().join(format!("baud-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("root");
+
+        let seal = |dir: &Path, name: &str| {
+            fs::create_dir_all(join_all(dir, &FLEET_RELATIVE_DIR)).unwrap();
+            fs::write(
+                dir.join(format!("{name}{REGISTRY_SUFFIX}")),
+                r#"{"branches":[{"path":"src/aipass/one"}]}"#,
+            )
+            .unwrap();
+        };
+        seal(&root, "FIXTUREROOT");
+        seal(&root.join(PROJECTS_SUBDIR).join("nested"), "NESTED");
+
+        let root = root.canonicalize().unwrap();
+        let anchor = Project {
+            name: "FIXTUREROOT".to_string(),
+            fleet_dir: join_all(&root, &FLEET_RELATIVE_DIR),
+            root,
+            anchor: true,
+        };
+        (base, anchor)
+    }
+
     #[test]
     fn an_unknown_project_name_is_refused_rather_than_defaulted() {
-        let error = snapshot_project(Some("no-such-project-9f3a")).expect_err("refused");
+        let (base, anchor) = census_fixture("census-refuse");
+
+        let error = select_project(anchor, Some("no-such-project-9f3a")).expect_err("refused");
         assert!(
             error.contains("no-such-project-9f3a"),
             "the error names what was asked for: {error}"
         );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_named_project_resolves_out_of_the_census() {
+        // The other half of the refusal: without this, a `select_project` that
+        // simply never finds anything would pass the test above.
+        let (base, anchor) = census_fixture("census-find");
+
+        let seated = select_project(anchor.clone(), Some("NESTED")).expect("in the census");
+        assert_eq!(seated.name, "NESTED");
+        assert!(!seated.anchor, "only the anchor is the anchor");
+        assert_eq!(seated.root, anchor.root.join(PROJECTS_SUBDIR).join("nested"));
+
+        assert_eq!(
+            select_project(anchor, None).expect("no name is the anchor").name,
+            "FIXTUREROOT",
+            "naming nothing seats the anchor, never a census entry"
+        );
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     fn argv(args: &[&str]) -> Vec<u8> {
