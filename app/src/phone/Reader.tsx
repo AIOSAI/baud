@@ -1,0 +1,79 @@
+/**
+ * The reading room, phone-shaped (FPLAN-0413 phase 3b).
+ *
+ * Patrick's first review of the face: "it shows all agents but zero function."
+ * He was right, and the cause was mine - the card's figures ARE doors on the
+ * desktop, and I had wired every one of them to a handler that threw. Reads are
+ * not verbs; refusing them was over-application of `readOnly`.
+ *
+ * So: one full-height sheet that shows a file or a diff. No editor, no save, no
+ * verb - the doctrine holds because reading was always allowed.
+ *
+ * PATHS ARE NAMES HERE. @api's fence takes a branch and a file name and has no
+ * path parameter to abuse, so this sheet is opened with `<branch>/<relative>`
+ * and never the absolute path the desktop passes around. The transport refuses
+ * an absolute path outright rather than guessing at it.
+ */
+
+import { useEffect, useState } from "react";
+
+import { gitDiffText, readFileText } from "../host";
+import { HostError } from "../host/transport.http";
+
+export interface ReadTarget {
+  /** `<branch>/<file>` for a file, or just the branch name for a diff. */
+  ref: string;
+  /** What the header calls it. */
+  title: string;
+  kind: "file" | "diff";
+}
+
+interface ReaderProps {
+  target: ReadTarget;
+  onClose: () => void;
+}
+
+export default function Reader({ target, onClose }: ReaderProps) {
+  const [text, setText] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setText(null);
+    setError(null);
+    const read = target.kind === "diff" ? gitDiffText(target.ref) : readFileText(target.ref);
+    read
+      .then((got) => {
+        if (!mounted) return;
+        setText(got.content);
+        setTruncated(got.truncated);
+      })
+      .catch((cause) => {
+        if (!mounted) return;
+        // @api's sentence, verbatim - "Unknown branch: 'baud'" is a far better
+        // thing to read on a phone than "could not load".
+        setError(cause instanceof HostError ? cause.message : String(cause));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [target.ref, target.kind]);
+
+  return (
+    <section className="baud-phone-reader">
+      <header className="baud-phone-reader-head">
+        <button type="button" className="baud-phone-back" onClick={onClose}>
+          ‹ back
+        </button>
+        <span className="baud-phone-reader-title">{target.title}</span>
+      </header>
+
+      {error ? <p className="baud-phone-error">{error}</p> : null}
+      {!error && text === null ? <p className="baud-phone-empty">reading…</p> : null}
+      {truncated ? <p className="baud-phone-truncated">truncated by the server — this is the head of the file</p> : null}
+
+      {text !== null ? <pre className="baud-phone-text">{text}</pre> : null}
+    </section>
+  );
+}

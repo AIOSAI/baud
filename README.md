@@ -48,14 +48,21 @@ operator actually opens tomorrow. The desktop launcher
 rebuild IS the deploy; its `Path=` seats the process inside the AIPass tree,
 which is how the release app's ancestor-walk finds its anchor.
 
-## `--snapshot` — the same fleet read, without a window
+## The headless doors — the same answers, without a window
 
-The binary has a second entry point. `--snapshot` prints one fleet read as JSON
+The binary has a second entry point. Each headless flag prints one JSON object
 on stdout and exits, opening no window and touching no tauri state:
 
 ```
-baud --snapshot [--project <name>]
+baud --snapshot     [--project <name>]
+baud --end-room     <branch> [--project <name>]
+baud --capture-room <branch> [--project <name>] [--lines <N>]
+baud --send-room    <branch> [--project <name>] (--text <literal> | --key <NAME>)
 ```
+
+One verb per process. Writing both is a usage error rather than a precedence
+rule — a caller who asked for a read *and* a kill does not know what they asked
+for, and guessing for them is how a read turns into a kill.
 
 It exists so that **"which agents are alive" has exactly one implementation.**
 The phone arc puts a host API in front of the same fleet (DPLAN-0300), and the
@@ -82,6 +89,103 @@ with the GUI, and the release pin is one binary.
 - **It resolves the anchor by walking up from the working directory**, exactly
   as the window does, so a caller whose CWD sits outside the tree gets exit 1
   and must either run inside it or set `AIPASS_ROOT`.
+
+### `--end-room` — the kill seam
+
+`room_kill` is a tauri command, reachable only from inside the running desktop,
+so the host API had nothing to proxy: `/v1/verbs/kill` sat behind a gate that
+named BAUD. This flag is that gate's key, and it is a **door onto the one
+mechanism, never a second one**. `--end-room` and the desktop's *end room*
+button both call the same `end_room_in`, which calls the same `room_kill_named`
+— there is no `tmux kill-session` anywhere in the headless path. Patrick's 2026-08-10
+ruling stands: one thing ends a session, because a second door eventually
+disagrees with the first.
+
+- **stdout** is always one `KillOutcome` object. `detail` and `error` are
+  mutually exclusive by construction — exactly one is non-null, and which one
+  matches the exit code, so a caller reading only one field can never be misled
+  about whether it worked.
+- **`ended` is not the same as success.** `ended: true` means this call ended a
+  live session; `ended: false` with no error means there was nothing to end.
+  Both exit `0` — killing a room that is already gone is the goal state, not a
+  failure — but they are different facts and the phone shows different sentences.
+- **An unknown branch is refused, not reported as nothing-to-end.** They would
+  look identical in a `null` room and are opposites: one means the caller holds
+  a stale or wrong name, the other means the goal is already reached.
+- **Fenced on names, not paths**, like the read lane. A branch name that is not
+  a single directory component is refused before anything resolves it, and the
+  sentence says *why* — a refusal that reads "no such branch" invites a retry.
+- **Exit codes** are the snapshot's, deliberately: `0` did what was asked · `1`
+  refused, with a full envelope explaining why · `2` usage error, stdout empty.
+
+**Exit 1 and exit 2 are not two flavours of "no".** A *structural* mistake —
+a flag missing its value, two verbs in one line, no branch named — is exit 2:
+whoever built the command line built it wrong, and it never ran. A *value* the
+caller chose — a key name off the allowlist, a scrollback depth past the cap —
+is exit 1 with a full envelope, because that sentence has to reach the
+operator's screen rather than becoming "the invoker made a mistake". The host
+API maps exit 2 to a 503 it owns; putting a phone's typo there would blame the
+wrong party and tell the operator nothing.
+
+```
+$ baud --end-room cli
+{"project":"AIPASS","branch":"cli","room":"baud-cli","ended":true,
+ "detail":"ended 'baud-cli'","generated_at":"…","error":null}          # exit 0
+
+$ baud --end-room cli
+{… "room":null,"ended":false,"detail":"nothing live for 'cli' - already ended",
+ "error":null}                                                         # exit 0
+
+$ baud --end-room ../etc
+{… "detail":null,"error":"branch name '../etc' is not a single directory
+ component - this door takes names, not paths"}                        # exit 1
+```
+
+### `--capture-room` and `--send-room` — parked, revivable, and not the input path
+
+**Nothing calls these today, and that is recorded rather than left to be
+discovered.** They were built for a phone terminal that polled `capture-pane`
+and repainted it; that design was cut before it shipped (DPLAN-0300 Amendment
+1). The phone attaches a real client now, so keystrokes ride a PTY.
+
+Both stay in the binary by @devpulse's ruling — working tested code is not
+deleted on a late-evening say-so — on the condition that their status is
+documented in the same breath, so *unused-but-shipped* never quietly becomes a
+second door:
+
+- **`--send-room` is NOT the phone's input path and NOT a general input door.**
+  The attach PTY is the one door for input. This flag exists, works, and is
+  routed to by nothing.
+- **`--capture-room` earns its place on its own argument**: looking is a read,
+  typing is a verb. Attach is operate-only *by nature* — a shell prompt has no
+  reading half — so a capture is the only possible path to a look-don't-touch
+  view under a read token. That is a real future, not a leftover.
+
+Neither flag attaches: `capture-pane` observes, so nothing about the operator's
+own view changes — no resize, no focus, no second client.
+
+- **`--capture-room`** returns `{project, branch, room, pane, cols, rows,
+  captured, detail, error, generated_at}`. `pane` keeps its escape sequences,
+  because a monochrome mirror of a coloured screen is a different screen.
+  `--lines` reaches N rows above the visible screen (default 0, cap 2000,
+  **refused not clamped**).
+- **`--send-room`** takes exactly one of `--text` or `--key`. They are different
+  mechanisms, not two spellings of one: a literal is **typed** through
+  `send-keys -l`, a key name is **interpreted**. A literal `C-c` in `--text`
+  types those four characters; `--key C-c` presses the interrupt. Both-or-neither
+  is refused, because guessing which one a caller meant is how a paste turns
+  into a control code.
+- **`--key` names come from a fixed allowlist** — `Enter, Escape, Tab, Up, Down,
+  Left, Right, C-c, C-d, C-l, C-u, BSpace, PageUp, PageDown`. `send-keys`
+  without `-l` interprets whatever it is handed, so an unbounded name would be
+  an unbounded keystroke.
+- **`--text` never appends a newline.** A paste alone can therefore never
+  execute; running it stays a separate, deliberate act. This is BAUD's own rule,
+  already written into `Terminal.tsx` for the desktop, carried onto the wire
+  rather than reinvented for it. Proven by typing a command through the flag,
+  capturing the room, and finding it sitting unexecuted at the prompt.
+- **A room that is not live is refused**, not returned as an empty screen. One
+  is a fact about the fleet; the other looks exactly like a dead agent.
 
 ## The window
 
@@ -619,6 +723,9 @@ projects/baud/
 │   │   ├── App.tsx             window shell, tabs, launch, startup agent
 │   │   ├── components/         cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
+│   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
+│   │   ├── phone/              the one-column face: shell, token door, reader, feed, verb chips, room doors, attached terminal, photo picker
+│   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
 │   │   ├── intent.ts           operator decisions that outlive a remount
@@ -633,7 +740,11 @@ projects/baud/
 │   │   ├── screenshot.rs       the XDG portal client
 │   │   └── main.rs             thin binary entry
 │   ├── src-tauri/capabilities/ the permission grant
+│   ├── phone.html              the phone face's entry document
+│   ├── public/                 the PWA manifest and its icons
+│   ├── vite.config.phone.ts    the phone build — one alias, and that alias is the whole port
 │   ├── dist/                   vite output (build artifact, not tracked)
+│   ├── dist-phone/             phone bundle (build artifact, not tracked)
 │   └── README.md               a milestone-2-era description of the app; this file supersedes it
 ├── src/baud/baud/              @baud — the project's resident agent
 ├── tests/                      placeholder README only
@@ -693,10 +804,350 @@ import from `../host` and never from `@tauri-apps` — the two exceptions are
 `App.tsx` and `Zoom.tsx`, which use `api/webview` for file-drop and window zoom,
 genuine desktop-window concerns rather than host calls.
 
-The point is a second face: a phone client binds the same verbs to HTTP instead
-of IPC and reuses these components rather than mirroring them. The seam has one
-binding today and no runtime switch — a named boundary, not an abstraction over
-something that does not exist yet.
+That second face now exists — see below. The seam has two bindings and still no
+runtime switch: a build picks one, and nothing above the seam can tell which.
+
+### The phone face — one column, read by default
+
+`npm run build:phone` emits `dist-phone/`: BAUD in a single column, installable
+to a phone home screen, built from **the same React components** as the desktop.
+
+The entire port is one alias in `vite.config.phone.ts`. `host/index.ts` imports
+`./transport`; that build resolves it to `transport.http.ts` — `fetch` against
+@api's host API — instead of the tauri binding. The 26 typed verbs, the cards,
+the bell and the palette are compiled unchanged. The proof is mechanical: the
+phone bundle contains **zero** occurrences of `@tauri-apps`, and the nine `/v1`
+routes it does contain came from the transport table alone — plus two doors that
+are not table rows because they are not JSON request/response: the room socket
+(`/v1/room/attach`) and the multipart upload (`/v1/files/upload`).
+
+The seam is command-shaped and `/v1` is REST-shaped, so `transport.http.ts` holds
+a table from command name to route, and holds it alone. Verbs the phone cannot
+perform are refused **by name** with a reason (`pty_create` → "the phone has no
+pty") rather than silently failing — a designed absence and a bug should not look
+the same from a phone.
+
+**No token is ever baked into the bundle.** The face opens on a paste-token
+screen, proves the token against `/v1/whoami` before showing anything, and keeps
+it in `localStorage`. A refused token and an unreachable server are reported as
+different failures, because they send the operator to different places.
+
+**Reads are not verbs.** The first cut got this wrong — every card callback was
+wired to a handler that threw, so the face showed all seventeen agents and did
+nothing at all. Opening a file and reading a diff were never verbs; they are
+exactly what the read lane serves. Each card now carries a read row (diff,
+readme, memory, dashboard, inbox) that opens a full-height reader, and the
+card's own figures open the file they came from. A `feed` screen replaces the
+desktop's drop-down shade: same events, cursor-keyed, and when the server
+reports a `gap` the screen says so — a window that silently lost events looks
+exactly like a quiet night, and those are opposite things.
+
+**Three verbs, and refusal is a state rather than an absence.** The phone can
+now *wake* an agent, *end a room* and *lock the machine's screen* — chips under
+each card, plus one lock chip in the header, because there is one machine. Under
+a read-scoped token every chip is **still there**, dimmed, carrying the sentence
+that says why it will not fire; hiding them would make a designed absence look
+exactly like a broken build. Patrick's own phone token stays read-scoped, so
+that dimmed state is the everyday one, not an error path.
+
+`wake` names a branch, a project and a message — and **no model**, because the
+branch's own config decides what wakes in it (Patrick's ruling). The project
+travels with the branch on both `wake` and `kill`: a room name carries its
+project scope, and resolving it against anything else names a different room.
+
+Three client-side guards sit in front of the destructive verb, and each one is
+the client's job *precisely because the server must not rely on any of them* —
+anyone holding the token can call the endpoint with no browser at all. They
+narrow the accident, not the attack: scope, a screen that must actually be
+visible (a tap queued behind a lock screen never ends a session), and a confirm
+dialog that asks the platform to verify the person where it offers it. The
+server is never told that a human confirmed, because a claim like that from a
+client is worth nothing.
+
+**Both halves are built; end to end is not proven yet.** The chips, the payloads,
+the scope refusal and the confirm flow were proven with real clicks against a
+stand-in that asks the *real* `/v1/whoami` for the scope — and `kill` was
+deliberately never proxied upstream, because if the route had gone live mid-run
+a test harness clicking *end room* would have ended a real session. @api's
+`/v1/verbs/{wake,kill,lock}` now exist on their side (POST only; a `GET` is 405,
+because a destructive action must never be a link), and `kill` reaches the
+desktop through `--end-room` above. The live run of the whole chain is still
+pending, and two payload details are still being reconciled between the two
+sides; neither is written here as settled until it is.
+
+**The terminal — attach, not repaint.** Each card carries the desktop's own
+launch doors, and pressing one opens a real `xterm.js` client on a WebSocket
+(`/v1/room/attach`) whose far end is a PTY running `tmux new-session -A -t
+baud-<branch>` — the same command `pty.rs` runs on the desk. Two clients, one
+session. Scrollback, colour, cursor position and full-screen programs all work
+because nothing is reimplemented.
+
+This replaced a repaint design that polled `capture-pane` once a second and
+painted the result. Patrick cut it before it shipped: *attach needs to work just
+like on desktop*. Repaint-polling shows a picture of the room that updates;
+attach gives you the room.
+
+- **A launch IS an attach**, exactly as on the desktop since m6. The modes stay
+  `resume | fresh` — attach is not a third one — and a room with a live agent
+  offers exactly **one** door, structurally: `roomDoors()` returns a
+  single-element list for it, so there is no branch where a live room is also
+  offered a resume.
+- **The double-claude guard is ported, not re-solved.** A command line is typed
+  only where it can land at a *prompt*; a room with a live claude has a message
+  box instead, so bytes sent there become chat. `rooms.ts` quotes every rule
+  back to the desktop line it came from.
+- **Attaching needs OPERATE**, and that is a change from the repaint design:
+  watching a picture was a read, but an attached room is a shell prompt with the
+  operator's credentials at it. Under a read token the doors render **disabled
+  with the reason** and **no socket is opened at all** — the refusal is not a
+  dimmed button in front of a live connection.
+- **Closing is free.** Disconnect sends SIGHUP to the tmux *client* — a detach.
+  The session, the agent and the scrollback survive. Ending a room stays exactly
+  one door (`--end-room`), and nothing in the sheet can reach it.
+- **The phone sizes like the real client it is.** FitAddon measures the sheet
+  and sends `{"type":"resize","cols","rows"}`. What the room does with that is
+  no longer left to tmux's default — see the geometry section below.
+- **The key bar writes real control bytes** (`0x03`, `0x1b`, `\x1b[A`), not key
+  names. The old 14-name allowlist existed because `send-keys` *interprets* what
+  it is handed; a stream interprets nothing, so the allowlist is not a loss.
+- **Typing a line and running it are still two bytes.** The field writes the
+  literal, and `\r` goes separately — the same property `--send-room` had to
+  enforce, now free: nothing on this path can append a newline for you.
+- **The attached card is frozen at the moment the door was pressed.** The fleet
+  re-polls every ten seconds and hands down a new object each time; depending on
+  it re-ran the attach effect per poll, opening a fresh socket and **re-typing
+  the launch line into the room**. Caught by measuring the wire — the harness
+  logged the same launch bytes twice in one attach.
+
+**A room opens with two options, and each chained command carries its own
+`-t`** (2026-08-15). `pty.rs` opens rooms with `tmux new-session -A` and then
+sets `mouse on` and `window-size smallest` on that session by name.
+
+The `-t` is right — explicit costs nothing and removes a question the code
+cannot answer — but **it was not the bug, and this file said it was.** The
+correction is worth more than the claim was.
+
+A chained `set-option` with no target writes to whatever tmux considers the
+*current* session. Under `-d` there is no attached client, so it lands
+elsewhere and the room is left untouched — which is what the first probe here
+measured, and on that basis this section asserted that no BAUD room had ever had
+a scroll lane. Production never runs `-d`: it runs under a real PTY and
+*attaches*, and the attaching client's current session **is** the room. Measured
+in four shapes after @api said they could not reproduce it:
+
+| shape | option lands on the room |
+|---|---|
+| with `-t`, attached (shipping) | yes |
+| without `-t`, attached (the old build, production) | **yes** |
+| without `-t`, detached `-d` (what the first probe did) | no |
+| without `-t`, attached, another session created later | yes |
+
+So the old build's rooms did get `mouse on`. The room @devpulse measured as
+mouse-OFF was reached over the phone's attach lane, which set no options at all
+until @api shipped them — a different hole, since closed on their side. The
+lesson is the probe, not the flag: a shape that differs from production in one
+switch can invert the result, and `-d` was that switch.
+
+`room_argv()` still earns its place: a list of strings can be asserted, a
+`CommandBuilder` handed to a pty cannot.
+
+**Geometry — why `smallest`, measured across all three policies.** Patrick's
+report was a tmux status bar that stacked copies of itself, typed messages
+arriving mangled, and no scroll. That is one bug wearing three costumes: a
+client whose grid disagrees with the window. Two clients, one room, and tmux's
+default `window-size latest` means the window follows whichever client resized
+last — so the desk steals the geometry on its next repaint while the pocket is
+still holding 72 columns.
+
+Measured with two real clients (200×50 and 72×44) attached to one room:
+
+| policy | phone after attach | after the desk resizes again |
+|---|---|---|
+| `latest` (default) | fits | **210×51 — phone cannot hold it** |
+| `smallest` | fits | **still fits** |
+| `largest` | never fits | never fits |
+
+`smallest` is the only policy where the phone always holds a whole window, and
+it is not destructive: no client is kicked, and the window returns to the
+desktop's size on its own the moment the phone detaches. The desk pays for it
+only while a pocket is actually attached, which — cursor-first — is only while
+someone is looking at one. The alternative on the table was `new-session -A -D`,
+which detaches the *other* client on attach: also correct, one flag, but it
+kills the desktop's pane instead of shrinking it, and it needs a change on the
+host side. Gentler beat cheaper.
+
+**What is fixed, and what is only *probably* fixed.** The size mismatch is real
+and now prevented: under `latest`, a desk pane attached at 200×30 hands the
+phone a 200-column window to render on a 72-column grid, which is text arriving
+mangled. Reproduced, and gone under `smallest`.
+
+The stacking status bar had a different cause, and the harness was right to
+refuse to claim it. Driving the real bundle in a real browser against a real
+room — mismatch present, under repaint load — the banner drew exactly **once** in
+every policy, including the broken one. It could not reproduce, and the reason is
+now known: the phone's attach lane spawned its tmux client with no controlling
+terminal, so `TIOCSWINSZ` had no recipient, the PTY was born 0×0 and the client
+fell back to 80×24 *forever*. Eighty columns painted into a 46-column screen is
+the mangling and the staircase both. Fixed on the host side (@api, 2026-08-15:
+`login_tty` acquisition plus an initial winsize before spawn), and Patrick's
+verdict on the corrected stack was *"this is much better. the view looks right.
+scrolling work."*
+
+Two things worth keeping from that. The resize frames were correct all along —
+they were landing in a room with nobody home to hear them — so the honest
+"not reproduced" was the difference between a fix and a coincidence. And the
+harness could never have caught it: its stand-in spawns the client through
+`pty.fork()`, which *does* give a controlling terminal, so the harness was
+structurally incapable of having the bug it was being asked about.
+
+**Scrolling a full-screen TUI.** Claude Code fills the screen, so there is no
+local scrollback to swipe — the history belongs to tmux, not to the phone's
+xterm. Scrolling therefore means sending the room a **wheel event** and letting
+tmux's copy-mode do the work, which is why `mouse on` is a prerequisite and not
+a nicety.
+
+- **A finger pan is translated into SGR wheel reports** (`ESC [ < 64|65 ; col ;
+  row M`), paid out in notches: the pan is divided by the room's real cell
+  height (measured off the rendered rows) times tmux's five lines per notch —
+  read off `list-keys`, not assumed — so text tracks the thumb at roughly 1:1.
+  The remainder carries between moves, or a slow drag scrolls nothing and reads
+  as broken. Finger down uncovers what came before, which is a wheel *up*.
+- **The coordinates are the cell the finger is on**, because tmux reads them to
+  decide which pane a wheel event belongs to.
+- **It refuses to write when the room is not listening for a mouse.** Those
+  bytes are only a scroll if something is watching for one; otherwise they are
+  *text*, and `[<64;38;20M` would land in claude's input box. That is the exact
+  mangling this round set out to end, and it would have been BAUD doing it. A
+  room with no mouse lane scrolls the local xterm buffer instead and the chip
+  says why.
+- **The browser does not get the down-swipe.** Reaching back through history is
+  a downward pan, which is exactly the gesture Chrome claims for
+  pull-to-refresh, so the room scrolled while a reload spinner argued with it.
+  `overscroll-behavior-y: contain` on `html`/`body` kills the refresh action
+  without touching ordinary scrolling, and `touch-action: none` on the terminal
+  host stops the browser interpreting the pan at all — `preventDefault` alone is
+  not enough, because a browser can claim a gesture at `touchstart`, before the
+  first move is ever delivered. Taps still fire, so focusing the terminal is
+  unaffected.
+- **A pan travels 3× the thumb** (`PAN_ACCELERATION`). Tracking the finger
+  exactly is right for a document you are reading and wrong for scrollback you
+  are reaching *back* through, where the thumb runs out of screen long before
+  the history runs out. At 3× one comfortable swipe is about a screenful. A feel
+  constant, not a correctness one.
+- **The `↑`/`↓` chips are still arrow KEYS, relabelled `↑key`/`↓key`.** A thumb
+  read them as scroll and got a stale prompt stuffed into the room's input box —
+  which then rode out attached to Patrick's next message, because send ships the
+  *box*, not the field. They are not repurposed, because claude's menus are
+  navigated with arrows and a phone that cannot answer a permission prompt is
+  worse than one that cannot scroll. The fix is that scroll now has its own
+  clearly different pair (`▲`/`▼`) sitting to their left, and a gesture.
+
+**Sending a photo — the path is the delivery.** The terminal sheet has a
+`photo` control: it opens `<input type="file" accept="image/*">`, which on
+Android offers the camera *and* the gallery with no native code and no
+permissions dance. The bytes go to `POST /v1/files/upload` as multipart with the field named
+**`image`** (operate scope, the server names the file — a phone-supplied
+filename is untrusted), and the response's **absolute path is the entire
+product**.
+
+That field name is written down here because it is the detail that broke.
+The contract said "multipart body, one image" and never pinned it; @api built
+`image`, this built `file`, and the first real photo from Patrick's phone came
+back `422 {"loc":["body","image"],"msg":"Field required"}`. Neither harness
+could catch it — a stand-in speaks the spelling its own author believes in. A
+wire detail with two possible spellings has to be read off the other side, never
+inferred. The phone then types that
+path into the already-open socket.
+
+This is not a new mechanism; it is the desktop's, reached from a pocket.
+`screenshot.rs` line 3 states it: Claude Code reads images by path, so "send a
+screenshot" means get bytes onto disk and type where they landed.
+
+- **One quoting rule, in `deliver.ts`.** It was inline in `App.tsx` until the
+  phone needed it; a rule with shell semantics that exists twice is a rule that
+  drifts, and the drifted copy does not look wrong — it mis-escapes a path and
+  the operator's line quietly means something else. The camera button, the drop
+  handler and the photo picker all call the same `deliveryText()`.
+- **Quoted only when needed, wrapped in spaces** so the path joins whatever the
+  operator was already typing.
+- **Never submitted.** No newline exists anywhere on this path. Enter stays the
+  operator's keystroke — the third time that rule carried in one evening, which
+  is what made it doctrine.
+- **A failed upload types nothing at all**, and says which half broke. An
+  operator who believes a path is in their line will press Enter on it.
+- **The server's sentence survives, whatever shape it arrives in.** `/v1`
+  documents one error envelope, but the validation layer in front of it has its
+  own (`{"detail":[{"loc","msg"}]}`) — and reading only the documented one left
+  the phone showing `HTTP 422` while that same response body named the field and
+  the fault. The status line is the last resort, never the first.
+
+**A dropped write is never silent** (2026-08-14, found live). Patrick reported
+that the phone "would not send" — he typed a message, pressed send, and the
+field emptied into nothing. The wire and the TUI were both innocent: this was
+client state. Opening the photo picker hands the screen to the OS gallery, the
+PWA goes to the background, and the platform closes the WebSocket underneath a
+sheet that still looks attached. Every control then failed the same way and said
+nothing, because the byte writer *guarded* a dead socket and returned nothing, so
+each caller went on to claim success.
+
+- **The writer reports.** It returns whether the bytes reached an OPEN socket.
+  The guard was always right; returning nothing was the bug.
+- **The operator's text is the operator's** until the bytes are known to have
+  gone. `send()` writes first and clears second. A failed send leaves the line
+  exactly where it was, with a sentence. (Clearing the field was what made it
+  look like it had sent — the emptiness was the whole illusion.)
+- **`delivered` may only render over bytes that actually went.** A photo that
+  outlives its socket is **queued** against the next open one and says `saved ·
+  <path>` — the upload is the durable half, the file is really on disk, and
+  nothing throws it away or lies about it.
+- **Detached is a state, not an error.** The sheet says so, offers a `reattach`
+  control, and heals itself on `visibilitychange` — returning from the picker is
+  precisely the uncovered moment. Cursor-first is unchanged; this is the other
+  half of that sentence, which was missing.
+- **A reattach never re-types the launch line.** Once per sheet, never once per
+  socket — otherwise the double-claude hazard walks in through the back door
+  after all the work spent closing the front one.
+- **Direct tap-and-type is untouched** — same writer, same bytes, nothing added
+  between the keyboard and the room (@devpulse's constraint, mid-round: it is
+  what Patrick instinctively reaches for). It only gained the sentence, and it
+  is the path that needs it most: the terminal echoes nothing back locally, so
+  typing into a closed socket looks exactly like typing into an open one.
+- This is learning #389 again, one layer down. A scope-refused UI must be
+  disabled *with a visible reason* rather than hidden, because a silent refusal
+  is indistinguishable from breakage — and that does not stop being true when
+  the failure is the client's own transport rather than the server's rule.
+
+**Why these two guards and no others** (Patrick's posture ruling, 2026-08-14).
+The token is the wall: his laptop, his network, the server dies when the laptop
+does. Security gets its own pass later, so nothing here is gated on caution —
+only on plumbing. The confirm tap and the dark-screen check stay because they
+protect a *thumb*, not data: a pocket tap ending a live session is a real cost
+with no upside. Scope stays because it is the server's rule, not the client's.
+
+The desktop's remaining verbs stay withdrawn on the phone — shell, settings,
+watch — because each wants a pty or a native window on the machine itself. Cards
+render with `readOnly`, which suppresses exactly that button row. The push hooks
+(`src/phone/push.ts`) are still exported, empty and inert — a reservation with
+its gate named, the way `App.tsx` holds the terminal slot. There is also **no service worker**: an
+offline cache of a live fleet would show stale aliveness, which is the one lie
+this system keeps paying to avoid.
+
+The read lane is fenced on **names, not paths**. The host API takes a branch and
+a file name and has no path parameter to abuse, so `transport.http.ts` refuses
+an absolute path outright rather than stripping its leading slash and asking for
+a branch called `home`.
+
+**Serving is settled and live.** @api took the zero-CORS shape: their server
+mounts `dist-phone/` on its own origin, so `npm run build:phone` *is* the
+handoff — rebuild is deploy, the same contract the release binary has. There is
+no artifact to pass and no CORS allow-list to misconfigure. The page itself is
+unauthenticated on purpose: a top-level browser navigation cannot carry an
+`Authorization` header, so gating it would mean inventing a second, weaker auth
+system beside the bearer wall to protect public code that renders a token door.
+Every byte of data stays behind `/v1/*`.
+
+Patrick's S24 reached it over the tailnet on 2026-08-14 and rendered the fleet.
+`npm run dev:phone` still proxies `/v1` from port 1421 for a local build loop.
 
 **BAUD is terminal-agnostic** (Patrick's ruling, 2026-08-14). AIPass is the
 backend that does the work, BAUD is the face that makes it clickable, and the
@@ -708,10 +1159,11 @@ launch line in `App.tsx`; the seam names what BAUD does (`ptyCreate`, `roomKill`
 Checks, all expected clean:
 
 ```
-cd app/src-tauri && cargo test      # 58 unit tests; compiling IS the Rust type check
+cd app/src-tauri && cargo test      # 81 unit tests; compiling IS the Rust type check
 cd app/src-tauri && cargo clippy    # lints
 cd app && npx tsc --noEmit          # TypeScript type check
 cd app && npm run build             # tsc && vite build - the frontend must actually build
+cd app && npm run build:phone       # the phone face - same components, HTTP transport
 ```
 
 There is no seedgo audit lane for this repo: seedgo's checks target AIPass
@@ -737,6 +1189,15 @@ maiden CI run went red on two path-resolution tests that passed here only
 because this repo happens to be cloned inside the AIPass tree. To check the
 property by hand, run the test binary from outside that tree — `cd /tmp && env
 -u AIPASS_ROOT <target/debug/deps/baud_lib-*>` — and expect the same green.
+
+It has cost that twice now: the `--snapshot` project-census test made the same
+mistake in a new place, because the only function it could aim at resolved the
+root itself. The remedy both times was the same, and it is a design rule rather
+than a habit — **a function a test needs to steer takes the root, or the project,
+as an argument**. `snapshot_project` resolves the anchor and hands it to
+`select_project`, which does the census work; the test builds its own two-project
+census in a temp directory and selects against that. A test that can only call
+the resolving half is a test that can only be green at home.
 
 ## Versions and releases
 

@@ -272,6 +272,37 @@ pub fn shutdown(registry: &PtyRegistry) {
 
 // ------------------------------------------------------------- commands
 
+/// The argv that opens a room: attach-or-create, then the room's two options.
+///
+/// Split out to be TESTABLE. The bug this replaced was invisible by reading -
+/// `set-option mouse on` looks correct, runs with exit 0, and writes to a
+/// session that is not the one being opened. Only `show-options` on the room
+/// itself told the truth. A list of strings can be asserted against; a
+/// `CommandBuilder` handed straight to a pty cannot.
+fn room_argv<'a>(room: &'a str, start_dir: &'a str) -> Vec<&'a str> {
+    vec![
+        "new-session",
+        "-A",
+        "-s",
+        room,
+        "-c",
+        start_dir,
+        ";",
+        "set-option",
+        "-t",
+        room,
+        "mouse",
+        "on",
+        ";",
+        "set-option",
+        "-w",
+        "-t",
+        room,
+        "window-size",
+        "smallest",
+    ]
+}
+
 /// Does this room already exist on the tmux server? No server = no room.
 fn room_exists(room: &str) -> bool {
     std::process::Command::new("tmux")
@@ -345,22 +376,36 @@ pub fn pty_create(
         Some(name) => {
             // The room's window: a tmux client. `-A` attaches or creates in
             // one verb; `-c` seats a NEW session in the branch dir (ignored on
-            // attach); mouse on so the wheel scrolls history like any
-            // terminal. The chained set-option is idempotent across attaches.
+            // attach). Both chained options are idempotent across attaches.
+            //
+            // EVERY CHAINED COMMAND NEEDS ITS OWN `-t`. Without one, set-option
+            // writes to the *current* session, which during `new-session -A` is
+            // not yet the room being opened - so the mouse line here was a
+            // silent no-op from the day it was written. Measured, not read:
+            // `show-options -t <room> mouse` came back empty, and @devpulse
+            // independently found mouse OFF on a live room.
+            //
+            // `mouse on` is what gives a room a scroll lane at all: the wheel
+            // (and the phone's translated touch pan) enters copy-mode and
+            // scrolls real history. Session-scoped, so it touches BAUD's rooms
+            // and no other tmux session the operator keeps.
+            //
+            // `window-size smallest` settles the geometry fight between the
+            // desk and the pocket. Under tmux's default (`latest`) the window
+            // follows whichever client resized last, so the moment the desktop
+            // client changes size the room jumps to ITS geometry while the
+            // phone is still holding a 72-column grid - the phone then renders
+            // a window it cannot fit, which is the smeared status bar stacking
+            // on itself and the scattered echo. `smallest` pins the room to the
+            // client that can hold the least, so the phone always has a whole
+            // window and no repaint can steal it. The desk pays for it only
+            // while the phone is actually attached: on detach the window
+            // returns to the desktop's size on its own. Measured across all
+            // three policies before choosing - `largest` never fits the phone,
+            // `latest` fits until the desk moves, `smallest` always fits.
             let start_dir = cwd.as_deref().unwrap_or_else(|| root.to_str().unwrap_or("."));
             let mut tmux = CommandBuilder::new("tmux");
-            tmux.args([
-                "new-session",
-                "-A",
-                "-s",
-                name,
-                "-c",
-                start_dir,
-                ";",
-                "set-option",
-                "mouse",
-                "on",
-            ]);
+            tmux.args(room_argv(name, start_dir));
             tmux
         }
         // `new_default_prog` is portable-pty's login-shell path: it runs
@@ -593,7 +638,45 @@ pub fn pty_kill(id: String, registry: tauri::State<'_, PtyRegistry>) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::{base64_encode, valid_monitor_target};
+    use super::{base64_encode, room_argv, valid_monitor_target};
+
+    /// EVERY chained tmux command must name the room it means.
+    ///
+    /// This is the regression, and it is worth a test precisely because the
+    /// broken version was unreadable as broken: `set-option mouse on` in a
+    /// chain has valid syntax, exits 0, and silently writes to whatever tmux
+    /// considers the current session - never the room being opened. It shipped
+    /// that way and every BAUD room went without a scroll lane.
+    #[test]
+    fn every_chained_option_targets_the_room_by_name() {
+        let argv = room_argv("baud-example", "/tmp/example");
+        let chained: Vec<&[&str]> = argv.split(|arg| *arg == ";").collect();
+        assert_eq!(chained.len(), 3, "attach plus two options");
+
+        for command in &chained[1..] {
+            let target = command
+                .iter()
+                .position(|arg| *arg == "-t")
+                .expect("a chained option with no -t writes to the wrong session");
+            assert_eq!(command[target + 1], "baud-example");
+        }
+    }
+
+    /// The two options are the room's usability contract, so they are pinned:
+    /// `mouse on` is the only reason a wheel or a translated touch pan can
+    /// scroll anything, and `window-size smallest` is what stops the desktop
+    /// client from stealing the geometry out from under the phone mid-session.
+    #[test]
+    fn a_room_opens_with_a_scroll_lane_and_a_settled_size() {
+        let argv = room_argv("baud-example", "/tmp/example");
+        let joined = argv.join(" ");
+        assert!(argv.starts_with(&["new-session", "-A", "-s", "baud-example"]));
+        assert!(joined.contains("set-option -t baud-example mouse on"));
+        assert!(joined.contains("set-option -w -t baud-example window-size smallest"));
+        // `largest` fits the desk and never the phone; `latest` fits until the
+        // desk repaints. Neither may creep back in.
+        assert!(!joined.contains("largest") && !joined.contains("latest"));
+    }
 
     #[test]
     fn monitor_targets_are_branch_lists_or_commons() {

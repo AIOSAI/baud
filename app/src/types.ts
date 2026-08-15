@@ -81,6 +81,75 @@ export interface NotificationEvent {
   source: string;
 }
 
+/**
+ * One window of the feed, cursor and all - @api's `/v1/feed` envelope
+ * (FPLAN-0413 phase 3b). PHONE-ONLY: this shape has no Rust counterpart,
+ * because the desktop reads the feed file directly and has no cursor to keep.
+ *
+ * `gap` is the field that matters. The server re-delivers the boundary event on
+ * purpose - at-least-once, since a dropped alert is worse than a duplicate - but
+ * when the feed was trimmed past what the caller had seen, no cursor can hide
+ * that events were lost. It says so, and the face has to show it rather than
+ * quietly render a shorter list.
+ */
+export interface FeedWindow {
+  events: NotificationEvent[];
+  cursor: string | null;
+  gap: boolean;
+  gap_reason: string | null;
+  more: boolean;
+}
+
+/**
+ * What a verb answers with (FPLAN-0413 phase 6). PHONE-ONLY.
+ *
+ * `ok` is the server's judgment, not the client's hope: a chip turns green
+ * because the machine said the thing happened, never because the request left.
+ * `detail` is a human sentence to show verbatim - the same discipline the read
+ * lane already follows with @api's error envelope.
+ */
+export interface VerbResult {
+  ok: boolean;
+  detail: string | null;
+}
+
+/**
+ * One room's screen as the binary read it. Mirrors `CaptureOutcome` in lib.rs.
+ *
+ * NOT ON THE PHONE'S PATH ANY MORE. Amendment 1 cut the repaint design this
+ * served; the phone attaches a real client instead. Kept because `--capture-room`
+ * is still IN the shipped binary and this file's contract is to mirror the Rust
+ * structs - deleting the mirror while the struct lives would be the drift
+ * `types.ts` exists to prevent. Goes when @devpulse rules on the flag.
+ */
+export interface PaneCapture {
+  project: string;
+  branch: string;
+  room: string | null;
+  pane: string;
+  cols: number;
+  rows: number;
+  captured: boolean;
+  detail: string | null;
+  generated_at: string;
+  error: string | null;
+}
+
+/**
+ * What one keystroke or one paste answered with. Mirrors `SendOutcome`.
+ *
+ * Same standing as {@link PaneCapture}: off the phone's path since Amendment 1,
+ * still mirroring a struct that is still in the binary. The property it records
+ * outlived it - text is typed without a newline, so running a command stays a
+ * second deliberate act, and that is now a property of the byte stream instead.
+ */
+export interface SendResult {
+  room: string | null;
+  sent: boolean;
+  detail: string | null;
+  error: string | null;
+}
+
 /** Mirrors `AgentSettings` in src-tauri/src/settings.rs - null means the key
  *  is absent from the file, which is a real state: claude decides. */
 export interface AgentSettings {

@@ -9,7 +9,9 @@
     "dev": "npm run tokens && vite",
     "build": "npm run tokens && tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "dev:phone": "npm run tokens && vite --config vite.config.phone.ts",
+    "build:phone": "npm run tokens && tsc && vite build --config vite.config.phone.ts"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.4",

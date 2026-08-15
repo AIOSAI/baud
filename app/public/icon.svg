@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BAUD">
+  <!-- Colours are the design tokens' own values (bg, green, line). Kept literal
+       here because a manifest icon is fetched by the OS, not by the app, and
+       never sees a CSS custom property. -->
+  <rect width="512" height="512" fill="#070a09"/>
+  <circle cx="256" cy="176" r="46" fill="#4ade80"/>
+  <rect x="118" y="286" width="276" height="18" rx="9" fill="#4ade80"/>
+  <rect x="118" y="336" width="196" height="18" rx="9" fill="#2b3a35"/>
+  <rect x="118" y="386" width="236" height="18" rx="9" fill="#2b3a35"/>
+</svg>

@@ -1,0 +1,653 @@
+/*
+ * The phone face's layout - and ONLY its layout (FPLAN-0413 phase 3).
+ *
+ * Every colour, radius and gap below is a `var(--baud-*)` from
+ * tokens.generated.css. There is not one literal colour in this file, which is
+ * the design-token payoff: the phone looks like BAUD because it drinks from the
+ * same palette, not because someone matched hex values by eye.
+ *
+ * theme.css is loaded first and already styles the cards themselves, so this
+ * file adds one thing: a single column that fits a hand.
+ */
+
+/* THE BROWSER DOES NOT GET THE DOWN-SWIPE. Patrick: "the refresh pull down is
+   getting in the way of scrolling down" - reaching back through history is a
+   downward pan, which is exactly the gesture Chrome claims for pull-to-refresh,
+   so the room scrolled and a reload spinner argued with it.
+
+   `contain` rather than `none`: it stops the overscroll ACTION - the refresh,
+   the scroll chaining to the page behind - while leaving ordinary scrolling
+   inside the app untouched. This is an app, not a document; a stray thumb
+   should never be able to reload the fleet out from under itself. */
+html,
+body {
+  overscroll-behavior-y: contain;
+}
+
+.baud-phone {
+  min-height: 100vh;
+  min-height: 100dvh; /* the visual viewport, so a mobile URL bar cannot clip the foot */
+  display: flex;
+  flex-direction: column;
+  background: var(--baud-bg);
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+}
+
+/* ------------------------------------------------------------- the head -- */
+
+.baud-phone-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--baud-gap);
+  padding: calc(var(--baud-pad) / 1.5);
+  /* The safe area keeps the header clear of a notch when installed. */
+  padding-top: calc(var(--baud-pad) / 1.5 + env(safe-area-inset-top, 0px));
+  background: var(--baud-bg-panel);
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-phone-title {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.baud-phone-project {
+  color: var(--baud-ink-dim);
+  font-size: 0.8rem;
+  margin-right: auto;
+}
+
+.baud-phone-signout {
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 4px 8px;
+}
+
+/* ----------------------------------------------------------- the column -- */
+
+.baud-phone-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
+}
+
+/* One card per row, full width. The desktop strip scrolls sideways; a thumb
+   scrolls down. Same card, different axis - that is the whole re-seating. */
+.baud-phone-column .baud-chip {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.baud-phone-live,
+.baud-phone-empty,
+.baud-phone-foot {
+  color: var(--baud-ink-faint);
+  font-size: 0.72rem;
+  padding: 0 calc(var(--baud-pad) / 1.5);
+}
+
+.baud-phone-live {
+  padding-top: calc(var(--baud-gap) / 2);
+}
+
+.baud-phone-foot {
+  margin-top: auto;
+  padding-block: var(--baud-pad);
+  border-top: 1px solid var(--baud-line);
+}
+
+.baud-phone-error {
+  margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
+  padding: calc(var(--baud-gap) / 2);
+  border: 1px solid var(--baud-red);
+  border-radius: var(--baud-radius);
+  color: var(--baud-red);
+  font-size: 0.75rem;
+}
+
+/* ------------------------------------------------------------- the door -- */
+
+.baud-phone-door {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--baud-gap) / 2);
+  padding: var(--baud-pad);
+  background: var(--baud-bg);
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+}
+
+.baud-phone-door-title {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: 0.14em;
+}
+
+.baud-phone-door-line {
+  margin: 0 0 var(--baud-gap);
+  color: var(--baud-ink-dim);
+  font-size: 0.8rem;
+}
+
+.baud-phone-door-label {
+  color: var(--baud-ink-dim);
+  font-size: 0.72rem;
+  text-transform: lowercase;
+}
+
+.baud-phone-door-input {
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 1rem; /* 16px or larger, or mobile Safari zooms the whole page on focus */
+  padding: 10px;
+}
+
+.baud-phone-door-button {
+  background: var(--baud-bg-card-live);
+  border: 1px solid var(--baud-green);
+  border-radius: var(--baud-radius);
+  color: var(--baud-green);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 10px;
+}
+
+.baud-phone-door-button:disabled {
+  border-color: var(--baud-line-strong);
+  color: var(--baud-ink-faint);
+}
+
+/* Two failures, two colours, because they send the operator two places. */
+.baud-phone-door-rejected {
+  color: var(--baud-red);
+  font-size: 0.75rem;
+}
+
+.baud-phone-door-unreachable {
+  color: var(--baud-amber);
+  font-size: 0.75rem;
+}
+
+.baud-phone-door-note {
+  color: var(--baud-ink-faint);
+  font-size: 0.68rem;
+}
+
+/* ------------------------------------------------- the read row (3b) -- */
+
+.baud-phone-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The phone's own doors, sitting under the card rather than inside it - the
+   card is the report on both faces, and the doors belong to the face holding
+   it. Every one of these is a READ; verbs are not here and are not coming
+   until phase 6. */
+.baud-phone-reads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 2px 0;
+}
+
+.baud-phone-reads button {
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.7rem;
+  /* 32px of height is a thumb target, not a mouse target. */
+  padding: 7px 10px;
+}
+
+/* --------------------------------------------- the reader and the feed -- */
+
+.baud-phone-reader,
+.baud-phone-feed {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--baud-bg);
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+}
+
+.baud-phone-reader-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--baud-gap);
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-top: calc(var(--baud-pad) / 1.5 + env(safe-area-inset-top, 0px));
+  background: var(--baud-bg-panel);
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-phone-back,
+.baud-phone-feedbutton {
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 6px 10px;
+}
+
+.baud-phone-reader-title {
+  color: var(--baud-ink-dim);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wrapped, not scrolled sideways: a phone has one axis worth using, and a diff
+   read with a horizontal scrollbar is a diff nobody reads. */
+.baud-phone-text {
+  margin: 0;
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
+  font-size: 0.7rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-phone-truncated,
+.baud-phone-gap {
+  margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
+  padding: calc(var(--baud-gap) / 2);
+  border: 1px solid var(--baud-amber);
+  border-radius: var(--baud-radius);
+  color: var(--baud-amber);
+  font-size: 0.72rem;
+}
+
+.baud-phone-events {
+  list-style: none;
+  margin: 0;
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+}
+
+.baud-phone-event {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--baud-line);
+  padding-bottom: calc(var(--baud-gap) / 2);
+}
+
+.baud-phone-event-kind {
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-faint);
+  font-size: 0.6rem;
+  padding: 2px 5px;
+}
+
+.baud-phone-kind-mail,
+.baud-phone-kind-dispatch {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+.baud-phone-kind-wake {
+  border-color: var(--baud-amber);
+  color: var(--baud-amber);
+}
+
+.baud-phone-event-title {
+  font-size: 0.76rem;
+}
+
+.baud-phone-event-age {
+  color: var(--baud-ink-faint);
+  font-size: 0.65rem;
+}
+
+.baud-phone-event-body {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------- the verb lane -- */
+/* Deliberately NOT the read row's clothes. A read shows you something; a verb
+   changes the machine, so it is squarer, brighter and the destructive one is
+   the only red thing on the card. Refused chips stay visible and dim - the
+   whole doctrine of this phase is that a refusal is a state, not an absence. */
+
+.baud-phone-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 2px 0;
+  border-top: 1px dashed var(--baud-line);
+  margin-top: 8px;
+}
+
+.baud-phone-verb {
+  background: var(--baud-bg-card-live);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  /* Same 32px thumb target as the read row. */
+  padding: 7px 12px;
+}
+
+.baud-phone-verb-destructive {
+  border-color: var(--baud-red);
+  color: var(--baud-red);
+}
+
+/* Refused: readable, not gone. Never `disabled` - a disabled button on touch
+   has no hover, no title and no answer, so pressing it teaches nothing. */
+.baud-phone-verb-refused {
+  background: none;
+  border-color: var(--baud-line);
+  border-style: dashed;
+  color: var(--baud-ink-faint);
+}
+
+/* What the MACHINE said, echoed under the chips. Never "sent". */
+.baud-phone-said {
+  padding: 6px 2px 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.baud-phone-lock {
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 6px 10px;
+}
+
+/* ----------------------------------------------------- asking me first -- */
+
+.baud-phone-confirm {
+  margin: 8px 2px 0;
+  padding: calc(var(--baud-gap) / 2);
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-red);
+  border-radius: var(--baud-radius);
+}
+
+.baud-phone-confirm-line {
+  color: var(--baud-ink);
+  font-size: 0.75rem;
+}
+
+.baud-phone-confirm-warn {
+  color: var(--baud-red);
+  font-size: 0.7rem;
+  padding-top: 4px;
+}
+
+.baud-phone-confirm-row {
+  display: flex;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.baud-phone-confirm-no,
+.baud-phone-confirm-yes {
+  flex: 1;
+  border-radius: var(--baud-radius);
+  font-family: inherit;
+  font-size: 0.75rem;
+  /* 40px: this is the tap that cannot be taken back. Make it a deliberate one. */
+  padding: 11px 12px;
+}
+
+.baud-phone-confirm-no {
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  color: var(--baud-ink);
+}
+
+.baud-phone-confirm-yes {
+  background: none;
+  border: 1px solid var(--baud-red);
+  color: var(--baud-red);
+}
+
+/* --------------------------------------------------- the terminal pane -- */
+/* A photograph of a screen, not a screen. Rendered at the ROOM's geometry and
+   scrolled sideways, because shrink-to-fit would lie about the layout the
+   agent is actually drawing. */
+
+/* The room doors: the desktop's launch set on a phone card. Sized and coloured
+   like verbs rather than like reads, because that is what they are - a door
+   that attaches a terminal and may type a command line into it.
+
+   NAMED `roomdoor`, NOT `door`, and that is a scar. The first cut called these
+   `.baud-phone-door` - which was ALREADY the token sign-in screen's class, a
+   full-viewport flex column. CSS does not collide loudly: my rule won the
+   properties it named and the sign-in screen's rule kept the rest, so every
+   room door button silently became `min-height: 100dvh` and the sign-in screen
+   picked up a button's padding. It shipped, and Patrick saw it. Class names in
+   this file are a flat namespace; check before adding one. */
+.baud-phone-roomdoors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 2px 0;
+}
+
+.baud-phone-roomdoor {
+  background: var(--baud-bg-card-live);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 8px 12px;
+}
+
+.baud-phone-roomdoor:disabled {
+  /* Same language as every other refused verb: dashed, legible, not dead. */
+  background: var(--baud-bg-panel);
+  border-style: dashed;
+  color: var(--baud-ink-faint);
+  opacity: 1;
+}
+
+.baud-phone-term {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--baud-bg);
+}
+
+.baud-phone-term-head {
+  display: flex;
+  align-items: center;
+  gap: var(--baud-gap);
+  padding: var(--baud-pad) calc(var(--baud-pad) / 1.5);
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-phone-term-title {
+  color: var(--baud-ink);
+  font-size: 0.85rem;
+}
+
+.baud-phone-term-geom {
+  margin-left: auto;
+  color: var(--baud-ink-faint);
+  font-size: 0.68rem;
+}
+
+/* The screen takes what is left; the key bar and the field never scroll away,
+   because the reason you opened this is usually to press ^C. */
+.baud-phone-term-screen {
+  flex: 1;
+  min-height: 0;
+  /* HIDDEN, not auto. The repaint design scrolled a wide captured picture
+     sideways; a real client has no picture to scroll - FitAddon measures this
+     box and tells the room how many columns it actually has. A scrollbar here
+     would mean the client is lying about its own size. */
+  overflow: hidden;
+  padding: 4px;
+  /* Nothing bounces or chains out of the room's box either. */
+  overscroll-behavior: none;
+  background: var(--baud-bg);
+}
+
+.baud-phone-term-host {
+  /* Fills the box, and FitAddon reads the box. Vertical scrolling is xterm's
+     own, inside the viewport, because the scrollback is real now. */
+  height: 100%;
+  width: 100%;
+  /* THIS ELEMENT HANDLES ITS OWN TOUCHES. The pan is read here and paid out as
+     wheel notches to the room, so the browser must not also interpret it -
+     `preventDefault` alone is not enough, because a browser can claim a gesture
+     at touchstart before the first move is ever delivered. Taps still fire, so
+     focusing the terminal is unaffected. */
+  touch-action: none;
+}
+
+.baud-phone-term-refused {
+  padding: 6px calc(var(--baud-pad) / 1.5);
+  color: var(--baud-amber);
+  font-size: 0.7rem;
+}
+
+.baud-phone-term-keys {
+  display: flex;
+  gap: 6px;
+  padding: 8px calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-phone-term-key {
+  flex: 1;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.75rem;
+  /* 40px: these are pressed in a hurry, usually to stop something. */
+  padding: 11px 0;
+}
+
+/* The scroll pair reads as a pair, and does NOT read as the arrow keys beside
+   it. A thumb that mistakes one for the other stuffs a stale prompt into the
+   room's input box - which is exactly how Patrick's "Pic test" went out with
+   someone else's sentence attached to it. */
+.baud-phone-term-scroll {
+  background: var(--baud-bg-panel);
+  color: var(--baud-ink-dim);
+  font-size: 0.62rem;
+}
+
+.baud-phone-term-key:disabled,
+.baud-phone-term-field:disabled,
+.baud-phone-term-send:disabled {
+  /* Disabled, never hidden - and still legible, so it reads as "not from this
+     session" rather than as a dead button. */
+  border-style: dashed;
+  color: var(--baud-ink-faint);
+  opacity: 1;
+}
+
+.baud-phone-term-input {
+  display: flex;
+  gap: 6px;
+  padding: 8px calc(var(--baud-pad) / 1.5) var(--baud-pad);
+}
+
+/* The way back onto the wire. Full width and directly under the sentence that
+   asks for it, because it is the answer to that sentence - and a thumb reaching
+   for it is usually reaching in a hurry, having just watched a send fail. It
+   is deliberately NOT styled as an error: a detached room is intact, and red
+   would say something untrue about it. */
+.baud-phone-term-reattach {
+  margin: 0 var(--baud-pad) 8px;
+  padding: 10px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+}
+
+/* The photo door sits LEFT of the line it writes into, in the input row rather
+   than the key bar: the key bar is for stopping things in a hurry, and this is
+   a compose action. */
+.baud-phone-term-photo {
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  padding: 0 12px;
+}
+
+.baud-phone-term-photo:disabled {
+  border-style: dashed;
+  color: var(--baud-ink-faint);
+  opacity: 1;
+}
+
+.baud-phone-term-field {
+  flex: 1;
+  min-width: 0;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 11px 10px;
+}
+
+.baud-phone-term-send {
+  background: var(--baud-bg-card-live);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 11px 16px;
+}

@@ -25,6 +25,7 @@ import type {
   BaudSettings,
   BranchStatus,
   DirEntryInfo,
+  FeedWindow,
   FileText,
   FleetSnapshot,
   GitChanges,
@@ -32,6 +33,7 @@ import type {
   NotificationEvent,
   ProjectListing,
   SpawnResult,
+  VerbResult,
 } from "../types";
 import { call } from "./transport";
 
@@ -87,8 +89,8 @@ export const roomKill = (branchName: string, project: string | null) =>
   call<void>("room_kill", { branchName, project });
 
 /* ------------------------------------------------------------ terminals -- */
-/* Desktop-only. The phone deep-links into a native terminal attached to the
-   same tmux room instead of binding any of these. */
+/* Desktop-only. The phone reaches the same tmux room over a socket instead
+   (`openRoomSocket` below) rather than binding any of these. */
 
 export const ptyCreate = (args: Record<string, unknown>) =>
   call<SpawnResult>("pty_create", args);
@@ -106,6 +108,65 @@ export const monitorCreate = (args: Record<string, unknown>) =>
 /* ---------------------------------------------------------------- bell -- */
 
 export const notificationsRead = () => call<NotificationEvent[]>("notifications_read");
+
+/**
+ * PHONE-ONLY. One cursor-keyed window of the feed, envelope and all.
+ *
+ * The desktop reads the feed file off its own disk and keeps no cursor, so
+ * there is no Rust command behind this name and calling it from the desktop
+ * build would rightly fail. It lives here rather than in `phone/` because this
+ * file is the ONE vocabulary - a verb hidden beside its caller is how a second
+ * seam starts.
+ *
+ * Pass `since: null` for first contact: the server answers with the most recent
+ * window rather than the whole file.
+ */
+export const notificationsFeed = (since: string | null, limit: number) =>
+  call<FeedWindow>("notifications_feed", { since, limit });
+
+/* ---------------------------------------------------------------- verbs -- */
+/* PHONE-ONLY, OPERATE scope (FPLAN-0413 phase 6). The desktop already does all
+   three of these locally - it opens ptys, it kills rooms, the operator's own
+   compositor locks the screen - so there is no Rust command behind these names.
+   They exist because doing them from a pocket goes over a wire, and a wire
+   needs a named payload.
+
+   TERMINAL-AGNOSTIC, still: `wake` names a branch and a message. It does NOT
+   name a model, because the branch's own config decides that (Patrick's ruling,
+   2026-08-14) - there is not one vendor word in this contract. */
+
+/** Wake an agent in its branch. Never admin: a woken agent is a worker. */
+export const verbWake = (branch: string, project: string, message: string) =>
+  call<VerbResult>("verb_wake", { branch, project, message });
+
+/**
+ * End a room. DESTRUCTIVE, and the project is required rather than inferred -
+ * the same rule `roomKill` carries on the desktop and for the same reason.
+ */
+export const verbKill = (branch: string, project: string) =>
+  call<VerbResult>("verb_kill", { branch, project });
+
+/** Lock the machine's screen, through @skills' own lock skill. */
+export const verbLock = () => call<VerbResult>("verb_lock");
+
+/* ------------------------------------------------------------ terminal -- */
+/* PHONE-ONLY (FPLAN-0414 seam 3, as amended). Not a lesser terminal and not a
+   picture of one: the phone attaches a REAL client to the same tmux room the
+   desktop attaches to, over a socket instead of a pty in a pane.
+
+   There is no `roomPane`/`roomType`/`roomKey` here any more. Those were the
+   repaint design - poll a screen, send a named key - and Amendment 1 cut it in
+   favour of the room itself. The 14-key allowlist went with them and is not a
+   loss: an allowlist was the whole safety of `send-keys`, which INTERPRETS what
+   it is handed. A stream has no such path - the key bar writes the same control
+   bytes a keyboard writes, and nothing anywhere interprets them.
+
+   A socket is not an `invoke`, so this door is not a `call` - but it is still
+   bound the same way: both transports export it, the vite alias picks one, and
+   the desktop's refuses by construction because `pty.rs` already does it better
+   without a network hop. Imported from `./transport` like every other door, so
+   the http binding never enters the desktop's import graph. */
+export { openRoomSocket, uploadImage } from "./transport";
 
 /* ------------------------------------------------------------ settings -- */
 

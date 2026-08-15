@@ -1338,11 +1338,201 @@ fn room_kill(
     // room, and resolving the name here under the seated scope would end a
     // session the operator never named.
     let project = project_named(project.as_deref(), &state)?;
-    match branch_session(&project, &branch_name) {
-        Some(session) => room_kill_named(&session),
+    end_room_in(&project, &branch_name).map(|_| ())
+}
+
+/// What ending a room actually did, for a caller that has to say so.
+///
+/// The desktop throws this away - a card that stops being green has already
+/// told the operator. A phone six rooms away has nothing else to go on, so the
+/// distinction between "ended it" and "there was nothing to end" is carried
+/// rather than flattened into a bare Ok.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct RoomEnded {
+    /// The tmux session that was ended, or `None` when nothing was live.
+    pub room: Option<String>,
+}
+
+/// End a branch's session inside an ALREADY-RESOLVED project.
+///
+/// The project arrives as an argument rather than being looked up, which is
+/// what lets the headless seam and the desktop command share one body: the
+/// desktop resolves from its seat, the seam from the census, and neither owns
+/// a second way to end a session. Same shape - and the same reason - as
+/// [`select_project`] taking its anchor in.
+///
+/// The name fence is HERE rather than at either caller, because a fence that
+/// each door has to remember is a fence one of them eventually forgets.
+pub(crate) fn end_room_in(project: &Project, branch_name: &str) -> Result<RoomEnded, String> {
+    match resolve_room(project, branch_name)? {
+        Some(session) => {
+            room_kill_named(&session)?;
+            Ok(RoomEnded {
+                room: Some(session),
+            })
+        }
         // Nothing live for this branch: already the goal state.
-        None => Ok(()),
+        None => Ok(RoomEnded { room: None }),
     }
+}
+
+/// The live room a headless door acts on, or `None` when the branch is real
+/// and simply has nothing running.
+///
+/// Every door that names a branch comes through here, so the fence is written
+/// once. A fence each door has to remember is one a door eventually forgets -
+/// and the doors now number four.
+pub(crate) fn resolve_room(project: &Project, branch_name: &str) -> Result<Option<String>, String> {
+    if branch_name.is_empty() {
+        return Err("a branch name is required".to_string());
+    }
+    // NAMES, not paths - the same rule the read lane is fenced on. Refusing is
+    // the whole point: a name that resolves anywhere but one directory under
+    // this project's fleet dir must not reach tmux at all.
+    if branch_name.contains(['/', '\\']) || branch_name.starts_with('.') {
+        return Err(format!(
+            "branch name '{branch_name}' is not a single directory component - this door takes names, not paths"
+        ));
+    }
+    // An unknown branch is refused, never treated as "nothing here". The two
+    // look identical in a `null` room and are opposite facts: one means the
+    // caller is holding a stale or wrong name, the other means the goal state
+    // is already reached. Same doctrine as an unknown project name.
+    if !project.fleet_dir.join(branch_name).is_dir() {
+        return Err(format!(
+            "no branch named '{branch_name}' in project '{}'",
+            project.name
+        ));
+    }
+    Ok(branch_session(project, branch_name))
+}
+
+/// The room a terminal door needs: like [`resolve_room`], but a branch with
+/// nothing running is a REFUSAL rather than a quiet `None`.
+///
+/// The kill can treat a dead room as the goal state. Capture and send cannot:
+/// there is no screen to show and nothing to type into, and rendering an empty
+/// pane would look exactly like an agent sitting at a blank prompt.
+fn live_room_in(project: &Project, branch_name: &str) -> Result<String, String> {
+    resolve_room(project, branch_name)?
+        .ok_or_else(|| format!("no room live for '{branch_name}' - nothing to attach to"))
+}
+
+/// The keystroke names `--key` will pass to tmux, and the only ones.
+///
+/// `send-keys` WITHOUT `-l` interprets its argument, so an unbounded name is an
+/// unbounded keystroke. This list is the contract's, exactly - the six the key
+/// bar shows plus the ones a stuck agent needs.
+const ALLOWED_KEYS: [&str; 14] = [
+    "Enter", "Escape", "Tab", "Up", "Down", "Left", "Right", "C-c", "C-d", "C-l", "C-u", "BSpace",
+    "PageUp", "PageDown",
+];
+
+/// Longest literal `--text` will type in one call. Refused rather than
+/// trimmed: a caller whose 3000 characters silently became 2000 would believe
+/// they had typed a command they did not type.
+const TEXT_LIMIT: usize = 2000;
+
+/// Deepest scrollback `--capture-room` will reach above the visible screen.
+const LINES_LIMIT: i64 = 2000;
+
+fn key_is_allowed(name: &str) -> bool {
+    ALLOWED_KEYS.contains(&name)
+}
+
+fn refuse_lines(lines: i64) -> Result<(), String> {
+    if !(0..=LINES_LIMIT).contains(&lines) {
+        return Err(format!(
+            "--lines is {lines}, outside the 0 to {LINES_LIMIT} this door will read - refused rather than clamped, because a caller who asked for 5000 and silently got 2000 would believe they had the whole history"
+        ));
+    }
+    Ok(())
+}
+
+fn refuse_text(text: &str) -> Result<(), String> {
+    if text.is_empty() {
+        return Err("--text needs something to type".to_string());
+    }
+    if text.chars().count() > TEXT_LIMIT {
+        return Err(format!(
+            "--text is {} characters, over the {TEXT_LIMIT} limit - refused rather than trimmed, because half a command is worse than none",
+            text.chars().count()
+        ));
+    }
+    Ok(())
+}
+
+/// What `--send-room` was asked to put into the room. The two are different
+/// mechanisms, not two spellings of one: a literal is TYPED, a key name is
+/// INTERPRETED.
+///
+/// PARKED, AND NOT THE INPUT PATH (@devpulse ruling, 2026-08-14). `--send-room`
+/// is **not** how the phone types into a room and **not** a general input door:
+/// the attach PTY behind `/v1/room/attach` is the one door for input, and this
+/// flag is routed to by nothing. It stays because deleting working tested code
+/// on a late ruling is worse than parking it - but parked has to be WRITTEN
+/// DOWN, or unused-but-shipped quietly becomes the second door the one-door
+/// principle exists to prevent. Revisited at reconciliation.
+///
+/// Its sibling `--capture-room` is parked on stronger ground: looking is a
+/// read and typing is a verb, and attach is operate-only by nature (a shell
+/// prompt has no reading half), so a capture is the only path there will ever
+/// be to a look-don't-touch view under a read token.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum SendPayload {
+    /// Typed verbatim through `send-keys -l`. Never interpreted: a literal
+    /// `C-c` in here types those four characters.
+    Text(String),
+    /// One allowlisted name through `send-keys`, interpreted as a keystroke.
+    Key(String),
+}
+
+/// The tmux target for a room's SCREEN, which is not the target for its
+/// session.
+///
+/// `kill-session -t =room` names a session; `capture-pane`/`send-keys` want a
+/// PANE, and a bare session name is not one - tmux answers "can't find pane"
+/// (found live, first capture attempt). The trailing colon makes it
+/// `session:current-window.active-pane`, and the `=` still forces an exact
+/// name match so a room called `baud-api` can never resolve to `baud-api-2`.
+fn pane_target(room: &str) -> String {
+    format!("={room}:")
+}
+
+/// The argv for one capture. Split out so the shape tmux is handed can be
+/// asserted without a tmux server - the same reason `parse_panes` exists.
+fn capture_args(target: &str, lines: i64) -> Vec<String> {
+    let mut argv = vec![
+        "capture-pane".to_string(),
+        "-p".to_string(),
+        // Escape sequences PRESERVED - the phone renders the colours the desk
+        // sees. A monochrome mirror of a coloured screen is a different screen.
+        "-e".to_string(),
+        "-t".to_string(),
+        target.to_string(),
+    ];
+    if lines > 0 {
+        argv.push("-S".to_string());
+        argv.push(format!("-{lines}"));
+    }
+    argv
+}
+
+/// The argv for one send. The `-l` is the whole difference between typing and
+/// pressing, so the two payloads produce visibly different lines.
+fn send_keys_args(target: &str, payload: &SendPayload) -> Vec<String> {
+    let mut argv = vec!["send-keys".to_string(), "-t".to_string(), target.to_string()];
+    match payload {
+        SendPayload::Text(text) => {
+            argv.push("-l".to_string());
+            // `--` so a literal beginning with a dash is typed rather than
+            // read as a tmux flag.
+            argv.push("--".to_string());
+            argv.push(text.clone());
+        }
+        SendPayload::Key(name) => argv.push(name.clone()),
+    }
+    argv
 }
 
 fn room_kill_named(room: &str) -> Result<(), String> {
@@ -1361,6 +1551,114 @@ fn room_kill_named(room: &str) -> Result<(), String> {
         return Ok(());
     }
     Err(format!("could not end room '{room}': {}", stderr.trim()))
+}
+
+/// What one room's screen looks like right now, inside an already-resolved
+/// project.
+///
+/// Read-only in the strictest sense: `capture-pane` observes, it does not
+/// attach, so nothing about the operator's own view changes - no resize, no
+/// focus, no client. The phone renders at the captured geometry and scrolls,
+/// which is a stated limit rather than an oversight: resizing the room from a
+/// pocket would scramble whatever is on the desk mid-session.
+pub(crate) fn capture_room_in(
+    project: &Project,
+    branch_name: &str,
+    lines: i64,
+) -> Result<PaneCapture, String> {
+    refuse_lines(lines)?;
+    let room = live_room_in(project, branch_name)?;
+    let target = pane_target(&room);
+
+    let output = Command::new("tmux")
+        .args(capture_args(&target, lines))
+        .output()
+        .map_err(|err| format!("could not run tmux: {err}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "could not capture '{room}': {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let pane = String::from_utf8_lossy(&output.stdout).to_string();
+
+    // Geometry is a separate question from content, and a failure to answer it
+    // must not lose the screen we already hold: zeroes mean "tmux would not
+    // say", and the phone falls back to its own default.
+    let (cols, rows) = pane_geometry(&target);
+
+    Ok(PaneCapture {
+        room,
+        pane,
+        cols,
+        rows,
+    })
+}
+
+/// One room's pane geometry, or `(0, 0)` when tmux will not say.
+fn pane_geometry(target: &str) -> (u16, u16) {
+    let output = Command::new("tmux")
+        .args(["display-message", "-p", "-t", target, "#{pane_width}\t#{pane_height}"])
+        .output();
+    let Ok(output) = output else { return (0, 0) };
+    if !output.status.success() {
+        return (0, 0);
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut fields = text.trim().split('\t');
+    let cols = fields.next().and_then(|f| f.parse().ok()).unwrap_or(0);
+    let rows = fields.next().and_then(|f| f.parse().ok()).unwrap_or(0);
+    (cols, rows)
+}
+
+/// One room's screen, as read.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PaneCapture {
+    pub room: String,
+    pub pane: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+/// Put one payload into one room, inside an already-resolved project.
+///
+/// TEXT IS TYPED, NEVER RUN. `send-keys -l` inserts the characters and nothing
+/// else - this door cannot append a newline, so a paste alone can never
+/// execute. Submitting stays a separate, deliberate act, which is BAUD's own
+/// rule carried out of `Terminal.tsx` rather than a new one invented for the
+/// wire.
+pub(crate) fn send_room_in(
+    project: &Project,
+    branch_name: &str,
+    payload: &SendPayload,
+) -> Result<String, String> {
+    match payload {
+        SendPayload::Text(text) => refuse_text(text)?,
+        // Checked here as well as at the parse: this function is reachable
+        // from the desktop side of the crate too, and the allowlist IS the
+        // safety of the interpreted path.
+        SendPayload::Key(name) if !key_is_allowed(name) => {
+            return Err(format!(
+                "'{name}' is not one of the keys this door will press ({})",
+                ALLOWED_KEYS.join(", ")
+            ))
+        }
+        SendPayload::Key(_) => {}
+    }
+
+    let room = live_room_in(project, branch_name)?;
+    let target = pane_target(&room);
+    let output = Command::new("tmux")
+        .args(send_keys_args(&target, payload))
+        .output()
+        .map_err(|err| format!("could not run tmux: {err}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "could not send to '{room}': {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(room)
 }
 
 /// Count mailbox messages by status straight from `inbox.json`.
@@ -1639,35 +1937,144 @@ enum Invocation {
     Window,
     /// `--snapshot [--project <name>]` - print one fleet read and exit.
     Snapshot { project: Option<String> },
-    /// Called wrong. Carries the line to put on stderr.
+    /// `--end-room <branch> [--project <name>]` - end one room and exit.
+    EndRoom {
+        branch: String,
+        project: Option<String>,
+    },
+    /// `--capture-room <branch> [--project <name>] [--lines <N>]` - read one
+    /// room's screen and exit.
+    CaptureRoom {
+        branch: String,
+        project: Option<String>,
+        lines: i64,
+    },
+    /// `--send-room <branch> [--project <name>] (--text <s> | --key <NAME>)` -
+    /// put one payload into one room and exit.
+    SendRoom {
+        branch: String,
+        project: Option<String>,
+        payload: SendPayload,
+    },
+    /// Called wrong STRUCTURALLY - a flag missing its value, two verbs, a
+    /// branch not named. Exit 2, stdout empty.
+    ///
+    /// Deliberately NOT where a bad *value* lands. A key name that is not on
+    /// the allowlist, or a scrollback depth over the cap, is the CALLER's data
+    /// arriving through a correctly-built command line - so those refuse with
+    /// a full envelope and exit 1, and the sentence reaches the operator's
+    /// screen instead of becoming "the invoker built a bad line".
     Usage(String),
 }
 
+/// The headless verbs. A process that carries one of these has been asked for
+/// an answer, not a window.
+const HEADLESS_FLAGS: [&str; 4] = [
+    "--snapshot",
+    "--end-room",
+    "--capture-room",
+    "--send-room",
+];
+
 /// Parse the process arguments (already stripped of argv0).
 ///
-/// Only `--snapshot` opts into headless mode; anything else falls through to
+/// Only a HEADLESS_FLAG opts into headless mode; anything else falls through to
 /// the window untouched, because `tauri dev` passes arguments of its own and a
-/// strict parser here would refuse to start the app. Once `--snapshot` IS
-/// present the parse turns strict: a misspelled flag then means the caller
-/// wanted data and would otherwise get a GUI, or worse, silently get a
-/// different project than they asked for.
+/// strict parser here would refuse to start the app. Once one IS present the
+/// parse turns strict: a misspelled flag then means the caller wanted data and
+/// would otherwise get a GUI, or worse, silently get a different project than
+/// they asked for.
+///
+/// Two verbs in one command line is a usage error rather than a precedence
+/// rule. One process, one answer - a caller who wrote both does not know what
+/// they asked for, and guessing for them is how a read turns into a kill.
 fn parse_invocation(args: &[String]) -> Invocation {
-    if !args.iter().any(|arg| arg == "--snapshot") {
-        return Invocation::Window;
-    }
+    let verbs: Vec<&String> = args
+        .iter()
+        .filter(|arg| HEADLESS_FLAGS.contains(&arg.as_str()))
+        .collect();
+    let verb = match verbs.as_slice() {
+        [] => return Invocation::Window,
+        [only] => only.as_str(),
+        _ => return Invocation::Usage("one headless verb at a time".to_string()),
+    };
+
+    // Every verb but --snapshot names a branch, positionally, so the flag
+    // reads like the button it stands for: `baud --end-room devpulse`.
+    let takes_branch = verb != "--snapshot";
 
     let mut project = None;
-    let mut rest = args.iter().filter(|arg| *arg != "--snapshot");
+    let mut branch = None;
+    let mut lines = 0_i64;
+    let mut text = None;
+    let mut key = None;
+    let mut rest = args.iter().filter(|arg| arg.as_str() != verb);
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--project" => match rest.next() {
                 Some(name) if !name.starts_with("--") => project = Some(name.clone()),
                 _ => return Invocation::Usage("--project needs a project name".to_string()),
             },
+            // Only the SHAPE is checked here - "is this a number at all".
+            // Whether the number is in range is a value question, and value
+            // questions answer with an envelope; see `refuse_lines`.
+            "--lines" if verb == "--capture-room" => match rest.next().map(|n| n.parse::<i64>()) {
+                Some(Ok(depth)) => lines = depth,
+                _ => return Invocation::Usage("--lines needs a whole number".to_string()),
+            },
+            // A literal may legitimately begin with a dash, so `--text` takes
+            // WHATEVER follows it. Refusing `--text --help` would make that
+            // string impossible to type from a phone.
+            "--text" if verb == "--send-room" => match rest.next() {
+                Some(literal) => text = Some(literal.clone()),
+                None => return Invocation::Usage("--text needs something to type".to_string()),
+            },
+            "--key" if verb == "--send-room" => match rest.next() {
+                Some(name) => key = Some(name.clone()),
+                None => return Invocation::Usage("--key needs a key name".to_string()),
+            },
+            other if takes_branch && !other.starts_with("--") && branch.is_none() => {
+                branch = Some(other.to_string());
+            }
             other => return Invocation::Usage(format!("unknown argument '{other}'")),
         }
     }
-    Invocation::Snapshot { project }
+
+    if takes_branch && branch.is_none() {
+        return Invocation::Usage(format!("{verb} needs a branch name"));
+    }
+    let branch = branch.unwrap_or_default();
+
+    match verb {
+        "--end-room" => Invocation::EndRoom { branch, project },
+        "--capture-room" => Invocation::CaptureRoom {
+            branch,
+            project,
+            lines,
+        },
+        "--send-room" => match (text, key) {
+            // Exactly one. The two are different mechanisms - typed versus
+            // interpreted - and guessing which a caller meant is how a paste
+            // turns into a control code.
+            (Some(literal), None) => Invocation::SendRoom {
+                branch,
+                project,
+                payload: SendPayload::Text(literal),
+            },
+            (None, Some(name)) => Invocation::SendRoom {
+                branch,
+                project,
+                payload: SendPayload::Key(name),
+            },
+            (Some(_), Some(_)) => {
+                Invocation::Usage("--text and --key are alternatives, not a pair".to_string())
+            }
+            (None, None) => {
+                Invocation::Usage("--send-room needs one of --text or --key".to_string())
+            }
+        },
+        _ => Invocation::Snapshot { project },
+    }
 }
 
 /// The project a headless snapshot reads: the named one, or the anchor when
@@ -1739,6 +2146,216 @@ fn snapshot_exit_code(snapshot: &FleetSnapshot) -> i32 {
     i32::from(snapshot.error.is_some())
 }
 
+/// One headless room kill, as JSON on stdout.
+///
+/// `detail` and `error` are mutually exclusive by construction: exactly one is
+/// non-null, and which one it is matches the exit code. A caller that only
+/// reads one field can still never be misled about whether it worked.
+#[derive(Debug, Clone, Serialize)]
+pub struct KillOutcome {
+    /// The project the branch was resolved in - the caller's name echoed back
+    /// only once it has been proved to exist, or "?" when it never resolved.
+    pub project: String,
+    /// The branch the caller named, echoed verbatim.
+    pub branch: String,
+    /// The tmux session that was ended, or null when nothing was live.
+    pub room: Option<String>,
+    /// True ONLY when this call ended a live session. False with no error
+    /// means there was nothing to end - a success, and a different fact.
+    pub ended: bool,
+    /// The sentence to show an operator, on success. Null on failure.
+    pub detail: Option<String>,
+    /// ISO-8601 UTC timestamp of this call.
+    pub generated_at: String,
+    /// The sentence to show an operator, on failure. Null on success.
+    pub error: Option<String>,
+}
+
+impl KillOutcome {
+    /// Nothing happened and here is why - the shape every refusal takes.
+    fn failed(branch: &str, project: Option<&str>, error: String) -> Self {
+        KillOutcome {
+            project: project.unwrap_or("?").to_string(),
+            branch: branch.to_string(),
+            room: None,
+            ended: false,
+            detail: None,
+            generated_at: now_iso8601(),
+            error: Some(error),
+        }
+    }
+}
+
+/// End one named room in one named project, with no tauri state in reach.
+///
+/// The gate @api's `/v1/verbs/kill` is waiting on. It reaches the SAME
+/// `end_room_in` the desktop button reaches, which reaches the same
+/// `room_kill_named` - so `room_kill` stays the one thing that ends a session
+/// and this flag is a door onto it, never a second mechanism. There is no
+/// `tmux kill-session` anywhere in the headless path.
+fn end_room_headless(branch: &str, project_name: Option<&str>) -> KillOutcome {
+    let project = match snapshot_project(project_name) {
+        Ok(project) => project,
+        Err(error) => return KillOutcome::failed(branch, project_name, error),
+    };
+
+    match end_room_in(&project, branch) {
+        Ok(RoomEnded { room: Some(room) }) => KillOutcome {
+            project: project.name,
+            branch: branch.to_string(),
+            detail: Some(format!("ended '{room}'")),
+            room: Some(room),
+            ended: true,
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Ok(RoomEnded { room: None }) => KillOutcome {
+            project: project.name,
+            branch: branch.to_string(),
+            room: None,
+            ended: false,
+            detail: Some(format!("nothing live for '{branch}' - already ended")),
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Err(error) => KillOutcome::failed(branch, Some(&project.name), error),
+    }
+}
+
+/// Exit code for a finished kill: 0 when it did what was asked - including the
+/// idempotent nothing-to-end - and 1 when it refused. Same contract as the
+/// snapshot, deliberately: @api parses one envelope shape and one code rule.
+fn kill_exit_code(outcome: &KillOutcome) -> i32 {
+    i32::from(outcome.error.is_some())
+}
+
+/// One room's screen, as JSON on stdout.
+///
+/// Same envelope promise as [`KillOutcome`]: `detail` and `error` are mutually
+/// exclusive, and which one is set matches the exit code.
+#[derive(Debug, Clone, Serialize)]
+pub struct CaptureOutcome {
+    pub project: String,
+    pub branch: String,
+    /// The room that was read, or null when nothing was.
+    pub room: Option<String>,
+    /// The screen itself, escape sequences intact. Empty string on a refusal -
+    /// never null, so a renderer has one type to handle.
+    pub pane: String,
+    /// Pane geometry as tmux reported it; 0 when it would not say.
+    pub cols: u16,
+    pub rows: u16,
+    /// True only when a real screen was read.
+    pub captured: bool,
+    pub detail: Option<String>,
+    pub generated_at: String,
+    pub error: Option<String>,
+}
+
+impl CaptureOutcome {
+    fn failed(branch: &str, project: Option<&str>, error: String) -> Self {
+        CaptureOutcome {
+            project: project.unwrap_or("?").to_string(),
+            branch: branch.to_string(),
+            room: None,
+            pane: String::new(),
+            cols: 0,
+            rows: 0,
+            captured: false,
+            detail: None,
+            generated_at: now_iso8601(),
+            error: Some(error),
+        }
+    }
+}
+
+/// One send, as JSON on stdout.
+#[derive(Debug, Clone, Serialize)]
+pub struct SendOutcome {
+    pub project: String,
+    pub branch: String,
+    pub room: Option<String>,
+    /// True only when tmux accepted the payload.
+    pub sent: bool,
+    pub detail: Option<String>,
+    pub generated_at: String,
+    pub error: Option<String>,
+}
+
+impl SendOutcome {
+    fn failed(branch: &str, project: Option<&str>, error: String) -> Self {
+        SendOutcome {
+            project: project.unwrap_or("?").to_string(),
+            branch: branch.to_string(),
+            room: None,
+            sent: false,
+            detail: None,
+            generated_at: now_iso8601(),
+            error: Some(error),
+        }
+    }
+}
+
+/// Read one room's screen with no tauri state in reach.
+fn capture_room_headless(branch: &str, project_name: Option<&str>, lines: i64) -> CaptureOutcome {
+    let project = match snapshot_project(project_name) {
+        Ok(project) => project,
+        Err(error) => return CaptureOutcome::failed(branch, project_name, error),
+    };
+    match capture_room_in(&project, branch, lines) {
+        Ok(capture) => CaptureOutcome {
+            project: project.name,
+            branch: branch.to_string(),
+            detail: Some(format!("read '{}'", capture.room)),
+            room: Some(capture.room),
+            pane: capture.pane,
+            cols: capture.cols,
+            rows: capture.rows,
+            captured: true,
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Err(error) => CaptureOutcome::failed(branch, Some(&project.name), error),
+    }
+}
+
+/// Put one payload into one room with no tauri state in reach.
+fn send_room_headless(
+    branch: &str,
+    project_name: Option<&str>,
+    payload: &SendPayload,
+) -> SendOutcome {
+    let project = match snapshot_project(project_name) {
+        Ok(project) => project,
+        Err(error) => return SendOutcome::failed(branch, project_name, error),
+    };
+    match send_room_in(&project, branch, payload) {
+        Ok(room) => SendOutcome {
+            project: project.name,
+            branch: branch.to_string(),
+            // Names WHICH mechanism ran, because "typed" and "pressed" are
+            // different acts and an operator reading a log should see which.
+            detail: Some(match payload {
+                SendPayload::Text(_) => format!("typed into '{room}' - no newline appended"),
+                SendPayload::Key(name) => format!("pressed {name} in '{room}'"),
+            }),
+            room: Some(room),
+            sent: true,
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Err(error) => SendOutcome::failed(branch, Some(&project.name), error),
+    }
+}
+
+fn capture_exit_code(outcome: &CaptureOutcome) -> i32 {
+    i32::from(outcome.error.is_some())
+}
+
+fn send_exit_code(outcome: &SendOutcome) -> i32 {
+    i32::from(outcome.error.is_some())
+}
+
 /// Run the headless half if the command line asked for it.
 ///
 /// Returns the process exit code, or `None` to mean "carry on and open the
@@ -1750,6 +2367,9 @@ fn run_headless(args: &[String]) -> Option<i32> {
         Invocation::Usage(problem) => {
             eprintln!("baud: {problem}");
             eprintln!("usage: baud --snapshot [--project <name>]");
+            eprintln!("       baud --end-room <branch> [--project <name>]");
+            eprintln!("       baud --capture-room <branch> [--project <name>] [--lines <N>]");
+            eprintln!("       baud --send-room <branch> [--project <name>] (--text <s> | --key <NAME>)");
             Some(2)
         }
         Invocation::Snapshot { project } => {
@@ -1769,6 +2389,52 @@ fn run_headless(args: &[String]) -> Option<i32> {
                     Some(1)
                 }
             }
+        }
+        Invocation::EndRoom { branch, project } => {
+            let outcome = end_room_headless(&branch, project.as_deref());
+            emit(&outcome, outcome.error.as_deref(), kill_exit_code(&outcome))
+        }
+        Invocation::CaptureRoom {
+            branch,
+            project,
+            lines,
+        } => {
+            let outcome = capture_room_headless(&branch, project.as_deref(), lines);
+            emit(
+                &outcome,
+                outcome.error.as_deref(),
+                capture_exit_code(&outcome),
+            )
+        }
+        Invocation::SendRoom {
+            branch,
+            project,
+            payload,
+        } => {
+            let outcome = send_room_headless(&branch, project.as_deref(), &payload);
+            emit(&outcome, outcome.error.as_deref(), send_exit_code(&outcome))
+        }
+    }
+}
+
+/// Print one envelope whole and return its exit code.
+///
+/// Errors never produce partial output: the object is serialized completely
+/// before a byte reaches stdout. Serializing our own struct cannot realistically
+/// fail, but claiming success on an empty stdout would be a lie, so the
+/// impossible case still gets an honest code.
+fn emit<T: Serialize>(outcome: &T, error: Option<&str>, code: i32) -> Option<i32> {
+    match serde_json::to_string(outcome) {
+        Ok(json) => {
+            println!("{json}");
+            if let Some(error) = error {
+                eprintln!("baud: {error}");
+            }
+            Some(code)
+        }
+        Err(error) => {
+            eprintln!("baud: could not serialize the result: {error}");
+            Some(1)
         }
     }
 }
@@ -2009,6 +2675,350 @@ mod tests {
         );
 
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn end_room_takes_a_branch_and_an_optional_project() {
+        assert_eq!(
+            parse_invocation(&args(&["--end-room", "devpulse"])),
+            Invocation::EndRoom {
+                branch: "devpulse".to_string(),
+                project: None
+            }
+        );
+        assert_eq!(
+            parse_invocation(&args(&["--end-room", "devpulse", "--project", "AIPASS"])),
+            Invocation::EndRoom {
+                branch: "devpulse".to_string(),
+                project: Some("AIPASS".to_string())
+            }
+        );
+        // Order is not load-bearing here either.
+        assert_eq!(
+            parse_invocation(&args(&["--project", "AIPASS", "--end-room", "devpulse"])),
+            Invocation::EndRoom {
+                branch: "devpulse".to_string(),
+                project: Some("AIPASS".to_string())
+            }
+        );
+    }
+
+    /// A kill with no target, or with two, must never guess which room was
+    /// meant - the failure mode being guarded is ending the wrong session.
+    #[test]
+    fn an_ambiguous_end_room_is_a_usage_error() {
+        assert!(matches!(
+            parse_invocation(&args(&["--end-room"])),
+            Invocation::Usage(_)
+        ));
+        assert!(matches!(
+            parse_invocation(&args(&["--end-room", "--project", "AIPASS"])),
+            Invocation::Usage(_)
+        ));
+        // Two branches named: which one did they want ended?
+        assert!(matches!(
+            parse_invocation(&args(&["--end-room", "devpulse", "api"])),
+            Invocation::Usage(_)
+        ));
+        // A read verb and a destructive verb in one process.
+        assert!(matches!(
+            parse_invocation(&args(&["--snapshot", "--end-room", "devpulse"])),
+            Invocation::Usage(_)
+        ));
+        // The snapshot's own positional-free strictness is unchanged: a bare
+        // word beside --snapshot is still a typo, not a branch.
+        assert!(matches!(
+            parse_invocation(&args(&["--snapshot", "devpulse"])),
+            Invocation::Usage(_)
+        ));
+    }
+
+    /// The seam is fenced on NAMES. A path-shaped branch must be refused
+    /// BEFORE anything resolves it, and the sentence must say so - otherwise
+    /// the refusal reads as "no such branch" and the caller retries.
+    #[test]
+    fn a_path_shaped_branch_never_reaches_the_kill() {
+        let (base, anchor) = census_fixture("kill-fence");
+
+        for bad in ["../devpulse", "a/b", "a\\b", ".hidden"] {
+            let error = end_room_in(&anchor, bad).expect_err("refused");
+            assert!(
+                error.contains("names, not paths"),
+                "the refusal names the real problem for '{bad}': {error}"
+            );
+        }
+        assert!(end_room_in(&anchor, "").expect_err("refused").contains("required"));
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// An unknown branch and an already-ended one are opposite facts. Flatten
+    /// them and a caller holding a stale name is told the kill succeeded.
+    #[test]
+    fn an_unknown_branch_is_refused_and_a_quiet_one_is_not() {
+        let (base, anchor) = census_fixture("kill-census");
+
+        let error = end_room_in(&anchor, "no-such-branch-4b1e").expect_err("refused");
+        assert!(
+            error.contains("no-such-branch-4b1e") && error.contains("FIXTUREROOT"),
+            "the refusal names the branch AND the project it looked in: {error}"
+        );
+
+        // The other half: a real branch with nothing running is a SUCCESS
+        // carrying no room. Its name is deliberately one no live session could
+        // answer to, so this stays true on a machine with tmux and on a runner
+        // without one.
+        let quiet = anchor.fleet_dir.join("quiet-fixture-branch-4b1e");
+        fs::create_dir_all(&quiet).unwrap();
+        assert_eq!(
+            end_room_in(&anchor, "quiet-fixture-branch-4b1e").expect("nothing to end"),
+            RoomEnded { room: None }
+        );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// The envelope's whole promise: exactly one of `detail`/`error` is set,
+    /// and the exit code agrees with which. A caller reading only one field
+    /// must not be able to mistake a refusal for a kill.
+    #[test]
+    fn a_kill_outcome_says_one_thing_and_the_exit_code_agrees() {
+        let refused = KillOutcome::failed("devpulse", Some("AIPASS"), "nope".to_string());
+        assert_eq!(refused.detail, None);
+        assert_eq!(refused.error.as_deref(), Some("nope"));
+        assert!(!refused.ended, "a refusal never claims it ended anything");
+        assert_eq!(kill_exit_code(&refused), 1);
+
+        let done = KillOutcome {
+            project: "AIPASS".to_string(),
+            branch: "devpulse".to_string(),
+            room: Some("baud-devpulse".to_string()),
+            ended: true,
+            detail: Some("ended 'baud-devpulse'".to_string()),
+            generated_at: now_iso8601(),
+            error: None,
+        };
+        assert_eq!(kill_exit_code(&done), 0);
+        // Nothing-to-end is a success too: the goal state was already reached.
+        let quiet = KillOutcome {
+            room: None,
+            ended: false,
+            detail: Some("nothing live for 'devpulse' - already ended".to_string()),
+            ..done.clone()
+        };
+        assert_eq!(kill_exit_code(&quiet), 0);
+        // And it is still distinguishable from the kill that did work.
+        assert!(done.ended && !quiet.ended);
+    }
+
+    #[test]
+    fn capture_room_takes_a_branch_a_project_and_a_depth() {
+        assert_eq!(
+            parse_invocation(&args(&["--capture-room", "devpulse"])),
+            Invocation::CaptureRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                lines: 0
+            }
+        );
+        assert_eq!(
+            parse_invocation(&args(&[
+                "--capture-room",
+                "devpulse",
+                "--project",
+                "AIPASS",
+                "--lines",
+                "200"
+            ])),
+            Invocation::CaptureRoom {
+                branch: "devpulse".to_string(),
+                project: Some("AIPASS".to_string()),
+                lines: 200
+            }
+        );
+        // A depth that is not a number at all is STRUCTURAL - the command
+        // line itself is malformed, so it never runs.
+        assert!(matches!(
+            parse_invocation(&args(&["--capture-room", "devpulse", "--lines", "lots"])),
+            Invocation::Usage(_)
+        ));
+        // But a number OUT OF RANGE is caller data arriving through a
+        // well-formed line, so the parse accepts it and the door refuses it
+        // with a sentence the operator can read. Over the cap is REFUSED, not
+        // clamped: a caller who asked for 5000 and silently got 2000 would
+        // believe they were looking at the whole history.
+        assert_eq!(
+            parse_invocation(&args(&["--capture-room", "devpulse", "--lines", "2001"])),
+            Invocation::CaptureRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                lines: 2001
+            }
+        );
+        assert!(refuse_lines(2001).is_err());
+        assert!(refuse_lines(-3).is_err());
+        assert!(refuse_lines(0).is_ok() && refuse_lines(LINES_LIMIT).is_ok());
+    }
+
+    #[test]
+    fn send_room_takes_exactly_one_of_text_or_key() {
+        assert_eq!(
+            parse_invocation(&args(&["--send-room", "devpulse", "--text", "ls -la"])),
+            Invocation::SendRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                payload: SendPayload::Text("ls -la".to_string())
+            }
+        );
+        assert_eq!(
+            parse_invocation(&args(&["--send-room", "devpulse", "--key", "C-c"])),
+            Invocation::SendRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                payload: SendPayload::Key("C-c".to_string())
+            }
+        );
+        // Neither, and both, are refusals: the two are different mechanisms
+        // (literal typing vs an interpreted keystroke) and guessing which one
+        // a caller meant is how a paste turns into a control code.
+        assert!(matches!(
+            parse_invocation(&args(&["--send-room", "devpulse"])),
+            Invocation::Usage(_)
+        ));
+        assert!(matches!(
+            parse_invocation(&args(&["--send-room", "devpulse", "--text", "x", "--key", "Enter"])),
+            Invocation::Usage(_)
+        ));
+        // A literal that LOOKS like a flag is still a literal - refusing it
+        // would make `--text --help` impossible to type from a phone.
+        assert_eq!(
+            parse_invocation(&args(&["--send-room", "devpulse", "--text", "--help"])),
+            Invocation::SendRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                payload: SendPayload::Text("--help".to_string())
+            }
+        );
+    }
+
+    /// The allowlist is the whole safety of `--key`: `send-keys` without `-l`
+    /// interprets its argument, so an unbounded name is an unbounded keystroke.
+    #[test]
+    fn only_allowlisted_key_names_are_accepted() {
+        for name in [
+            "Enter", "Escape", "Tab", "Up", "Down", "Left", "Right", "C-c", "C-d", "C-l", "C-u",
+            "BSpace", "PageUp", "PageDown",
+        ] {
+            assert!(
+                key_is_allowed(name),
+                "{name} is named in the contract and must be accepted"
+            );
+        }
+        for bad in ["kill", "C-z", "enter", "", "Enter Enter", "C-c;ls"] {
+            assert!(!key_is_allowed(bad), "'{bad}' must not reach send-keys");
+        }
+        // The refusal is a VALUE refusal, not a usage one: the command line
+        // was well formed and carried a key the caller chose. It therefore
+        // travels as an envelope the operator can read, rather than becoming
+        // "whoever invoked the binary built a bad line".
+        assert_eq!(
+            parse_invocation(&args(&["--send-room", "devpulse", "--key", "C-z"])),
+            Invocation::SendRoom {
+                branch: "devpulse".to_string(),
+                project: None,
+                payload: SendPayload::Key("C-z".to_string())
+            }
+        );
+    }
+
+    /// Text is typed, never executed. The flag cannot append a newline, so a
+    /// paste alone can never run a command - submitting stays a separate,
+    /// deliberate act. BAUD's own rule, carried out of `Terminal.tsx`.
+    #[test]
+    fn text_is_bounded_and_never_carries_a_newline_of_its_own() {
+        assert!(refuse_text("").is_err(), "empty text has nothing to type");
+        assert!(refuse_text("ls -la").is_ok());
+        assert!(refuse_text(&"x".repeat(TEXT_LIMIT)).is_ok());
+        let too_long = refuse_text(&"x".repeat(TEXT_LIMIT + 1)).expect_err("refused");
+        assert!(
+            too_long.contains(&TEXT_LIMIT.to_string()),
+            "the refusal names the limit so the caller can act on it: {too_long}"
+        );
+        // The literal is handed to tmux verbatim: `send-keys -l` types the
+        // characters, so a newline the OPERATOR typed is typed, and nothing is
+        // ever appended on their behalf.
+        assert_eq!(send_keys_args(&pane_target("baud-x"), &SendPayload::Text("ls\n".to_string())),
+            vec!["send-keys", "-t", "=baud-x:", "-l", "--", "ls\n"]);
+        // Without -l the name is interpreted - which is exactly why the
+        // allowlist exists and why the two paths are separate argv shapes.
+        assert_eq!(send_keys_args(&pane_target("baud-x"), &SendPayload::Key("C-c".to_string())),
+            vec!["send-keys", "-t", "=baud-x:", "C-c"]);
+    }
+
+    /// `-e` keeps the escape sequences so the phone renders the same colours
+    /// the desk sees; `-S -N` reaches N lines above the visible screen. The
+    /// trailing colon is load-bearing: without it tmux refuses with "can't
+    /// find pane", which is how the first live capture failed.
+    #[test]
+    fn capture_args_ask_for_colour_and_the_right_depth() {
+        assert_eq!(
+            capture_args(&pane_target("baud-x"), 0),
+            vec!["capture-pane", "-p", "-e", "-t", "=baud-x:"]
+        );
+        assert_eq!(
+            capture_args(&pane_target("baud-x"), 120),
+            vec!["capture-pane", "-p", "-e", "-t", "=baud-x:", "-S", "-120"]
+        );
+    }
+
+    /// A room that is not live cannot be captured or typed into, and saying
+    /// "nothing here" is not the same as showing an empty screen - one is a
+    /// fact about the fleet, the other looks like a dead agent.
+    #[test]
+    fn a_room_that_is_not_live_is_refused_by_both_new_doors() {
+        let (base, anchor) = census_fixture("terminal-noroom");
+        let quiet = anchor.fleet_dir.join("quiet-terminal-branch-7c2d");
+        fs::create_dir_all(&quiet).unwrap();
+
+        let captured = capture_room_in(&anchor, "quiet-terminal-branch-7c2d", 0).expect_err("refused");
+        assert!(
+            captured.contains("no room live"),
+            "the refusal says the room is not there: {captured}"
+        );
+        let sent = send_room_in(
+            &anchor,
+            "quiet-terminal-branch-7c2d",
+            &SendPayload::Key("Enter".to_string()),
+        )
+        .expect_err("refused");
+        assert!(sent.contains("no room live"), "same sentence, same reason: {sent}");
+
+        // And the name fence is shared with the kill door rather than copied.
+        for bad in ["../devpulse", "a/b"] {
+            assert!(capture_room_in(&anchor, bad, 0)
+                .expect_err("refused")
+                .contains("names, not paths"));
+            assert!(send_room_in(&anchor, bad, &SendPayload::Key("Enter".to_string()))
+                .expect_err("refused")
+                .contains("names, not paths"));
+        }
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// Same envelope promise as the kill: exactly one of detail/error, and the
+    /// exit code agrees with which.
+    #[test]
+    fn terminal_envelopes_say_one_thing_and_the_codes_agree() {
+        let refused = CaptureOutcome::failed("devpulse", Some("AIPASS"), "nope".to_string());
+        assert_eq!(refused.detail, None);
+        assert!(!refused.captured);
+        assert_eq!(capture_exit_code(&refused), 1);
+
+        let refused_send = SendOutcome::failed("devpulse", Some("AIPASS"), "nope".to_string());
+        assert_eq!(refused_send.detail, None);
+        assert!(!refused_send.sent, "a refusal never claims it typed anything");
+        assert_eq!(send_exit_code(&refused_send), 1);
     }
 
     fn argv(args: &[&str]) -> Vec<u8> {

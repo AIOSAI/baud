@@ -36,6 +36,21 @@ interface BranchChipProps {
   onHelp: (branch: BranchStatus) => void;
   /** Operator clicked the gear: open this branch's settings panel (m11). */
   onSettings: (branch: BranchStatus) => void;
+  /**
+   * Render the card as a report and nothing else - no doors at all
+   * (FPLAN-0413 phase 3).
+   *
+   * `foreign` already withdraws the doors that would refuse at the fence; this
+   * withdraws the rest, because a face can be able to READ everything and DO
+   * nothing. That is the phone today: it mirrors the fleet over HTTP and has no
+   * verb lane until phase 6 clears.
+   *
+   * THE VERB REGISTER LANDS HERE. When the ruling arrives, the buttons this
+   * flag suppresses are the ones that come back - remote-capable, one at a
+   * time, each gated on its own. Deliberately not designed yet; marked so the
+   * next reader knows where it goes rather than inventing a second place.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -58,6 +73,7 @@ export default function BranchChip({
   onHelp,
   onSettings,
   foreign,
+  readOnly = false,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
@@ -66,8 +82,9 @@ export default function BranchChip({
   const [changes, setChanges] = useState<GitChanges | null>(null);
   useEffect(() => {
     // A foreign path fails the fence by design - asking every 15 seconds
-    // would be a guaranteed rejection on a loop.
-    if (foreign) return;
+    // would be a guaranteed rejection on a loop. A read-only face has no
+    // local git at all, and the count already rides the card.
+    if (foreign || readOnly) return;
     let mounted = true;
     const refresh = () => {
       gitChanges(branch.path)
@@ -84,7 +101,7 @@ export default function BranchChip({
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [branch.path, foreign]);
+  }, [branch.path, foreign, readOnly]);
 
   // Every number on the card is a door: clicking it opens the file the
   // number came from, in the reading room.
@@ -187,7 +204,7 @@ export default function BranchChip({
             {branch.project}
           </span>
         ) : null}
-        {branch.is_citizen && !foreign ? (
+        {branch.is_citizen && !foreign && !readOnly ? (
           <button
             type="button"
             className="baud-chip-help"
@@ -200,7 +217,7 @@ export default function BranchChip({
         {/* m11: this branch's own settings - model, auto-compact, context
             threshold. The panel writes claude's settings.local.json, so it
             only exists for branches that are actually citizens. */}
-        {branch.is_citizen && !foreign ? (
+        {branch.is_citizen && !foreign && !readOnly ? (
           <button
             type="button"
             className="baud-chip-gear"
@@ -269,7 +286,7 @@ export default function BranchChip({
         <span className={`baud-chip-age ${age.stale ? "baud-chip-age-stale" : ""}`}>
           updated {age.label}
         </span>
-        {branch.is_citizen ? (
+        {branch.is_citizen && !readOnly ? (
           <span className="baud-chip-buttons">
             {/* files and watch read under the seat's fence - on a roster
                 card they would refuse, so the card does not offer them. The

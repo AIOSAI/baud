@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges } from "./host";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { deliveryText } from "./deliver";
 
 import AgentSettings from "./components/AgentSettings";
 import Bell from "./components/Bell";
@@ -409,15 +410,15 @@ export default function App() {
     launch(branch, cardMode(branch));
   }, [snapshot, baudSettings, prefs.startupAgent, launch]);
 
-  // Deliver file paths INTO the chat box (m8): quoted only when they need
-  // it, wrapped in spaces so they join whatever the operator was typing,
-  // never submitted - Enter stays the operator's keystroke. Used by the
-  // camera button and the drop handler alike.
+  // Deliver file paths INTO the chat box (m8). The rule itself - quote only
+  // when needed, wrap in spaces, never submit - moved to `deliver.ts` when the
+  // phone's photo lane needed the same delivery: a quoting rule with shell
+  // semantics must exist once or it drifts. Used by the camera button and the
+  // drop handler alike.
   const deliverPaths = useCallback((paths: string[]) => {
-    if (paths.length === 0) return;
-    const quote = (text: string) =>
-      /[\s'"]/.test(text) ? `'${text.replace(/'/g, `'\\''`)}'` : text;
-    const typed = terminalRef.current?.typeText(` ${paths.map(quote).join(" ")} `) ?? false;
+    const text = deliveryText(paths);
+    if (!text) return;
+    const typed = terminalRef.current?.typeText(text) ?? false;
     // The delivery's whole point is the chat box - bring it forward.
     if (typed) setActiveTab(TERMINAL_TAB);
   }, []);
