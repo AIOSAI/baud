@@ -37,3 +37,4 @@ Thumbs.db
 
 # Registry lock
 .*_REGISTRY.lock
+.ai_central/deletions.jsonl
