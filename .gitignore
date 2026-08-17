@@ -38,3 +38,13 @@ Thumbs.db
 # Registry lock
 .*_REGISTRY.lock
 .ai_central/deletions.jsonl
+
+# Runtime state written by a branch at work - never source, never reviewable.
+# .backup/ is the memory rollover's own safety copy, .chroma/ the vector store's
+# sqlite. Both are regenerated from the live system; a committed one is a stale
+# lie about what the branch remembers.
+# NOT listed here on purpose: dropbox/. It looks like the same kind of dirt, but
+# the only file in it is the wheel mockup Patrick voted on - an artefact, not
+# state. It stays visible in status until someone rules on where it belongs.
+.backup/
+.chroma/

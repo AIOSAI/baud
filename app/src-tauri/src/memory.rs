@@ -339,6 +339,93 @@ fn write_config_at(path: &std::path::Path, patch: &MemoryConfigPatch) -> Result<
     read_config_at(path)
 }
 
+/// Run one of @memory's own config verbs and hand back the file afterwards.
+///
+/// ROLLOVER COUNTS ARE NOT BAUD'S TO WRITE (round A ruling). The character
+/// caps above have no verb behind them and stay on the direct file lane, but
+/// every keep-count now goes through `drone @memory config ...` so the bounds
+/// (1-100) and the refusal sentences come from ONE place - @memory's - instead
+/// of being re-implemented here and drifting the first time it changes them.
+///
+/// TWO THINGS MEASURED BEFORE THIS WAS WRITTEN, both of which shape it:
+///
+/// - A REFUSED VERB STILL EXITS 0. `config set @baud sessions 0` prints
+///   "Count must be at least 1 (got 0)" and returns success. So the exit
+///   status is not the test and is deliberately not treated as one.
+/// - There is no `--json` mode; the output is Rich-formatted for a human.
+///
+/// So the verb's own sentence is passed straight through for the panel to
+/// show, and the PROOF that a write happened is the file read back afterwards.
+/// Not any string this function parsed: a caller compares the number it asked
+/// for with the number that came back.
+fn run_memory_verb(args: &[&str]) -> Result<String, String> {
+    let output = std::process::Command::new("drone")
+        .arg("@memory")
+        .args(args)
+        .output()
+        .map_err(|err| format!("could not run drone @memory: {err}"))?;
+    let spoken = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // @memory marks its own refusals; the exit code cannot be asked.
+    if spoken.contains('❌') {
+        return Err(refusal_sentence(&spoken));
+    }
+    if !output.status.success() {
+        return Err(format!("drone @memory refused: {}", refusal_sentence(&spoken)));
+    }
+    Ok(spoken)
+}
+
+/// @memory's refusal, in @memory's words - the marked line and the line under
+/// it, which is where its "→ Try:" explanation lives. Never reworded: a
+/// sentence the operator can search for beats one BAUD invented.
+fn refusal_sentence(spoken: &str) -> String {
+    let lines: Vec<&str> = spoken
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    let marked = lines.iter().position(|line| line.contains('❌'));
+    match marked {
+        Some(index) => lines[index..]
+            .iter()
+            .take(2)
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" "),
+        None => lines.join(" "),
+    }
+}
+
+/// One branch's keep-count, through @memory's verb.
+#[tauri::command]
+pub fn memory_config_set(branch: String, entry_type: String, count: u64) -> Result<MemoryConfig, String> {
+    let target = format!("@{}", branch.trim_start_matches('@'));
+    let number = count.to_string();
+    run_memory_verb(&["config", "set", &target, &entry_type, &number])?;
+    read_config_at(&config_path()?)
+}
+
+/// A default keep-count, through @memory's verb. Does NOT reach any branch -
+/// that is what the push is for, and the panel says so.
+#[tauri::command]
+pub fn memory_config_set_default(entry_type: String, count: u64) -> Result<MemoryConfig, String> {
+    let number = count.to_string();
+    run_memory_verb(&["config", "set-default", &entry_type, &number])?;
+    read_config_at(&config_path()?)
+}
+
+/// Reset EVERY branch to the defaults. The one fleet-wide door, and the panel
+/// asks twice before it opens.
+#[tauri::command]
+pub fn memory_config_push() -> Result<MemoryConfig, String> {
+    run_memory_verb(&["rollover", "push"])?;
+    read_config_at(&config_path()?)
+}
+
 /// The dials as they are on disk right now.
 #[tauri::command]
 pub fn memory_config_read() -> Result<MemoryConfig, String> {
@@ -354,6 +441,22 @@ pub fn memory_config_write(patch: MemoryConfigPatch) -> Result<MemoryConfig, Str
 
 #[cfg(test)]
 mod tests {
+
+    /// @memory's refusals exit ZERO - measured, not assumed - so the marked
+    /// line is the only signal. This is the parser that reads it, and it must
+    /// keep @memory's own words rather than summarising them.
+    #[test]
+    fn a_refusal_keeps_memorys_own_sentence() {
+        let spoken = "\u{274c} Count must be at least 1 (got 0)\n   \u{2192} Try: A limit of 0 would roll over every entry immediately\n";
+        let read = refusal_sentence(spoken);
+        assert!(read.contains("Count must be at least 1 (got 0)"));
+        // The line under the mark carries the explanation and comes with it.
+        assert!(read.contains("would roll over every entry immediately"));
+
+        // Nothing marked: everything spoken, never an empty error.
+        let plain = refusal_sentence("something went sideways\n");
+        assert_eq!(plain, "something went sideways");
+    }
     use super::*;
 
     fn document() -> Map<String, Value> {

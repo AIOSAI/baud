@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { agentSettingsRead, agentSettingsWrite } from "../host";
+import { agentSettingsRead, agentSettingsWrite, memoryConfigRead, memoryConfigSet } from "../host";
 
-import type { AgentSettings as Settings, AgentSettingsPatch } from "../types";
+import type {
+  AgentSettings as Settings,
+  AgentSettingsPatch,
+  MemoryConfig,
+  RolloverDial,
+} from "../types";
 
 /**
  * One agent's settings (m11 phase 2): the gear on a card opens this, and it
@@ -94,6 +99,90 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
         if (alive.current) setReadError(message(err));
       });
   }, [agent]);
+
+  /* ------------------------------------------------------ memory limits --
+   * This agent's ROLLOVER limits: how many sessions, learnings and
+   * observations its memory keeps before the oldest roll off into @memory's
+   * vectors. Read off the same shared config the global panel renders, and
+   * resolved exactly the way @memory documents it - per FILE KEY, not per
+   * entry type: once a branch has a block for a group, the default block for
+   * that group is never consulted for it again.
+   *
+   * A number here is written through @memory's verb, never by BAUD touching
+   * the file. This panel is shared with the phone, so both go through the one
+   * host door and the phone's transport refuses it with a reason of its own.
+   */
+  const [memory, setMemory] = useState<MemoryConfig | null>(null);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const [limits, setLimits] = useState<Record<string, number>>({});
+  const [savingLimit, setSavingLimit] = useState<string | null>(null);
+
+  /**
+   * ONE EDGE THIS RESOLUTION DOES NOT COVER, stated rather than hidden.
+   * @memory documents resolution as per FILE KEY: once a branch has a block
+   * for a group, that group's defaults are never consulted for it again. The
+   * lookup below is per (group, key) pair, so a branch carrying a PARTIAL
+   * group block - some keys set, others absent - could be shown a default
+   * here that the engine would not actually apply.
+   *
+   * It cannot happen today: every branch is at the defaults and the push
+   * writes whole groups. It is left as a comment and not as clever code
+   * because the real fix is a read that @memory itself resolves - its `config
+   * get @branch` already prints exactly this, and the day it can answer in
+   * JSON this function becomes a call instead of a rule BAUD re-derives.
+   */
+  const adoptMemory = (next: MemoryConfig) => {
+    setMemory(next);
+    const mine = next.per_branch.find((entry) => entry.branch === agent);
+    const effective: Record<string, number> = {};
+    for (const dial of next.rollover) {
+      const override = mine?.dials.find((each) => each.group === dial.group && each.key === dial.key);
+      effective[dial.key] = override ? override.count : dial.count;
+    }
+    setLimits(effective);
+  };
+
+  useEffect(() => {
+    memoryConfigRead()
+      .then((next) => {
+        if (!alive.current) return;
+        adoptMemory(next);
+        setMemoryError(null);
+      })
+      .catch((err) => {
+        if (alive.current) setMemoryError(message(err));
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agent]);
+
+  /** Is this dial the agent's own number, or the fleet default it inherits? */
+  const overridden = (dial: RolloverDial): boolean => {
+    const mine = memory?.per_branch.find((entry) => entry.branch === agent);
+    return Boolean(mine?.dials.some((each) => each.group === dial.group && each.key === dial.key));
+  };
+
+  const commitLimit = (dial: RolloverDial) => {
+    const next = limits[dial.key];
+    if (!Number.isFinite(next) || savingLimit) return;
+    const current = memory?.per_branch
+      .find((entry) => entry.branch === agent)
+      ?.dials.find((each) => each.group === dial.group && each.key === dial.key)?.count;
+    if (next === (current ?? dial.count)) return;
+    setSavingLimit(dial.key);
+    setMemoryError(null);
+    memoryConfigSet(agent, dial.key, next)
+      .then((fresh) => {
+        // The file re-read after the verb ran - the ONLY honest proof the
+        // number moved, because @memory's refusals exit zero.
+        if (alive.current) adoptMemory(fresh);
+      })
+      .catch((err) => {
+        if (alive.current) setMemoryError(message(err));
+      })
+      .finally(() => {
+        if (alive.current) setSavingLimit(null);
+      });
+  };
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
@@ -257,12 +346,56 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
           </span>
         </label>
 
-        <div className="baud-settings-row baud-settings-row-off">
-          <span className="baud-settings-label">memory caps</span>
-          <span className="baud-settings-soon">
-            Rollover caps — coming with @memory support
+        {/* ROLLOVER LIMITS, live (round A). Each dial commits on blur through
+            @memory's own verb - not with the panel's save button, because the
+            save button writes claude's settings file and these numbers live in
+            @memory's shared config. One button doing both would make a model
+            change quietly rewrite this agent's memory. */}
+        <div className="baud-settings-row baud-settings-row-head">
+          <span className="baud-settings-label">memory limits</span>
+          <span className="baud-settings-hint">
+            entries kept before rollover · applies at the next rollover run
           </span>
         </div>
+        {memoryError ? (
+          <p className="baud-settings-error" role="alert">
+            memory limits: {memoryError}
+          </p>
+        ) : null}
+        {memory
+          ? memory.rollover.map((dial) => (
+              <label className="baud-settings-row" key={`${dial.group}/${dial.key}`}>
+                <span className="baud-settings-label">{dial.key.replace(/_/g, " ")}</span>
+                <input
+                  type="number"
+                  className="baud-settings-number"
+                  min={1}
+                  max={100}
+                  step={1}
+                  disabled={savingLimit !== null}
+                  value={Number.isFinite(limits[dial.key]) ? limits[dial.key] : ""}
+                  onChange={(event) =>
+                    setLimits({ ...limits, [dial.key]: event.target.valueAsNumber })
+                  }
+                  onBlur={() => commitLimit(dial)}
+                />
+                {/* Which number this IS - inherited or this agent's own. An
+                    operator changing a limit needs to know whether they are
+                    about to create an override or move one. */}
+                <span className="baud-settings-hint">
+                  {savingLimit === dial.key
+                    ? "saving…"
+                    : overridden(dial)
+                      ? `override · fleet default ${dial.count}`
+                      : "default"}
+                </span>
+              </label>
+            ))
+          : memoryError
+            ? null
+            : (
+                <p className="baud-settings-hint">reading @memory's limits…</p>
+              )}
 
         {readError ? (
           <p className="baud-settings-error" role="alert">

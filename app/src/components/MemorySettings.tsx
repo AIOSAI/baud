@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { memoryConfigRead, memoryConfigWrite } from "../host";
+import {
+  memoryConfigPush,
+  memoryConfigRead,
+  memoryConfigSetDefault,
+  memoryConfigWrite,
+} from "../host";
 
 import type { MemoryConfig, MemoryConfigPatch } from "../types";
 
@@ -47,7 +52,6 @@ export default function MemorySettings() {
   const [config, setConfig] = useState<MemoryConfig | null>(null);
   const [caps, setCaps] = useState<Numbers>({});
   const [counts, setCounts] = useState<Numbers>({});
-  const [autoCaps, setAutoCaps] = useState<Numbers>({});
   const [openBranches, setOpenBranches] = useState(false);
 
   const [readError, setReadError] = useState<string | null>(null);
@@ -86,13 +90,9 @@ export default function MemorySettings() {
     setConfig(next);
     setCaps(Object.fromEntries(next.entry_limits.map((l) => [l.key, l.max_chars])));
     setCounts(Object.fromEntries(next.rollover.map((d) => [dialId(d.group, d.key), d.count])));
-    setAutoCaps(
-      Object.fromEntries(
-        next.rollover
-          .filter((d) => d.auto_compact_cap !== null)
-          .map((d) => [dialId(d.group, d.key), d.auto_compact_cap as number]),
-      ),
-    );
+    // auto_compact_cap is NOT mirrored into editor state any more: it is
+    // read-only in v1, and holding an edit buffer for a value nothing can
+    // write is how a dead input gets re-added by accident later.
   }
 
   // Only genuine differences reach the wire, and a field the operator cleared
@@ -107,42 +107,78 @@ export default function MemorySettings() {
         patch.caps.push({ key: limit.key, max_chars: next });
       }
     }
-    for (const dial of config.rollover) {
-      const id = dialId(dial.group, dial.key);
-      const count = counts[id];
-      const auto = autoCaps[id];
-      const countMoved = Number.isFinite(count) && count !== dial.count;
-      const autoMoved =
-        dial.auto_compact_cap !== null && Number.isFinite(auto) && auto !== dial.auto_compact_cap;
-      if (countMoved || autoMoved) {
-        patch.rollover.push({
-          group: dial.group,
-          key: dial.key,
-          ...(countMoved ? { count } : {}),
-          ...(autoMoved ? { auto_compact_cap: auto } : {}),
-        });
-      }
-    }
+    // ROLLOVER COUNTS NO LONGER TRAVEL IN THIS PATCH (round A ruling). They
+    // were direct file writes; they are now @memory's `config set-default`,
+    // one verb per moved dial, so the 1-100 bounds and the refusal wording
+    // come from @memory rather than from a second copy of its rules here.
+    // `patch.rollover` stays in the type because the CAP writer still uses
+    // the same envelope - it is simply always empty from this panel now.
   }
-  const pending = patch.caps.length + patch.rollover.length;
+  const movedDials = config
+    ? config.rollover.filter((dial) => {
+        const next = counts[dialId(dial.group, dial.key)];
+        return Number.isFinite(next) && next !== dial.count;
+      })
+    : [];
+  const pending = patch.caps.length + movedDials.length;
 
-  const save = () => {
+  /**
+   * Two lanes, deliberately, and the split is the round's ruling: character
+   * caps have no verb behind them and stay on the direct file write; every
+   * keep-count goes through @memory's own `config set-default`.
+   *
+   * The dials run in SEQUENCE, not in parallel - they all edit one shared
+   * file, and three concurrent writers to one JSON document is how a config
+   * loses a key. Slower by a few hundred milliseconds, and correct.
+   *
+   * Whatever comes back is the file RE-READ after the verb, so the panel
+   * always settles on what @memory's config actually says rather than on what
+   * BAUD asked for. That matters more than usual here: a refused verb exits
+   * zero, so the read-back is the only honest proof a number moved.
+   */
+  const save = async () => {
     if (pending === 0 || saving) return;
     setSaving(true);
     setWriteError(null);
-    memoryConfigWrite(patch)
+    try {
+      let settled: MemoryConfig | null = null;
+      if (patch.caps.length > 0) settled = await memoryConfigWrite(patch);
+      for (const dial of movedDials) {
+        settled = await memoryConfigSetDefault(dial.key, counts[dialId(dial.group, dial.key)]);
+      }
+      if (alive.current && settled) {
+        adopt(settled);
+        setSaved(true);
+      }
+    } catch (err) {
+      if (alive.current) setWriteError(message(err));
+    } finally {
+      if (alive.current) setSaving(false);
+    }
+  };
+
+  /**
+   * The fleet-wide reset. Two taps, never one: this rewrites the limits of
+   * every branch at once and there is no undo verb to offer afterwards.
+   */
+  const [confirmPush, setConfirmPush] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const push = () => {
+    if (pushing) return;
+    setPushing(true);
+    setWriteError(null);
+    memoryConfigPush()
       .then((next) => {
-        // What comes back is the file re-read, so the panel always settles on
-        // what @memory's config actually says - never on what BAUD sent.
         if (!alive.current) return;
         adopt(next);
+        setConfirmPush(false);
         setSaved(true);
       })
       .catch((err) => {
         if (alive.current) setWriteError(message(err));
       })
       .finally(() => {
-        if (alive.current) setSaving(false);
+        if (alive.current) setPushing(false);
       });
   };
 
@@ -194,9 +230,14 @@ export default function MemorySettings() {
             </label>
           ))}
 
+          {/* THE TIMING SENTENCE, corrected this round: there is no daemon
+              tick and nothing here is scheduled. A changed limit is applied by
+              the next rollover RUN - a compaction hook, a watch, or somebody
+              running it by hand. Never promise a clock we do not own. */}
           <p className="baud-memory-note">
-            rollover keep-counts · defaults only. They reach the branches when you run
-            <code className="baud-memory-cmd">drone @memory rollover push</code>
+            rollover keep-counts · defaults only, written through @memory's own verb.
+            A change applies at the next rollover run, and does NOT reach any agent
+            until you push.
           </p>
 
           {config.rollover.map((dial) => {
@@ -206,15 +247,27 @@ export default function MemorySettings() {
                 <span className="baud-settings-label">{dial.key.replace(/_/g, " ")}</span>
                 {number(counts[id], (next) => setCounts({ ...counts, [id]: next }), 1)}
                 <span className="baud-settings-hint">kept in {dial.group}</span>
+                {/* READ-ONLY IN v1 - @memory displays this dial and does not
+                    take a value for it, so BAUD shows the number and offers no
+                    box. An input that silently does nothing is worse than no
+                    input at all. */}
                 {dial.auto_compact_cap !== null ? (
-                  <>
-                    {number(autoCaps[id], (next) => setAutoCaps({ ...autoCaps, [id]: next }), 0)}
-                    <span className="baud-settings-hint">auto-compact cap</span>
-                  </>
+                  <span className="baud-settings-hint">
+                    auto-compact cap {dial.auto_compact_cap} · read-only in v1
+                  </span>
                 ) : null}
               </label>
             );
           })}
+
+          {/* THE EMPTY STATE IS A FACT, NOT A BLANK. Every branch sitting at
+              the defaults is the healthy case and the panel should say so out
+              loud - an empty region reads as a list that failed to load. */}
+          {config.per_branch.length === 0 ? (
+            <p className="baud-memory-note">
+              no branch overrides · every agent is at the defaults above
+            </p>
+          ) : null}
 
           {config.per_branch.length > 0 ? (
             <div className="baud-memory-branches">
@@ -243,6 +296,51 @@ export default function MemorySettings() {
               ) : null}
             </div>
           ) : null}
+
+          {/* THE PUSH. Its copy carries @memory's real semantics, which are
+              easy to soften and must not be: changing a default above does NOT
+              reach a single agent. Until this button is pressed, every branch
+              that already carries an override keeps showing its OLD number.
+              That is the whole reason the button exists. */}
+          <div className="baud-memory-push">
+            <p className="baud-memory-note">
+              changing a default does not reach agents · until you push, every agent with
+              an override stays at its old number
+            </p>
+            {confirmPush ? (
+              <div className="baud-memory-push-row">
+                <span className="baud-memory-warn">
+                  this resets ALL {config.per_branch.length || "17"} branches to the defaults —
+                  there is no undo
+                </span>
+                <button
+                  type="button"
+                  className="baud-settings-save"
+                  disabled={pushing}
+                  onClick={push}
+                >
+                  {pushing ? "pushing…" : "yes, reset every agent"}
+                </button>
+                <button
+                  type="button"
+                  className="baud-memory-toggle"
+                  disabled={pushing}
+                  onClick={() => setConfirmPush(false)}
+                >
+                  cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="baud-memory-toggle"
+                title="drone @memory rollover push - resets every branch's limits to the defaults"
+                onClick={() => setConfirmPush(true)}
+              >
+                push defaults to every agent…
+              </button>
+            )}
+          </div>
 
           {writeError ? (
             <p className="baud-settings-error" role="alert">

@@ -7,6 +7,13 @@ export interface BranchStatus {
   is_citizen: boolean;
   /** Passport `identity.citizen_class` is "manager" — the project's owner. */
   manager: boolean;
+  /**
+   * That same `identity.citizen_class` verbatim, empty when the passport is
+   * missing or unreadable. `manager` is this field asked one question; this is
+   * the whole answer, so the passport can print the class and a class AIPass
+   * adds later needs no second trip through this file.
+   */
+  citizen_class: string;
   dispatched: boolean;
   interactive: boolean;
   has_history: boolean;
@@ -50,6 +57,18 @@ export interface DirEntryInfo {
   name: string;
   path: string;
   is_dir: boolean;
+}
+
+/**
+ * One directory level with its honesty flag — the phone transport's shape,
+ * same idea as FeedWindow below. `path` here is RELATIVE to the branch root
+ * (the phone's fence takes names, never machine paths), and `truncated` says
+ * the server dropped the tail of an over-full level rather than letting a
+ * shorter list read as the whole one.
+ */
+export interface DirWindow {
+  entries: DirEntryInfo[];
+  truncated: boolean;
 }
 
 /** Mirrors `FileText` in src-tauri/src/lib.rs. */

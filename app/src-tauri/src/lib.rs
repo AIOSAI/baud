@@ -142,6 +142,15 @@ pub struct BranchStatus {
     /// not one. False for a builder, a non-citizen, and any passport BAUD
     /// cannot read - the mark is only ever claimed when the file says so.
     pub manager: bool,
+    /// The passport's `identity.citizen_class` VERBATIM, or empty when there is
+    /// no passport, no key, or nothing BAUD could read.
+    ///
+    /// `manager` above is this field asked one narrow question, and it stays
+    /// because half the app asks exactly that question. This carries the whole
+    /// answer so the passport view can PRINT the class, and so a class AIPass
+    /// invents next month arrives without a second plumbing trip through the
+    /// snapshot, the types file and the transports.
+    pub citizen_class: String,
     /// `.ai_mail.local/.dispatch.lock` exists - a dispatched agent is working
     /// the branch right now.
     pub dispatched: bool,
@@ -192,6 +201,7 @@ impl BranchStatus {
             path,
             is_citizen: false,
             manager: false,
+            citizen_class: String::new(),
             dispatched: false,
             interactive: false,
             has_history: false,
@@ -1689,27 +1699,31 @@ fn mail_counts_in(branch_dir: &Path) -> (u64, u64) {
     (new_mail, opened_mail)
 }
 
-/// Does this branch's passport declare a manager-class citizen?
+/// What class does this branch's passport declare its citizen to be?
 ///
-/// The value read is `identity.citizen_class == "manager"` - spawn's
-/// identity-only class, never minted from a template, so a passport either
-/// says it or the branch is not one. Every failure path (no passport,
-/// unreadable, malformed, key absent, any other class) reads as false: an
-/// ownership mark is a claim, and BAUD only makes it when the file does.
-fn is_manager(branch_dir: &Path) -> bool {
+/// The passport's `identity.citizen_class`, VERBATIM and unjudged - spawn's
+/// identity-only field, never minted from a template, so a passport either
+/// says a class or the branch has none to report. Every failure path (no
+/// passport, unreadable, malformed, key absent) reads as the empty string: a
+/// class is a claim the FILE makes, and BAUD repeats it rather than inventing
+/// one. Nothing here knows which classes exist, which is the point - the value
+/// travels to the passport view unchanged and a class AIPass adds later
+/// arrives without touching this function.
+fn citizen_class_of(branch_dir: &Path) -> String {
     let raw = match fs::read_to_string(join_all(branch_dir, &PASSPORT_RELATIVE_PATH)) {
         Ok(contents) => contents,
-        Err(_) => return false,
+        Err(_) => return String::new(),
     };
     let document: Value = match serde_json::from_str(&raw) {
         Ok(value) => value,
-        Err(_) => return false,
+        Err(_) => return String::new(),
     };
     document
         .get("identity")
         .and_then(|identity| identity.get("citizen_class"))
         .and_then(Value::as_str)
-        == Some("manager")
+        .unwrap_or_default()
+        .to_owned()
 }
 
 /// Overlay whatever `DASHBOARD.local.json` has to say onto a branch status.
@@ -1763,7 +1777,14 @@ fn read_branch(
     let mut status =
         BranchStatus::new(name, project.to_owned(), branch_dir.display().to_string());
     status.is_citizen = join_all(branch_dir, &PASSPORT_RELATIVE_PATH).is_file();
-    status.manager = status.is_citizen && is_manager(branch_dir);
+    // One read, both answers - and `manager` stays derived from the class
+    // rather than sampled separately, so the two can never disagree.
+    status.citizen_class = if status.is_citizen {
+        citizen_class_of(branch_dir)
+    } else {
+        String::new()
+    };
+    status.manager = status.citizen_class == "manager";
     status.dispatched = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
 
     // /proc reports kernel-canonical cwds; canonicalize the branch dir so a
@@ -1956,6 +1977,14 @@ enum Invocation {
         project: Option<String>,
         payload: SendPayload,
     },
+    /// `--list-projects` - print the switcher's census and exit. Takes no
+    /// `--project`: the census IS the set of valid project names, so there is
+    /// nothing to scope it by.
+    ListProjects,
+    /// `--roster` - print every project's WORKING agents and exit. Takes no
+    /// `--project` either, and for a sharper reason: crossing projects is the
+    /// entire point, so a scoped roster is a fleet read with extra steps.
+    Roster,
     /// Called wrong STRUCTURALLY - a flag missing its value, two verbs, a
     /// branch not named. Exit 2, stdout empty.
     ///
@@ -1969,11 +1998,13 @@ enum Invocation {
 
 /// The headless verbs. A process that carries one of these has been asked for
 /// an answer, not a window.
-const HEADLESS_FLAGS: [&str; 4] = [
+const HEADLESS_FLAGS: [&str; 6] = [
     "--snapshot",
     "--end-room",
     "--capture-room",
     "--send-room",
+    "--list-projects",
+    "--roster",
 ];
 
 /// Parse the process arguments (already stripped of argv0).
@@ -2001,7 +2032,7 @@ fn parse_invocation(args: &[String]) -> Invocation {
 
     // Every verb but --snapshot names a branch, positionally, so the flag
     // reads like the button it stands for: `baud --end-room devpulse`.
-    let takes_branch = verb != "--snapshot";
+    let takes_branch = !matches!(verb, "--snapshot" | "--list-projects" | "--roster");
 
     let mut project = None;
     let mut branch = None;
@@ -2011,7 +2042,10 @@ fn parse_invocation(args: &[String]) -> Invocation {
     let mut rest = args.iter().filter(|arg| arg.as_str() != verb);
     while let Some(arg) = rest.next() {
         match arg.as_str() {
-            "--project" => match rest.next() {
+            // The census-shaped verbs refuse the flag rather than ignoring it:
+            // neither can be scoped, and a silently dropped argument reads as a
+            // filter that worked.
+            "--project" if !matches!(verb, "--list-projects" | "--roster") => match rest.next() {
                 Some(name) if !name.starts_with("--") => project = Some(name.clone()),
                 _ => return Invocation::Usage("--project needs a project name".to_string()),
             },
@@ -2073,6 +2107,8 @@ fn parse_invocation(args: &[String]) -> Invocation {
                 Invocation::Usage("--send-room needs one of --text or --key".to_string())
             }
         },
+        "--list-projects" => Invocation::ListProjects,
+        "--roster" => Invocation::Roster,
         _ => Invocation::Snapshot { project },
     }
 }
@@ -2348,6 +2384,85 @@ fn send_room_headless(
     }
 }
 
+/// What `--list-projects` prints: the switcher's census, whole, as an
+/// envelope - headless callers get one object, never a bare array.
+#[derive(Serialize)]
+struct CensusOutcome {
+    /// Every project BAUD can seat, anchor first - the same rows the desktop
+    /// menu shows.
+    projects: Vec<ProjectListing>,
+    /// ISO-8601 UTC timestamp of this census.
+    generated_at: String,
+    /// Why the census is empty, when it is.
+    error: Option<String>,
+}
+
+/// The switcher's census, headless. The seat is per-window state and a
+/// headless process has no window, so `active` marks the anchor - the seat
+/// every fresh window starts in. A remote client that keeps its own seat
+/// overrides the flag locally.
+fn list_projects_headless() -> CensusOutcome {
+    match anchor_project() {
+        Ok(anchor) => CensusOutcome {
+            projects: discover_projects(&anchor)
+                .into_iter()
+                .map(|project| ProjectListing {
+                    active: project.anchor,
+                    name: project.name,
+                    root: project.root.display().to_string(),
+                    anchor: project.anchor,
+                })
+                .collect(),
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Err(error) => CensusOutcome {
+            projects: Vec::new(),
+            generated_at: now_iso8601(),
+            error: Some(error),
+        },
+    }
+}
+
+/// What `--roster` prints: the system's working agents, as an envelope -
+/// headless callers get one object, never a bare array.
+#[derive(Serialize)]
+struct RosterOutcome {
+    /// Dispatched first, then live, then by project and name. That is
+    /// [`agent_roster`]'s own ranking, passed through untouched: a caller
+    /// drawing this as a wheel wants the order the desktop strip already
+    /// shows, and re-sorting it here would put two answers in the system.
+    branches: Vec<BranchStatus>,
+    /// ISO-8601 UTC timestamp of this sweep.
+    generated_at: String,
+    /// Why the roster is empty, when it is EMPTY BECAUSE IT FAILED. An
+    /// honestly empty roster - nobody working anywhere - carries no error, and
+    /// the two must stay tellable apart: one says "nothing is happening", the
+    /// other says "I could not look".
+    error: Option<String>,
+}
+
+/// The system-wide working set, headless.
+///
+/// This is [`agent_roster`] with a way out of the binary, and deliberately
+/// nothing more - the desktop's roster tabs and a phone's cross-project wheel
+/// must not be able to disagree about who is working, so there is ONE sweep
+/// and one ranking behind both.
+fn roster_headless() -> RosterOutcome {
+    match agent_roster() {
+        Ok(branches) => RosterOutcome {
+            branches,
+            generated_at: now_iso8601(),
+            error: None,
+        },
+        Err(error) => RosterOutcome {
+            branches: Vec::new(),
+            generated_at: now_iso8601(),
+            error: Some(error),
+        },
+    }
+}
+
 fn capture_exit_code(outcome: &CaptureOutcome) -> i32 {
     i32::from(outcome.error.is_some())
 }
@@ -2370,6 +2485,8 @@ fn run_headless(args: &[String]) -> Option<i32> {
             eprintln!("       baud --end-room <branch> [--project <name>]");
             eprintln!("       baud --capture-room <branch> [--project <name>] [--lines <N>]");
             eprintln!("       baud --send-room <branch> [--project <name>] (--text <s> | --key <NAME>)");
+            eprintln!("       baud --list-projects");
+            eprintln!("       baud --roster");
             Some(2)
         }
         Invocation::Snapshot { project } => {
@@ -2413,6 +2530,16 @@ fn run_headless(args: &[String]) -> Option<i32> {
         } => {
             let outcome = send_room_headless(&branch, project.as_deref(), &payload);
             emit(&outcome, outcome.error.as_deref(), send_exit_code(&outcome))
+        }
+        Invocation::ListProjects => {
+            let outcome = list_projects_headless();
+            let code = i32::from(outcome.error.is_some());
+            emit(&outcome, outcome.error.as_deref(), code)
+        }
+        Invocation::Roster => {
+            let outcome = roster_headless();
+            let code = i32::from(outcome.error.is_some());
+            emit(&outcome, outcome.error.as_deref(), code)
         }
     }
 }
@@ -2495,7 +2622,10 @@ pub fn run() {
             settings::hooks_sound_get,
             settings::hooks_sound_set,
             memory::memory_config_read,
-            memory::memory_config_write
+            memory::memory_config_write,
+            memory::memory_config_set,
+            memory::memory_config_set_default,
+            memory::memory_config_push
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session
@@ -2573,6 +2703,50 @@ mod tests {
         // pass for the wrong reason and prove nothing about the guard.
         assert!(matches!(
             parse_invocation(&args(&["--snapshot", "--project", "--verbose"])),
+            Invocation::Usage(_)
+        ));
+    }
+
+    #[test]
+    fn list_projects_parses_bare() {
+        assert_eq!(
+            parse_invocation(&args(&["--list-projects"])),
+            Invocation::ListProjects
+        );
+    }
+
+    #[test]
+    fn roster_parses_bare() {
+        assert_eq!(parse_invocation(&args(&["--roster"])), Invocation::Roster);
+    }
+
+    #[test]
+    fn roster_refuses_a_project_scope() {
+        // Crossing projects IS the roster. Accepting the flag and ignoring it
+        // would hand back the whole system to a caller who asked for one
+        // project - the opposite of a filter that silently did nothing.
+        assert!(matches!(
+            parse_invocation(&args(&["--roster", "--project", "BAUD"])),
+            Invocation::Usage(_)
+        ));
+    }
+
+    #[test]
+    fn roster_refuses_a_branch_name() {
+        // A positional argument beside a verb that takes none is a caller who
+        // believes they scoped something.
+        assert!(matches!(
+            parse_invocation(&args(&["--roster", "devpulse"])),
+            Invocation::Usage(_)
+        ));
+    }
+
+    #[test]
+    fn list_projects_refuses_a_project_scope() {
+        // The census cannot be filtered; accepting and ignoring the flag would
+        // read as a filter that worked.
+        assert!(matches!(
+            parse_invocation(&args(&["--list-projects", "--project", "BAUD"])),
             Invocation::Usage(_)
         ));
     }
@@ -3353,6 +3527,37 @@ mod tests {
     }
 
     #[test]
+    fn citizen_class_is_repeated_verbatim_never_invented() {
+        let dir = std::env::temp_dir().join(format!("baud-class-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let trinity = dir.join(".trinity");
+        fs::create_dir_all(&trinity).unwrap();
+
+        // No passport: no class to report, and that is not an error.
+        assert_eq!(citizen_class_of(&dir), "");
+
+        // Whatever the file says, unjudged - including a class BAUD has never
+        // heard of, which is the whole point of carrying the string.
+        for class in ["manager", "aipass_framework", "some_future_class"] {
+            fs::write(
+                trinity.join("passport.json"),
+                format!(r#"{{"identity": {{"citizen_class": "{class}"}}}}"#),
+            )
+            .unwrap();
+            assert_eq!(citizen_class_of(&dir), class);
+            assert_eq!(citizen_class_of(&dir) == "manager", class == "manager");
+        }
+
+        // Malformed, and key absent: the empty string both times. A class is a
+        // claim the FILE makes, so an unreadable file makes none.
+        fs::write(trinity.join("passport.json"), "not json").unwrap();
+        assert_eq!(citizen_class_of(&dir), "");
+        fs::write(trinity.join("passport.json"), r#"{"identity": {}}"#).unwrap();
+        assert_eq!(citizen_class_of(&dir), "");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn manager_mark_is_claimed_only_when_the_passport_says_so() {
         let dir = std::env::temp_dir().join(format!("baud-mgr-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -3360,7 +3565,7 @@ mod tests {
         fs::create_dir_all(&trinity).unwrap();
 
         // No passport at all: not a manager, not an error.
-        assert!(!is_manager(&dir));
+        assert_ne!(citizen_class_of(&dir), "manager");
 
         // The real shape, both live values seen in the fleet.
         fs::write(
@@ -3368,22 +3573,22 @@ mod tests {
             r#"{"identity": {"citizen_class": "manager", "role": "project_agent"}}"#,
         )
         .unwrap();
-        assert!(is_manager(&dir));
+        assert_eq!(citizen_class_of(&dir), "manager");
 
         fs::write(
             trinity.join("passport.json"),
             r#"{"identity": {"citizen_class": "aipass_framework"}}"#,
         )
         .unwrap();
-        assert!(!is_manager(&dir));
+        assert_ne!(citizen_class_of(&dir), "manager");
 
         // A citizen whose passport omits the key is a builder, not a manager.
         fs::write(trinity.join("passport.json"), r#"{"identity": {}}"#).unwrap();
-        assert!(!is_manager(&dir));
+        assert_ne!(citizen_class_of(&dir), "manager");
 
         // Malformed JSON reads quiet-false, never takes the snapshot down.
         fs::write(trinity.join("passport.json"), "not json").unwrap();
-        assert!(!is_manager(&dir));
+        assert_ne!(citizen_class_of(&dir), "manager");
 
         let _ = fs::remove_dir_all(&dir);
     }

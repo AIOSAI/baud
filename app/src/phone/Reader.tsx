@@ -26,6 +26,17 @@ export interface ReadTarget {
   /** What the header calls it. */
   title: string;
   kind: "file" | "diff";
+  /**
+   * WHICH PROJECT the branch lives in - browsing is free since 2026-08-16.
+   *
+   * Absent means the seat, which is what every read on this face meant before
+   * the ruling. It matters most when it is WRONG rather than missing: eleven
+   * projects share a naming convention, so a read aimed at a foreign agent and
+   * silently resolved under the seat does not fail - it finds a different
+   * agent's file and shows it as this one's. Naming the project is what makes
+   * the cross-project read a fact rather than a coincidence.
+   */
+  project?: string;
 }
 
 interface ReaderProps {
@@ -42,7 +53,10 @@ export default function Reader({ target, onClose }: ReaderProps) {
     let mounted = true;
     setText(null);
     setError(null);
-    const read = target.kind === "diff" ? gitDiffText(target.ref) : readFileText(target.ref);
+    const read =
+      target.kind === "diff"
+        ? gitDiffText(target.ref, target.project)
+        : readFileText(target.ref, target.project);
     read
       .then((got) => {
         if (!mounted) return;
@@ -58,7 +72,9 @@ export default function Reader({ target, onClose }: ReaderProps) {
     return () => {
       mounted = false;
     };
-  }, [target.ref, target.kind]);
+    // The project is a dependency because it CHANGES THE ANSWER: the same ref
+    // read under two projects is two different files.
+  }, [target.ref, target.kind, target.project]);
 
   return (
     <section className="baud-phone-reader">

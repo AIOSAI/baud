@@ -37,6 +37,15 @@ interface BranchChipProps {
   /** Operator clicked the gear: open this branch's settings panel (m11). */
   onSettings: (branch: BranchStatus) => void;
   /**
+   * Operator clicked the avatar: open this agent's passport (round A).
+   *
+   * The avatar and not the whole card, deliberately - a card is already a
+   * dense field of doors, and a click-anywhere card turns every miss into a
+   * navigation. The avatar is new, it is the agent's face, and pressing a
+   * face to see who someone is needs no legend.
+   */
+  onOpenPassport: (branch: BranchStatus) => void;
+  /**
    * Render the card as a report and nothing else - no doors at all
    * (FPLAN-0413 phase 3).
    *
@@ -72,6 +81,7 @@ export default function BranchChip({
   onShell,
   onHelp,
   onSettings,
+  onOpenPassport,
   foreign,
   readOnly = false,
 }: BranchChipProps) {
@@ -163,6 +173,29 @@ export default function BranchChip({
     <article className={chipClass}>
       <header className="baud-chip-head">
         <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
+        {/* THE AGENT'S FACE, and the door to its passport (round A). Initials,
+            because a fleet of seventeen is scanned by shape before it is read
+            by name - the phone's wheel has been doing this for weeks and this
+            is the same idea, brought back to the desk.
+            Manager centre is BLUE-family on Patrick's ruling (explicitly not
+            red): red is the fleet's alarm colour and ownership is not an
+            alarm. The sub-agent flash IS red-family, because work happening
+            inside a session you cannot see is exactly the thing worth a
+            glance. */}
+        <button
+          type="button"
+          className={`baud-chip-avatar ${branch.manager ? "baud-chip-avatar-manager" : ""} ${
+            branch.subagents > 0 ? "baud-chip-avatar-busy" : ""
+          }`}
+          title={
+            branch.subagents > 0
+              ? `open ${branch.name}'s passport — ${branch.subagents} sub-agent(s) running inside this session`
+              : `open ${branch.name}'s passport`
+          }
+          onClick={() => onOpenPassport(branch)}
+        >
+          {branch.name.slice(0, 2).toUpperCase()}
+        </button>
         <h2 className="baud-chip-name">{branch.name}</h2>
         {/* Manager class: the project's first agent and its owner, the only
             one holding git write, the feedback channel and watchdog. Rare by

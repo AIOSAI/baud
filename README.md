@@ -243,7 +243,9 @@ settings from the new root, and re-polls immediately. The terminal is untouched.
 ## Cards
 
 One citizen, one card, under the strip's own heading — **Agent Passports**,
-because that is what a card reads: the branch's passport, not its process.
+because that is what a card reads: the branch's passport, not its process. The
+name is now literal on both counts — a card's avatar **opens** the passport as
+a document (see *The opened passport*), where before the strip only read one.
 Strip order: dispatched first, then interactive, then alphabetical. The strip
 scrolls sideways rather than wrapping, so the workbench below never loses
 height as the fleet grows.
@@ -278,6 +280,12 @@ signal — it stays this way on purpose, not for want of the wiring.
 - **Lamp** — amber pulse: dispatched (`.ai_mail.local/.dispatch.lock` exists).
   Steady green: interactive (a live claude with no `-p`/`--print` has its cwd
   inside the branch). Dim: neither.
+- **Avatar** — the agent's initials in a disc, and the door to its passport.
+  A fleet of seventeen is scanned by shape before it is read by name; the
+  phone's wheel had been doing this for weeks and the desk now does it too.
+  The avatar rather than the whole card is the door on purpose: a card is
+  already a dense field of doors, and a click-anywhere card turns every miss
+  into a navigation.
 - **★ manager mark** — beside the name, amber, on citizens whose passport says
   `identity.citizen_class` is `manager`: a project's first agent and its owner,
   the only class holding git write, the feedback channel to @devpulse, and
@@ -286,16 +294,38 @@ signal — it stays this way on purpose, not for want of the wiring.
   construction, so the mark stays rare and the hover does the teaching. Read
   from the passport itself — no passport, unreadable, malformed, or any other
   class all read as "not a manager", because an ownership mark is a claim BAUD
-  only makes when the file makes it.
+  only makes when the file makes it. **The avatar carries the same fact in
+  colour**: a manager's disc is ringed blue — Patrick's ruling, explicitly not
+  red, because red is this app's alarm colour and ownership is not an alarm.
+  The card now carries the class twice, once in a glyph and once in a colour,
+  which is deliberate: the glyph is precise, the colour is what survives a
+  glance across seventeen cards. The snapshot carries `citizen_class`
+  verbatim beside the boolean, so a class AIPass adds later needs no new
+  plumbing to reach the passport page.
 - **Badge** — `dispatched`, `live`, or a quiet `room` when a tmux room exists
   with nothing live in it. A trailing `⧉` means the live session is one BAUD
   did not create; hovering names it.
 - **Sub badge** — amber `N sub` while sub-agents are running inside the branch's
-  session. Sub-agents never appear in the process table (they run inside the
+  session, and **the avatar pulses red** for the same fact: the disc fills and
+  its initials invert, roughly once a second. The badge counts; the pulse is
+  what carries across a room. Red here where the manager ring is blue, because
+  this one *is* activity worth a glance — work happening inside a session that
+  nothing else on screen reports.
+  The pulse animates the disc's fill rather than a halo around it, and that is
+  a correction worth recording: the first version borrowed the dispatched
+  lamp's glow-only idiom and Patrick read it as "no flash just a solid red".
+  The animation was running the whole time and was simply invisible — a 9px
+  lamp *is* its glow, but a 26px disc whose border and initials are already
+  solid red drowns a 35%-alpha halo. Under `prefers-reduced-motion` the fill is
+  held rather than pulsed: motion off, state kept, and kept in a form that can
+  still be read.
+  Sub-agents never appear in the process table (they run inside the
   parent claude), so the count comes off disk: async agents by the freshness of
   their own `subagents/agent-<id>.jsonl` (180-second window), blocking agents by
   `Agent`/`Task` spawn calls with no matching result in the transcript tail.
-  Only transcripts written in the last 15 minutes are consulted.
+  Only transcripts written in the last 15 minutes are consulted. That freshness
+  window is why a finished agent can hold the count up for a few minutes — the
+  number is honest about what the files say, not about what is still breathing.
 - **`?`** — opens a help terminal for this branch (see *Help terminals*).
 - **Gear** — opens this branch's settings panel (see *Settings*).
 - **Figures** — every number is a door. `mail` and `open` are counted live from
@@ -344,6 +374,52 @@ Claude Code's Remote Control is a terminal-native convenience like attach — re
 worth using when it is there, never something the fleet depends on. It works
 without BAUD's help: `/remote-control` typed inside a session puts that session
 on the phone.
+
+## The opened passport
+
+Pressing a card's avatar opens that agent as a **document**: issuer, document
+type, holder — `AIPASS`, `AGENT PASSPORT`, the name — then the pages. It is a
+modal rather than a workbench tab, and the distinction is the reasoning: the
+workbench is where the operator *works*, holding a terminal and the files kept
+open beside it, while a passport is consulted and dismissed. Escape closes it,
+because the settings panels already taught that gesture.
+
+**Identity** renders `.trinity/passport.json` as fields, never as the JSON it
+happens to be stored in: class, role, purpose, traits, with `created` shown as
+*Issued* and `registry_id` as the *passport number*. **Working memory** is four
+tabs over the agent's own files — Sessions, Key Learnings, Todos from
+`local.json`, Observations from `observations.json` — each entry a card with its
+number, date and text. They are ordered newest-first *by position, not by date*:
+these files are appended to, so a hand-typed date can be wrong in a way the
+order cannot. The four containers disagree about what they call their text
+(`summary`, `learning`, `note`, `task`), so one reader tries each name and an
+entry carrying none of them says so rather than rendering blank. A footer says
+what the page is: the recent end only, because the rest has rolled over into
+@memory's archive.
+
+**Sub-agents appear as a count and only ever a count** — no names exist in that
+lane and BAUD will not imply any.
+
+**A manager's passport carries the two global monitors** — prax mission control
+and the commons feed. They used to sit in the top bar, which had no room for
+them, and they belong to the agent that runs them. Same doors and the same tab
+ids as before, so a monitor opened from a passport *is* the tab the old bar
+opened, and closing it from the tab bar leaves the toggle honest.
+
+Every page is read and nothing is owned: these are @spawn's and the agent's own
+files, and a read that fails prints the refusal in the file's own words rather
+than drawing an empty document that would read as an agent with nothing to say.
+A passport reached from another project's roster card is fenced like every other
+read and says so.
+
+**The document follows the poll.** Its row is looked up live on every render
+from the seated snapshot, falling back to the roster sweep, and matched on name
+*and* project — a room name carries its project scope, and eleven projects share
+a naming convention. The click-time snapshot is kept only for a branch that
+leaves both lists mid-read. This was a defect first: the first version froze the
+whole card at click, so a card could flash red for four running sub-agents while
+the passport opened from it still read "none running". A view that shows live
+numbers has to read them live.
 
 ## Rooms and the seat model
 
@@ -567,8 +643,24 @@ that threshold too, disclosed as a second pending change: `autoCompactEnabled`
 alone would leave the cutoff at claude's model-dependent default, which is the
 exact trap above. **Inherit** hands both keys back. **Off** leaves a stored
 threshold parked — that is what the file says, and the panel does not edit what
-it was not asked to. The `memory caps` row is a disabled placeholder and writes
-nothing.
+it was not asked to.
+
+**The memory row is live now**, and it is the only row in this gear that does
+not touch claude's settings file — which is why it commits on its own, on blur,
+instead of riding the panel's save button. One button writing both would make a
+model change quietly rewrite this agent's memory. It lists the keep-counts, how
+many entries of each type survive a rollover, and each dial goes through
+`drone @memory config set <branch>` — the same verb a human would type — then
+re-reads the file, because @memory's refusals exit zero and only the read-back
+proves a number moved.
+
+Each dial says which number it is showing: **override · fleet default 20**, or
+just **default**, so nobody edits a shared number thinking it is theirs or the
+reverse. The timing is stated on the row — *applies at the next rollover run* —
+and one edge is written into the code rather than hidden: @memory resolves
+per file KEY, so a branch carrying a *partial* group block could be shown a
+default here that the engine would not apply. It cannot happen today, and the
+real fix is a resolved read from @memory rather than BAUD re-deriving the rule.
 
 ### The header gear — BAUD's own interface
 
@@ -621,25 +713,49 @@ Below the interface rows sits a **memory** section reading
 save button, deliberately: one button writing two owners' config is how a
 poll-cadence tweak ends up silently rewriting the fleet's memory limits.
 
-| Half | What it sets | When it takes effect |
-| --- | --- | --- |
-| entry caps | `entry_limits.entry_types.<type>.max_chars` — chars per entry | immediately; the enforcement hook re-reads the file on every memory write |
-| keep-counts | `rollover.defaults.<group>.<container>.count` and `auto_compact_cap` | only after the operator runs `drone @memory rollover push` |
+| Half | What it sets | Written by | When it takes effect |
+| --- | --- | --- | --- |
+| entry caps | `entry_limits.entry_types.<type>.max_chars` — chars per entry | BAUD, directly (no verb exists) | immediately; the enforcement hook re-reads the file on every memory write |
+| keep-counts | `rollover.defaults.<group>.<container>.count` | `drone @memory config set-default` | at the next rollover run, and only for branches after a push |
 
-The panel prints that command and stops there. Pushing config out to seventeen
-branches is @memory's job, not a side effect of closing a dialog. Per-branch
-overrides (`rollover.per_branch`) are listed read-only behind a disclosure —
-they are written *by* that push, and seventeen editable copies of the same
-three dials is a panel nobody can read. Nothing is hardcoded: the caps, the
+**The two halves travel different lanes, and that split is the rule.** Every
+keep-count now goes through @memory's own verbs rather than BAUD editing the
+file, so the bounds (1–100) and the refusal wording live in one place instead of
+being re-implemented here and drifting the first time @memory changes them. Only
+the character caps stay on the direct write, because they have no verb behind
+them yet. `auto_compact_cap` is displayed and **not** editable — it is read-only
+in v1, and an input that silently does nothing is worse than no input at all.
+
+**The panel now runs the push itself**, behind a two-tap confirm, and its copy
+carries @memory's real semantics unsoftened: changing a default does *not* reach
+any agent, and until you push, every agent carrying an override keeps reporting
+its old number. When no branch overrides exist the panel says so in a sentence —
+*every agent is at the defaults* — rather than showing an empty region, which
+reads as a list that failed to load. **Per-agent limits are editable from the
+card gear**, each dial committing on blur through the same verb.
+
+Nothing promises a schedule, because there is none: there is no daemon tick, and
+a changed limit is applied by the next rollover *run* — a compaction hook, a
+watch, or somebody running it by hand. Nothing is hardcoded either: the caps, the
 dials and the branch list are whatever the file says today, and an entry type
 @memory adds tomorrow simply appears.
 
-Two refusals guard the write, both stricter than the card gear's. A dial that
-does not already exist on disk is **not created** — BAUD turns dials it can
+**A refused write exits zero.** `drone @memory config set` prints its refusal and
+returns success, so nothing in this lane trusts an exit code: the wrapper looks
+for @memory's own marker, passes their sentence through unreworded, and re-reads
+the file afterwards — the read-back is the proof a number moved, never a string
+BAUD parsed. The phone meets the same hazard in a different costume, where @api
+forwards an after-routing refusal as HTTP 200 with `ok: false`, and its transport
+throws on that. (Pre-routing validation failures *do* arrive as a 400.)
+
+Two refusals guard the direct lane, both stricter than the card gear's. A dial
+that does not already exist on disk is **not created** — BAUD turns dials it can
 see, and inventing structure in another agent's config is the cross-edit the
-ecosystem forbids. And zero is refused for caps and counts: it is the one value
-that reads as a valid number and silently breaks every memory write in the
-fleet. Both refusals happen before a byte is written.
+ecosystem forbids. And zero is refused: it is the one value that reads as a
+valid number and silently breaks every memory write in the fleet. Both refusals
+happen before a byte is written. The keep-counts inherit the equivalent refusal
+from @memory itself now that they travel the verb, which is the point of moving
+them — one owner, one bound, one sentence.
 
 One honest cost, measured on a copy of the real 8 KB file rather than guessed:
 moving one dial rewrites 2 of its 364 lines. One is the number. The other is
@@ -724,7 +840,7 @@ projects/baud/
 │   │   ├── components/         cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
-│   │   ├── phone/              the one-column face: shell, token door, reader, feed, verb chips, room doors, attached terminal, photo picker
+│   │   ├── phone/              the wheel face: shell, token door, fleet wheel, expanded agent card, passport sheet, files, monitor, reader, feed, verb chips, room doors, attached terminal, photo picker
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
@@ -807,10 +923,11 @@ genuine desktop-window concerns rather than host calls.
 That second face now exists — see below. The seam has two bindings and still no
 runtime switch: a build picks one, and nothing above the seam can tell which.
 
-### The phone face — one column, read by default
+### The phone face — a wheel of agents, read by default
 
-`npm run build:phone` emits `dist-phone/`: BAUD in a single column, installable
+`npm run build:phone` emits `dist-phone/`: BAUD as a wheel of agents, installable
 to a phone home screen, built from **the same React components** as the desktop.
+(It was a single column until FPLAN-0423 — see *The wheel* below.)
 
 The entire port is one alias in `vite.config.phone.ts`. `host/index.ts` imports
 `./transport`; that build resolves it to `transport.http.ts` — `fetch` against
@@ -832,6 +949,31 @@ screen, proves the token against `/v1/whoami` before showing anything, and keeps
 it in `localStorage`. A refused token and an unreachable server are reported as
 different failures, because they send the operator to different places.
 
+**Browsing is free, and the seat is a default rather than a fence.** Patrick's
+ruling, 2026-08-16: view any agent's project files, open any passport, no
+restriction. `/v1/files`, `/v1/dir` and `/v1/diff` take a `project` and resolve
+it through BAUD's own census, exactly as `/v1/fleet` always did — an unknown
+branch inside a known project is a 400 naming both, an unknown project is a 503
+carrying BAUD's own census sentence, and the per-branch path fence is untouched:
+browsing is free across *branches*, never across the disk.
+
+This closed a real asymmetry rather than adding a feature. For one evening the
+fleet lane honoured `?project=` while the read lanes were seated in whichever
+project the server started in, so the header could be switched to a project
+whose cards all appeared and whose every file read then refused — README, inbox,
+dashboard, working memory, the passport. It was found by probing the live host
+with controls (project omitted and the seated name both succeeded; two other
+project names both failed on both routes) and fixed server-side the same night.
+
+**So the phone names the project on every read.** Omitting it is not a smaller
+request, it is a *different* one: eleven projects share a naming convention, so
+a read aimed at a foreign agent and resolved under the seat does not fail —
+it finds a same-named local agent's file and shows it as this one's. The three
+read verbs in the seam take an optional project and leave the key off the
+payload entirely when there is none, so the desktop — which resolves under the
+seat it already sits in — hands `invoke` a byte-identical object to what it did
+before the argument existed.
+
 **Reads are not verbs.** The first cut got this wrong — every card callback was
 wired to a handler that threw, so the face showed all seventeen agents and did
 nothing at all. Opening a file and reading a diff were never verbs; they are
@@ -841,6 +983,49 @@ card's own figures open the file they came from. A `feed` screen replaces the
 desktop's drop-down shade: same events, cursor-keyed, and when the server
 reports a `gap` the screen says so — a window that silently lost events looks
 exactly like a quiet night, and those are opposite things.
+
+**The `GIT` tile is live, and it has three answers rather than a number with a
+fallback.** The count was the last figure on the card with no route behind it;
+it now rides `/v1/git-changes`, which matched the desktop's *semantics* and not
+just its shape — tracked files only, branch-local paths, `git diff HEAD`
+relative — so the two faces cannot disagree about the same branch at the same
+moment. The response also carries `untracked`, and the phone **deliberately drops
+it**: rendering it would make the phone's tile mean something the desktop's does
+not, which is the exact divergence the matched semantics exist to prevent. It
+belongs on both faces or neither, and the desktop is frozen.
+
+The three answers are the point. `0` is a **fact** — it says nothing has changed
+in this branch — so a lane that cannot answer must not be able to produce it.
+A refusal renders `n/a`, which cannot be read as a number, and carries the
+server's own sentence with it; the em dash stays for *asking* and for a branch
+with no git at all, which are absences rather than failures. An empty list
+painted as clean is the one lie a glance would read as truth and act on.
+
+**And the tile refuses for real reasons, not for being far away** — which took a
+probe to establish, because the brief said otherwise. The expectation handed to
+me was that *every* foreign project would answer `503`, drone having no passport
+to verify its caller with. Measured against the live server with controls in both
+directions, that is not what happens: `VERA-STUDIO`, `EARMARK`, `AIPASS-SITE`,
+`MARKETSTAND` and `BAUD` all answer `200` with real data, and the one `503` in
+the sweep was `CHESS` saying *"fatal: not a git repository"* — a true statement
+about that project rather than a fence. The control that settles it is this
+branch: the API reports `count 0, untracked 3` for `baud`, and this branch's own
+tree is exactly that — three untracked directories, no tracked changes. Had the
+tile been keyed on *foreignness* it would have painted five projects' correct
+counts as unavailable, which is the same lie told in the other direction.
+
+**And the bell counts while that screen is shut**, which is the only stretch a
+badge is for. The feed screen polls its own cursor lane, but it mounts on open
+and unmounts on close — so nothing was counting during the entire period the
+number describes, and the bell was a bare glyph with no state at all. The count
+now lives a level up, on the desktop `Bell`'s model: poll the feed, hold a marker
+for how far the operator has read, badge the difference, key the marker per
+project because another project's feed is another history. It diverges from the
+desk in one deliberate place. The desktop's shade is a glance with a `CLEAR`
+button beside it; the phone's feed is a full-height screen you must leave to get
+back to anything, so **leaving is the read** — the marker moves on close, never
+on open, so nothing can be marked read while it is still arriving behind the
+screen you are looking at.
 
 **Three verbs, and refusal is a state rather than an absence.** The phone can
 now *wake* an agent, *end a room* and *lock the machine's screen* — chips under
@@ -1199,6 +1384,397 @@ as an argument**. `snapshot_project` resolves the anchor and hands it to
 census in a temp directory and selects against that. A test that can only call
 the resolving half is a test that can only be green at home.
 
+### The wheel — the fleet as one flick
+
+The fleet screen is a horizontal rail. Cards scroll-snap sideways, scale from
+1.28 at the centre to 0.90 at the edges with an opacity fade, and a green notch
+under the middle names the centre as a **place**. Whoever sits under the notch is
+the **current agent**, and everything context-bound follows them.
+
+**The column was not wrong, it did not scale.** Seventeen agents in a vertical
+list is a scroll-to-find, and the fleet's whole point is knowing at a glance who
+is awake. The rail makes the entire fleet one flick, and it gives the phone
+something the desktop does not have: a current agent at all.
+
+**Patrick approved the shape off a live mockup on his S24, in one round.** That
+makes `dropbox/wheel_round/wheel_mockup_APPROVED_SHAPE.html` the specification
+rather than a suggestion, so its numbers — 76px cards, 52px avatars, the 1.28
+scale, the `.12s linear` transition — were ported literally. Only its hard-coded
+hex colours were changed, into `--baud-*` tokens, so the rail follows the theme
+instead of freezing one night's palette into a second source of truth. **An
+approved shape spends someone else's decision; improving it silently is not a
+style choice.**
+
+**Two gestures, and only one of them can launch anything.** A tap on an
+off-centre card glides it under the notch and opens *nothing*. Only a tap on the
+card that is already centred opens it. Every launch therefore costs two
+deliberate touches, and a thumb reaching across a rail of seventeen cannot start
+a session by accident.
+
+**The scroll is the browser's, deliberately.** `scroll-snap-type: x mandatory`
+plus native overflow scrolling — momentum, snap physics and accessibility all
+come free and all feel wrong reimplemented. The code only *paints* the
+consequence of a scroll position, imperatively, one frame at a time; seventeen
+React re-renders per frame of a flick would lose the feel that was approved.
+State is lifted only when the centred card actually changes.
+
+**The rail's gestures cannot leak into the room's.** `touch-action: pan-x` hands
+the browser the horizontal flick and refuses the vertical one in the same
+declaration; `overscroll-behavior-x: contain` stops an overscrolled flick
+becoming browser back-navigation — the same species as the pull-to-refresh that
+ate the down-swipe last round. The terminal's own guards are untouched.
+
+**One layout — and this part was wrong for a day.** The approved mockup hid the
+rail whenever a room was open, and that was *my* design call inside the shape.
+Live use killed it in a day. Patrick, verbatim: *"the wheel was supposed to be on
+top and the terminal below, so I can observe and look at other agents as the
+terminal is running in view. I have to detach every time I want to observe
+agents. the terminal is the center piece, always there just like desktop, I can
+navigate as agents are working."*
+
+So the rail **persists above the terminal at all times**. Fleet view and room
+view are not two layouts; they are one layout whose lower region shows either the
+attached room or a resting state. The shape was approved and still wrong, and the
+same thumb that approved it revoked it — which is the correct order, and the
+reason a mockup is evidence about a design rather than proof of one.
+
+**Browsing is not switching.** Flicking the rail moves the notch, the current
+strip and the expand target, and touches nothing else: no socket opens, none
+closes, no byte is written. The room below keeps running and keeps rendering
+while the operator reads across the fleet. Measured negatively, on the wire — a
+flick past four cards produces zero attaches, zero detaches and zero client
+bytes. When the notch and the terminal point at different agents the face says so
+outright (*"the room below stays attached to X"*), because an unexplained
+mismatch reads as a flick that failed to switch.
+
+**Switching is one explicit act, and it happens in place.** Attaching from an
+expanded card unmounts the old sheet — whose cleanup closes that socket, which
+tmux reads as a detach, so the room survives — and mounts a new one against the
+new room. The rail does not move: measured at 410px scroll before the press and
+410px after. This mirrors the desk, where clicking another agent's room switches
+the tab and the cards stay put.
+
+**`‹ detach` is named for what it does.** With the fleet permanently on screen
+there is no "back" to go to, so the only thing that affordance does is close this
+client. tmux keeps the session, the agent and the scrollback.
+
+**Reads are overlays, and under a persistent rail that stopped being cosmetic.**
+The reader and the feed used to be early returns, which unmounted the whole face.
+Opening a README while attached would have torn down the terminal and closed the
+room's socket — making *"observing never requires detaching"* false through the
+door the operator uses most. They render on top now; the room below keeps taking
+bytes.
+
+**The keyboard is the one place the layout gives.** A rail, a room, the chips and
+a soft keyboard do not fit. The terminal is the centrepiece and is what the
+typing is aimed at, so the rail *compacts* while the compose field has focus —
+avatars shrink, names and notch drop, the strip and footer go — and never
+disappears. Card **width** is deliberately untouched, so the snap geometry cannot
+move: measured across focus and blur, card layout width 76px, rail scrollWidth
+910px and scrollLeft 410px are identical, and the centred card does not drift out
+from under the thumb.
+
+**Deleting a container deletes every door inside it.** Removing the column took
+its read row (`readme`, `memory`, `dashboard`, `inbox`) with it. Three landed on
+the expanded card's stat tiles, which are **doors, not labels** — on the desktop
+those same figures already are the read affordance. `readme` had nowhere to go,
+so the agent's **name** is now its README door. This was found by asking what the
+deleted element had been carrying, which is a question worth asking *before* the
+deletion rather than after.
+
+One thing on the expanded card is a deliberate deviation from the approved
+shape, flagged rather than smuggled: the verb chips stay, because dropping the
+row would take `end room` with it and strand rooms with no way to close them
+from a pocket. `files` and `watch` used to sit beside it as a second deviation —
+present but disabled, because they wanted a file manager and a native window *on
+the machine itself*. Both went live in August: `files` browses the branch
+through the same fenced read lane the stat tiles use, and `watch` streams
+@api's read-only `drone @prax monitor run` instead of opening a window on the
+desk. Every door on that row is real now, and the disabled-with-a-reason list
+retired empty.
+
+**The terminal is one seat, and it goes where it is pointed.** Patrick's ruling,
+2026-08-16: *"the terminal is one seat, just a view — it hosts the agent I
+choose no matter where I spawn it… I chat with devpulse, go browse baud's files
+or run watch, switch to baud, vera, drone — they appear in the ONE terminal…
+baud is an aipass tenant, vera is external, that should not matter. When you
+block you create friction."* Every door on the expanded card used to refuse a
+foreign agent with a single sentence. Exactly one still does:
+
+| Door | Cross-project | |
+| --- | --- | --- |
+| README, the four stat tiles, `files`, `passport` | **free** | freed when the read routes learned `project` |
+| `resume` / `fresh`, `shell`, `wake`, `end room` | **free** | freed by the one-terminal ruling |
+| `watch` | **free** | freed by *measurement* — see below |
+| `settings` | fenced | its route takes a branch and **no** project |
+
+Each of those retreats is worth keeping, because none of the fences was
+arbitrary and each fell to a different kind of evidence.
+
+The **read** fence was guarding something real: while the routes were seated, an
+unnamed project resolved under the seat, so a read aimed at a foreign agent could
+find a same-named local one and show its file as this one's. Naming the project
+closed the hazard, and the fence went with it.
+
+The **operate** fence was mine and outlived its reason. The attach lane was never
+fenced server-side; the seat-binding was inherited from the days when reads were
+seat-only, and it survived as habit after the thing it protected was gone.
+
+The **watch** fence fell to four probes rather than an argument. It existed on
+the reasoning that @prax is anchor tooling that monitors the repo it lives in —
+a rationale its own author proposed and then disproved: `monitor run baud`
+answers *"Live — scoped to BAUD"*, identically from the anchor and from the
+project's own root, so the working directory was never the variable anyone
+believed it was. And where @prax genuinely cannot show something, it says so on
+the screen the operator is already reading rather than failing. A live accurate
+warning beats a guess at the door, so no fence — and no allowlist of watchable
+projects either, which would only be a second model of @prax's scope, drifting
+from the first time they change it.
+
+**`settings` is the one that stays, and it is worth stating twice.** It is the
+only door here that would not fail loudly: it would open — and let the operator
+*edit* — a same-named **local** agent's claude config while the header named the
+foreign one. A door that refuses is visible; a door that succeeds against the
+wrong target is found later, somewhere else, as damage. It stays shut until that
+route learns the second half of the address.
+
+**A mounted pane never consults the poll again — freeing the browse made that
+load-bearing the same evening.** Patrick, with a screenshot: *"the terminal will
+not stay persistent — I can change project and the terminal drops your chat.
+nothing changes the terminal agent except my hands."* The cause was one line in
+the pane renderer: every pane re-resolved its card by *name*, on every render,
+out of the **seated** project's list. That was harmless while the face could only
+reach one project. The moment the header could point elsewhere, the lookup missed
+for any pane whose agent lived in the project you had just left, the pane fell
+through to a *"no longer in the fleet read"* line, and unmounting a terminal sheet
+closes its socket. Browsing dropped the room.
+
+The desktop never had this bug, and the reason is **structural rather than
+careful**: its `<Terminal>` is mounted once with no branch prop at all and holds
+its own room internally, so there is no lookup available to miss. The fix ports
+that model into the phone's tab architecture rather than patching the lookup: a
+pane now carries the card **as it was when the operator opened it**, and the live
+poll is never asked about a pane again. Both *"no longer in the fleet read"* arms
+are gone from the file, because that state was never a real one — a room with a
+tmux client on the other end does not stop existing when a list changes.
+
+**Unmount happens on exactly three hands, all of them the operator's:** the
+attach swap (the one-agent-seat replacement), `end room`, and the tab's `✕`. A
+pane whose branch has dropped out of the current read keeps its socket and keeps
+typing.
+
+**The pane key is project-qualified now, with one deliberate exception.** The host
+names a room `baud-<project>-<branch>` and a shell `baud-shell-<project>-<branch>`
+— the project is part of a room's identity *on the host*, so a key that omitted it
+described a room that does not exist. Free browsing made that live: two projects
+can hold a same-named agent, and the unqualified key made the second one look
+already open, so attaching it would have focused the first one's pane and left the
+operator typing to the wrong agent under the right name. The project-root shell
+was the worst of them — `@project` was the same string for every project on the
+machine. The exception is global mission control, which names no branch **and no
+project** on the wire, so its key names none either; qualifying it by seat would
+have stacked identical monitors as you flicked between projects.
+
+The keys are also no longer written by hand anywhere. Two call sites had spelled
+one out as a template literal, which is exactly the thing that goes stale the
+first time the shape changes — and it had just changed. Both now build the key
+through the same function every other site uses, so the detach affordance and the
+close gesture cannot drift from the pane they name.
+
+**The wheel's avatars carry the desktop's two marks**, from the same payload and
+on the same rulings: a manager's disc is ringed blue, and a disc with sub-agents
+running fills red on the beat. One indicator wearing two sizes — when the pulse
+turned out to be invisible on the desk it was fixed on both faces together,
+because the phone's 44px disc had even more steady colour to hide it.
+
+**The sheet states the sub-agent count in words**, on the status line rather than
+in the counter row. Every tile in that row is a *door* — press `MAIL` and the
+inbox opens — and sub-agents have no file to open, so a fifth tile would be a
+dead button among four live ones. It is also a different kind of fact: the four
+counters are standing figures, this one appears and vanishes with activity.
+**Zero is stated, not hidden** (`no sub-agents running`), because a sheet that
+renders nothing at zero is indistinguishable from a sheet that does not report
+sub-agents at all — which is exactly the gap that put this line here. The rail
+says *that* something is running; the sheet says *how many*.
+
+**The passport opens from the door row, not from the avatar.** On the desk the
+avatar *is* the door; here the equivalent disc lives on the wheel, inside the
+tap target that opens the sheet, and nesting a second target inside it at that
+size would trade the gesture the whole face is built on for a mis-tap. So it
+joins `files`, `shell`, `watch` and `settings` at finger size. What opens is the
+desktop document's **content and order** at 46 columns, not its layout: the
+fields *stack* (label over value, which is how a real passport prints a field
+and what stops a Purpose sentence living in thirty characters), the four memory
+tabs scroll sideways rather than wrapping to two rows that would change height
+under the reader's thumb, and each entry clamps to six lines with the **whole
+entry** as the tap target that opens it — a fleet session summary runs past a
+thousand characters, and four of those unclamped is a wall rather than a
+document.
+
+Three facts about that document are worth stating because they are easy to get
+wrong. It reads **names, never paths**: the desk asks for
+`<path>/.trinity/passport.json` and this face's transport refuses absolute paths
+by design, so the phone asks for `<branch>/.trinity/passport.json` — the shape
+the stat tiles have used all along. It follows the **poll**, holding the card's
+`project/name` ref rather than the card, so a sub-agent that starts while the
+passport is open appears on it; and an agent that leaves the fleet closes its own
+passport, because a modal that returns by itself on a later poll is a bug nobody
+can explain. And a **refused read is printed in the host's own words** rather
+than drawn as an empty document — which matters more here than at the desk,
+because this face's read lane genuinely does refuse some branches (see below).
+
+**`traits` arrives in two shapes, and only one of them used to render.** Most
+passports carry a string; @devpulse's is a JSON array of six sentences. A
+string-only reader printed an em-dash over a populated field — a document saying
+*nothing here* about the manager whose passport is the most likely to be opened.
+The phone reads both shapes and bullets the list. The desktop still has the
+single-shape reader; it is frozen, so this is reported rather than fixed there.
+
+**A manager's passport carries the monitors**, relocated exactly as they were on
+the desk, and both doors are live. The commons feed is `drone @prax monitor run
+commons`, a target the watch route names by keyword. Prax mission control is the
+desk's *target-less* `drone @prax monitor run` — every branch at once — and on
+the wire that is `kind=watch` with **no branch**, which is the one lane where an
+absent branch is a real answer rather than the bug that kills a live session:
+a watch names no session to take over.
+
+That door shipped **disabled for one round**, and the reason is worth keeping.
+The watch route could only express a branch monitor, and the `prax` *branch* was
+a valid target sitting right there — pointing the button at it would have
+rendered perfectly and been a different view, with an operator reading a branch
+monitor as mission control and never learning otherwise. It shipped shut with
+the reason on it instead, and the missing shape was reported measured rather than
+described. It took twenty minutes to build the next evening. A plausible
+substitution is worse than an honest refusal, and it is most tempting exactly
+when the wrong answer renders cleanly.
+
+Both monitors ride the **seat**, and that is a choice rather than a fence now
+that external watches are allowed: mission control and the commons feed are
+*this installation's* views, so a manager card browsed from another project
+opens the monitors those buttons have always meant. A watch aimed at a
+particular foreign branch is a different question, and the `watch` door on that
+branch's own card is where it is asked.
+
+### The standing screen is the wheel and the room
+
+Patrick's screenshot verdict on the persistent layout: *"ok getting there. u see
+no room for the terminal."* Three visible lines of room under four rows of
+chrome. So the standing layout was stripped to exactly two things — the rail and
+the terminal — and everything that was restating a fact moved to where the fact
+already lived.
+
+**The current-agent strip is gone.** *"All agent info goes in the card."* The
+rail's dots and badges are the at-a-glance layer, the expanded card is the detail
+layer, and the strip was a third copy standing between them paying rent in the
+one dimension the terminal needs. Every figure it showed is already a door on the
+card.
+
+**The terminal's header row is gone too.** It cost a permanent row to say three
+things: which room, that the room is attached, and a detach button.
+
+**So the "which room is below" fact moved onto the rail itself** — an amber ring
+on that agent's card, deliberately *not* the centred card's green. Those are two
+different questions ("which card am I looking at" / "which room is below"), and
+answering both in one colour would make the wheel say less rather than more. This
+is where the deleted strip's split-naming sentence went: browsing away from an
+attached room with nothing acknowledging it reads as a flick that failed to
+switch, so the fact had to survive — it just no longer costs a row, and it points
+straight down at the terminal it describes.
+
+**Detach became a door on the card, and only on one card.** The agent whose room
+is open offers `‹ detach` and *not* attach — "open this room" is not an offer you
+can make about the room already on screen. Every other agent offers attach and no
+detach. It is worded away from `end room`, which sits a few lines below it and is
+destructive: this one closes a client, and tmux keeps everything.
+
+**The status line survives, but only as news.** `attached · name` is what a room
+looks like when nothing is happening, and a permanent row restating that is
+exactly the rent this round collected. An upload in flight or a dropped socket is
+news, and news gets a line.
+
+Measured after: the terminal's screen is **66% of the viewport, 44 rendered rows**
+at the new 10px default.
+
+**Zoom returned, and it is real rather than cosmetic** — because the resize lane
+works now. `A−` / `A+` set the size on the live terminal, re-measure with
+FitAddon, and *send the new geometry*. Smaller type genuinely buys columns and the
+room follows, because rooms are opened `window-size smallest`: measured 79×44 →
+**88×49** on one press, with the resize frame on the wire and no reattach. Before
+the deaf-room fix this control would have been a lie told to a room that could not
+hear it.
+
+**Fullscreen is a CSS class on the mounted node, never a remount.** This is the
+trap in the feature: the terminal sheet is keyed by room, so anything that
+unmounts it closes the socket — a fullscreen toggle implemented by moving or
+re-rendering the node would have cost the operator the room every time they
+pressed it. Verified three ways: zero detaches and zero attaches on the wire
+across *both* enter and exit, the terminal's DOM node identity preserved through
+both (tagged before, still tagged after), and a resize frame for the new geometry
+each way. The room stayed typeable in fullscreen, and exiting returned to the
+layout underneath with the rail at the same scroll position.
+
+### The wheel stopped cutting people's names off
+
+A screenshot round, and two of the five fixes in it were one defect wearing two
+mechanisms. Patrick: *"the agent cards get cut off, and some words almost
+completely covered."*
+
+**The selected card is `transform: scale(1.28)`, and a transform does not change
+layout.** The rail is still as tall as the *unscaled* card, so the scaled one
+renders about 10px past it at each end — and the rail's own `overflow-y: hidden`,
+which exists so a vertical drag never scrolls it, cuts whatever lands outside.
+The bottom is where it showed, because that is where the label is: the
+descenders of the selected agent's name were being sliced off. Fixed with
+headroom rather than by weakening the overflow rule — 11px of vertical padding on
+the rail, taken back out of the wrap above it so the terminal loses nothing. That
+number and the `50vw - 32px` beside it are the same species: **one measurement
+written in two places, and both have to move when the card does.**
+
+**The label's own box was a second clipper** and would have survived the new
+headroom on its own. `overflow: hidden` is there for the ellipsis, and it clips
+vertically too — at the default `line-height: normal` a box that size leaves a
+descender touching its own bottom edge. `1.4` gives the `p` in `devpulse`
+somewhere to go.
+
+**The edge cards fade now, because the clipping is real and should look
+decided.** A rail wider than the screen always has a partial card at each end;
+they were being sliced mid-circle with half a badge hanging off, which reads as a
+layout accident rather than as *more fleet over there*. A mask fades the outer
+26px each way — about a third of a card, enough to read as a fade, short enough
+that a peeking card is still identifiable as one you can flick to. It changes no
+geometry, no scroll extent and no hit target.
+
+**`CTRL` was bleeding its border, and `flex: 1` is why.** That is `flex: 1 1 0%`
+— every slot gets an *identical* width whatever is in it, so a row of one- and
+two-glyph chips set the width and the only four-letter label in it overflowed;
+`min-width: 0` then let it shrink below its own text, and with no overflow rule
+the text simply drew past the border. `flex: 1 1 auto` starts each slot at its
+content width and shares the slack, so `CTRL` takes the ~32px it needs and the
+arrows give up a few they never used. Clipping with `overflow: hidden` was the
+other option and would have shipped a chip reading `CTR` — a control that lies
+about which key it sends is worse than one that is a few pixels wide.
+
+**The smoke-test strip is gone; the selection it measured is not.** Round 1b's
+readout — dashed amber, six live counters, deliberately ugly — existed to answer
+one question on a real S24: *why does a drag collapse at 12-14 characters?* That
+question is answered, so the instrument went, along with the counters behind it,
+the drop detector that wrote its sentence, and the two window error listeners
+that reported into it. What stayed is everything that turned out to be a
+**mechanism rather than a measurement**: the forged shift-drag, the second-finger
+guard, the `contextmenu` prevent (that one was always a fix), and the
+ResizeObserver hold — a fit mid-drag drops the selection, so a drag holds the
+observer off and pays the fit out on lift. Copy and clear stayed too, in a plain
+row instead of the probe box: without them a selection is text a thumb can
+highlight and never use, which would have deleted the *feature* while deleting
+the probe.
+
+**And the PWA manifest stopped describing a face that no longer exists** — it
+still said *"the AIPass fleet, read-only, in one column"*, and the column went
+when the wheel landed. The same sentence turned out to be sitting on the sign-in
+door, which nobody had reported: `read-only` is a property of the **token** now,
+not of the face, and that door is shown before either token is known. Both say
+what is true of both scopes; the header's lock chip says which one arrived.
+
 ## Versions and releases
 
 BAUD is versioned with semantic versioning. The current version is **0.1.0**,
@@ -1236,8 +1812,8 @@ pointed at any commit, and "it was probably green on main" is not evidence.
 
 ## How it got here
 
-Eleven milestones over three days, 2026-08-09 to 2026-08-11, and two nights of
-rulings answered after them:
+Eleven milestones over three days, 2026-08-09 to 2026-08-11, and the rounds
+answered after them:
 
 | | |
 | --- | --- |
@@ -1253,12 +1829,15 @@ rulings answered after them:
 | m10 | the notification bell; desktop toasts retired |
 | m11 | settings — the per-agent gear and BAUD's own interface gear |
 | m12 | the room-end ruling — ended rooms stay dead, outside sessions surface and end |
-| m13 | chips follow the session not the seat; the memory dials join the interface gear |
+| m13–m16 | the settings arc — chips follow the session not the seat, the memory dials join the interface gear, the dial write that stopped rewriting the whole config, and `baud --snapshot`: the fleet read as a second entry point, one JSON envelope, no window |
+| DPLAN-0300 | the phone face — design tokens, the transport seam, the host API, and a real tmux client in a browser |
+| the passport round | the avatar door and the opened passport, the manager mark, the sub-agent pulse, and memory settings that write through @memory's own verbs |
 
 Along the way: whole-window zoom, ctrl+click terminal links, slash-command
 chips, and the mail-count fix that reads the mailbox instead of the dashboard's
 cache.
 
 Milestones 1–12 are committed, and BAUD `v0.1.0` was tagged and released from
-`main` on 2026-08-12. m13 is in the working tree, uncommitted — @baud has no
-git write; @devpulse commits this project on Patrick's word.
+`main` on 2026-08-12. The settings arc and the phone face were committed after
+it. The passport round is in the working tree, uncommitted — @baud has no git
+write; @devpulse commits this project on Patrick's word.

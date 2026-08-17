@@ -17,6 +17,8 @@ interface FleetStripProps {
   onHelp: (branch: BranchStatus) => void;
   /** Operator clicked the gear: open this branch's settings panel (m11). */
   onSettings: (branch: BranchStatus) => void;
+  /** Operator clicked the avatar: open this agent's passport (round A). */
+  onOpenPassport: (branch: BranchStatus) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -44,6 +46,7 @@ export default function FleetStrip({
   onShell,
   onHelp,
   onSettings,
+  onOpenPassport,
   seatedProject,
 }: FleetStripProps) {
   if (branches.length === 0) {
@@ -68,6 +71,7 @@ export default function FleetStrip({
           onShell={onShell}
           onHelp={onHelp}
           onSettings={onSettings}
+          onOpenPassport={onOpenPassport}
           foreign={seatedProject !== null && branch.project !== seatedProject}
         />
       ))}

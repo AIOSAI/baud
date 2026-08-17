@@ -149,14 +149,43 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/whoami",
   },
   fleet_snapshot: {
+    // `args.project` rides the generic project lift in `call` - the phone's
+    // seat is client state, passed on every read, never held by the server.
     path: "/v1/fleet",
   },
+  list_projects: {
+    // The switcher's rows - @baud's own census by exec, reached through @api.
+    // The envelope's error became a 503 server-side; what lands here is whole.
+    path: "/v1/projects",
+    unwrap: (body) => body?.projects ?? [],
+  },
   agent_roster: {
-    // The roster is every project's citizens. The host API serves one project
-    // per call, so the phone shows the seated project's cards and nothing else
-    // until /v1 grows a roster of its own. Named here rather than faked.
-    path: "/v1/fleet",
+    // THE SYSTEM'S WORKING SET, and it must cross projects or it is a lie.
+    //
+    // This used to alias /v1/fleet, which serves ONE project - so the phone got
+    // the seated project's cards back under a name that promises every
+    // project's. Harmless while nothing asked the question; the moment the rail
+    // grew cross-project wheels it became a wheel that looks full and is wrong.
+    // Repointed at @baud's own sweep by exec, the same lane /v1/projects
+    // already uses: `baud --roster`, one process and one ranking behind both
+    // faces. Until @api lands the route this 404s, and the wheels say so - a
+    // refusal beats a half-true fleet.
+    path: "/v1/roster",
     unwrap: (body) => body?.branches ?? [],
+  },
+  list_dir_window: {
+    // One level of a branch's tree, fenced on names. The seam's `path` is
+    // `<branch>` or `<branch>/<subdir>`; entry paths come back RELATIVE to
+    // the branch root, ready to feed straight back in or into a file read.
+    path: "/v1/dir",
+    query: (args) => {
+      const split = splitBranchFile(String(args.path ?? ""));
+      return { branch: split.branch, dir: split.file };
+    },
+    unwrap: (body) => ({
+      entries: body?.entries ?? [],
+      truncated: Boolean(body?.truncated),
+    }),
   },
   read_file_text: {
     // NAMES, never paths - @api's fence takes a branch and a file name, and
@@ -180,6 +209,31 @@ const ROUTES: Record<string, Route> = {
       path: body?.branch ?? "",
       content: body?.diff ?? "",
       truncated: Boolean(body?.truncated),
+    }),
+  },
+  /**
+   * @api MATCHED THE SEMANTICS, NOT ONLY THE SHAPE, and that is the whole
+   * reason this can share `GitChanges` with the desktop: they read lib.rs and
+   * answered with tracked files only, branch-local paths, `git diff HEAD`
+   * relative. So the two faces cannot disagree about the same branch at the
+   * same moment, which a re-implementation would have guaranteed they
+   * eventually would.
+   *
+   * `untracked` arrives too and is DELIBERATELY DROPPED. It is real and it is
+   * additive, and rendering it here would make the phone's GIT tile mean
+   * something the desktop's does not - the exact divergence the matched
+   * semantics exist to prevent. It belongs on both faces or neither, and the
+   * desktop is frozen.
+   *
+   * The argument is a branch NAME on this transport, never `branch.path`: an
+   * absolute path is refused by `splitBranchFile` on purpose.
+   */
+  git_changes: {
+    path: "/v1/git-changes",
+    query: (args) => ({ branch: branchOf(String(args.path ?? "")) }),
+    unwrap: (body) => ({
+      files: Array.isArray(body?.files) ? body.files.map(String) : [],
+      count: Number(body?.count ?? 0),
     }),
   },
   notifications_read: {
@@ -230,6 +284,79 @@ const ROUTES: Record<string, Route> = {
     body: () => ({}),
   },
 
+  /* ---------------------------------------------------------- settings -- */
+  /* The desktop's two gears, reached over /v1. Reads ride the read scope,
+     writes are operate. The patch shapes cross the wire UNTOUCHED because
+     JSON.stringify keeps null and drops undefined - which IS the three-state
+     contract, so no body mapper may "clean" a patch here. */
+
+  agent_settings_read: {
+    path: "/v1/agent-settings",
+    query: (args) => ({ branch: String(args.agent ?? "") }),
+  },
+  agent_settings_write: {
+    path: "/v1/agent-settings",
+    method: "POST",
+    body: (args) => ({ branch: args.agent, patch: args.patch }),
+  },
+  baud_settings_read: {
+    path: "/v1/baud-settings",
+  },
+  baud_settings_write: {
+    path: "/v1/baud-settings",
+    method: "POST",
+    body: (args) => ({ patch: args.patch }),
+  },
+  hooks_sound_get: {
+    path: "/v1/hooks-sound",
+    unwrap: (body) => Boolean(body?.active),
+  },
+  hooks_sound_set: {
+    path: "/v1/hooks-sound",
+    method: "POST",
+    body: (args) => ({ active: args.active }),
+    unwrap: (body) => Boolean(body?.active),
+  },
+
+  /* ----------------------------------------------------- memory limits -- */
+  /* LIVE as of this round - re-probed from here before these lines were
+     written: the four routes answer 401 unauthenticated where they answered
+     404 yesterday, and a nonsense path still answers 404, so the distinction
+     holds in both directions rather than only in the one that flatters the
+     change.
+
+     @api's envelope is NOT this seam's MemoryConfig, so the translation lives
+     here, which is the one place allowed to know both shapes. Two things the
+     envelope genuinely does not carry, and neither is invented below:
+     character caps (there is no route for them - the desktop gear keeps that
+     lane) and the rollover GROUP each dial belongs to. */
+
+  memory_config_read: {
+    path: "/v1/memory-config",
+    // No branch: the FLEET view. `defaults` plus `overrides` is exactly what a
+    // MemoryConfig's `rollover` plus `per_branch` is, which is why the
+    // per-agent panel can share one component across both faces.
+    unwrap: (body) => fleetMemoryConfig(body),
+  },
+  memory_config_set: {
+    path: "/v1/memory-config/set",
+    method: "POST",
+    body: (args) => ({ branch: args.branch, type: args.entryType, count: args.count }),
+    unwrap: (body) => refusalGuard(body),
+  },
+  memory_config_set_default: {
+    path: "/v1/memory-config/set-default",
+    method: "POST",
+    body: (args) => ({ type: args.entryType, count: args.count }),
+    unwrap: (body) => refusalGuard(body),
+  },
+  memory_config_push: {
+    path: "/v1/memory-config/push",
+    method: "POST",
+    body: () => ({}),
+    unwrap: (body) => refusalGuard(body),
+  },
+
   // NO TERMINAL ROUTE LIVES HERE. The room is not a request/response resource:
   // it is a stream, and `openRoomSocket` below is its door. `/v1/room/pane` and
   // `/v1/verbs/keys` were routed here for one evening and are gone with the
@@ -244,9 +371,10 @@ const ROUTES: Record<string, Route> = {
  * a designed absence with a date on it, the second is a bug.
  */
 const NOT_YET: Record<string, string> = {
-  project_switch: "the phone reads the project it was pointed at; switching lands with the verb lane",
-  list_dir: "the file tree needs a directory listing route - /v1 serves single files today",
-  git_changes: "per-branch change counts ride the fleet card; a standalone count has no route yet",
+  project_switch:
+    "the phone keeps its seat locally and passes it on every read - there is no server seat to switch",
+  list_dir:
+    "the phone browses through list_dir_window - the desktop tree's absolute entry paths have no meaning on this fence",
   git_project_changes: "the project-wide count has no route yet",
   resolve_paths: "path resolution is a desktop drag-and-drop concern and has no phone gesture",
   room_kill: "the phone ends a room through verb_kill, which names its project explicitly",
@@ -255,14 +383,17 @@ const NOT_YET: Record<string, string> = {
   pty_resize: "no webview terminal on the phone - see pty_create",
   pty_kill: "no webview terminal on the phone - see pty_create",
   monitor_create: "monitor panes are a desktop pane concern",
-  agent_settings_read: "settings are edits - held for the verb lane",
-  agent_settings_write: "settings are edits - held for the verb lane",
-  baud_settings_read: "desktop-local preferences; the phone keeps its own",
-  baud_settings_write: "desktop-local preferences; the phone keeps its own",
-  hooks_sound_get: "desktop-local preference",
-  hooks_sound_set: "desktop-local preference",
-  memory_config_read: "config is an edit - held for the verb lane",
-  memory_config_write: "config is an edit - held for the verb lane",
+  /* THE FOUR MEMORY-CONFIG ROUTES LEFT THIS TABLE - they are live now, and the
+     move was re-measured from here rather than taken on report: 401
+     unauthenticated where they answered 404 before, with a nonsense path still
+     answering 404 in the same sweep. They sit in the route table above.
+
+     `memory_config_write` STAYS REFUSED, and not by oversight. It is the
+     direct file write for entry CHARACTER caps, and there is no host route for
+     those - @api serves the rollover lane only. A verb with no route belongs
+     here with its reason, not bound to the nearest plausible path. */
+  memory_config_write:
+    "entry character caps have no /v1 route - only the rollover limits are served here, and the desktop gear owns the caps",
   screenshot_capture: "this captures the MACHINE's screen through its compositor - there is none to capture from a phone",
 };
 
@@ -296,6 +427,107 @@ function splitBranchFile(path: string): Query {
 
 function branchOf(path: string): string {
   return String(splitBranchFile(path).branch ?? "");
+}
+
+/**
+ * Which `.trinity/` file a rollover entry type lives in.
+ *
+ * @api's envelope names the entry TYPE and not the group, while this seam's
+ * `RolloverDial` is identified by both - a patch names group and key together.
+ * The mapping is not guessed: it is @memory's own ENTRY TYPES table, printed
+ * by `drone @memory config --help`, which states sessions and key_learnings
+ * live in local.json and observations in observations.json.
+ *
+ * A type nobody here has heard of keeps its own name as its group rather than
+ * being forced into one of the two. It will not match an override and will not
+ * pretend to - which is the honest failure, and visible.
+ */
+const ROLLOVER_GROUPS: Record<string, string> = {
+  sessions: "local",
+  key_learnings: "local",
+  observations: "observations",
+};
+
+function groupOf(entryType: string): string {
+  return ROLLOVER_GROUPS[entryType] ?? entryType;
+}
+
+/**
+ * A write answered 200 but refused - the phone's copy of the exit-code hazard.
+ *
+ * @memory's verbs exit ZERO when they refuse, and @api faithfully passes that
+ * through as `{ok: false, detail: "<@memory's sentence>"}` with an HTTP 200.
+ * So a transport that trusted the status code would report a refused write as
+ * a save and leave a number on screen that was never written. The sentence is
+ * @memory's own and is thrown unreworded.
+ */
+/**
+ * A refusal that arrived with a SUCCESS status, which is the only kind this can
+ * still catch - and measuring that is what corrected my own report of it.
+ *
+ * @memory refuses in-band (prints a sentence, exits zero), so I reported that
+ * @api's new `suggestion` field was being dropped here. It is not: their
+ * refusals come back as HTTP 400 and never reach an `unwrap` at all, and their
+ * handler JOINS the suggestion onto the message before sending it ("... — Try:
+ * <remedy>"), so `errorFrom` already surfaces the whole sentence verbatim.
+ * Wiring it a second time would have printed the remedy twice.
+ *
+ * What was genuinely wrong is right here and was never reachable enough to
+ * notice: this branch read `body.detail`, which is FastAPI's validation shape,
+ * while @api's envelope is `error.message`. A 200-carrying-a-refusal would have
+ * been reported as "refused, without saying why" while the reason sat one field
+ * away. Same fields as `errorFrom` now, suggestion included, so if that door
+ * ever opens it speaks.
+ */
+function refusalGuard(body: any): unknown {
+  if (body?.ok === false) {
+    const envelope = body?.error;
+    const said = String(envelope?.message ?? body?.detail ?? "@memory refused, without saying why");
+    const offered = typeof envelope?.suggestion === "string" ? envelope.suggestion.trim() : "";
+    throw new HostError(
+      400,
+      String(envelope?.code ?? "memory_config_refused"),
+      offered && !said.includes(offered) ? `${said} — Try: ${offered}` : said,
+    );
+  }
+  return body;
+}
+
+/**
+ * @api's fleet envelope -> this seam's `MemoryConfig`.
+ *
+ * Two fields are left deliberately empty rather than filled with a plausible
+ * value, because nothing on this route reports them: `entry_limits` (the
+ * character caps have no host route at all - the desktop gear owns that lane)
+ * and `enforced`, which is a claim about the enforcement hook that this
+ * envelope makes no statement about. `path` names the ROUTE the numbers came
+ * from, which is true, rather than a file path this face never touched.
+ */
+function fleetMemoryConfig(body: any): unknown {
+  const defaults = (body?.defaults ?? {}) as Record<string, { count?: number; auto_compact_cap?: number | null }>;
+  const rollover = Object.entries(defaults).map(([key, dial]) => ({
+    group: groupOf(key),
+    key,
+    count: Number(dial?.count ?? 0),
+    auto_compact_cap: dial?.auto_compact_cap ?? null,
+  }));
+  const overrides = Array.isArray(body?.overrides) ? body.overrides : [];
+  const per_branch = overrides.map((entry: any) => ({
+    branch: String(entry?.branch ?? ""),
+    dials: (Array.isArray(entry?.limits) ? entry.limits : []).map((limit: any) => ({
+      group: groupOf(String(limit?.type ?? "")),
+      key: String(limit?.type ?? ""),
+      count: Number(limit?.count ?? 0),
+      auto_compact_cap: limit?.auto_compact_cap ?? null,
+    })),
+  }));
+  return {
+    path: "/v1/memory-config",
+    enforced: false,
+    entry_limits: [],
+    rollover,
+    per_branch,
+  };
 }
 
 function queryString(query: Query): string {
@@ -469,7 +701,7 @@ export async function uploadImage(file: File): Promise<string> {
   return path;
 }
 
-export function openRoomSocket(branch: string, project: string): WebSocket {
+export function openRoomSocket(branch: string, project: string, kind = ""): WebSocket {
   const token = readToken();
   if (!token) {
     throw new HostError(401, "unauthorized", "no token - sign in before attaching a room");
@@ -482,5 +714,9 @@ export function openRoomSocket(branch: string, project: string): WebSocket {
     ? API_BASE.replace(/^http/, "ws")
     : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
   const query = new URLSearchParams({ branch, project });
+  // `kind=shell` asks for an EMPTY terminal instead of the agent's room -
+  // absent entirely for agent attaches, so that handshake stays byte-identical
+  // to what it was before shells existed.
+  if (kind) query.set("kind", kind);
   return new WebSocket(`${base}/v1/room/attach?${query}`, [BEARER_SENTINEL, token]);
 }

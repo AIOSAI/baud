@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <!-- viewport-fit=cover so env(safe-area-inset-*) in phone.css is real on a
          notched device; without it the insets resolve to zero. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: Chrome 108+ stopped resizing the
+         LAYOUT viewport for the soft keyboard (only the visual one), which
+         hid the bottom key row behind the keys (DPLAN-0301). This opts back
+         into the resize on Chrome; Firefox ignores the token and the
+         visualViewport belt-lift in TerminalSheet carries that half. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#070a09" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />

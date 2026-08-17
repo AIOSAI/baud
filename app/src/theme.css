@@ -1741,3 +1741,309 @@ button.baud-tab {
 .baud-footer-poll-alert {
   color: var(--baud-red);
 }
+
+/* ------------------------------------------------------- agent passports */
+/* ROUND A. Two things land here: the agent's FACE on the card, and the
+   document that face opens. */
+
+/* The avatar: initials, because a fleet of seventeen is scanned by shape
+   before it is read by name. Also the passport door - see BranchChip. */
+.baud-chip-avatar {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: 50%;
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+}
+
+.baud-chip-avatar:hover {
+  border-color: var(--baud-green);
+  color: var(--baud-ink);
+}
+
+/* Manager: BLUE, on Patrick's explicit ruling that it must not be red. Red is
+   this app's alarm colour and ownership is not an alarm - it is a standing
+   fact about who holds git write, the feedback channel and the watchdog. */
+.baud-chip-avatar-manager {
+  border-color: var(--baud-blue);
+  color: var(--baud-blue);
+  box-shadow: inset 0 0 0 1px var(--baud-glow-blue);
+}
+
+/* Sub-agents running inside the session: a red-family flash. This one IS an
+   alarm-adjacent colour on purpose - work happening inside an agent you
+   cannot see in the process table is exactly what deserves the glance.
+
+   IT MUST READ AS ACTIVITY, NOT AS A STATE COLOUR. The first version animated
+   the glow alone, borrowing the dispatched lamp's idiom - and Patrick saw
+   "no flash just a solid red". The animation was running the whole time; it
+   was simply invisible. A 9px lamp IS its glow, so a halo around it is the
+   whole signal, but this is a 26px disc whose border and initials are already
+   solid red, and a 35%-alpha halo cannot compete with that much steady colour
+   sitting next to it. The state and the activity were the same red, and only
+   the weaker of the two was moving.
+   So the DISC fills now: background and ink invert on the beat and the glow
+   rides along. That is a change nobody has to be looking for. */
+.baud-chip-avatar-busy {
+  border-color: var(--baud-red);
+  color: var(--baud-red);
+  animation: baud-subagent-flash 1.3s ease-in-out infinite;
+}
+
+@keyframes baud-subagent-flash {
+  0%,
+  100% {
+    background: var(--baud-bg-panel);
+    color: var(--baud-red);
+    box-shadow: 0 0 0 0 var(--baud-glow-red);
+  }
+  50% {
+    background: var(--baud-red);
+    color: var(--baud-bg);
+    box-shadow: 0 0 10px 3px var(--baud-glow-red);
+  }
+}
+
+/* Exactly as the dispatched lamp does it: motion off, the STATE stays. An
+   operator who cannot take a flashing light must not thereby lose the fact. */
+/* Motion off, the STATE stays - and it stays in the form that survived the
+   contrast problem above. The filled disc is held rather than pulsed, so an
+   operator who cannot take a flashing light still sees the difference from
+   across the room instead of hunting for a faint halo. */
+@media (prefers-reduced-motion: reduce) {
+  .baud-chip-avatar-busy {
+    animation: none;
+    background: var(--baud-red);
+    color: var(--baud-bg);
+    box-shadow: 0 0 8px 2px var(--baud-glow-red);
+  }
+}
+
+/* The document. Rides the settings scrim - a passport is a modal glance, and
+   the operator already knows escape closes one of these. */
+.baud-passport {
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}
+
+/* The title block reads in the order a real passport does: issuer, document
+   type, holder. The rules above and below it are the document's own. */
+.baud-passport-title {
+  position: relative;
+  padding: 14px var(--baud-pad) 12px;
+  border-bottom: 1px solid var(--baud-line-strong);
+  text-align: center;
+}
+
+.baud-passport-issuer {
+  margin: 0;
+  color: var(--baud-ink-faint);
+  font-size: 0.6rem;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+}
+
+.baud-passport-type {
+  margin: 2px 0 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.24em;
+  text-indent: 0.24em;
+}
+
+.baud-passport-name {
+  margin: 6px 0 0;
+  color: var(--baud-green);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.baud-passport-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.baud-passport-close:hover {
+  color: var(--baud-ink);
+}
+
+.baud-passport-body {
+  overflow-y: auto;
+  padding: 0 var(--baud-pad) var(--baud-pad);
+}
+
+.baud-passport-page {
+  padding-top: 14px;
+}
+
+.baud-passport-page-head {
+  margin: 0 0 8px;
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+/* Fields, not JSON: a two-column document grid. */
+.baud-passport-fields {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+
+.baud-passport-fields dt {
+  color: var(--baud-ink-faint);
+  font-size: 0.66rem;
+}
+
+.baud-passport-fields dd {
+  margin: 0;
+  color: var(--baud-ink);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* The registry id reads as a serial number, because that is what it is. */
+.baud-passport-serial {
+  letter-spacing: 0.08em;
+}
+
+.baud-passport-principles {
+  margin: 10px 0 0;
+  padding-left: 16px;
+  color: var(--baud-ink-dim);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.baud-passport-hint,
+.baud-passport-foot {
+  margin: 8px 0 0;
+  color: var(--baud-ink-faint);
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+
+/* A refused read is the file's own sentence, shown where the page would have
+   been. An empty document would read as an agent with nothing to say. */
+.baud-passport-refusal {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--baud-amber);
+  border-radius: var(--baud-radius);
+  color: var(--baud-amber);
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.baud-passport-monitors {
+  display: flex;
+  gap: 8px;
+}
+
+.baud-passport-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--baud-line);
+  padding-bottom: 6px;
+}
+
+.baud-passport-tab {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--baud-radius);
+  padding: 3px 8px;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+  font-size: 0.66rem;
+}
+
+.baud-passport-tab-on {
+  border-color: var(--baud-line-strong);
+  color: var(--baud-green);
+}
+
+.baud-passport-entries {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.baud-passport-entry {
+  padding: 8px 10px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+}
+
+.baud-passport-entry-head {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 0.6rem;
+}
+
+.baud-passport-entry-mark {
+  color: var(--baud-green);
+}
+
+.baud-passport-entry-date {
+  color: var(--baud-ink-faint);
+}
+
+.baud-passport-entry-text {
+  margin: 0;
+  color: var(--baud-ink);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+/* How the work was proved, kept visually second to what the work was. */
+.baud-passport-entry-proof {
+  margin: 6px 0 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.66rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.baud-passport-entry-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 6px 0 0;
+}
+
+.baud-passport-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: 999px;
+  color: var(--baud-ink-faint);
+  font-size: 0.58rem;
+}

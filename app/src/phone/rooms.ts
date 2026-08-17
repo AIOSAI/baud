@@ -20,6 +20,17 @@ import type { BranchStatus } from "../types";
 
 export type { LaunchMode };
 
+/**
+ * What the phone's terminal region can hold: one of the desktop's launch modes,
+ * an EMPTY shell — the desktop's per-card and header terminal buttons — or a
+ * WATCH, the desktop card's read-only monitor pane. A shell types nothing on
+ * attach; `launchCommand` never sees it, and the type system is what keeps that
+ * true (`launchCommand` still takes only `LaunchMode`). A watch never reaches
+ * TerminalSheet at all — it renders MonitorSheet, which has no keyboard to
+ * type with in the first place.
+ */
+export type PhoneMode = LaunchMode | "shell" | "watch";
+
 /** Single-quote for the shell, exactly as `App.tsx` does - odd paths survive. */
 const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
 

@@ -1,7 +1,7 @@
 {
-  "name": "BAUD — AIPass fleet",
+  "name": "BAUD — the AIPass fleet in your pocket",
   "short_name": "BAUD",
-  "description": "The AIPass fleet, read-only, in one column.",
+  "description": "Your agents on one wheel, their rooms in one terminal. Read anyone, watch anyone, attach anyone — from anywhere.",
   "start_url": "/phone.html",
   "scope": "/",
   "display": "standalone",

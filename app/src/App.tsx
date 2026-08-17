@@ -14,6 +14,7 @@ import FileTree from "./components/FileTree";
 import FileView from "./components/FileView";
 import InquiryPane, { helpCommand } from "./components/InquiryPane";
 import MonitorPane from "./components/MonitorPane";
+import PassportView from "./components/PassportView";
 import ProjectSwitch from "./components/ProjectSwitch";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
@@ -158,6 +159,34 @@ export default function App() {
     [],
   );
   const closeSettings = useCallback(() => setSettingsAgent(null), []);
+
+  /**
+   * The opened passport (round A, corrected).
+   *
+   * WHAT IS HELD IS THE IDENTITY, NOT THE ROW. The first version held the whole
+   * BranchStatus captured at click, and that froze the document: the cards
+   * re-render from every poll, so Patrick's card flashed red for four running
+   * sub-agents while the passport he opened from it still read "none running".
+   * A view that shows live numbers has to READ them live - the prax monitor
+   * this app already ships is exactly that discipline, and the passport was
+   * quietly not following it.
+   *
+   * The row is looked up from the current poll on every render (see
+   * `passportBranch` below). The snapshot taken at click is kept only as the
+   * fallback for a branch that LEAVES the list while its passport is open -
+   * a project switch, a roster tab change - because a document that empties
+   * itself mid-read is worse than one showing its last known good state.
+   */
+  const [passportOf, setPassportOf] = useState<{
+    name: string;
+    project: string;
+    held: BranchStatus;
+  } | null>(null);
+  const openPassport = useCallback(
+    (branch: BranchStatus) =>
+      setPassportOf({ name: branch.name, project: branch.project, held: branch }),
+    [],
+  );
 
   // BAUD's own settings (m11 phase 6): the header gear. `null` means the read
   // has not landed yet - the app runs on defaults until it does, and the
@@ -545,6 +574,29 @@ export default function App() {
       ? branches
       : roster.filter((branch) => (stripTab === "live" ? branch.interactive : branch.dispatched));
 
+  /**
+   * The opened passport's row, re-read from the LIVE lists every render.
+   *
+   * Both lists are searched because a passport can be opened from either: the
+   * seated project's own poll, or the roster sweep behind the live and
+   * dispatched tabs. The seated snapshot is preferred where a branch appears
+   * in both - it is the fresher of the two, polling at the card cadence while
+   * the roster only ticks when a roster tab is open.
+   *
+   * Identity is name AND project. A room name carries its project scope, and
+   * matching on the name alone would show one project's numbers under another
+   * project's passport - the same class of mistake as key learning #22.
+   */
+  const passportBranch = passportOf
+    ? (branches.find(
+        (branch) => branch.name === passportOf.name && branch.project === passportOf.project,
+      ) ??
+      roster.find(
+        (branch) => branch.name === passportOf.name && branch.project === passportOf.project,
+      ) ??
+      passportOf.held)
+    : null;
+
   // Whole-project uncommitted count. Not a sum of the cards: those ask
   // `diff HEAD` about their own subtree and cannot see files git has never
   // seen, so a new module counts here and nowhere else. Its own slow tick at
@@ -618,21 +670,12 @@ export default function App() {
           >
             ❯_
           </button>
-          {MONITOR_TOGGLES.map((spec) => {
-            const live = fileTabs.some((tab) => tab.path === spec.id);
-            return (
-              <button
-                key={spec.id}
-                type="button"
-                className={`baud-monitor-toggle ${live ? "baud-monitor-toggle-live" : ""}`}
-                title={live ? spec.onTitle : spec.offTitle}
-                onClick={() => (live ? closeFile(spec.id) : openMonitor(spec))}
-              >
-                <span className="baud-monitor-dot" aria-hidden="true" />
-                {spec.label}
-              </button>
-            );
-          })}
+          {/* THE TWO MONITOR TOGGLES MOVED (round A). They lived here and the
+              top bar has no room; they now open from a MANAGER's passport,
+              which is where an operator looks for what a manager runs. Same
+              openMonitor/closeFile doors, same tab ids - relocated, not
+              reimplemented, so a monitor opened from a passport and one opened
+              from the old bar are the same tab. */}
           <Camera onCaptured={(path) => deliverPaths([path])} />
           {/* The bell, wired (m10): desktop toasts are retired - ai_mail's
               notification feed lands here instead. Its cadence, retention and
@@ -723,11 +766,37 @@ export default function App() {
           seatedProject={snapshot?.project ?? null}
           onHelp={helpBranch}
           onSettings={openSettings}
+          onOpenPassport={openPassport}
         />
       )}
 
       {settingsAgent ? (
         <AgentSettings agent={settingsAgent} onClose={closeSettings} />
+      ) : null}
+
+      {/* The opened passport. The monitor toggles are handed in ONLY for a
+          manager-class passport, and their live state is still derived from
+          the open tabs - so a monitor opened here and closed from the tab bar
+          leaves the toggle honest, exactly as it did in the header. */}
+      {passportBranch ? (
+        <PassportView
+          branch={passportBranch}
+          onClose={() => setPassportOf(null)}
+          monitors={
+            passportBranch.manager
+              ? MONITOR_TOGGLES.map((spec) => {
+                  const live = fileTabs.some((tab) => tab.path === spec.id);
+                  return {
+                    id: spec.id,
+                    label: spec.label,
+                    live,
+                    title: live ? spec.onTitle : spec.offTitle,
+                    onToggle: () => (live ? closeFile(spec.id) : openMonitor(spec)),
+                  };
+                })
+              : []
+          }
+        />
       ) : null}
 
       {interfaceOpen ? (

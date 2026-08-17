@@ -61,7 +61,13 @@ export default function TokenDoor({ onOpen }: TokenDoorProps) {
   return (
     <main className="baud-phone-door">
       <h1 className="baud-phone-door-title">BAUD</h1>
-      <p className="baud-phone-door-line">the fleet, in your pocket — read-only</p>
+      {/* THE SAME STALENESS THE MANIFEST CARRIED, in the one place it is read
+          before anything else. "read-only" was true of the whole face when this
+          line was written; tonight it is a property of the TOKEN - a read token
+          still refuses every verb by name, an operate token opens the fleet -
+          and this door is shown before either is known. So it says what is true
+          of both, and the scope chip in the header says which one arrived. */}
+      <p className="baud-phone-door-line">the fleet, in your pocket</p>
 
       <label className="baud-phone-door-label" htmlFor="baud-token">
         access token

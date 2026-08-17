@@ -25,6 +25,7 @@ import type {
   BaudSettings,
   BranchStatus,
   DirEntryInfo,
+  DirWindow,
   FeedWindow,
   FileText,
   FleetSnapshot,
@@ -41,8 +42,13 @@ export { HostChannel, openExternal } from "./transport";
 
 /* ---------------------------------------------------------------- fleet -- */
 
-/** The seated project's cards plus the scan every card was read from. */
-export const fleetSnapshot = () => call<FleetSnapshot>("fleet_snapshot");
+/** The seated project's cards plus the scan every card was read from.
+ *  `project` names a census entry to read instead of the seat - the phone's
+ *  switcher passes it; the desktop, whose seat lives in the backend, never
+ *  does (and the argument is omitted entirely so the Tauri command's
+ *  signature is untouched). */
+export const fleetSnapshot = (project?: string) =>
+  project ? call<FleetSnapshot>("fleet_snapshot", { project }) : call<FleetSnapshot>("fleet_snapshot");
 
 /** Every project's citizens, for the roster tabs - one sweep, not one per card. */
 export const agentRoster = () => call<BranchStatus[]>("agent_roster");
@@ -58,7 +64,27 @@ export const projectSwitch = (name: string) => call<void>("project_switch", { na
 /** Fenced: the backend resolves under the seated project - callers pass names. */
 export const listDir = (path: string) => call<DirEntryInfo[]>("list_dir", { path });
 
-export const readFileText = (path: string) => call<FileText>("read_file_text", { path });
+/**
+ * THE OPTIONAL `project` ON THE THREE READS BELOW, and why it is not a desktop
+ * change (2026-08-16, browsing-is-free ruling).
+ *
+ * Patrick ruled browsing free: any agent's files, any project, no restriction.
+ * The host API's read routes now take a project and resolve it through @baud's
+ * own census; the fleet route always did. The desktop needs nothing - its
+ * backend resolves under the seat it is already sitting in - so the argument is
+ * threaded ONLY when a caller supplies one, and the key is left off the payload
+ * entirely otherwise. The desktop passes none, so the object handed to `invoke`
+ * is byte-identical to what it was before this line existed. One seam, two
+ * faces, and the face that needed a new capability is the only one that changed.
+ */
+
+/** The same level with its honesty flag - the phone's browser shows what was
+ *  dropped instead of rendering a trimmed list as complete. */
+export const listDirWindow = (path: string, project = "") =>
+  call<DirWindow>("list_dir_window", project ? { path, project } : { path });
+
+export const readFileText = (path: string, project = "") =>
+  call<FileText>("read_file_text", project ? { path, project } : { path });
 
 /**
  * Text -> the paths inside it that actually exist, for drop and paste.
@@ -71,12 +97,14 @@ export const resolvePaths = (base: string | null, candidates: string[]) =>
 /* ----------------------------------------------------------------- git -- */
 
 /** One branch's working-tree count, keyed by the branch's own directory. */
-export const gitChanges = (path: string) => call<GitChanges>("git_changes", { path });
+export const gitChanges = (path: string, project = "") =>
+  call<GitChanges>("git_changes", project ? { path, project } : { path });
 
 /** The whole seated project's count - a different question, deliberately. */
 export const gitProjectChanges = () => call<GitChanges>("git_project_changes");
 
-export const gitDiffText = (path: string) => call<FileText>("git_diff_text", { path });
+export const gitDiffText = (path: string, project = "") =>
+  call<FileText>("git_diff_text", project ? { path, project } : { path });
 
 /* --------------------------------------------------------------- rooms -- */
 
@@ -187,6 +215,46 @@ export const hooksSoundSet = (active: boolean) => call<boolean>("hooks_sound_set
 export const memoryConfigRead = () => call<MemoryConfig>("memory_config_read");
 
 export const memoryConfigWrite = (patch: unknown) => call<MemoryConfig>("memory_config_write", { patch });
+
+/* THE ROLLOVER COUNTS GO THROUGH @memory's OWN VERBS, never a file write
+   (round A ruling). Bounds are 1-100 and the refusals are sentences @memory
+   wrote; both live in one place that way, and BAUD shows what it is told
+   rather than re-deciding it. `memoryConfigWrite` above keeps the direct lane
+   for entry CHARACTER caps only - those have no verb behind them yet.
+
+   All three answer with the whole config re-read AFTER the verb ran, which is
+   the only honest proof a write landed: @memory's refusals exit 0, so a caller
+   that trusted the exit status would report a refused write as a success. The
+   phone meets the same hazard in a different costume - @api passes the refusal
+   through as HTTP 200 with {ok: false} - and its transport throws on that.
+
+   THE READ-BACK IS PART OF THE VERB, not part of the caller. The desktop's
+   Rust command re-reads the file itself; @api's write answers with a receipt
+   ({ok, detail}) and no config at all. So the read happens HERE, once, and
+   both faces hand their caller the same freshly-read MemoryConfig. It costs
+   the desktop one extra local read and buys one behaviour instead of two.
+
+   Each write is awaited BEFORE the read - a read fired alongside the write
+   would be racing it and could answer with the old number, which is exactly
+   the false "saved" this whole lane exists to prevent. */
+
+/** One branch's keep-count for one entry type. */
+export const memoryConfigSet = async (branch: string, entryType: string, count: number) => {
+  await call<unknown>("memory_config_set", { branch, entryType, count });
+  return memoryConfigRead();
+};
+
+/** A default keep-count. Does NOT reach any branch until a push. */
+export const memoryConfigSetDefault = async (entryType: string, count: number) => {
+  await call<unknown>("memory_config_set_default", { entryType, count });
+  return memoryConfigRead();
+};
+
+/** Reset EVERY branch to the defaults. Fleet-wide, and confirmed twice. */
+export const memoryConfigPush = async () => {
+  await call<unknown>("memory_config_push");
+  return memoryConfigRead();
+};
 
 /* -------------------------------------------------------------- camera -- */
 /** Desktop-only: the machine's own screen, through the compositor's portal. */

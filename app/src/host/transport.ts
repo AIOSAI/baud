@@ -60,7 +60,7 @@ export { Channel as HostChannel };
  * the binding - so the http transport is never in the desktop's import graph at
  * all, rather than merely tree-shaken out of its bundle.
  */
-export function openRoomSocket(_branch: string, _project: string): WebSocket {
+export function openRoomSocket(_branch: string, _project: string, _kind = ""): WebSocket {
   throw new Error(
     "room sockets are the phone's door - the desktop attaches through its own pty (pty.rs)",
   );
