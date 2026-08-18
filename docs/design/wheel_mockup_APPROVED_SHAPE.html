@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BAUD wheel — shape probe</title>
+<style>
+  /* Throwaway shape probe for the phone fleet screen. Not production code —
+     the point is that Patrick's thumb can vote on the FEEL. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: #070a09;
+    color: #d6e2dc;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    overscroll-behavior-y: contain;
+    overflow: hidden;
+  }
+  #app { display: flex; flex-direction: column; height: 100%; }
+
+  /* ---- top bar ---- */
+  #topbar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; font-size: 14px;
+    border-bottom: 1px solid #16211c;
+  }
+  #topbar b { letter-spacing: 2px; }
+  #topbar .dim { color: #5b6f66; font-size: 11px; margin-left: auto; }
+
+  /* ---- the wheel rail ---- */
+  #rail-wrap { position: relative; padding: 10px 0 2px; transition: all .25s; }
+  #rail-wrap.hidden { display: none; }
+  #rail {
+    display: flex; gap: 6px;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* padding lets first/last card reach center */
+    padding: 6px calc(50vw - 38px);
+  }
+  #rail::-webkit-scrollbar { display: none; }
+  .card {
+    flex: 0 0 76px;
+    scroll-snap-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    transition: transform .12s linear, opacity .12s linear;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .avatar {
+    width: 52px; height: 52px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #101a15; border: 2px solid #22352c;
+    font-size: 15px; font-weight: 700; color: #9fd6bc;
+    position: relative;
+  }
+  .card.center .avatar { border-color: #46e393; box-shadow: 0 0 14px #46e39344; }
+  .dot {
+    position: absolute; right: -1px; bottom: -1px;
+    width: 12px; height: 12px; border-radius: 50%;
+    border: 2px solid #070a09;
+  }
+  .dot.live { background: #46e393; }
+  .dot.idle { background: #47555e; }
+  .mail {
+    position: absolute; top: -5px; right: -7px;
+    background: #e3b346; color: #070a09;
+    font-size: 9px; font-weight: 700;
+    border-radius: 8px; padding: 1px 4px;
+  }
+  .cname { font-size: 10px; color: #7d968b; }
+  .card.center .cname { color: #d6e2dc; }
+
+  /* center marker under the rail */
+  #notch {
+    width: 0; height: 0; margin: 2px auto 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-bottom: 6px solid #46e393;
+  }
+
+  /* ---- expanded card overlay ---- */
+  #expand {
+    position: fixed; inset: 0; z-index: 30;
+    background: #070a09ee; backdrop-filter: blur(2px);
+    display: none; align-items: flex-start; justify-content: center;
+    padding-top: 12vh;
+  }
+  #expand.open { display: flex; }
+  #bigcard {
+    width: min(86vw, 340px);
+    background: #0c1410; border: 1px solid #2a4033; border-radius: 14px;
+    padding: 18px;
+  }
+  #bigcard h2 { font-size: 18px; color: #9fd6bc; letter-spacing: 1px; }
+  #bigcard .sub { font-size: 11px; color: #5b6f66; margin: 2px 0 12px; }
+  #stats { display: flex; gap: 14px; margin-bottom: 14px; }
+  #stats div { text-align: center; }
+  #stats b { display: block; font-size: 17px; color: #e3b346; }
+  #stats span { font-size: 9px; color: #7d968b; letter-spacing: 1px; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    flex: 1 1 40%;
+    padding: 11px 0; text-align: center;
+    background: #101a15; border: 1px solid #2a4033; border-radius: 9px;
+    font-size: 12px; color: #d6e2dc; letter-spacing: 1px;
+  }
+  .btn.go { border-color: #46e393; color: #46e393; }
+  #closer { text-align: center; margin-top: 14px; font-size: 11px; color: #5b6f66; }
+
+  /* ---- terminal region ---- */
+  #term {
+    flex: 1; display: flex; flex-direction: column;
+    min-height: 0; border-top: 1px solid #16211c;
+  }
+  #term-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; font-size: 12px; color: #7d968b;
+  }
+  #term-head .who { color: #d6e2dc; }
+  #back { display: none; border: 1px solid #2a4033; border-radius: 7px; padding: 4px 10px; }
+  body.room #back { display: inline-block; }
+  #screen {
+    flex: 1; overflow: hidden; padding: 6px 12px;
+    font-size: 11px; line-height: 1.45; color: #a7bdb2;
+    white-space: pre-wrap;
+  }
+  #screen .green { color: #46e393; }
+  #tmuxbar {
+    background: #1d3a2a; color: #9fd6bc;
+    font-size: 10px; padding: 2px 10px;
+  }
+  #chips { display: flex; gap: 6px; padding: 8px 10px 4px; }
+  .chip {
+    flex: 1; text-align: center; padding: 9px 0;
+    background: #101a15; border: 1px solid #22352c; border-radius: 8px;
+    font-size: 12px; color: #9fd6bc;
+  }
+  #compose { display: flex; gap: 8px; padding: 6px 10px 12px; }
+  #compose .field {
+    flex: 1; padding: 11px 12px;
+    background: #0c1410; border: 1px solid #22352c; border-radius: 9px;
+    color: #5b6f66; font-size: 12px;
+  }
+  #compose .send {
+    padding: 11px 18px; border: 1px solid #2a4033; border-radius: 9px;
+    color: #7d968b; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar"><b>BAUD</b><span class="dim" id="mode">fleet · flick the rail, tap the center card</span></div>
+
+  <div id="rail-wrap">
+    <div id="rail"></div>
+    <div id="notch"></div>
+  </div>
+
+  <div id="term">
+    <div id="term-head">
+      <span id="back">‹ fleet</span>
+      room · <span class="who" id="who">devpulse</span>
+    </div>
+    <div id="screen">● Ran 1 shell command
+  ⎿ tmux list-clients -t baud-devpulse
+
+● Your message landed clean — first phone-typed
+  message to arrive as a real turn.
+
+<span class="green">&gt;</span> █</div>
+    <div id="tmuxbar">[baud-devpulse] 0:claude*                    10:30 15-Aug-26</div>
+    <div id="chips">
+      <div class="chip">▲</div><div class="chip">▼</div><div class="chip">^C</div>
+      <div class="chip">esc</div><div class="chip">tab</div><div class="chip">⏎</div>
+    </div>
+    <div id="compose"><div class="field">type a line…</div><div class="send">send</div></div>
+  </div>
+</div>
+
+<div id="expand">
+  <div id="bigcard">
+    <h2 id="bigname">DEVPULSE</h2>
+    <div class="sub" id="bigsub">manager · live · updated 7m ago</div>
+    <div id="stats">
+      <div><b id="s-mail">5</b><span>MAIL</span></div>
+      <div><b id="s-plans">22</b><span>PLANS</span></div>
+      <div><b id="s-todos">11</b><span>TODOS</span></div>
+      <div><b id="s-git">2</b><span>GIT</span></div>
+    </div>
+    <div class="btnrow">
+      <div class="btn go" id="attach">▸ attach</div>
+      <div class="btn">files</div>
+      <div class="btn">watch</div>
+      <div class="btn">fresh</div>
+    </div>
+    <div id="closer">tap outside to close</div>
+  </div>
+</div>
+
+<script>
+  const FLEET = [
+    ["devpulse", true, 5], ["api", true, 1], ["baud", true, 0], ["ai_mail", false, 0],
+    ["flow", false, 2], ["memory", true, 0], ["spawn", false, 0], ["hooks", false, 1],
+    ["prax", true, 0], ["seedgo", false, 0], ["trigger", false, 3], ["drone", false, 0],
+    ["cli", false, 0], ["skills", false, 0], ["daemon", true, 0], ["commons", false, 4],
+    ["backup", false, 0],
+  ];
+  const rail = document.getElementById("rail");
+
+  for (const [name, live, mail] of FLEET) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.name = name;
+    card.innerHTML =
+      `<div class="avatar">${name.slice(0, 2).toUpperCase()}` +
+      `<div class="dot ${live ? "live" : "idle"}"></div>` +
+      (mail ? `<div class="mail">${mail}</div>` : "") +
+      `</div><div class="cname">${name}</div>`;
+    rail.appendChild(card);
+  }
+  const cards = [...rail.children];
+
+  // scale by distance from center — the wheel feel
+  let centered = null;
+  function paint() {
+    const mid = rail.getBoundingClientRect().left + rail.clientWidth / 2;
+    let best = null, bestD = 1e9;
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      const d = Math.abs(r.left + r.width / 2 - mid);
+      const t = Math.min(d / (rail.clientWidth / 2), 1);
+      c.style.transform = `scale(${1.28 - 0.38 * t})`;
+      c.style.opacity = String(1 - 0.55 * t);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    if (best !== centered) {
+      centered?.classList.remove("center");
+      best.classList.add("center");
+      centered = best;
+      document.getElementById("who").textContent = best.dataset.name;
+      document.getElementById(
+        "tmuxbar"
+      ).textContent = `[baud-${best.dataset.name}] 0:claude*                    10:30 15-Aug-26`;
+    }
+  }
+  rail.addEventListener("scroll", () => requestAnimationFrame(paint), { passive: true });
+  paint();
+
+  // tap: center card expands; off-center card scrolls to center
+  rail.addEventListener("click", (e) => {
+    const card = e.target.closest(".card");
+    if (!card) return;
+    if (card !== centered) {
+      card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      return;
+    }
+    const [name, live, mail] = FLEET.find(([n]) => n === card.dataset.name);
+    document.getElementById("bigname").textContent = name.toUpperCase();
+    document.getElementById("bigsub").textContent =
+      (name === "devpulse" ? "manager" : "citizen") + (live ? " · live" : " · idle") + " · updated 7m ago";
+    document.getElementById("s-mail").textContent = mail;
+    document.getElementById("expand").classList.add("open");
+  });
+  document.getElementById("expand").addEventListener("click", (e) => {
+    if (e.target.id === "expand") e.target.classList.remove("open");
+  });
+
+  // attach → room state: rail collapses, terminal owns the screen
+  document.getElementById("attach").addEventListener("click", () => {
+    document.getElementById("expand").classList.remove("open");
+    document.getElementById("rail-wrap").classList.add("hidden");
+    document.body.classList.add("room");
+    document.getElementById("mode").textContent = "room · the wheel steps aside";
+  });
+  document.getElementById("back").addEventListener("click", () => {
+    document.getElementById("rail-wrap").classList.remove("hidden");
+    document.body.classList.remove("room");
+    document.getElementById("mode").textContent = "fleet · flick the rail, tap the center card";
+    paint();
+  });
+</script>
+</body>
+</html>
