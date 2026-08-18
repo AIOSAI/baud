@@ -32,6 +32,22 @@
  * pointer, so the only movement that reaches the classifier is the vertical
  * one the browser refused. That is not a workaround, it is the reason the
  * feel survives being given a second gesture.
+ *
+ * THE FOURTH LAYER IS NOT AGENTS (DPLAN-0303, mock approved 08-17). Three
+ * wheels hold citizens; the fourth holds APPS - surfaces that belong to the
+ * project rather than to anybody in it, git first among them. This is what the
+ * stack was built to absorb, and it cost the promised nothing: one more row in
+ * the array below, one more pip, one more flash. What it DID need is a second
+ * card shape, because "a surface" and "a citizen" must be one glance apart -
+ * apps are rounded SQUARES in ember orange, agents stay circles in fleet green,
+ * and the accent travels through the pips, the notch and the flash together so
+ * arriving on the apps layer reads as one move rather than four.
+ *
+ * AN APP CARD IS NEVER THE CURRENT AGENT. It carries no `data-name`, so the
+ * centre report that drives the terminal, the sheet and the whole context-bound
+ * half of this face never fires on it - flicking down to look at git leaves the
+ * agent you were talking to exactly where it was. The apps layer tracks its own
+ * centre, locally, for its own tap rule.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -75,12 +91,16 @@ export const isAwake = (branch: BranchStatus): boolean =>
  * their bounds off this array, so an unread-mail or favourites wheel slots in
  * without touching any of them. That was the brief's "keep it open to N".
  */
-interface WheelLayer {
+interface WheelLayerBase {
   key: string;
   /** What flashes over the rail on arrival - the operator's word for it. */
   name: string;
   /** Said out loud when the layer holds nobody. A blank rail is a bug's face. */
   empty: string;
+}
+
+interface AgentLayer extends WheelLayerBase {
+  holds: "agents";
   /**
    * Which census this layer draws from.
    *
@@ -93,6 +113,46 @@ interface WheelLayer {
   source: "project" | "system";
   hold: (branch: BranchStatus) => boolean;
 }
+
+/**
+ * The apps layer: cards that are written down, not read from a census.
+ *
+ * There is no lane behind this list and there should not be one - an app is a
+ * surface this face itself provides, so a server that has never heard of it can
+ * neither add one nor take one away.
+ */
+interface AppLayer extends WheelLayerBase {
+  holds: "apps";
+  cards: ReadonlyArray<AppCard>;
+}
+
+/**
+ * ONE APP CARD, and the vocabulary that decides what a tap on it does.
+ *
+ * TWO KINDS, because the mock has two and they are genuinely different
+ * promises. A DOOR opens a surface inside this face and comes back with the
+ * back chip. A LINK LEAVES - it hands a URL to the phone's own browser and this
+ * face is done with it - so it wears a corner arrow, because a card that
+ * navigates away and a card that opens a sheet must not look the same before
+ * you touch them.
+ *
+ * ONLY DOORS EXIST THIS ROUND. The mock's REPO and COMMONS cards are link-cards
+ * and no lane on this face knows a remote's address yet, so building them would
+ * be shipping a door to nowhere. The kind is in the data anyway: a link-card is
+ * ONE ENTRY in the array below on the day the lane that resolves a remote URL
+ * lands, and nothing else here has to move.
+ */
+interface AppCard {
+  /** Stable id - what a tap reports upward, and what a badge is keyed by. */
+  key: string;
+  /** Drawn inside the square. Short: this is a 44px box. */
+  mark: string;
+  /** Under the card, in the agents' own place for a name. */
+  name: string;
+  kind: "door" | "link";
+}
+
+type WheelLayer = AgentLayer | AppLayer;
 
 /**
  * THE STACK, top to bottom. Patrick, on seeing the two-wheel version work:
@@ -108,12 +168,19 @@ interface WheelLayer {
  * contradict the amber dot it is wearing. The consequence is the one devpulse
  * asked for: wheel 2 is all steady green, wheel 3 is all amber pulse, and the
  * wheel's NAME and the card's LIGHT never say different things.
+ *
+ * THE FOURTH IS NOT A FOURTH WHEEL OF AGENTS. Three wheels is still the answer
+ * to "which citizens", and apps sits below them because it answers a different
+ * question entirely - it is the end of the stack rather than another filter on
+ * it. Deepest is the right place for it: the three an operator flicks between
+ * all day stay within one flick of each other.
  */
 const WHEELS: ReadonlyArray<WheelLayer> = [
   {
     key: "project",
     name: "current project",
     empty: "this project has no agents",
+    holds: "agents",
     source: "project",
     hold: () => true,
   },
@@ -123,6 +190,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
     // Not "no agents" - the fleet is full, the WORKING set is empty, and those
     // are different facts. Saying the wrong one sends someone hunting a bug.
     empty: "no one live",
+    holds: "agents",
     source: "system",
     hold: (branch) => branch.interactive && !branch.dispatched,
   },
@@ -130,8 +198,27 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
     key: "dispatched",
     name: "dispatched",
     empty: "nothing dispatched",
+    holds: "agents",
     source: "system",
     hold: (branch) => branch.dispatched,
+  },
+  {
+    key: "apps",
+    name: "apps",
+    // Unreachable while a card is written down here, and kept anyway: the
+    // rail's empty line is what a layer says when it holds nothing, and a
+    // layer that could not say it would be the one shape the stack cannot
+    // handle.
+    empty: "no apps on this face yet",
+    holds: "apps",
+    cards: [
+      {
+        key: "git",
+        mark: "GIT",
+        name: "git",
+        kind: "door",
+      },
+    ],
   },
 ];
 
@@ -147,6 +234,39 @@ const FLASH_MS = 1100;
 
 /** One card's identity, across every project. See `centered` below. */
 export const cardRef = (branch: BranchStatus): string => `${branch.project}/${branch.name}`;
+
+/**
+ * THE CARD A WHEEL OPENS ON, when nothing has been chosen yet.
+ *
+ * Patrick, this morning: "when I load up, the agent seat sits on the first
+ * agent - so ai_mail in aipass. I want it to sit on the manager agent." The
+ * rail opened at scroll zero, and scroll zero is not a decision - it is
+ * whichever agent sorts first, which is nobody in particular. The manager is
+ * the one agent every project HAS and the one an operator arrives to talk to,
+ * so it is what an unchosen wheel presents.
+ *
+ * MANAGER-NESS IS A FIELD, NEVER A NAME. `BranchStatus.manager` is the
+ * passport's `identity.citizen_class` already asked this exact question
+ * (types.ts:9) - the same boolean the card's blue avatar ring reads two hundred
+ * lines below and the sheet's MANAGER stamp reads in PassportSheet. Nothing
+ * here re-derives it from a branch name, so a project whose manager is not
+ * named after it opens correctly, and a rename can never silently move the
+ * default.
+ *
+ * SEATED PROJECT ONLY, which is what keeps this honest on the cross-project
+ * wheels: a foreign manager is somebody else's owner, and opening on one would
+ * be a wheel that starts in a project the phone is not sitting in.
+ *
+ * TWO MANAGERS is the census's own order - the first one it hands over, no
+ * tie-break invented here. NO MANAGER is silent and lands exactly where the
+ * rail landed before: the first card. A project mid-birth, or a passport that
+ * will not read, is not a fault worth saying out loud on a 64px card.
+ */
+export const openingCard = (
+  cards: readonly BranchStatus[],
+  seatedProject: string,
+): BranchStatus | undefined =>
+  cards.find((card) => card.manager && card.project === seatedProject) ?? cards[0];
 
 interface FleetWheelProps {
   branches: BranchStatus[];
@@ -172,6 +292,18 @@ interface FleetWheelProps {
   /** The project the phone is seated in - what makes a card foreign or not. */
   seatedProject: string;
   /**
+   * Changed-file counts by card ref, from PhoneApp's slow git sweep - and
+   * ABSENT for every branch the sweep has not reached yet.
+   *
+   * The absence is the contract, which is why this is a sparse map and not a
+   * number per card. The fleet read carries mail, plans and todos for free;
+   * git is a subprocess per branch and arrives late, one branch at a time. A
+   * card with no entry adds nothing to its badge rather than adding a zero,
+   * because zero is a FACT about a working tree - "nothing has changed here" -
+   * and a lane that has not answered yet must not be able to say it.
+   */
+  gitCounts: Readonly<Record<string, number | undefined>>;
+  /**
    * The card under the notch, as `PROJECT/name`.
    *
    * A NAME IS NOT AN IDENTITY once the rail crosses projects. Eleven projects
@@ -193,9 +325,21 @@ interface FleetWheelProps {
    * ring points at the room that is literally underneath it.
    */
   attached: string | null;
+  /**
+   * What each APP card's badge should read, by card key - and absent for a
+   * count nothing has measured yet.
+   *
+   * Sparse for the same reason `gitCounts` is: the git app's number is a repo
+   * -wide `git status` on a slow timer, so a badge that drew a zero before the
+   * first answer would say the repository is clean on the strength of a read
+   * that never happened.
+   */
+  appBadges: Readonly<Record<string, number | undefined>>;
   onCenter: (name: string) => void;
   /** A tap on the card that is ALREADY centered - the only way in. */
   onExpand: (name: string) => void;
+  /** The same two-touch rule, for an app card: centre first, then open. */
+  onOpenApp: (key: string) => void;
 }
 
 export default function FleetWheel({
@@ -203,10 +347,13 @@ export default function FleetWheel({
   roster,
   rosterRefusal,
   seatedProject,
+  gitCounts,
   centered,
   attached,
+  appBadges,
   onCenter,
   onExpand,
+  onOpenApp,
 }: FleetWheelProps) {
   const rail = useRef<HTMLDivElement | null>(null);
   /** The whole wheel - the drag surface, and the element that must out-argue
@@ -214,6 +361,11 @@ export default function FleetWheel({
   const wrap = useRef<HTMLDivElement | null>(null);
   /** Last name reported upward, so a scroll frame that changes nothing is free. */
   const reported = useRef<string | null>(null);
+  /** The same guard for the apps layer's local centre - one setState per real
+   *  change, never one per animation frame of a flick. */
+  const appReported = useRef<string | null>(null);
+  /** Which app card is under the notch, by key. Null on every agent wheel. */
+  const [appCentered, setAppCentered] = useState<string | null>(null);
 
   /** Which layer of the stack is showing. Index into WHEELS, never a name. */
   const [layer, setLayer] = useState(0);
@@ -238,14 +390,25 @@ export default function FleetWheel({
   const swiped = useRef(false);
 
   const wheel = WHEELS[layer];
+  /** The layer's agent half, or null on the apps layer - which has no census,
+   *  no roster to be refused by, and no filter to run. */
+  const citizens = wheel.holds === "agents" ? wheel : null;
+  /** The layer's app cards, or null on every agent wheel. */
+  const apps = wheel.holds === "apps" ? wheel.cards : null;
   /** Null ONLY when a system wheel has no lane to read - never when it is empty. */
-  const census = wheel.source === "system" ? roster : branches;
-  const shown = useMemo(() => (census ?? []).filter(wheel.hold), [census, wheel]);
+  const census = citizens ? (citizens.source === "system" ? roster : branches) : [];
+  const shown = useMemo(
+    () => (citizens ? (census ?? []).filter(citizens.hold) : []),
+    [census, citizens],
+  );
   /** What replaces the cards when the lane itself is missing. */
   const blocked =
     census === null
       ? (rosterRefusal ?? { line: "lane pending", detail: "the cross-project roster is unavailable" })
       : null;
+  /** How many cards the rail is actually holding, whichever kind they are -
+   *  what the empty line, the ghost card and the paint effect all key on. */
+  const held = apps ? apps.length : shown.length;
 
   /**
    * Paint the wheel for the current scroll position.
@@ -283,6 +446,19 @@ export default function FleetWheel({
       reported.current = name;
       onCenter(name);
     }
+
+    /* THE APPS LAYER'S OWN CENTRE, and it stays inside this component.
+       An app is not an agent, so it must not travel up as one - the centre
+       report drives the terminal, the sheet and the passport, and every one of
+       them takes a `project/branch` ref. What the apps layer needs the centre
+       for is only the two-touch rule and the ring, which is a local matter.
+       Set through state rather than a class written here, because the ring is
+       drawn in the render like every other card's. */
+    const app = nearest?.dataset.app ?? null;
+    if (app !== appReported.current) {
+      appReported.current = app;
+      setAppCentered(app);
+    }
   }, [onCenter]);
 
   useEffect(() => {
@@ -309,7 +485,7 @@ export default function FleetWheel({
     };
     // The VISIBLE count, not the fleet's: an agent going idle empties a card
     // off the active wheel while `branches.length` sits perfectly still.
-  }, [paint, shown.length]);
+  }, [paint, held]);
 
   /**
    * Land on the new wheel where it was left.
@@ -324,6 +500,70 @@ export default function FleetWheel({
     strip.scrollLeft = memory.current[WHEELS[layer].key] ?? 0;
     paint();
   }, [layer, paint]);
+
+  /**
+   * WHAT COUNTS AS A WHEEL THAT HAS NEVER BEEN OPENED.
+   *
+   * The project wheel is keyed per SEAT: a project switch replaces every card on
+   * it, so where it was left points at agents that are not there any more and
+   * means nothing - that is a wheel being opened for the first time, again. The
+   * system wheels are keyed by wheel alone, because a project switch does not
+   * move one card on them; where the operator left them still means exactly what
+   * they left it meaning, and re-placing those would be moving the rail under a
+   * hand that put it there.
+   *
+   * THE APPS LAYER IS KEYED BY ITSELF, like the system wheels and for the
+   * stronger version of their reason: its cards are written down, so a project
+   * switch cannot move one of them at all.
+   */
+  const placeKey = `${wheel.key}:${citizens?.source === "project" ? seatedProject : ""}`;
+  /**
+   * Wheels already given their opening position, by placement key. A ref, not
+   * state: placing is a scroll and never a render - and the whole point is that
+   * it happens ONCE per key, so it must not be able to re-run itself.
+   */
+  const placed = useRef<Record<string, boolean>>({});
+
+  /**
+   * THE OPENING PLACEMENT - the manager under the notch, and nothing after that.
+   *
+   * This is the one place the "first card" default used to live, as the `?? 0`
+   * directly above; `openingCard` now decides what an unchosen wheel presents.
+   * It cannot be done in that effect alone, because on a cold load the rail is
+   * a ghost card - the fleet read has not landed - so the placement has to wait
+   * for cards to exist rather than for a layer to change.
+   *
+   * HANDS OUTRANK IT, ALWAYS AND BY CONSTRUCTION. The key is marked spent the
+   * instant a card is placed, so every later run - and there is one per poll
+   * tick, since a fresh roster is a fresh array - returns on the first line. A
+   * flick, a tap, an agent waking or going idle: none of them can move the rail
+   * back. Nothing re-centres; this only fills the ABSENCE of a choice.
+   *
+   * An empty wheel is deliberately NOT marked spent. Marking it would burn the
+   * one shot on a rail that is still waiting for its first read, which is
+   * exactly the load this exists for.
+   */
+  useLayoutEffect(() => {
+    const strip = rail.current;
+    if (!strip || placed.current[placeKey]) return;
+    const target = openingCard(shown, seatedProject);
+    if (!target) return;
+    const ref = cardRef(target);
+    const card = Array.from(strip.children).find(
+      (node) => (node as HTMLElement).dataset.name === ref,
+    ) as HTMLElement | undefined;
+    if (!card) return;
+    placed.current[placeKey] = true;
+    // paint()'s own measurement, deliberately: the card the rail settles on has
+    // to be the card the notch marks, and two different centre calculations are
+    // two chances to disagree by a pixel and land one card over. `scrollIntoView`
+    // is not used - it is allowed to scroll ANCESTORS, and this runs while the
+    // page is still arriving.
+    const box = card.getBoundingClientRect();
+    const middle = strip.getBoundingClientRect().left + strip.clientWidth / 2;
+    strip.scrollLeft += box.left + box.width / 2 - middle;
+    paint();
+  }, [placeKey, seatedProject, shown, paint]);
 
   /** The flash is a moment, not a state - it clears itself. */
   useEffect(() => {
@@ -482,8 +722,22 @@ export default function FleetWheel({
     // click arrives AFTER the pointerup that ended the swipe.
     if (swiped.current) return;
     const card = (event.target as HTMLElement).closest<HTMLElement>(".baud-wheel-card");
-    const name = card?.dataset.name;
-    if (!card || !name) return;
+    if (!card) return;
+
+    // THE SAME TWO TOUCHES FOR AN APP, tested first because an app card carries
+    // no `data-name` and would otherwise fall out of this function unread.
+    const app = card.dataset.app;
+    if (app) {
+      if (app !== appCentered) {
+        card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+        return;
+      }
+      onOpenApp(app);
+      return;
+    }
+
+    const name = card.dataset.name;
+    if (!name) return;
     if (name !== centered) {
       card.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       return;
@@ -496,7 +750,12 @@ export default function FleetWheel({
     // cards and pips inside are buttons; this is the wheel's drag surface.
     <div
       ref={wrap}
-      className="baud-wheel-wrap"
+      /* THE ACCENT IS SET ON THE WHOLE WHEEL, not on the cards - so the notch,
+         the pips and the centred card's ring all change colour together and the
+         layer switch reads as ONE move rather than three. Every element that
+         carries the accent lives inside this box, which is why one class here
+         is the whole shift. */
+      className={`baud-wheel-wrap ${apps ? "baud-wheel-wrap-apps" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
@@ -511,12 +770,55 @@ export default function FleetWheel({
             drift the next time the card resizes. It carries no data-name, so
             paint() finds it and reports nothing, which is the honest answer
             for a wheel with nobody on it. */}
-        {shown.length === 0 ? (
+        {held === 0 ? (
           <div className="baud-wheel-card baud-wheel-ghost" aria-hidden="true">
             <span className="baud-wheel-avatar" />
             <span className="baud-wheel-name">—</span>
           </div>
         ) : null}
+        {/* THE APP CARDS - the same card, the same rail, the same snap and the
+            same notch, drawn as SQUARES so one glance separates a surface from
+            a citizen without reading a word. No dot: a lamp answers "is anyone
+            awake in there", and there is nobody in a git repository.
+            `data-app` instead of `data-name` is what keeps this layer out of
+            the current-agent report - see the file header. */}
+        {(apps ?? []).map((card) => {
+          const badge = appBadges[card.key];
+          return (
+            <div
+              key={card.key}
+              className={`baud-wheel-card ${card.key === appCentered ? "baud-wheel-center" : ""}`}
+              data-app={card.key}
+            >
+              <button
+                type="button"
+                className="baud-wheel-avatar baud-wheel-avatar-app"
+                title={
+                  card.kind === "link"
+                    ? `${card.name} — opens outside this face`
+                    : `${card.name} — this project's ${card.name} surface`
+                }
+              >
+                {card.mark}
+                {/* ABSENT UNTIL MEASURED, and absent at zero too - the agent
+                    cards' own rule, for the agent cards' own reason: a badge is
+                    a "how much" and a nought is not one. The two absences are
+                    NOT the same fact, and the card behind this one tells them
+                    apart: a measured zero prints as 0 on the sheet, an
+                    unmeasured one prints nothing at all. */}
+                {badge === undefined || badge <= 0 ? null : (
+                  <span className="baud-wheel-mail baud-wheel-mail-app">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                )}
+                {/* The link-card's tell: a corner arrow means this one does not
+                    open a sheet, it leaves. Door-cards wear nothing. */}
+                {card.kind === "link" ? <span className="baud-wheel-out">↗</span> : null}
+              </button>
+              <span className="baud-wheel-name">{card.name}</span>
+            </div>
+          );
+        })}
         {shown.map((branch) => {
           // The desktop lamp's own precedence: a dispatch outranks the
           // interactive word on the same card, exactly as in BranchChip.
@@ -526,6 +828,33 @@ export default function FleetWheel({
           // be discovered at the door, because "which project is this" is the
           // question a cross-project wheel creates and it has to answer it.
           const away = branch.project && branch.project !== seatedProject ? branch.project : null;
+          /**
+           * EVERYTHING WAITING ON THIS AGENT, in one number - Patrick's ruling
+           * (2026-08-17): the badge counted unread mail alone while the face
+           * tracked four attention items per agent, so his own card read 1
+           * where thirty-nine things were outstanding. A badge that reports one
+           * quarter of the answer is worse than no badge, because a glance
+           * BELIEVES it.
+           *
+           * OPENED MAIL IS STILL WAITING. Opened is not closed - the message
+           * was read and the work it asked for has not been done - and the
+           * fleet dashboard's own summary counts it in exactly this column.
+           * Leaving it out would make the pocket and the desk disagree about
+           * the same inbox.
+           *
+           * GIT IS THE ONE THAT CAN BE ABSENT, and absence here means absent:
+           * a branch the sweep has not reached, one with no git, and one whose
+           * read refused all add nothing at all. The number stays the sum of
+           * what is KNOWN, which is why it can only ever be an undercount and
+           * never an invention. The exact figure, and any refusal behind it,
+           * live on the card - a badge is a "how much", the card is the "what".
+           */
+          const waiting =
+            branch.new_mail +
+            branch.opened_mail +
+            branch.active_plans +
+            branch.todo_count +
+            (gitCounts[ref] ?? 0);
           return (
             <div
               key={ref}
@@ -555,9 +884,14 @@ export default function FleetWheel({
               >
                 {branch.name.slice(0, 2).toUpperCase()}
                 <span className={`baud-wheel-dot baud-wheel-dot-${word}`} />
-                {/* Unread mail only. A zero badge is noise on a rail this size,
-                    and the count is on the expanded card either way. */}
-                {branch.new_mail > 0 ? <span className="baud-wheel-mail">{branch.new_mail}</span> : null}
+                {/* Nothing waiting, no badge: a zero is noise on a rail this
+                    size, and it is the one number the operator never has to
+                    act on. Capped at 99+ like the header bell's, for the same
+                    reason - past two digits a badge stops being a glance and
+                    starts being a label that does not fit on a 64px card. */}
+                {waiting > 0 ? (
+                  <span className="baud-wheel-mail">{waiting > 99 ? "99+" : waiting}</span>
+                ) : null}
               </button>
               <span className="baud-wheel-name">{branch.name}</span>
               {/* Only where it is news. On the seated project's own wheel every
@@ -602,13 +936,23 @@ export default function FleetWheel({
         ))}
       </div>
 
-      {flash ? <p className="baud-wheel-flash">{flash}</p> : null}
+      {/* The pill's look is the approved mock's, ruled "much much improved"
+          against the old dim-ink whisper - see .baud-wheel-flash in phone.css.
+          KEYED ON THE NAME so a second flick inside the same second gets its
+          own fade: without the key React reuses this node, the new layer's
+          name lands in a pill that is already half faded out, and the flick
+          that most needs an answer is the one that gets the weakest. */}
+      {flash ? (
+        <p key={flash} className="baud-wheel-flash">
+          {flash}
+        </p>
+      ) : null}
 
       {/* "Could not look" outranks "nobody there" - a refusal must never be
           served as a confident count of zero. Both are said in the same quiet
           voice: an unshipped lane and an empty wheel are equally not-a-fault,
           and the one thing neither may do is look like an alarm. */}
-      {shown.length === 0 ? (
+      {held === 0 ? (
         <p className="baud-wheel-empty" title={blocked?.detail}>
           {blocked?.line ?? wheel.empty}
         </p>

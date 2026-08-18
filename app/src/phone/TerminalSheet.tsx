@@ -40,6 +40,10 @@ import { deliveryText } from "../deliver";
 import { openRoomSocket, uploadImage } from "../host";
 import { HostError } from "../host/transport.http";
 import type { BranchStatus } from "../types";
+/* The knob's bounds live with the panel that sets them - the desk's own shape,
+   where `App.tsx` reads `interfacePrefs` out of `InterfaceSettings`. One
+   direction only: the panel knows nothing about this sheet. */
+import { SCROLL_MAX, SCROLL_MIN, SCROLL_NEUTRAL } from "./PhoneSettings";
 import { type PhoneMode, launchCommand, typeOnAttach } from "./rooms";
 import { type Scope, scopeRefusal } from "./verbs";
 
@@ -223,6 +227,12 @@ const LINES_PER_NOTCH = 5;
  * is about one screenful, which is the unit people actually think in.
  *
  * A feel constant, not a correctness one. Patrick votes with his thumb.
+ *
+ * AND NOW HE VOTES WITH A SETTING TOO: `terminal_scroll_percent` scales this
+ * number, so 3 stopped being the answer and became the BASELINE the percentage
+ * is a percentage OF. It stays here rather than moving into the settings file
+ * because an absent key must leave this file computing exactly what it
+ * computed before the knob existed - see the pan handler.
  */
 const PAN_ACCELERATION = 3;
 
@@ -288,7 +298,33 @@ interface TerminalSheetProps {
   /** Which door the operator pressed. Attach is not a third mode - a launch IS
    *  an attach, so a live room arrives here as `resume` that types nothing. */
   mode: PhoneMode;
+  /**
+   * ONE command line typed into this shell when it opens, or null for a bare
+   * prompt. SHELL PANES ONLY.
+   *
+   * The desktop's own prop, same words (`InquiryPane.tsx:40`): "The caller
+   * decides: the card's `?` sends the branch's help command, the terminal
+   * buttons send nothing and hand over an empty shell." A launch mode never
+   * carries one - its line comes from `launchCommand`, which is the terminal
+   * slot and stays the only place anything claude-specific lives.
+   */
+  command?: string | null;
   scope: Scope;
+  /**
+   * How fast a finger-pan scrolls this room, as a PERCENT of the constants
+   * below - `BaudSettings.terminal_scroll_percent`, resolved by the caller.
+   *
+   * OPTIONAL AND NEUTRAL AT 100, which is what makes `LINES_PER_NOTCH` and
+   * `PAN_ACCELERATION` a baseline rather than a default this prop overrides: a
+   * sheet mounted without it, and a document with no such key, both compute the
+   * exact arithmetic this file computed before the knob existed.
+   *
+   * IT FOLLOWS THE FILE LIVE, through a ref rather than the attach effect's
+   * dependencies - the same mechanism, and the same reason, as `font`: a scroll
+   * speed that reattached the socket would be a remount hiding inside a
+   * preference.
+   */
+  scrollPercent?: number;
   /**
    * NO `onClose`. The sheet used to own its own way out, in the header row that
    * this round deleted - detach is a door on the agent's card now, because that
@@ -309,7 +345,9 @@ interface TerminalSheetProps {
 export default function TerminalSheet({
   branch,
   mode,
+  command = null,
   scope,
+  scrollPercent = SCROLL_NEUTRAL,
   onComposeFocus,
 }: TerminalSheetProps) {
   /**
@@ -329,6 +367,12 @@ export default function TerminalSheet({
    * what is happening inside it is on the screen.
    */
   const attachedTo = useRef(branch).current;
+  /**
+   * THE LINE THIS DOOR ASKED FOR, frozen with the card and for the same reason:
+   * it is a judgment made about the room the operator was LOOKING at when the
+   * door was pressed, and a later render does not get to re-decide it.
+   */
+  const opener = useRef(command).current;
   /**
    * What to call this room in status lines. An agent room is its branch's
    * name; a shell says so — and the project-root shell has NO branch, so the
@@ -376,6 +420,28 @@ export default function TerminalSheet({
    * inside a font change. Zoom is applied imperatively to the live instance.
    */
   const fontAtMount = useRef(font);
+  /**
+   * THE SCROLL KNOB, HELD THE WAY ZOOM IS HELD - and for the same reason one
+   * line up: the pan handler is CLOSED OVER by the attach effect, so putting
+   * the prop in that effect's dependencies would make saving a preference
+   * detach and reattach the room.
+   *
+   * A ref instead, refreshed after every render. The handler reads
+   * `speed.current` at the moment a finger moves, which is what makes a save
+   * land on the room already on screen with no reattach and no remount.
+   *
+   * BOUNDED AGAIN HERE, deliberately, though the caller resolved it already:
+   * this is the one number in the file that ends up UNDER a division, and a
+   * zero arriving from a future caller would not be a wrong feel, it would be
+   * an infinite notch count fired at the room.
+   */
+  const speed = useRef(SCROLL_NEUTRAL);
+  useEffect(() => {
+    speed.current =
+      Number.isFinite(scrollPercent) && scrollPercent >= SCROLL_MIN && scrollPercent <= SCROLL_MAX
+        ? scrollPercent
+        : SCROLL_NEUTRAL;
+  }, [scrollPercent]);
   /**
    * FULLSCREEN IS A CLASS, NEVER A REMOUNT - the whole point of the feature.
    * Patrick asked for the terminal to cover the screen "but not change the
@@ -612,6 +678,30 @@ export default function TerminalSheet({
         launched.current = true;
         write(`${launchCommand(attachedTo, mode)}\n`);
       }
+      // THE CARD'S `?` (08-17): a shell with one line already run in it. The
+      // desk does exactly this - `InquiryPane` writes its `command` prop into
+      // the pty the moment it opens (`InquiryPane.tsx:178`) - and it is the
+      // same byte lane the launch line above rides, so nothing new reaches the
+      // room, only a different sentence.
+      //
+      // SHARES `launched`, not a second flag. The rule is one line per SHEET:
+      // a reattach lands in a room that already ran it, and re-running help
+      // there would be the launch line's own double-type bug wearing a
+      // different word. The two branches are mutually exclusive by mode
+      // anyway - PhoneApp only ever hands a command to a shell.
+      //
+      // NO `typeOnAttach` GUARD, because there is nothing for it to read: that
+      // function asks whether a live claude owns the AGENT's room, and this is
+      // the `baud-shell-` room next door, which the census does not report on
+      // at all. The honest consequence, stated rather than hidden: a shell room
+      // the operator left something running in takes this line as input to
+      // whatever is running. That is one line into the operator's own shell -
+      // the hazard `typeOnAttach` exists for is a second claude, and no `drone
+      // --help` can start one.
+      if (!launched.current && mode === "shell" && opener) {
+        launched.current = true;
+        write(`${opener}\n`);
+      }
       // A delivery that was stranded by a dead socket goes NOW, on the first
       // open that can carry it. This is the picker case: choosing a photo
       // backgrounds the app, the socket dies while the operator is in the
@@ -801,7 +891,27 @@ export default function TerminalSheet({
         return;
       }
       if (panFrom === null || event.touches.length !== 1) return;
-      const perNotch = (cellHeight() * LINES_PER_NOTCH) / PAN_ACCELERATION;
+      /**
+       * ONE KNOB, ONE FEEL - and it is applied HERE, once, at the single place
+       * finger pixels become notches. Both scroll paths run through this
+       * number, so scaling it scales both by exactly the same factor:
+       *
+       *   mouse lane on  - `wheel()` sends `notches` SGR events and tmux moves
+       *                    5 lines per event, so lines = 5 x notches
+       *   mouse lane off - `wheel()` falls back to `scrollLines(notches x 5)`
+       *
+       * WHICH IS WHY `LINES_PER_NOTCH` IS NOT ALSO MULTIPLIED in that fallback,
+       * and the reason is written down at its own declaration: that 5 is a
+       * MIRROR of tmux's `WheelUpPane` binding, read off `list-keys`, not a
+       * dial this face owns. Scaling it too would scale the local path twice -
+       * k x k against the room's k - and the two lanes would disagree about
+       * what one swipe means, which is the exact bug the knob exists to avoid.
+       *
+       * `factor` is 1 EXACTLY at the neutral 100 (100/100, then 3 x 1), so an
+       * unset key leaves this arithmetic bit-for-bit what it was.
+       */
+      const factor = speed.current / SCROLL_NEUTRAL;
+      const perNotch = (cellHeight() * LINES_PER_NOTCH) / (PAN_ACCELERATION * factor);
       const travelled = event.touches[0].clientY - panFrom + panRest;
       const notches = Math.trunc(travelled / perNotch);
       if (notches === 0) return;
@@ -952,7 +1062,10 @@ export default function TerminalSheet({
       xterm.dispose();
       term.current = null;
     };
-  }, [attachedTo, mode, refusal, write, attempt, throughMods, allowKeyboard]);
+    // `opener` is frozen at mount like `attachedTo`, so it can never re-run
+    // this effect - it is listed because the effect reads it, not because it
+    // moves.
+  }, [attachedTo, mode, opener, refusal, write, attempt, throughMods, allowKeyboard]);
 
   /**
    * THE BELT RIDES ABOVE THE SOFT KEYBOARD (DPLAN-0301, Patrick: "the bottom

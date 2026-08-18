@@ -23,8 +23,35 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
+/**
+ * Verbs this face knows the name of and does not serve - the mirror of the http
+ * transport's own `NOT_YET` table, pointing the other way (DPLAN-0303).
+ *
+ * The git app's four reads exist because a POCKET cannot open a terminal. The
+ * desktop can, three feet from the repository, with the operator's own git in
+ * it - so there is no Rust command behind these names and there should not be
+ * one. Without this table they would reach `invoke` and come back as tauri's
+ * "command not found", which reads as a broken build rather than as a face
+ * that was never meant to have them.
+ *
+ * DELIBERATELY NOT RETRO-FITTED. The older phone-only verbs (`verb_wake`,
+ * `notifications_feed`, and the rest) still fail at the IPC boundary, and this
+ * round does not change what happens on the desktop when something calls a verb
+ * this round has nothing to do with. New names, new rule; the old ones move
+ * when somebody has a reason to move them.
+ */
+const NOT_ON_THIS_FACE: Record<string, string> = {
+  git_change_rows: "the desktop reads its own working tree - this is the phone's git app",
+  git_file_diff: "the desktop reads its own working tree - this is the phone's git app",
+  git_log: "the desktop reads its own working tree - this is the phone's git app",
+  git_commit: "the desktop reads its own working tree - this is the phone's git app",
+  git_remote: "the desktop opens the forge from a terminal beside the repository - this is the phone's git app",
+};
+
 /** A typed host call. The only `invoke` in the application. */
 export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  const refusal = NOT_ON_THIS_FACE[command];
+  if (refusal) return Promise.reject(new Error(`${command} is not served on this face: ${refusal}`));
   return invoke<T>(command, args);
 }
 

@@ -7,7 +7,7 @@ import AgentSettings from "./components/AgentSettings";
 import Bell from "./components/Bell";
 import Camera from "./components/Camera";
 import FleetStrip from "./components/FleetStrip";
-import InterfaceSettings, { interfacePrefs } from "./components/InterfaceSettings";
+import { interfacePrefs } from "./components/InterfaceSettings";
 import { GIT_POLL_MS, type LaunchMode } from "./components/BranchChip";
 import DiffView from "./components/DiffView";
 import FileTree from "./components/FileTree";
@@ -16,6 +16,7 @@ import InquiryPane, { helpCommand } from "./components/InquiryPane";
 import MonitorPane from "./components/MonitorPane";
 import PassportView from "./components/PassportView";
 import ProjectSwitch from "./components/ProjectSwitch";
+import SettingsDialog from "./components/SettingsDialog";
 import Terminal, { type TerminalHandle } from "./components/Terminal";
 import Zoom from "./components/Zoom";
 import { relativeAge } from "./age";
@@ -799,8 +800,12 @@ export default function App() {
         />
       ) : null}
 
+      {/* The gear's own state and wiring are unchanged - only what it opens
+          moved: one dialog with an interface section and a memory section,
+          rather than the interface panel with @memory's dials bolted under
+          it. */}
       {interfaceOpen ? (
-        <InterfaceSettings
+        <SettingsDialog
           agents={branches.map((branch) => branch.name)}
           settings={baudSettings ?? {}}
           onSaved={setBaudSettings}

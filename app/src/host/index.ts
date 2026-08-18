@@ -29,7 +29,12 @@ import type {
   FeedWindow,
   FileText,
   FleetSnapshot,
+  GitChangeRows,
   GitChanges,
+  GitCommit,
+  GitFileDiff,
+  GitLog,
+  GitRemote,
   MemoryConfig,
   NotificationEvent,
   ProjectListing,
@@ -96,9 +101,86 @@ export const resolvePaths = (base: string | null, candidates: string[]) =>
 
 /* ----------------------------------------------------------------- git -- */
 
-/** One branch's working-tree count, keyed by the branch's own directory. */
-export const gitChanges = (path: string, project = "") =>
-  call<GitChanges>("git_changes", project ? { path, project } : { path });
+/**
+ * One branch's working-tree count, keyed by the branch's own directory.
+ *
+ * `grain` NAMES THE SCOPE and defaults to the one every existing caller means:
+ * empty is the branch's own subtree, which is what the card, the badge sweep
+ * and the files screen have always asked for. Passing `repo` asks the wider
+ * question - every changed file in the repository this branch lives in - which
+ * is the git app's question and nobody else's.
+ *
+ * THE KEY IS LEFT OFF THE PAYLOAD ENTIRELY when it is empty, exactly as
+ * `project` is, so the object handed to `invoke` on the desktop is byte-
+ * identical to what it was before this parameter existed. A default that
+ * changed the request would be a rewrite of three callers dressed as an
+ * addition.
+ */
+export const gitChanges = (path: string, project = "", grain = "") =>
+  call<GitChanges>("git_changes", {
+    path,
+    ...(project ? { project } : {}),
+    ...(grain ? { grain } : {}),
+  });
+
+/* ------------------------------------------------------------- git app -- */
+/* PHONE-ONLY (DPLAN-0303). Four reads the desktop has no Rust command behind,
+   because the desktop answers all four with a real terminal a keystroke away.
+   A pocket cannot, so each one is a named payload over the wire.
+
+   THEY ARE NOT WIDER VERSIONS OF THE VERBS ABOVE. `gitChanges` is the badge's
+   count in the desktop's exact semantics and stays that way; these carry the
+   whole envelope - git's own status codes, untracked names, byte sizes, the
+   grain a thing was measured at. Two questions, never one verb answering both
+   and leaving the caller to work out which it got. */
+
+/** Every changed path with git's own code beside it - the changes screen. */
+export const gitChangeRows = (branch: string, project = "", grain = "") =>
+  call<GitChangeRows>("git_change_rows", { branch, project, grain });
+
+/**
+ * ONE file's patch, as unified diff text a parser can consume.
+ *
+ * `ref` reads that file out of a COMMIT instead of the working tree, and the
+ * server refuses the combinations that cannot mean anything (a commit has no
+ * staging area, and a commit is repo-wide by construction) rather than quietly
+ * answering something else. Nothing is pre-refused here: this face asks, and
+ * shows the server's sentence when the answer is no.
+ */
+export const gitFileDiff = (args: {
+  branch: string;
+  path: string;
+  project?: string;
+  grain?: string;
+  ref?: string;
+}) =>
+  call<GitFileDiff>("git_file_diff", {
+    branch: args.branch,
+    path: args.path,
+    project: args.project ?? "",
+    grain: args.grain ?? "",
+    ref: args.ref ?? "",
+  });
+
+/** The repository's recent commits. The branch names WHICH repository. */
+export const gitLog = (branch: string, project = "", limit = 20) =>
+  call<GitLog>("git_log", { branch, project, limit });
+
+/** One commit's facts and per-file stats. Its patch rides `gitFileDiff`. */
+export const gitCommit = (branch: string, ref: string, project = "") =>
+  call<GitCommit>("git_commit", { branch, ref, project });
+
+/**
+ * The repository's remote - the addresses a link-card leaves for.
+ *
+ * NO NETWORK BEHIND IT. The server reads the repository's own configuration, so
+ * this answers whether the forge is up or down, reachable or not: it says where
+ * the repository points, which is all a link needs to know. Anything about what
+ * is ON the forge - open pull requests, issue counts - is a different lane
+ * needing credentials, and this one deliberately is not it.
+ */
+export const gitRemote = (branch: string, project = "") =>
+  call<GitRemote>("git_remote", { branch, project });
 
 /** The whole seated project's count - a different question, deliberately. */
 export const gitProjectChanges = () => call<GitChanges>("git_project_changes");

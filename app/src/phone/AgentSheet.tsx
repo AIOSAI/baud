@@ -21,7 +21,7 @@ import { gitChanges } from "../host";
 import type { BranchStatus } from "../types";
 import VerbChips from "./VerbChips";
 import { isAwake } from "./FleetWheel";
-import { type LaunchMode, roomDoors } from "./rooms";
+import { type LaunchMode, helpCommand, roomDoors } from "./rooms";
 import { type Scope, scopeRefusal } from "./verbs";
 
 /** The files behind the figures, by the names @api's fence takes. */
@@ -30,6 +30,20 @@ const PLANS_FILE = "DASHBOARD.local.json";
 const TODOS_FILE = ".trinity/local.json";
 const README_FILE = "README.md";
 
+/**
+ * A monitor this card can open - manager-class agents only.
+ *
+ * Declared here rather than in the passport since compass #291: these are
+ * operational doors, and operational doors live on the card.
+ */
+export interface SheetMonitor {
+  id: string;
+  label: string;
+  hint: string;
+  /** Absent = this face has no route for it, and the hint says which. */
+  open: (() => void) | null;
+}
+
 interface AgentSheetProps {
   branch: BranchStatus;
   /**
@@ -37,26 +51,77 @@ interface AgentSheetProps {
    *
    * A card reached from the live or dispatched wheel can live somewhere else,
    * and this is what "somewhere else" is measured against. Since the
-   * one-terminal ruling it decides almost nothing: every door but `settings`
-   * works on a foreign card, and this value is what that one refusal names.
-   * See the fence note in the body for what each retreat cost.
+   * one-terminal ruling it decides almost nothing: every door works on a
+   * foreign card, the header's settings gear is the single exception, and this
+   * value is what that one refusal names. See the fence note in the body for
+   * what each retreat cost.
    */
   seatedProject: string;
   scope: Scope;
-  /** Open a read - the same reader the column used. */
-  onRead: (ref: string, title: string, kind: "file" | "diff") => void;
+  /**
+   * Open a read - the same reader the column used.
+   *
+   * FILES ONLY, since 08-17. The reader still knows how to fetch a whole
+   * branch's patch and this card was its only caller; the GIT tile left for
+   * `onGit` on Patrick's ruling, so the kind this card can ask for is narrowed
+   * to the one it actually asks for. A prop that offers a mode nobody presses
+   * is a door drawn on a wall.
+   */
+  onRead: (ref: string, title: string, kind: "file") => void;
+  /**
+   * Open THIS branch's changes - the GIT tile's door (Patrick, 08-17).
+   *
+   * A door of its own rather than a third `onRead` kind, because what it opens
+   * is not a read: it is a screen with its own back stack, its own list and its
+   * own per-file diff underneath it. The reader shows one thing; this shows a
+   * way through several.
+   */
+  onGit: () => void;
   /** Open the branch's file browser - the files door, live since 08-15. */
   onFiles: () => void;
   /** Open an EMPTY terminal in this branch's directory - the desktop card's
    *  shell button. A different room than the agent's (`baud-shell-*`), so it
    *  is offered even while the agent's own room is the one on screen. */
   onShell: () => void;
+  /**
+   * Open that same shell with `drone @<branch> --help` already run - the
+   * desktop card's `?` (BranchChip.tsx:240, App.tsx:297). Since 08-17 it wears
+   * the desk's shape too: a bare `?` in the card's top-right corner.
+   *
+   * A SEPARATE PROP, not a parameter on `onShell`, because the card does not
+   * own the sentence: WHAT gets typed is `rooms.ts`'s job and WHERE it lands is
+   * the fleet's, exactly as the launch doors hand up a mode rather than a
+   * command line. The card only says which door was pressed.
+   */
+  onHelp: () => void;
   /** Watch this branch's activity - the desktop card's monitor pane (m9),
    *  live in the stage since 08-16. Read-only by contract, both ends. */
   onWatch: () => void;
-  /** Open this branch's claude settings - the desktop card's gear. The panel
-   *  itself is the desktop's own component; only the door lives here. */
+  /** Open this branch's claude settings - the desktop card's gear, and since
+   *  08-17 the desk's own glyph in the desk's own corner. The panel itself is
+   *  the desktop's component; only the door lives here. */
   onSettings: () => void;
+  /**
+   * Open this branch's WORKING MEMORY - sessions, learnings, todos,
+   * observations (compass #291).
+   *
+   * The screen behind this door is not new work: it is the four tabs that used
+   * to live inside the passport, reading the same two `.trinity` files by the
+   * same named-file lane. What moved is WHERE they hang. A passport is an
+   * identity document and a memory file is the agent's live workbook - the day
+   * it was written is the day it changed - so the workbook belongs on the card
+   * that carries every other live fact, and the document carries none.
+   */
+  onMemory: () => void;
+  /**
+   * The monitors a MANAGER runs, or empty for everyone else.
+   *
+   * THE CALLER DECIDES, because the caller owns the panes these doors open.
+   * They lived in the passport until compass #291 and they were operational
+   * doors sitting inside an identity document; they are the same two doors,
+   * regrouped under a zone label on the card where doors live.
+   */
+  monitors: SheetMonitor[];
   /**
    * Open the passport - the transfer round's document.
    *
@@ -86,11 +151,15 @@ export default function AgentSheet({
   branch,
   scope,
   onRead,
+  onGit,
   seatedProject,
   onFiles,
   onShell,
+  onHelp,
   onWatch,
   onSettings,
+  onMemory,
+  monitors,
   onPassport,
   onAttach,
   isAttachedRoom,
@@ -205,12 +274,20 @@ export default function AgentSheet({
       figure:
         changes.state === "count" ? String(changes.count) : changes.state === "unavailable" ? "n/a" : "—",
       label: "GIT",
-      // The tile is a door, and the door refuses in the same voice the tile
-      // does: /v1/diff carries the same limits as /v1/git-changes, so a branch
-      // whose count is unavailable opens a reader that says why, in @api's own
-      // sentence rather than a guess of mine.
+      // The tile is a door, and the door now RE-ASKS THE LANE THE TILE COUNTED.
+      // It used to open the raw whole-branch patch - one unhighlighted wall of
+      // text - and Patrick ruled on 08-17 that it should open "just like this
+      // [the git app's changes screen] but show only the agent local changes".
+      // So it opens that flow at branch grain: the same grouped list, the same
+      // tap-a-file, the same rendered patch, scoped to this citizen's tree.
+      //
+      // THE REFUSAL GOT BETTER FOR FREE. The old door read /v1/diff, a
+      // different lane that could say something else; the new one reads the
+      // very lane this figure was counted from, so a branch whose count says
+      // `n/a` opens a screen carrying the SAME sentence the hint carries -
+      // @api's own, in both places, because it is one answer.
       hint: changes.state === "unavailable" ? changes.why : undefined,
-      open: () => onRead(branch.name, `${branch.name} · diff`, "diff"),
+      open: onGit,
     },
   ];
 
@@ -227,27 +304,130 @@ export default function AgentSheet({
       }}
     >
       <section className="baud-agent-card">
-        {/* The name is the README door. The column had a row of read buttons
-            and the approved shape has no room for one, but a branch's README is
-            the document its own agents are told is the source of truth - losing
-            the only way to reach it from a pocket would be a real subtraction.
-            The title is the most obvious thing to press and it was doing
-            nothing. */}
-        <button
-          type="button"
-          className="baud-agent-name"
-          title={`read ${branch.name}'s README`}
-          onClick={() => onRead(`${branch.name}/${README_FILE}`, `${branch.name} · readme`, "file")}
-        >
-          {branch.name.toUpperCase()}
-        </button>
+        {/* THE HEADER ROW - the name, and in the corner the two doors that
+            stopped being doors (Patrick, 08-17: settings and `?` become small
+            icons top-right, no full work buttons for them). They are the desk's
+            own two header chips, in the desk's own order and the desk's own
+            glyphs (BranchChip.tsx:240-273), which is what this card has been
+            porting since the day it was written.
+
+            THE MIS-TAP OBJECTION IS ANSWERED, NOT IGNORED. An earlier round put
+            the `?` in the door row precisely to keep the header clear, and the
+            reason it gave was real: a second tap target INSIDE a finger-sized
+            one is a mis-tap machine, which is why the passport never went on the
+            wheel's avatar. But that hazard is nesting, and these are siblings -
+            the name is no longer a full-width strip, the row gaps them apart,
+            and each chip owns a 40px box of its own that the name's box does not
+            reach into. Small ink, finger-sized target: the padding carries the
+            touch, the glyph carries the meaning. */}
+        <div className="baud-agent-head">
+          {/* The name is the README door. The column had a row of read buttons
+              and the approved shape has no room for one, but a branch's README
+              is the document its own agents are told is the source of truth -
+              losing the only way to reach it from a pocket would be a real
+              subtraction. The title is the most obvious thing to press and it
+              was doing nothing. */}
+          <button
+            type="button"
+            className="baud-agent-name"
+            title={`read ${branch.name}'s README`}
+            onClick={() =>
+              onRead(`${branch.name}/${README_FILE}`, `${branch.name} · readme`, "file")
+            }
+          >
+            {branch.name.toUpperCase()}
+          </button>
+          {/* THE `?` (Patrick, 08-17: "we are missing in agent cards a ? symbol
+              ... u hit it, a terminal opens and --help was run for that agent.
+              then u can continue navigating the agent commands in the terminal.
+              desktop has it already"). The desk's door, ported whole: it opens a
+              shell and types one line into it, and the keyboard stays live
+              afterwards because that is the entire point (InquiryPane.tsx:9 -
+              "the card's help button pops a REAL shell seated in that branch
+              with the agent's help already run").
+
+              A BARE `?`, now that it is an icon rather than a chip in a row of
+              worded doors - the word `help` was carried only because a lone
+              glyph would have been the one door in that row not saying what it
+              does, and the row is no longer where it lives. The symbol is the
+              one Patrick asked for and the one the desk shows; `aria-label`
+              carries the word for anyone the glyph says nothing to.
+
+              NOT FENCED, like everything but the gear since the one-terminal
+              ruling. The desk hides its `?` on a foreign or non-citizen card;
+              this face does not, because the refusal is better downstream: a
+              foreign agent's shell opens through @api's census exactly as its
+              `shell` door does, and a branch with no drone address gets drone's
+              own sentence printed in the terminal it just opened. A live
+              accurate refusal beats a guess at the door. */}
+          <button
+            type="button"
+            className="baud-agent-chip"
+            title={`open ${branch.name}'s shell with '${helpCommand(branch.name)}' already run — and keep typing`}
+            aria-label="help"
+            onClick={onHelp}
+          >
+            <span className="baud-agent-chip-face">?</span>
+          </button>
+          {/* THE GEAR, and it sits OUTERMOST because it is the heavier door -
+              everything else on this card reads or attaches, and this one
+              WRITES a branch's claude config. The corner is where the desk keeps
+              it too.
+
+              THE ONE FENCED DOOR ON THE CARD, and the fence survives the move
+              intact: its route takes a branch and no project, so on a foreign
+              card it would open the SEATED project's same-named agent while the
+              header named the other one. Disabled in the face's own idiom
+              (dashed, still legible) and carrying the refusal as its title, with
+              the sentence above spelling it out in full - because a title is a
+              desk affordance and this is a phone. Never a silent no-op tap.
+
+              An inline SVG, not `⚙`. The emoji was tried on this face once and
+              read as a sticker on a terminal (Patrick: "uggggg"); these are the
+              same paths the phone's own header gear draws, so the two gears an
+              operator meets are one gear. */}
+          <button
+            type="button"
+            className="baud-agent-chip"
+            disabled={Boolean(settingsElsewhere)}
+            title={
+              settingsElsewhere ??
+              `${branch.name}'s claude settings - model and auto-compact, the desktop's own panel`
+            }
+            aria-label="settings"
+            onClick={onSettings}
+          >
+            <span className="baud-agent-chip-face">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3.4" />
+                <path d="M20.2 14.6a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3.4a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.3a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z" />
+              </svg>
+            </span>
+          </button>
+        </div>
+        {/* NAME, CLASS, MODE - and nothing else (compass #291). The card's
+            summary string used to ride here too ("1 opened, 24 active plans,
+            10 todos"), which was the counter row below written out in prose:
+            the same four facts, in a second place, in a different order, with
+            no way to press them. One home per fact - the tiles are the home,
+            because they are the ones that open what they count. */}
         <p className="baud-agent-sub">
-          {kind} · <span className={isAwake(branch) ? "baud-agent-awake" : ""}>{state}</span> ·{" "}
-          {branch.summary || "no summary"}
+          {kind} · <span className={isAwake(branch) ? "baud-agent-awake" : ""}>{state}</span>
         </p>
         {/* SUB-AGENTS, and it belongs HERE rather than in the counter row
             below, which was the other candidate. Every tile in that row is a
-            DOOR - press MAIL and the inbox opens, press GIT and the diff does.
+            DOOR - press MAIL and the inbox opens, press GIT and this branch's
+            changes do.
             Sub-agents have no file to open: the count comes from the session
             transcript and no names exist in that lane, so a fifth tile would
             be a dead button sitting among four live ones, at 46 columns.
@@ -276,17 +456,22 @@ export default function AgentSheet({
         {isAttachedRoom ? (
           <p className="baud-agent-here">▸ this room is open in the terminal below</p>
         ) : null}
-        {/* Said once, plainly, above the doors that are about to refuse - so the
-            greyed row reads as a place the operator is not, rather than as an
-            app that has stopped working. */}
-        {/* NOT a refusal any more - a fact about WHERE, plus the single door
-            that is still shut. The terminal is one seat and goes where it is
-            pointed, so saying "lives in VERA-STUDIO" and stopping there would
-            read as a wall that is no longer standing. */}
+        {/* NOT a refusal - a fact about WHERE, plus the single door that is
+            still shut. The terminal is one seat and goes where it is pointed, so
+            saying "lives in VERA-STUDIO" and stopping there would read as a wall
+            that is no longer standing.
+
+            IT NAMES THE GEAR, AND NOW IT POINTS AT IT. This line carried the
+            whole fence back when settings was a worded button in the row below
+            and a dashed chip reading `settings` said its own name. An icon
+            cannot: a dashed circle in a corner is a control that has gone quiet,
+            not a control that has explained itself. So the word stays here and
+            the sentence says where the quiet one is - the title is the desk's
+            affordance, and this is a phone. */}
         {away ? (
           <p className="baud-agent-away">
-            {branch.name} lives in {away} — read it, watch it, attach it from here. Only{" "}
-            <b>settings</b> stays behind, because that door names no project.
+            {branch.name} lives in {away} — read it, watch it, attach it from here. Only the{" "}
+            <b>settings</b> gear, top right, stays behind: that door names no project.
           </p>
         ) : null}
 
@@ -311,6 +496,14 @@ export default function AgentSheet({
         </div>
 
         <nav className="baud-agent-doors">
+          {/* THE WORK DOORS - attach or detach, files, shell, watch, memory, and
+              only those. `? help` and `settings` left this row on 08-17 for the
+              two chips in the header (Patrick's ruling): one is a shortcut into
+              the shell already offered two buttons down and the other is
+              configuration rather than work, so neither was earning a
+              full-width chip standing beside `attach` and `watch`. The row's
+              parity is unchanged in kind - it wraps two-up and a lone last door
+              takes the width, exactly as it did when there were seven. */}
           {/* The room doors are the fleet's own judgment, ported in rooms.ts: a
               live room offers exactly ONE door, which is the structural half of
               the double-claude guard. Under a read token they are refused with
@@ -384,36 +577,77 @@ export default function AgentSheet({
           >
             watch
           </button>
-          {/* The desktop card's gear (08-16): the same three dials, the same
-              panel component, through /v1. Offered on every scope - the dials
-              READ on a read token, and a save answers with the server's own
-              refusal rather than the door pretending not to exist. */}
+          {/* WORKING MEMORY (compass #291): sessions, learnings, todos,
+              observations - the four tabs that used to be pages of the
+              passport. Same two files, same named-file lane, new door: a
+              memory file is the agent's live workbook and belongs beside the
+              other live doors, not inside a document that is supposed to say
+              only who this agent IS. */}
           <button
             type="button"
             className="baud-agent-door"
-            disabled={Boolean(settingsElsewhere)}
-            title={
-              settingsElsewhere ??
-              `${branch.name}'s claude settings - model and auto-compact, the desktop's own panel`
-            }
-            onClick={onSettings}
+            title={`${branch.name}'s working memory - sessions, learnings, todos, observations`}
+            onClick={onMemory}
           >
-            settings
-          </button>
-          {/* THE PASSPORT (transfer round): the desk's document, phone-shaped.
-              Fenced with the rest - the three .trinity reads go down the same
-              named-file lane every door on this row uses, so a card from
-              another project refuses here exactly as it refuses everywhere
-              else, in the same sentence. */}
-          <button
-            type="button"
-            className="baud-agent-door"
-            title={`${branch.name}'s passport - identity, principles and working memory`}
-            onClick={onPassport}
-          >
-            passport
+            memory
           </button>
         </nav>
+
+        {/* THE MANAGER ZONE (compass #291). These two doors are the desk's
+            global monitors and they spent a round living in the passport,
+            which made an identity document the place you went to start a live
+            view. They are unchanged - same targets, same read-only contract,
+            same refusal when this face has no route - and only regrouped:
+            operational doors on the card, under a label that says who they
+            belong to. Rendered only when the caller hands some over, which is
+            manager-class only. */}
+        {monitors.length > 0 ? (
+          <section className="baud-agent-zone">
+            <p className="baud-agent-zonelabel">MANAGER</p>
+            <nav className="baud-agent-doors">
+              {monitors.map((monitor) => (
+                <button
+                  key={monitor.id}
+                  type="button"
+                  className="baud-agent-door"
+                  // A door with no route is SHOWN and refused with the reason,
+                  // never hidden - the same ruling the scope-refused verbs
+                  // ride. Hiding it would make an absent lane look like a
+                  // feature the phone was never meant to have.
+                  disabled={!monitor.open}
+                  title={monitor.hint}
+                  onClick={() => monitor.open?.()}
+                >
+                  {monitor.label}
+                </button>
+              ))}
+            </nav>
+          </section>
+        ) : null}
+
+        {/* THE IDENTITY ZONE, and it holds exactly one door. The passport is
+            no longer one door among six - it is a different KIND of thing from
+            the rest of this card: everything above is live and changes while
+            you watch it, and behind this one is a document that only changes
+            when @spawn issues something. Full width because it is the only
+            thing in its zone, not for emphasis. */}
+        <section className="baud-agent-zone">
+          <p className="baud-agent-zonelabel">IDENTITY</p>
+          <nav className="baud-agent-doors">
+            {/* Fenced with the rest - the passport read goes down the same
+                named-file lane every door on this card uses, so a card from
+                another project refuses here exactly as it refuses everywhere
+                else, in the same sentence. */}
+            <button
+              type="button"
+              className="baud-agent-door baud-agent-door-wide"
+              title={`${branch.name}'s passport - the identity document, nothing operational`}
+              onClick={onPassport}
+            >
+              passport
+            </button>
+          </nav>
+        </section>
 
         {/* The phone's own verbs, kept from the column that this sheet replaced.
             Not in the approved shape - flagged as a deliberate carry-over,

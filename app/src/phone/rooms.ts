@@ -21,13 +21,39 @@ import type { BranchStatus } from "../types";
 export type { LaunchMode };
 
 /**
+ * THE HELP LINE - the desktop's own function, imported rather than retyped
+ * (`InquiryPane.tsx:51`). The card's `?` sends it; nothing else does.
+ *
+ * IMPORTED, NOT PORTED, and that is the one place this file breaks its own
+ * quote-it-back habit - deliberately, because the rule inside it is a FACT
+ * about the ecosystem rather than a judgment about a card: `aipass` is the
+ * user's front-door CLI with its own binary, so drone cannot resolve @aipass
+ * and its card must ask the binary itself. A second copy of that exception is
+ * a second thing to remember the day a second exception appears, and the two
+ * faces would then disagree about what one card's `?` runs.
+ */
+export { helpCommand } from "../components/InquiryPane";
+
+/**
  * What the phone's terminal region can hold: one of the desktop's launch modes,
  * an EMPTY shell — the desktop's per-card and header terminal buttons — or a
- * WATCH, the desktop card's read-only monitor pane. A shell types nothing on
- * attach; `launchCommand` never sees it, and the type system is what keeps that
+ * WATCH, the desktop card's read-only monitor pane. A shell never launches an
+ * agent; `launchCommand` never sees it, and the type system is what keeps that
  * true (`launchCommand` still takes only `LaunchMode`). A watch never reaches
  * TerminalSheet at all — it renders MonitorSheet, which has no keyboard to
  * type with in the first place.
+ *
+ * HELP IS NOT A FOURTH MODE, and that is a decision worth stating. The card's
+ * `?` opens the SAME shell room this list already names and hands it one
+ * command line, exactly as the desk hands `InquiryPane` its `command` prop
+ * (`InquiryPane.tsx:40`) - and the desk's own help pane is a shell too, with a
+ * line typed into it. Making it a mode would put the phrase "help is really a
+ * shell" in four more places (`paneKey`, `isSeat`, `paneLabel`, the socket's
+ * `kind`), and the day one of them forgot it, `?` would attach the AGENT's room
+ * and type a command line into a live claude's message box. The wire agrees:
+ * @api's attach lane knows `shell` and `watch` and refuses every other kind by
+ * name (`server.py:1018`), so a `kind=help` could not exist even if this file
+ * invented one.
  */
 export type PhoneMode = LaunchMode | "shell" | "watch";
 

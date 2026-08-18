@@ -707,11 +707,17 @@ the temp directory, so it resets on reboot; that is the flag's design, not ours.
 
 ### The memory dials — @memory's config, edited from here
 
-Below the interface rows sits a **memory** section reading
+A **memory** section of its own — the desktop gear's second tab, and the phone's
+`settings → memory` row — reads
 `<AIPass root>/src/aipass/memory/memory_json/custom_config/memory.config.json`
 — @memory's file, shared by every citizen in the ecosystem. It carries its own
 save button, deliberately: one button writing two owners' config is how a
 poll-cadence tweak ends up silently rewriting the fleet's memory limits.
+
+**It used to sit at the bottom of the interface panel and no longer does.**
+"Interface" is this face's look and feel; these dials are another agent's
+fleet-wide config, and one door cannot honestly be labelled for both (Patrick's
+ruling). Same component on both faces, one implementation, two placements.
 
 | Half | What it sets | Written by | When it takes effect |
 | --- | --- | --- | --- |
@@ -931,12 +937,30 @@ to a phone home screen, built from **the same React components** as the desktop.
 
 The entire port is one alias in `vite.config.phone.ts`. `host/index.ts` imports
 `./transport`; that build resolves it to `transport.http.ts` — `fetch` against
-@api's host API — instead of the tauri binding. The 26 typed verbs, the cards,
+@api's host API — instead of the tauri binding. The typed verbs, the cards,
 the bell and the palette are compiled unchanged. The proof is mechanical: the
-phone bundle contains **zero** occurrences of `@tauri-apps`, and the nine `/v1`
+phone bundle contains **zero** occurrences of `@tauri-apps`, and the `/v1`
 routes it does contain came from the transport table alone — plus two doors that
 are not table rows because they are not JSON request/response: the room socket
 (`/v1/room/attach`) and the multipart upload (`/v1/files/upload`).
+
+The counts move as the seam grows, so they are stated as measured rather than
+carried forward: `host/index.ts` exports **39** typed verbs today (it was 26 when
+this section was written), the http table holds **28** rows across **22**
+distinct routes, and the built bundle contains **24** — those 22 plus the socket
+and the upload. Re-measure rather than trust the sentence: the numbers are here
+to be checked, not believed.
+
+**The refusal table now points both ways.** `transport.http.ts` has always
+refused the verbs a phone cannot perform *by name*; since DPLAN-0303
+`transport.ts` carries the mirror image, `NOT_ON_THIS_FACE` — the git app's five
+reads have no Rust command behind them and should not have one, because the desk
+sits three feet from the repository with the operator's own git in a terminal.
+Without the table those names would reach `invoke` and come back as tauri's
+*command not found*, which reads as a broken build rather than as a face that
+was never meant to have them. It is deliberately **not** retro-fitted to the
+older phone-only verbs: new names, new rule, and the old ones move when somebody
+has a reason to move them.
 
 The seam is command-shaped and `/v1` is REST-shaped, so `transport.http.ts` holds
 a table from command name to route, and holds it alone. Verbs the phone cannot
@@ -993,6 +1017,15 @@ moment. The response also carries `untracked`, and the phone **deliberately drop
 it**: rendering it would make the phone's tile mean something the desktop's does
 not, which is the exact divergence the matched semantics exist to prevent. It
 belongs on both faces or neither, and the desktop is frozen.
+
+**The tile's number still drops untracked; the screens behind it do not** —
+which is not a contradiction, because they are answering different questions.
+The tile is the desktop's figure and stays matched to it. Since 2026-08-17 the
+tile is also a *door*: it opens the changes screen described below, and that
+screen asks the same route for the whole envelope — git's own two-column codes,
+untracked files **by name** — because a list of what changed that silently omits
+the new files is a list nobody can act on. A count that means one thing and a
+list that shows more is honest as long as both say which question they answered.
 
 The three answers are the point. `0` is a **fact** — it says nothing has changed
 in this branch — so a lane that cannot answer must not be able to produce it.
@@ -1611,6 +1644,12 @@ entry** as the tap target that opens it — a fleet session summary runs past a
 thousand characters, and four of those unclamped is a wall rather than a
 document.
 
+*Two things in that paragraph moved off the passport on 2026-08-17 and are kept
+here rather than rewritten, because the reasoning is still why they look the way
+they do — see* **The passport is only a passport** *below: the memory tabs are
+now the card's own `memory` screen, and a manager's monitors are the card's
+MANAGER zone. The sideways tabs and the six-line clamp travelled with them.*
+
 Three facts about that document are worth stating because they are easy to get
 wrong. It reads **names, never paths**: the desk asks for
 `<path>/.trinity/passport.json` and this face's transport refuses absolute paths
@@ -1630,7 +1669,16 @@ string-only reader printed an em-dash over a populated field — a document sayi
 The phone reads both shapes and bullets the list. The desktop still has the
 single-shape reader; it is frozen, so this is reported rather than fixed there.
 
-**A manager's passport carries the monitors**, relocated exactly as they were on
+*One desktop change has landed since that freeze, so the line is worth drawing
+where the code draws it: the settings split below touched both faces, and it
+carries Patrick's ruling in its own comments as the reason. The freeze has never
+been a rule about files — it is a rule about **findings**: a defect this face
+notices while porting is reported, not fixed on the desk. That still holds; the
+`traits` reader above is one of them, unfixed on purpose.*
+
+**A manager's passport carried the monitors** — until 2026-08-17, when they moved
+one surface over to the card's MANAGER zone for the reason below; the doors and
+their reasoning are unchanged, only their address. They were relocated exactly as they were on
 the desk, and both doors are live. The commons feed is `drone @prax monitor run
 commons`, a target the watch route names by keyword. Prax mission control is the
 desk's *target-less* `drone @prax monitor run` — every branch at once — and on
@@ -1775,6 +1823,266 @@ door, which nobody had reported: `read-only` is a property of the **token** now,
 not of the face, and that door is shown before either token is known. Both say
 what is true of both scopes; the header's lock chip says which one arrived.
 
+### The passport is only a passport, and the workbook got a door
+
+*2026-08-17, compass #291.* The phone's passport had become a filing cabinet: an
+identity document with four tabs of working memory inside it, a manager's
+monitors bolted underneath, a sub-agent count printed a second time, and `class`
+appearing both as a field in the list and as the answer to the manager question.
+
+The ruling behind this round is one sentence — **the passport is a pure identity
+document**, `passport.json` rendered as a document and nothing else. Every live
+fact, every count, every door and every verb belongs to the agent card. One home
+per fact; nothing renders twice.
+
+So the round is mostly a **subtraction**, and nothing in it was deleted:
+
+| what left | where it went | why |
+| --- | --- | --- |
+| working memory | the card's `memory` door — its own screen | four files the agent rewrites daily are the opposite of an identity document |
+| the two manager monitors | the card's MANAGER zone | operational doors, and a passport has no operational doors |
+| the sub-agent count | the card's state line, where it already was | it was printed twice, and it is a live number |
+| `class` | the holder block, beside the name | which is where a passport prints it |
+
+What the document keeps is the document: holder, role, purpose, traits, when it
+was issued and under what number, the principles the agent declares, the
+**stamps** it has earned, and one door to the official records behind it.
+
+**The memory screen is a screen, not a sheet**, which is the files idiom rather
+than the passport's: full height, one `‹ back`, sticky head, four tabs of
+thousand-character summaries. Nothing in it is new work — the same two `.trinity`
+files, the same by-name lane, the same reader that has to cope with four
+containers written by four different hands. Only the address changed.
+
+### The birth certificate, drawn as the document it is
+
+Every other file on this face opens in the Reader as text, and that is right:
+BAUD does not know what a report or a plan *means*. It does know what a birth
+certificate means — @spawn writes exactly one, at exactly one name, with a shape
+that has not changed in five months — so the one file in the fleet that is a
+**document** gets drawn as one, behind the passport's records door.
+
+Two conditions, both required, and they are in one place so they can be
+disproved: the browse must be floored at `artifacts` (the passport's records
+door, not the card's general files door) **and** the file must be the one
+certificate at its one name. A `birth_certificate.json` found anywhere else
+opens as text, because a designed document is a claim about provenance, and the
+only provenance this face knows is *"@spawn wrote it here, when the branch was
+born"*.
+
+**The honest-absence rule is the whole design.** A field that is not in the file
+renders **nothing** — no `N/A`, no *unknown*, no placeholder box waiting to be
+filled. A certificate with no privileges block has no seal, and a greyed-out seal
+would read as a grant that was revoked. And the renderer **declines**: it returns
+null the moment the text is not a JSON object, and the Reader then prints the raw
+file exactly as it does for everything else. That is not an error path — the raw
+text *is* the honest render of a file that does not carry a certificate. Measured
+rather than assumed: of the 16 birth certificates in this repo, @memory's is
+**zero bytes** and three more (@commons, @flow, @skills) are literally `{}`.
+
+The certificate's path is **one constant** shared by the renderer and the
+passport's gold `ADMIN GRANT` stamp, because that stamp's only evidence is the
+signed certificate itself — not a field on the passport, not a flag in the fleet
+read. Two copies of the string is how a stamp and its document drift apart.
+
+### The git app — the fourth layer is not an agent
+
+*DPLAN-0303.* Every other door on this face is addressed to somebody — a card, a
+room, a passport, a memory — and **the repository they all live in belongs to
+nobody**, so it has nowhere to hang on a rail made of citizens. The wheel grew a
+fourth layer for surfaces that belong to the project rather than to anyone in it:
+`current project`, `live`, `dispatched`, **`apps`**.
+
+It cost the stack the promised nothing — one row in the array, one pip, one
+flash — but it needed a second **card shape**, because *a surface* and *a
+citizen* must be one glance apart: apps are rounded squares in ember orange,
+agents stay circles in fleet green, and the accent travels through the pips, the
+notch and the flash together so arriving on the apps layer reads as one move
+rather than four. An app card carries **no `data-name`**, so the centre report
+that drives the terminal, the sheet and the whole context-bound half of this face
+never fires on it: flicking down to look at the repository leaves the agent you
+were talking to exactly where it was. There is no lane behind the list and there
+should not be one — an app is a surface this face itself provides, so a server
+that has never heard of it can neither add one nor take one away.
+
+**Five screens and a stack.** Changes → one file's patch; commits → one commit →
+one file's patch. The per-file patch is reachable from two places, which means
+*back* is a question about where you came **from**, not about which screen you
+are on; a stack answers that by construction, where five booleans in `PhoneApp`
+would have to re-derive it and would get it wrong the first time a sixth screen
+appeared. Deep screens also carry a **home chip** beside `‹ back` — same chip
+family, one glyph apart — and screens with nowhere to go home to draw nothing
+rather than a disabled control.
+
+**Nothing is held across a close.** Every screen reads on mount, so re-opening
+the app is a fresh read rather than a picture of a working tree that has moved
+on. A phone in a pocket is out of date by definition; the fix is to read again,
+not to cache harder.
+
+**Two grains, one app.** Patrick's ruling, 2026-08-17: *"it should open just like
+this but show only the agent local changes"* — the card's `GIT` tile used to open
+a raw whole-branch patch, one unhighlighted wall of text, and it now opens the
+same grouped list narrowed to that one citizen's working tree. So the grain is a
+**prop, not a second component**: a copy of these screens scoped to a branch
+would be the same four reads, the same refusal voice and the same grouping rule
+written twice, and the second copy is where the two start disagreeing about what
+a changed file looks like. The grain changes exactly three named things — which
+floor the stack starts on, what the changes screen asks for, and how deep a group
+cuts (three path segments at repo grain, where this fleet keeps its branch roots;
+one at branch grain, where the root is already stripped). Grouping is
+presentation and nothing else: it never adds, drops or reorders a row. A
+repository laid out differently gets uglier headings and the same complete list.
+
+**Divergences from the mock, each one upstream and named rather than faked.** The
+patch renders with **three** lines of context, not the mock's one, because the
+lane routes through drone's own door and that door recognises no `-U`
+passthrough — a narrower context is asked for upstream and this screen inherits
+it the day it lands, with nothing here to change. The commits list carries **two
+short rows, not four fields**, because the log door runs `--oneline`: an
+abbreviated name and a subject, no author and no date. They are one tap away on
+the commit itself, where one read answers for one commit. And the list is
+**always the whole repository** — that log door runs from the repository root
+with no pathspec, so *"commits for devpulse"* would be a straight lie about what
+was measured.
+
+**Every file in a commit wears the same letter**, and that is a refusal to guess.
+A commit's file carries additions and deletions and **no porcelain code** — a
+commit has no index and no worktree columns to report — and two numbers cannot be
+turned back into one. A file with no additions is as likely to be five deleted
+lines as a deleted file. So every row says the one thing that is true of all of
+them (*this commit modified it*) and the `+`/`−` numbers beside the name carry
+what actually happened.
+
+**One file at a time, by design** — the patch lane cuts a single file's block out
+of the whole and refuses over 512KB rather than truncating, because half a patch
+is not a small patch, it is a broken one. A commit's entire patch never crosses
+the wire. The renderer is `react-diff-view` (MIT), consuming exactly what the
+server sends: writing a unified-patch renderer by hand is writing a unified-patch
+parser by hand, and every edge case it misses — hunk headers, no-newline markers,
+renames, binaries — is a *wrong picture of a real change* rather than a crash.
+Its stylesheet exposes every colour as a `--diff-*` custom property, so the
+phone's palette drives it instead of a second set of hexes being pasted over it.
+
+**Rows that leave.** Pull requests, issues and the remote are the forge's pages,
+not this app's screens: they are anchors, they open a browser tab, they act on
+the first tap rather than pushing a floor onto the stack, and they wear a corner
+arrow so a card that navigates away never looks like one that opens a sheet. They
+exist at **repo grain only** — a remote belongs to the repository, so the
+branch-grain door the card's tile opens neither shows them nor asks for them —
+and they ride @api's `/v1/git-remote`. The host stays in the displayed address:
+`AIOSAI/AIPass` would look identical whether the remote points at GitHub or at a
+box in somebody's basement. When there is no remote the server answers
+`web: null` and the screen says so, rather than drawing a link to nowhere.
+
+**The badge is its own lane, and a much slower one.** The per-branch sweep walks
+the fleet one card at a time; the app's badge is **one** call for the whole
+repository, and it is the most expensive read this face makes — a status over a
+tree with seventeen branches in it. Two minutes between reads is well inside the
+scale a repo-wide count moves on, and it makes the number a background fact
+rather than a poll.
+
+### Git rides the row it belongs to
+
+*DPLAN-0303 phase 2, mock approved 2026-08-17.* The files screen paints status
+onto the listing it already had: **a changed file is painted, never moved, never
+grouped, never lifted out into a second screen.** The one row this adds is a file
+git says is *gone* — absence you can see, in the place the file used to sit. A
+directory row wears a dot when anything beneath it changed, so a level points at
+where the next tap goes instead of making you open folders one by one to find
+out.
+
+**The whole vocabulary, not half of it** (Patrick, 2026-08-17: *"git activity,
+green new, red deleted, amber edited, just like git works on vscode"*, and
+*"changes dont act different than git"*). The rows lane carries git's own
+two-column code per path and untracked files **by name**, so the screen reads the
+status instead of inferring one — and it reads it through the same mapping the
+git app's file rows use. One mapping, one set of colours, so a file cannot read
+as *new* here and *modified* one screen along.
+
+That mapping lives in exactly one file, and its precedence is deliberate and not
+alphabetical: **deleted wins** (a file that is gone is the one status where
+acting on the row is impossible, so it must never hide behind a second letter),
+then untracked (`??`, which has no columns and never appears beside anything),
+then added **from the index column only**, then everything else is modified —
+renames, copies, type changes, unmerged pairs, and any code nobody anticipated.
+A row is never dropped for wearing a letter this face has not met. @api sends the
+code **raw and unstripped** for exactly this reason: `A ` and ` M` are different
+answers that collapse into one the moment either is trimmed, and in their words,
+*"a letter invented here would be a second vocabulary for a fact git has already
+stated"*.
+
+### One gear, two owners' files
+
+The header gear used to open the interface panel with @memory's dials bolted
+underneath it — two owners' config behind one door labelled *interface*
+(Patrick's ruling, and the reason for this round). A second gear is how an app
+ends up with two places called settings, so the gear opens **one** surface and
+the sections sit inside it: a sectioned dialog on the desk, a list of rows on the
+phone. A thumb navigates a screen at a time and a pointer does not need to.
+
+**One implementation, two placements.** `InterfaceSettings` now exports the rows
+(`InterfaceControls`) and the rows wearing their own scrim and title bar — the
+desk mounts the controls inside a dialog that already carries chrome, the phone
+mounts the whole panel on top of its own. A title bar drawn twice is the only
+thing that split exists to prevent, and there is still exactly one implementation
+of startup agent, poll cadence, bell and hook sounds, and one of the memory
+dials.
+
+The phone's settings screen exists because this face gained a preference the desk
+does not have: **terminal scroll speed**, a thumb's problem. The knob scales the
+pan acceleration the terminal already used, so `3` stopped being the answer and
+became the baseline the percentage is a percentage *of* — an absent key leaves
+the file computing exactly what it computed before the knob existed. A desktop
+control for the same key is not refused, it is simply not that round's; the field
+is on the shared document precisely so the desk can grow one without a migration.
+
+### The startup seat, and why it needed a different store
+
+Patrick, 2026-08-17: *"In baud settings I have devpulse set as the default
+startup agent. On desktop when I open baud, devpulse is there waiting… Phone does
+not do this — when I refresh, devpulse doesn't reload/seat."*
+
+The seat spends **one shot per page load**, and the store is the entire
+difference between the two faces. The desk spends its shot in `sessionStorage`
+because its *app run* outlives a React remount — `npm run tauri dev` **is** the
+operator's seat, so every frontend save hot-reloads `App`, and a ref-held guard
+would re-arm and resurrect a room the operator just ended. None of that is true
+here: the phone ships a built bundle with no HMR, and its refresh is a **tab
+reload**, which `sessionStorage` deliberately survives. Borrowing the desk's
+store would have armed the shot exactly once per tab, ever, and left the second
+refresh in precisely the state this round exists to fix. Module scope dies with
+the page load, which is what *once per open, every open* actually means in a
+browser.
+
+It also needed a second flag, and finding out why is the useful part. `scope` is
+`"read"` in three unrelated situations — a genuinely read-scoped token, an answer
+that failed, and **the first frame of every returning arrival**, before `whoami`
+has been asked. Every other consumer is happy with that conflation, because for a
+verb chip all three mean the same safe thing. The seat is the one consumer that
+must tell them apart, and it is not a race that *sometimes* happens: child
+effects run before the parent's, so the fleet is asked for first, and `/v1/fleet`
+shells out to `baud --snapshot` without awaiting — it holds the event loop for
+the whole read, so the fleet **always** lands first. Gating the seat on `scope`
+alone would have made Patrick's own case fail every time.
+
+### The feed learned to clear
+
+Patrick, 2026-08-17: *"notification has no clear button"* — the desktop bell has
+one and the phone's feed did not. It is the desk's model exactly: a **cleared-up
+to** timestamp held by the face, keyed per project, and everything at or older
+than it stops rendering. **Display only** — the feed file is never touched, BAUD
+is a reader and ai_mail is the feed's only writer, so there is no host call here
+to make.
+
+**Two markers, not one.** *Read* moves by itself when the screen closes;
+*cleared* only ever moves when the operator taps clear, and it is the one that
+stops an event rendering at all. They live together one level up, beside the
+unread count, because the **badge** has to obey the cursor too: a badge counting
+three events over a screen that shows none is the phone telling two stories about
+one feed. And the button is **absent** rather than disabled when there is nothing
+to clear — this face's own rule, because a disabled button on touch has no hover,
+no title and no answer.
+
 ## Versions and releases
 
 BAUD is versioned with semantic versioning. The current version is **0.1.0**,
@@ -1832,6 +2140,8 @@ answered after them:
 | m13–m16 | the settings arc — chips follow the session not the seat, the memory dials join the interface gear, the dial write that stopped rewriting the whole config, and `baud --snapshot`: the fleet read as a second entry point, one JSON envelope, no window |
 | DPLAN-0300 | the phone face — design tokens, the transport seam, the host API, and a real tmux client in a browser |
 | the passport round | the avatar door and the opened passport, the manager mark, the sub-agent pulse, and memory settings that write through @memory's own verbs |
+| DPLAN-0302 | the wheel, the one-terminal ruling, browsing goes free, the passport reaches the phone, and the pane that stopped asking the poll who it was |
+| DPLAN-0303 | the git app as the wheel's fourth layer, git's own vocabulary on the files screen, the birth certificate drawn as a document, the passport/card split, and one gear per face |
 
 Along the way: whole-window zoom, ctrl+click terminal links, slash-command
 chips, and the mail-count fix that reads the mailbox instead of the dashboard's
@@ -1839,5 +2149,7 @@ cache.
 
 Milestones 1–12 are committed, and BAUD `v0.1.0` was tagged and released from
 `main` on 2026-08-12. The settings arc and the phone face were committed after
-it. The passport round is in the working tree, uncommitted — @baud has no git
-write; @devpulse commits this project on Patrick's word.
+it. **@baud commits this repository itself** — the tier arrived with the repo,
+and the day-3 arc landed as one narrative commit on 2026-08-16, DPLAN-0303 as
+another. Pushing is still Patrick's own keystroke: this tree is committed on his
+word and pushed by his hand.

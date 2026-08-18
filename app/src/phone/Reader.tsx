@@ -15,7 +15,7 @@
  * an absolute path outright rather than guessing at it.
  */
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { gitDiffText, readFileText } from "../host";
 import { HostError } from "../host/transport.http";
@@ -41,10 +41,26 @@ export interface ReadTarget {
 
 interface ReaderProps {
   target: ReadTarget;
+  /**
+   * AN OPTIONAL DESIGNED RENDER for the text this reader read - and the
+   * reader knows nothing about what it draws.
+   *
+   * One file in the fleet is a document rather than a file: @spawn's birth
+   * certificate. Rather than teach this reader about certificates, the caller
+   * hands in a renderer and this reader asks it. Returning null is the
+   * renderer DECLINING - the file did not parse, or parsed into something that
+   * is not the document it draws - and the raw text below is then the render,
+   * exactly as it is for every other file on this face.
+   *
+   * ABSENT ON EVERY OTHER OPEN, which is what keeps this addition free: with
+   * no renderer there is no branch, and the `<pre>` is reached the same way it
+   * always was.
+   */
+  render?: (content: string) => ReactNode | null;
   onClose: () => void;
 }
 
-export default function Reader({ target, onClose }: ReaderProps) {
+export default function Reader({ target, render, onClose }: ReaderProps) {
   const [text, setText] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +105,10 @@ export default function Reader({ target, onClose }: ReaderProps) {
       {!error && text === null ? <p className="baud-phone-empty">reading…</p> : null}
       {truncated ? <p className="baud-phone-truncated">truncated by the server — this is the head of the file</p> : null}
 
-      {text !== null ? <pre className="baud-phone-text">{text}</pre> : null}
+      {/* The designed render first, the file itself if it declined. `?? null`
+          rather than a ternary on `render`: a renderer that says no is the
+          same case as no renderer at all, and both land on the raw text. */}
+      {text !== null ? (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>) : null}
     </section>
   );
 }

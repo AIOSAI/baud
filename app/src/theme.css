@@ -1225,9 +1225,42 @@ body {
   cursor: default;
 }
 
+/* The desk's settings sections (SettingsDialog): a row of tabs under the head,
+   the pointer's answer to the phone's screen-at-a-time doors. Its own classes
+   rather than the workbench's tabbar, which is a different surface that will
+   grow different needs. */
+.baud-settings-tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+.baud-settings-tab {
+  flex: none;
+  padding: 2px 10px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.baud-settings-tab:hover {
+  color: var(--baud-ink);
+}
+
+.baud-settings-tab-on {
+  border-color: var(--baud-line-strong);
+  background: var(--baud-bg-card-live);
+  color: var(--baud-ink);
+}
+
 /* ------------------------------------------------------------ memory dials
-   A section inside the interface panel, but visibly ANOTHER agent's file:
-   its own heading, its own path line, its own save button. The separation is
+   Their own section on both faces now - visibly ANOTHER agent's file: their
+   own heading, their own path line, their own save button. The separation is
    the point - one save must never write two owners' config.
    ------------------------------------------------------------------------ */
 
@@ -1238,6 +1271,16 @@ body {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--baud-line-strong);
+}
+
+/* The rule above divided the dials from the interface controls they used to
+   sit under. Behind a section of their own there is nothing above them but the
+   panel's head, which draws its own line - so the leaf drops the separator
+   rather than the component learning where it is mounted. */
+.baud-settings-leaf > .baud-memory {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .baud-memory-head {

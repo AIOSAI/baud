@@ -28,6 +28,24 @@
  *  configuration at all; the dev proxy and any future split origin override it. */
 const API_BASE = (import.meta.env.VITE_BAUD_API ?? "").replace(/\/+$/, "");
 
+/**
+ * WHERE THIS FACE IS TALKING, in one sentence a person can read.
+ *
+ * The settings screen shows the server it is connected to, and the only file
+ * entitled to answer that is this one - "it only holds while this file stays
+ * the ONLY place that knows a URL" (the header, and it still means it). A
+ * screen resolving `VITE_BAUD_API ?? location.origin` for itself would be a
+ * second implementation of the same rule, drifting the first time the rule
+ * changes.
+ *
+ * The empty base is not a missing value: it is same-origin, which resolves to
+ * the address the page was served from - exactly what a `fetch("/v1/...")`
+ * would reach.
+ */
+export function apiOrigin(): string {
+  return API_BASE || window.location.origin;
+}
+
 const TOKEN_KEY = "baud.phone.token";
 
 /**
@@ -230,11 +248,79 @@ const ROUTES: Record<string, Route> = {
    */
   git_changes: {
     path: "/v1/git-changes",
-    query: (args) => ({ branch: branchOf(String(args.path ?? "")) }),
+    // `grain` rides through untouched when a caller names one. Absent is the
+    // branch's own subtree, which is the server's default and every existing
+    // caller's meaning - so the request this route builds for the card, the
+    // badge sweep and the files screen is character-for-character what it was.
+    query: (args) => ({
+      branch: branchOf(String(args.path ?? "")),
+      grain: args.grain as string,
+    }),
     unwrap: (body) => ({
       files: Array.isArray(body?.files) ? body.files.map(String) : [],
       count: Number(body?.count ?? 0),
     }),
+  },
+
+  /* ----------------------------------------------------------- git app -- */
+  /* DPLAN-0303. The same two routes as above plus two more, asked WHOLE: the
+     envelope is the answer here, not a number lifted out of it.
+
+     NOTHING IS PRE-REFUSED IN THIS TABLE. The lanes have their own rules -
+     a limit outside 1..50, a ref with a grain, a file the patch does not touch -
+     and every one of them is answered by @api in a sentence written for a
+     person. A guard here would replace those sentences with BAUD's guess at
+     them, which is the one thing the error envelope exists to prevent. */
+
+  git_change_rows: {
+    path: "/v1/git-changes",
+    // A branch NAME, never a path: these callers are phone screens and there is
+    // no desktop shape to split. `project` rides the generic lift in `call`.
+    query: (args) => ({ branch: args.branch as string, grain: args.grain as string }),
+    // The envelope kept whole, with the two collections defended. A field that
+    // arrived as something other than a list is a lane that changed shape, and
+    // an empty list renders as "nothing changed" rather than throwing inside a
+    // map three components away.
+    unwrap: (body) => ({
+      branch: String(body?.branch ?? ""),
+      grain: String(body?.grain ?? ""),
+      files: Array.isArray(body?.files) ? body.files.map(String) : [],
+      count: Number(body?.count ?? 0),
+      untracked: Number(body?.untracked ?? 0),
+      rows: Array.isArray(body?.rows)
+        ? body.rows.map((row: any) => ({ path: String(row?.path ?? ""), status: String(row?.status ?? "") }))
+        : [],
+    }),
+  },
+  git_file_diff: {
+    path: "/v1/diff",
+    // `staged` is deliberately never sent. The app reads what is in the tree or
+    // what is in a commit; a staged/unstaged split is a desk concern, and the
+    // parameter refuses outright beside a ref.
+    query: (args) => ({
+      branch: args.branch as string,
+      path: args.path as string,
+      grain: args.grain as string,
+      ref: args.ref as string,
+    }),
+  },
+  git_log: {
+    path: "/v1/git-log",
+    query: (args) => ({ branch: args.branch as string, limit: args.limit as number }),
+  },
+  git_commit: {
+    path: "/v1/commit",
+    query: (args) => ({ branch: args.branch as string, ref: args.ref as string }),
+  },
+  git_remote: {
+    // The envelope WHOLE, and it has to be: the browsable form and the
+    // configured URL are two different answers, and a face that only got one of
+    // them would either lose the fact or invent a page for a directory. No
+    // unwrap here builds a link out of them either - the server already dropped
+    // the clone suffix and turned ssh into https, so anything this table did to
+    // `web` would be a second implementation of a rule that already ran.
+    path: "/v1/git-remote",
+    query: (args) => ({ branch: args.branch as string }),
   },
   notifications_read: {
     path: "/v1/feed",

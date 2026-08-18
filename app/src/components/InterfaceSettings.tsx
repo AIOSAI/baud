@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { baudSettingsRead, baudSettingsWrite, hooksSoundGet, hooksSoundSet } from "../host";
 
 import type { BaudSettings } from "../types";
-import MemorySettings from "./MemorySettings";
 
 /**
  * BAUD's own settings (m11 phase 6) - the header gear, sibling to the per-card
@@ -18,6 +17,19 @@ import MemorySettings from "./MemorySettings";
  * temp dir (`aipass-hooks-muted`, @hooks' own switch), not a setting of ours.
  * It applies on the flip, it is never saved here, and the panel reads it live
  * on open because a shell or another window may have flipped it since.
+ *
+ * THIS FILE IS NOW ONLY THE FACE'S OWN LOOK AND FEEL. The memory dials used to
+ * ride at the bottom of this panel and no longer do: they write @memory's
+ * fleet-wide config, which is a different owner's file and has no business
+ * behind a door labelled "interface" (Patrick's ruling). They live one row over
+ * on both faces now - see SettingsDialog on the desk, the `memory` section on
+ * the phone.
+ *
+ * TWO EXPORTS, ONE IMPLEMENTATION. `InterfaceControls` is the rows and their
+ * save; the default export is those rows wearing this panel's own scrim and
+ * title bar. The desk mounts the controls INSIDE a sectioned dialog that
+ * already carries chrome, the phone mounts the whole panel on top of its own -
+ * and a title bar drawn twice is the only thing the split exists to prevent.
  */
 
 /** What the app does when the file says nothing. */
@@ -86,22 +98,21 @@ function withCurrent<T>(
   return choices.includes(current) ? options : [...options, { value: current, label: label(current) }];
 }
 
-interface InterfaceSettingsProps {
+interface InterfaceControlsProps {
   /** Fleet names for the startup list, in card order. */
   agents: string[];
   /** What the app is running on right now - the panel opens on the truth. */
   settings: BaudSettings;
   /** A save landed: the whole document, exactly as the backend wrote it. */
   onSaved: (settings: BaudSettings) => void;
+}
+
+interface InterfaceSettingsProps extends InterfaceControlsProps {
   onClose: () => void;
 }
 
-export default function InterfaceSettings({
-  agents,
-  settings,
-  onSaved,
-  onClose,
-}: InterfaceSettingsProps) {
+/** The rows themselves, chrome-free, for a surface that carries its own. */
+export function InterfaceControls({ agents, settings, onSaved }: InterfaceControlsProps) {
   // What the file says. Seeded from the running app so the panel never
   // flashes defaults, then confirmed by a read on open.
   const [base, setBase] = useState<BaudSettings>(settings);
@@ -151,14 +162,6 @@ export default function InterfaceSettings({
         if (alive.current) setHooksError(message(err));
       });
   }, []);
-
-  useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
 
   useEffect(() => {
     if (!saved) return;
@@ -235,6 +238,160 @@ export default function InterfaceSettings({
   };
 
   return (
+    <>
+      <label className="baud-settings-row">
+        <span className="baud-settings-label">startup agent</span>
+        <select
+          className="baud-settings-select"
+          value={startupAgent}
+          title="opened once, when BAUD starts - attached if it is live, resumed if it has history"
+          onChange={(event) => setStartupAgent(event.target.value)}
+        >
+          <option value="">None (empty)</option>
+          {agentOptions.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="baud-settings-row">
+        <span className="baud-settings-label">poll every</span>
+        <select
+          className="baud-settings-select"
+          value={pollMs}
+          title="how often the fleet snapshot and the bell refresh"
+          onChange={(event) => setPollMs(Number(event.target.value))}
+        >
+          {withCurrent(POLL_CHOICES, pollMs, seconds).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="baud-settings-row">
+        <span className="baud-settings-label">bell keeps</span>
+        <select
+          className="baud-settings-select"
+          value={bellMax}
+          title="how many notification events the bell keeps - the feed file itself is ai_mail's"
+          onChange={(event) => setBellMax(Number(event.target.value))}
+        >
+          {withCurrent(RETENTION_CHOICES, bellMax, (value) => `${value} events`).map(
+            (option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ),
+          )}
+        </select>
+      </label>
+
+      <div className="baud-settings-row">
+        <span className="baud-settings-label">bell chime</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={bellSound}
+          className={`baud-settings-switch ${bellSound ? "baud-settings-switch-on" : ""}`}
+          title={
+            bellSound
+              ? "a short blip when new events arrive"
+              : "the bell stays silent - the badge is the only signal"
+          }
+          onClick={() => setBellSound((current) => !current)}
+        >
+          <span className="baud-settings-knob" aria-hidden="true" />
+        </button>
+        <span className="baud-settings-state">{bellSound ? "on" : "off"}</span>
+      </div>
+
+      {/* Not a setting of ours: the flag file IS the state, so this flips
+          on click and has nothing to do with save. */}
+      <div className="baud-settings-row">
+        <span className="baud-settings-label">hook sounds</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={hooksActive === true}
+          className={`baud-settings-switch ${hooksActive ? "baud-settings-switch-on" : ""}`}
+          title={
+            hooksActive === null
+              ? "reading the mute flag…"
+              : hooksActive
+                ? "AIPass hook sounds are on - click to mute the whole fleet"
+                : "AIPass hook sounds are muted - click to bring them back"
+          }
+          disabled={hooksActive === null}
+          onClick={flipHooks}
+        >
+          <span className="baud-settings-knob" aria-hidden="true" />
+        </button>
+        <span className="baud-settings-state">
+          {hooksActive === null ? "…" : hooksActive ? "on" : "muted"}
+        </span>
+        <span className="baud-settings-hint">resets on reboot</span>
+      </div>
+
+      {readError ? (
+        <p className="baud-settings-error" role="alert">
+          read failed: {readError}
+        </p>
+      ) : null}
+      {writeError ? (
+        <p className="baud-settings-error" role="alert">
+          write failed: {writeError}
+        </p>
+      ) : null}
+      {hooksError ? (
+        <p className="baud-settings-error" role="alert">
+          hook sounds: {hooksError}
+        </p>
+      ) : null}
+
+      <footer className="baud-settings-foot">
+        <span
+          className={`baud-settings-note ${saved && pending === 0 ? "baud-settings-note-saved" : ""}`}
+        >
+          {pending > 0 ? `${pending} change(s) pending` : saved ? "saved" : "no changes"}
+        </span>
+        <button
+          type="button"
+          className="baud-settings-save"
+          disabled={pending === 0 || saving}
+          onClick={save}
+        >
+          {saving ? "saving…" : "save"}
+        </button>
+      </footer>
+    </>
+  );
+}
+
+/**
+ * The panel as the phone still opens it: the controls above, wearing the scrim,
+ * the title bar and the Escape key. Chrome is the only thing this adds - every
+ * row, every read and the save itself live one component up, so the desk's
+ * sectioned dialog and this share an implementation rather than a resemblance.
+ */
+export default function InterfaceSettings({
+  agents,
+  settings,
+  onSaved,
+  onClose,
+}: InterfaceSettingsProps) {
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, [onClose]);
+
+  return (
     <div className="baud-settings-scrim" onPointerDown={onClose}>
       <div
         className="baud-settings-panel baud-interface-panel"
@@ -254,142 +411,7 @@ export default function InterfaceSettings({
           </button>
         </header>
 
-        <label className="baud-settings-row">
-          <span className="baud-settings-label">startup agent</span>
-          <select
-            className="baud-settings-select"
-            value={startupAgent}
-            title="opened once, when BAUD starts - attached if it is live, resumed if it has history"
-            onChange={(event) => setStartupAgent(event.target.value)}
-          >
-            <option value="">None (empty)</option>
-            {agentOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="baud-settings-row">
-          <span className="baud-settings-label">poll every</span>
-          <select
-            className="baud-settings-select"
-            value={pollMs}
-            title="how often the fleet snapshot and the bell refresh"
-            onChange={(event) => setPollMs(Number(event.target.value))}
-          >
-            {withCurrent(POLL_CHOICES, pollMs, seconds).map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="baud-settings-row">
-          <span className="baud-settings-label">bell keeps</span>
-          <select
-            className="baud-settings-select"
-            value={bellMax}
-            title="how many notification events the bell keeps - the feed file itself is ai_mail's"
-            onChange={(event) => setBellMax(Number(event.target.value))}
-          >
-            {withCurrent(RETENTION_CHOICES, bellMax, (value) => `${value} events`).map(
-              (option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ),
-            )}
-          </select>
-        </label>
-
-        <div className="baud-settings-row">
-          <span className="baud-settings-label">bell chime</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={bellSound}
-            className={`baud-settings-switch ${bellSound ? "baud-settings-switch-on" : ""}`}
-            title={
-              bellSound
-                ? "a short blip when new events arrive"
-                : "the bell stays silent - the badge is the only signal"
-            }
-            onClick={() => setBellSound((current) => !current)}
-          >
-            <span className="baud-settings-knob" aria-hidden="true" />
-          </button>
-          <span className="baud-settings-state">{bellSound ? "on" : "off"}</span>
-        </div>
-
-        {/* Not a setting of ours: the flag file IS the state, so this flips
-            on click and has nothing to do with save. */}
-        <div className="baud-settings-row">
-          <span className="baud-settings-label">hook sounds</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={hooksActive === true}
-            className={`baud-settings-switch ${hooksActive ? "baud-settings-switch-on" : ""}`}
-            title={
-              hooksActive === null
-                ? "reading the mute flag…"
-                : hooksActive
-                  ? "AIPass hook sounds are on - click to mute the whole fleet"
-                  : "AIPass hook sounds are muted - click to bring them back"
-            }
-            disabled={hooksActive === null}
-            onClick={flipHooks}
-          >
-            <span className="baud-settings-knob" aria-hidden="true" />
-          </button>
-          <span className="baud-settings-state">
-            {hooksActive === null ? "…" : hooksActive ? "on" : "muted"}
-          </span>
-          <span className="baud-settings-hint">resets on reboot</span>
-        </div>
-
-        {readError ? (
-          <p className="baud-settings-error" role="alert">
-            read failed: {readError}
-          </p>
-        ) : null}
-        {writeError ? (
-          <p className="baud-settings-error" role="alert">
-            write failed: {writeError}
-          </p>
-        ) : null}
-        {hooksError ? (
-          <p className="baud-settings-error" role="alert">
-            hook sounds: {hooksError}
-          </p>
-        ) : null}
-
-        <footer className="baud-settings-foot">
-          <span
-            className={`baud-settings-note ${saved && pending === 0 ? "baud-settings-note-saved" : ""}`}
-          >
-            {pending > 0
-              ? `${pending} change(s) pending`
-              : saved
-                ? "saved"
-                : "no changes"}
-          </span>
-          <button
-            type="button"
-            className="baud-settings-save"
-            disabled={pending === 0 || saving}
-            onClick={save}
-          >
-            {saving ? "saving…" : "save"}
-          </button>
-        </footer>
-
-        {/* Another agent's file, so it carries its own save button rather than
-            riding this one - see MemorySettings for why. */}
-        <MemorySettings />
+        <InterfaceControls agents={agents} settings={settings} onSaved={onSaved} />
       </div>
     </div>
   );

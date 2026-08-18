@@ -84,6 +84,137 @@ export interface GitChanges {
   count: number;
 }
 
+/**
+ * The git-changes envelope WHOLE - @api's `/v1/git-changes` (DPLAN-0303).
+ * PHONE-ONLY, and a second shape rather than a wider `GitChanges` on purpose.
+ *
+ * `GitChanges` above mirrors a Rust struct and is the BADGE's question: how
+ * many tracked files differ from HEAD, in exactly the desktop's semantics. This
+ * is the git APP's question, which needs three things that contract does not
+ * carry - the grain it was measured at, git's own code per row, and untracked
+ * files by name. Widening the mirrored struct would have made the desktop's
+ * type describe fields the desktop's backend never sends.
+ *
+ * `rows` is the complete answer and `files` is the tracked subset of it, which
+ * is why the app renders rows and the badge sweep still reads count: two
+ * questions, one read, neither one deciding for the other.
+ */
+export interface GitChangeRows {
+  branch: string;
+  /** `branch` (one citizen's subtree) or `repo` (every branch, one tree). */
+  grain: string;
+  /** Tracked paths that differ from HEAD - the desktop card's list. */
+  files: string[];
+  count: number;
+  /** How many untracked paths ride in `rows` and not in `files`. */
+  untracked: number;
+  rows: GitRow[];
+}
+
+/**
+ * One changed path with git's own two-column code beside it.
+ *
+ * The code arrives RAW and UNSTRIPPED - index column then worktree column -
+ * because trimming it collapses answers that are not the same answer. See
+ * `phone/gitStatus.ts`, which is the one place that reads it.
+ */
+export interface GitRow {
+  path: string;
+  status: string;
+}
+
+/**
+ * One file's patch as unified diff TEXT - @api's `/v1/diff`. PHONE-ONLY.
+ *
+ * The desktop's `git_diff_text` answers a `FileText`, which is a whole branch's
+ * patch under a path-shaped name. This lane is narrower and says more: one
+ * file's block, the byte size it really was, and whether the server capped it.
+ * A face that only had the text could not tell a short patch from a cut one.
+ */
+export interface GitFileDiff {
+  branch: string;
+  grain: string;
+  staged: boolean;
+  /** The commit this patch was read from, or "" for the working tree. */
+  ref: string;
+  path: string;
+  bytes: number;
+  truncated: boolean;
+  diff: string;
+}
+
+/**
+ * The repository's recent commits - @api's `/v1/git-log`. PHONE-ONLY.
+ *
+ * ALWAYS REPO GRAIN, and the envelope says so rather than leaving it implied:
+ * the branch names WHICH repository, never which history. A row carries a short
+ * object name and a subject and NOTHING else - that is the log door's whole
+ * output, and the alternative is fifty subprocesses dragging fifty patches to
+ * decorate a list.
+ */
+export interface GitLog {
+  branch: string;
+  grain: string;
+  commits: GitCommitRow[];
+  count: number;
+}
+
+export interface GitCommitRow {
+  sha: string;
+  subject: string;
+}
+
+/**
+ * One commit's facts and its per-file stats - @api's `/v1/commit`. PHONE-ONLY.
+ *
+ * NO PATCH, by design. The patch rides the diff lane one file at a time, so a
+ * phone never loads a whole commit at once.
+ */
+export interface GitCommit {
+  /** What was asked for - a sha, a tag, HEAD~2. `sha` is what it resolved to. */
+  ref: string;
+  sha: string;
+  author: string;
+  date: string;
+  subject: string;
+  message: string;
+  files: GitCommitFile[];
+  count: number;
+}
+
+export interface GitCommitFile {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
+/**
+ * The repository's remote - @api's `/v1/git-remote`. PHONE-ONLY.
+ *
+ * ALWAYS REPO GRAIN, and the envelope says so in its own field: a remote
+ * belongs to the repository, never to a branch, so the branch names WHICH
+ * repository exactly as it does on the log and commit lanes.
+ *
+ * TWO ADDRESSES, NOT ONE, and the difference is the whole reason a link can be
+ * honest. `url` is what is configured - possibly `git@host:owner/repo.git`,
+ * possibly a directory on this disk. `web` is a form a person can OPEN, which
+ * only some remotes have; the server answers null for the rest rather than
+ * putting a scheme in front of a filesystem path and calling it a page. So a
+ * face builds its links out of `web` and shows `url` as the fact it is.
+ */
+export interface GitRemote {
+  branch: string;
+  grain: string;
+  /** Which remote answered - `origin` by convention, its own name otherwise. */
+  remote: string;
+  /** As configured, with any password already replaced on the server. */
+  url: string;
+  /** A browsable address, or null when this remote has no page at all. */
+  web: string | null;
+  /** True when a credential was taken out of `url` before it was sent. */
+  redacted: boolean;
+}
+
 /** Mirrors `SpawnResult` in src-tauri/src/pty.rs. */
 export interface SpawnResult {
   id: string;
@@ -211,6 +342,21 @@ export interface BaudSettings {
   bell_max_events?: number;
   /** Chime when a poll brings genuinely new events. */
   bell_sound?: boolean;
+  /**
+   * How fast a finger-pan scrolls the terminal room, as a PERCENT of the
+   * face's built-in feel: 100 is that feel exactly, 200 is twice as far per
+   * swipe, 50 is half. Absent means 100 - and it must, because the constants
+   * this scales (`LINES_PER_NOTCH`, `PAN_ACCELERATION` in the phone's
+   * TerminalSheet) are the neutral baseline the knob was cut from, not a
+   * default the knob replaces.
+   *
+   * PHONE-CONSUMED, and only the phone edits it today: the room is scrolled by
+   * a thumb there, while the desk has a wheel its OS already tunes. It lives in
+   * this shared document anyway rather than in the phone's localStorage,
+   * because BAUD's settings file is the one place an operator's preference is
+   * written down, hand-editable, and survives a cache clear.
+   */
+  terminal_scroll_percent?: number;
 }
 
 /** Mirrors `EntryLimit` in src-tauri/src/memory.rs. */
