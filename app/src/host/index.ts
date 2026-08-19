@@ -38,6 +38,7 @@ import type {
   MemoryConfig,
   NotificationEvent,
   ProjectListing,
+  RootEntry,
   SpawnResult,
   VerbResult,
 } from "../types";
@@ -83,13 +84,56 @@ export const listDir = (path: string) => call<DirEntryInfo[]>("list_dir", { path
  * faces, and the face that needed a new capability is the only one that changed.
  */
 
+/**
+ * THE OPTIONAL `root` ON THE TWO READS BELOW (FPLAN-0443, 2026-08-18) - the
+ * same threading as `project` above, for the same reason and with the same
+ * discipline.
+ *
+ * Patrick, 2026-08-18: "rn I can only see into agent files... I cant explore
+ * home. or project files outside agents." The fence answered one kind of word -
+ * a citizen name - so agent-land was the whole of where a phone could stand.
+ * It now answers four (`branch`, `home`, `project`, `aipass`), and `root` is
+ * which kind of word the first component of `path` is.
+ *
+ * ABSENT MEANS BRANCH, which is not a default this seam invented: it is the
+ * only meaning these two verbs have ever had, so a browse written before roots
+ * existed sends the request it always sent. The key is left off the payload
+ * entirely, so the desktop's `invoke` object stays byte-identical - the desktop
+ * resolves under its seat and has no roster to consult.
+ *
+ * THE FACE NEVER SPELLS A ROOT ITSELF. Both halves come from a `RootEntry` the
+ * server handed over: `kind` here, and `name` as the first component of `path`.
+ */
+
 /** The same level with its honesty flag - the phone's browser shows what was
  *  dropped instead of rendering a trimmed list as complete. */
-export const listDirWindow = (path: string, project = "") =>
-  call<DirWindow>("list_dir_window", project ? { path, project } : { path });
+export const listDirWindow = (path: string, project = "", root = "") =>
+  call<DirWindow>("list_dir_window", {
+    path,
+    ...(project ? { project } : {}),
+    ...(root ? { root } : {}),
+  });
 
-export const readFileText = (path: string, project = "") =>
-  call<FileText>("read_file_text", project ? { path, project } : { path });
+export const readFileText = (path: string, project = "", root = "") =>
+  call<FileText>("read_file_text", {
+    path,
+    ...(project ? { project } : {}),
+    ...(root ? { root } : {}),
+  });
+
+/**
+ * EVERY PLACE THIS FACE MAY STAND, as the server holds them (FPLAN-0443).
+ *
+ * PHONE-ONLY. There is no Rust command behind this name and there should not
+ * be one: the desktop browses the project it is seated in, from a machine with
+ * a file manager on it. `transport.ts` refuses it by name for exactly that
+ * reason - see `NOT_ON_THIS_FACE`.
+ *
+ * ASKED, NEVER ASSUMED. The roster is a read like any other: it can refuse, it
+ * can be empty, and both are the server's answer to show rather than a reason
+ * for the face to fall back on a list of its own.
+ */
+export const listRoots = () => call<RootEntry[]>("list_roots", {});
 
 /**
  * Text -> the paths inside it that actually exist, for drop and paste.

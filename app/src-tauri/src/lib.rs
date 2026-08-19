@@ -165,6 +165,29 @@ pub struct BranchStatus {
     /// interactively. `None` when `has_history` is true (use `-c`) or when
     /// there are no transcripts at all (nothing to resume).
     pub resume_id: Option<String>,
+    /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
+    /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.
+    ///
+    /// Always spelled, whether or not the session exists: it is the name the
+    /// room HAS if it is live and the name it would be CREATED with if it is
+    /// not, which are the same string. [`has_room`](Self::has_room) says which
+    /// of the two you are looking at.
+    ///
+    /// PUBLISHED BECAUSE THIS DERIVATION HAD BEEN COPIED (FPLAN-0438, on
+    /// @seedgo's finding). @api's attach lane re-implemented the prefix, the
+    /// scope rule and the character sanitizer in python to work out which
+    /// session to attach the phone to - and a naming rule living in two
+    /// runtimes is a rule that will disagree with itself the first time either
+    /// side changes it, with the failure landing as "attached to a session
+    /// that never existed" rather than as an error. BAUD names its own rooms,
+    /// so BAUD says the name. Read this field; never rebuild it.
+    ///
+    /// NOT ALWAYS THE SESSION A DOOR ACTS ON, and that distinction is the
+    /// whole of m12: when `has_room` is false, the branch's live claude may be
+    /// sitting in a session BAUD never made, and
+    /// [`outside_room`](Self::outside_room) names it. The resolution is: own
+    /// room if it exists, else `outside_room`, else this name to create.
+    pub room: String,
     /// A `baud-<branch>` tmux session exists - the agent has a living room
     /// to attach to, whether or not anything is running inside it.
     pub has_room: bool,
@@ -206,6 +229,7 @@ impl BranchStatus {
             interactive: false,
             has_history: false,
             resume_id: None,
+            room: String::new(),
             has_room: false,
             outside_room: None,
             subagents: 0,
@@ -1801,7 +1825,11 @@ fn read_branch(
     status.resume_id = resume_id;
     status.subagents = subagent_count(&canonical);
 
-    status.has_room = rooms.names.contains(&room_name(room_scope, &status.name));
+    // Named once and used twice: the badge asks whether this session exists,
+    // the row carries the name either way. Deriving it a second time here is
+    // exactly the duplication this field exists to retire upstream.
+    status.room = room_name(room_scope, &status.name);
+    status.has_room = rooms.names.contains(&status.room);
     // Only when BAUD has no room here: a card with its own room already knows
     // which session its doors act on, and that one wins (m12).
     status.outside_room = if status.has_room {
@@ -3600,6 +3628,31 @@ mod tests {
         // '.' and ':' carry tmux target syntax; anything odd flattens to '-'.
         assert_eq!(room_name(None, "AIPASS.admin"), "baud-AIPASS-admin");
         assert_eq!(room_name(None, "a:b c"), "baud-a-b-c");
+    }
+
+    /// The row publishes the name, and it is the SAME name `room_name` builds -
+    /// which is the whole value of the field. A second derivation anywhere (a
+    /// python mirror of the sanitizer, a hand-built string in a face) is a rule
+    /// that can disagree with this one; a row that carries the answer cannot.
+    #[test]
+    fn a_row_carries_the_name_of_its_own_room() {
+        let base = std::env::temp_dir().join(format!("baud-roomfield-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let branch = base.join("ai_mail");
+        fs::create_dir_all(&branch).unwrap();
+
+        let quiet = RoomScan::default();
+        let anchor = read_branch(&branch, "ai_mail".into(), "AIPASS", &[], &quiet, None);
+        assert_eq!(anchor.room, "baud-ai_mail");
+        assert_eq!(anchor.room, room_name(None, "ai_mail"));
+        // Nothing is running in this fixture, so the name is what a launch
+        // WOULD create - stated all the same.
+        assert!(!anchor.has_room);
+
+        let scoped = read_branch(&branch, "ai_mail".into(), "VERA-STUDIO", &[], &quiet, Some("vera-studio"));
+        assert_eq!(scoped.room, "baud-vera-studio-ai_mail");
+
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

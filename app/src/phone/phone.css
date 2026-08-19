@@ -351,6 +351,7 @@ body {
    NOTHING rather than a disabled chip - this face has no dead controls. */
 .baud-phone-back,
 .baud-phone-home,
+.baud-phone-copyhead,
 .baud-phone-feedbutton,
 .baud-phone-feedclear {
   background: none;
@@ -516,24 +517,139 @@ body {
   text-decoration: line-through;
 }
 
+/* THE ROOTS ROSTER (FPLAN-0443) - the FILES app's first screen.
+   Deliberately almost no CSS of its own: the rows ARE file rows
+   (`baud-phone-file baud-phone-file-dir`), because picking a place to stand and
+   picking a directory to enter are the same gesture with the same shape, and a
+   second row style would make them look like two different kinds of thing one
+   tap apart. What is added is the grouping and the second line, and nothing
+   else. */
+.baud-phone-roots-group {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+
+/* A HEADING, not a section - it names which kind the rows beneath it are and
+   carries no control, so it is styled down towards the listing rather than up
+   towards the screen title. Sticky is deliberately NOT used: the roster is
+   short by construction (a home, a handful of projects, one checkout), and a
+   sticky heading on a list that does not scroll is chrome paying rent. */
+.baud-phone-roots-head {
+  margin: 0;
+  padding: 12px 6px 4px;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* THE NAME THE FENCE WILL ACTUALLY BE HANDED, shown only when it is not
+   already the word on the row - so a project row can print a person's name for
+   it and still say what the server was told. Dim and second, because it is
+   evidence rather than the label. */
+.baud-phone-roots-name {
+  flex: none;
+  color: var(--baud-ink-faint);
+  font-size: 0.66rem;
+  padding-left: 8px;
+}
+
 /* The dead row plus the answer it gives when tapped, as one block, so the
    answer cannot drift away from the row that owns it. */
-.baud-phone-file-dead {
+/* A ROW AND WHATEVER IT HAS TO SAY (was `-dead`, widened by the FPLAN-0443
+   rider). It held the deleted row and its explanation; now every row is one of
+   these, because every row can refuse a copy and the refusal belongs under the
+   row it is about. */
+.baud-phone-file-block {
   display: flex;
   flex-direction: column;
   flex: none;
   border-bottom: 1px solid var(--baud-line);
 }
 
-/* The rule between rows belongs to the BLOCK here, not to the button, or an
-   open answer would sit below the line that separates its own row from the
+/* The rule between rows belongs to the BLOCK here, not to the row inside it, or
+   an open answer would sit below the line that separates its own row from the
    next one - reading as a note about the wrong file. */
-.baud-phone-file-dead .baud-phone-file-gone {
+.baud-phone-file-block .baud-phone-file-row {
   border-bottom: none;
 }
 
-.baud-phone-file-dead .baud-phone-said {
+.baud-phone-file-block .baud-phone-said {
   padding-bottom: 8px;
+}
+
+/* THE ROW IS A LINE OF THREE THINGS NOW (FPLAN-0443 rider): the name, the copy
+   button, and one status slot. It exists because a button cannot contain
+   another button - the tappable name and the tappable copy have to be
+   siblings, so something has to hold them, and that something is also the
+   right place for the row's colour and its rule.
+
+   44px MINIMUM, which is the whole reason the rows grew: the copy target is
+   real or it is decoration. */
+.baud-phone-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--baud-ink-dim);
+}
+
+/* THE NAME TAKES THE WIDTH AND INHERITS THE COLOUR. `inherit` rather than a
+   token: the status classes moved up to the row so that the chip's
+   `currentColor` border and the name's ink come from ONE declaration, and a
+   colour set here would win against the row and quietly unpaint every status.
+   The border goes to the block above, so a row never draws its own. */
+.baud-phone-file-row .baud-phone-file {
+  flex: 1;
+  min-width: 0;
+  border-bottom: none;
+  color: inherit;
+}
+
+/* THE COPY BUTTON, on every row the listing paints. 44px square, the smallest
+   target a thumb reliably hits, and a plain border so it reads as a control
+   rather than as another status chip. */
+.baud-phone-copy {
+  flex: none;
+  width: 44px;
+  min-height: 44px;
+  background: none;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.56rem;
+  padding: 0;
+  text-align: center;
+}
+
+/* COPIED, and green because it is the face's "this landed" colour. It is drawn
+   only after a lane confirmed the copy - see `copyPath.ts`, where the whole
+   point is that this state is never assumed. */
+.baud-phone-copy-done {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+/* At the far end of a reader's head, past a title that shrinks and ellipses.
+   Same chrome as `‹ back` beside it, because it is the same species of
+   control. */
+.baud-phone-copyhead {
+  margin-left: auto;
+  flex: none;
+}
+
+/* THE EMPTY STATUS SLOT - the chip's 17px with nothing in it. A row with no
+   status still reserves the space, so the copy button beside it sits in one
+   column all the way down the listing instead of stepping sideways on every
+   row that happens to be unchanged. */
+.baud-phone-file-slot {
+  flex: none;
+  width: 17px;
+  height: 17px;
 }
 
 .baud-phone-file-chip {

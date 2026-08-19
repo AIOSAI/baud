@@ -19,10 +19,23 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { gitDiffText, readFileText } from "../host";
 import { HostError } from "../host/transport.http";
+import { COPY_REFUSED, NO_FLOOR, copyText, machinePath, underRoot } from "./copyPath";
 
 export interface ReadTarget {
   /** `<branch>/<file>` for a file, or just the branch name for a diff. */
   ref: string;
+  /**
+   * WHICH KIND OF WORD the first component of `ref` is (FPLAN-0443): `home`,
+   * `project`, `aipass`, or `branch`. Absent is the branch meaning every read
+   * on this face had before the roots roster existed, and it travels as an
+   * absent key rather than a spelled-out default.
+   *
+   * It rides the target because a file opened out of the home directory is
+   * still a file, read by this same reader, through this same lane - the only
+   * thing that differs is which floor the server resolves it against, and that
+   * fact has to travel WITH the reference or the read lands somewhere else.
+   */
+  root?: string;
   /** What the header calls it. */
   title: string;
   kind: "file" | "diff";
@@ -64,20 +77,31 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
   const [text, setText] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Where this file stands on the machine - see `copyPath`. "" is a server
+   *  that did not say, and the copy refuses on it. */
+  const [floor, setFloor] = useState("");
+  /** This file's path is on the clipboard. No timer: the clipboard has none. */
+  const [copied, setCopied] = useState(false);
+  /** Why the copy did not happen, when it did not. */
+  const [said, setSaid] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     setText(null);
     setError(null);
+    setFloor("");
+    setCopied(false);
+    setSaid(null);
     const read =
       target.kind === "diff"
         ? gitDiffText(target.ref, target.project)
-        : readFileText(target.ref, target.project);
+        : readFileText(target.ref, target.project, target.root);
     read
       .then((got) => {
         if (!mounted) return;
         setText(got.content);
         setTruncated(got.truncated);
+        setFloor(got.floor ?? "");
       })
       .catch((cause) => {
         if (!mounted) return;
@@ -89,8 +113,34 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
       mounted = false;
     };
     // The project is a dependency because it CHANGES THE ANSWER: the same ref
-    // read under two projects is two different files.
-  }, [target.ref, target.kind, target.project]);
+    // read under two projects is two different files. The ROOT is here for
+    // exactly the same reason, and was missing: `README.md` under `home` and
+    // under a project are two files, and a pane key is not a promise about
+    // effects.
+  }, [target.ref, target.kind, target.project, target.root]);
+
+  /**
+   * THE PATH OF THE FILE ON SCREEN - half the time you are already inside a
+   * file when you want its name to hand to someone.
+   *
+   * Composed here rather than carried: the reference this sheet was opened with
+   * is a NAME (`<branch>/<relative>`), and the floor that turns it into a
+   * machine path arrives with the answer, not with the target. Before the read
+   * lands there is genuinely nothing to copy, which is why the button appears
+   * with the text rather than with the header.
+   */
+  const machine = machinePath(floor, underRoot(target.ref));
+
+  const copy = async () => {
+    setSaid(null);
+    setCopied(false);
+    if (!machine) {
+      setSaid(NO_FLOOR);
+      return;
+    }
+    if (await copyText(machine)) setCopied(true);
+    else setSaid(COPY_REFUSED);
+  };
 
   return (
     <section className="baud-phone-reader">
@@ -99,8 +149,28 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
           ‹ back
         </button>
         <span className="baud-phone-reader-title">{target.title}</span>
+{/* A DIFF HAS NO PATH TO GIVE. It is a branch's patch, not a file, so
+            the button is absent rather than present and refusing - the same
+            rule the `⌂ home` chip on the files screen follows, and the honest
+            one: there is nothing here that a machine path would name.
+
+            AND IT ARRIVES WITH THE TEXT, not with the header. The floor comes
+            back WITH the read, so a button drawn while the file is still in
+            flight would refuse with "the server did not say where this root
+            stands" - which would be a true sentence about the wrong moment. No
+            text, no path, no button. */}
+        {target.kind === "file" && text !== null ? (
+          <button
+            type="button"
+            className={`baud-phone-copyhead ${copied ? "baud-phone-copy-done" : ""}`}
+            onClick={copy}
+          >
+            {copied ? "copied" : "copy path"}
+          </button>
+        ) : null}
       </header>
 
+      {said ? <p className="baud-phone-said">{said}</p> : null}
       {error ? <p className="baud-phone-error">{error}</p> : null}
       {!error && text === null ? <p className="baud-phone-empty">reading…</p> : null}
       {truncated ? <p className="baud-phone-truncated">truncated by the server — this is the head of the file</p> : null}

@@ -12,6 +12,14 @@
  * noise filter (.git, node_modules, .venv...) is the server's, mirrored from
  * the desktop tree - machine residue, not content.
  *
+ * AND SINCE FPLAN-0443 THE FLOOR CAN BE SOMEWHERE ELSE ENTIRELY. `root` names
+ * which KIND of word `branch` is - a citizen, a project, the home directory,
+ * the AIPass checkout - and everything above stays exactly true: the first
+ * component is still a name the server resolves, the entries still come back
+ * relative to whatever floor that was, and this screen still sends no path.
+ * Nothing in the browse changed; what changed is how many places it can start.
+ * A file explorer was never the missing piece - somewhere else to stand was.
+ *
  * GIT RIDES THE ROW IT BELONGS TO (DPLAN-0303 phase 2, mock approved 08-17).
  * The listing is the same listing - a changed file is painted, never moved,
  * never grouped, never lifted out into a second screen. The one row this adds
@@ -34,7 +42,11 @@ import { useEffect, useMemo, useState } from "react";
 import { gitChangeRows, listDirWindow } from "../host";
 import { HostError } from "../host/transport.http";
 import type { DirEntryInfo } from "../types";
+import { COPY_REFUSED, NO_FLOOR, copyText, machinePath } from "./copyPath";
 import { chipOf, type GitChip } from "./gitStatus";
+
+/** What a gone row answers when it is tapped. */
+const GONE_ANSWER = "deleted - there is no file left to open";
 
 interface FilesScreenProps {
   /** The branch whose tree this browses. */
@@ -42,6 +54,15 @@ interface FilesScreenProps {
   /** Which project that branch lives in - browsing is free across projects
    *  since 2026-08-16. Empty means the seat, the pre-ruling meaning. */
   project: string;
+  /**
+   * WHICH KIND OF WORD `branch` IS (FPLAN-0443) - `home`, `project`, `aipass`,
+   * or `branch`. Empty is the branch meaning this screen has always had, and
+   * it is sent as an absent key rather than a spelled-out default.
+   *
+   * It is never spelled here: it arrives from a `RootEntry` the server
+   * published, through the picker, unchanged.
+   */
+  root?: string;
   /**
    * Where the browse STARTS, relative to the branch root. "" is the branch
    * itself, which is what the files door has always asked for.
@@ -78,6 +99,7 @@ type FileRow =
 export default function FilesScreen({
   branch,
   project,
+  root = "",
   start = "",
   onOpenFile,
   onClose,
@@ -100,19 +122,47 @@ export default function FilesScreen({
    * the listing plain, which is the honest thing in both cases (see below).
    */
   const [changed, setChanged] = useState<ReadonlyMap<string, GitChip> | null>(null);
-  /** Which gone row was tapped, if any - it answers under itself. */
-  const [said, setSaid] = useState<string | null>(null);
+  /**
+   * WHICH ROW HAS SOMETHING TO SAY, and what it says.
+   *
+   * It began as the gone row's own answer and widened when the copy button
+   * arrived, because a refused copy is the same species of thing: news about
+   * ONE row, belonging under that row rather than in a banner over a listing
+   * that is otherwise perfectly true. One answer at a time, by construction -
+   * a screen with four open explanations on it is a screen nobody reads.
+   */
+  const [said, setSaid] = useState<{ path: string; text: string } | null>(null);
+  /**
+   * WHERE THIS LEVEL STANDS ON THE MACHINE, straight from the answer. "" is a
+   * server that has not sent it, and the copy button refuses on "" rather than
+   * composing a path out of half the facts.
+   */
+  const [floor, setFloor] = useState("");
+  /**
+   * WHICH ROW'S PATH IS ON THE CLIPBOARD, and it does NOT time out.
+   *
+   * A tick that fades after two seconds would be claiming the copy expired; the
+   * clipboard still holds the path, and this mark is the only record of which
+   * one. It is cleared when the level changes instead - not because the
+   * clipboard emptied, but because the row it pointed at is no longer on
+   * screen, and a mark that outlived its row could land on a same-named file
+   * somewhere else.
+   */
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     setEntries(null);
     setError(null);
     setSaid(null);
-    listDirWindow(dir ? `${branch}/${dir}` : branch, project)
+    setCopied(null);
+    setFloor("");
+    listDirWindow(dir ? `${branch}/${dir}` : branch, project, root)
       .then((got) => {
         if (!mounted) return;
         setEntries(got.entries);
         setTruncated(got.truncated);
+        setFloor(got.floor ?? "");
       })
       .catch((cause) => {
         if (!mounted) return;
@@ -122,7 +172,7 @@ export default function FilesScreen({
     return () => {
       mounted = false;
     };
-  }, [branch, project, dir]);
+  }, [branch, project, root, dir]);
 
   /*
    * ONE FETCH PER SCREEN, NOT ONE PER FOLDER. `dir` is deliberately absent
@@ -150,6 +200,27 @@ export default function FilesScreen({
   useEffect(() => {
     let mounted = true;
     setChanged(null);
+    /* CHIPS ARE OFF OUTSIDE A BRANCH ROOT, and silently (FPLAN-0443). The rows
+       lane is keyed BY A BRANCH: it answers "what has changed in this
+       citizen's working tree". Outside one there is no branch to key on - a
+       home directory is not a repository, and a project root is a repository
+       this lane cannot be asked about at this grain. Sending a root's name
+       where a branch name goes would return either a refusal or, far worse,
+       some same-named citizen's change set painted over a stranger's files.
+
+       SO THE LISTING GOES OUT PLAIN, which is the same picture this screen
+       drew before it ever learned to read status, and no banner says anything
+       is missing: an unpainted row claims nothing, where a row painted clean
+       would claim the file is unchanged. Never a false clean. Lighting them at
+       repo grain for the project and aipass roots is real and named as a
+       follow-on in the plan - the `repo` grain already exists - and it is off
+       here rather than guessed, because a chip keyed wrong is worse than no
+       chip at all. */
+    if (root && root !== "branch") {
+      return () => {
+        mounted = false;
+      };
+    }
     gitChangeRows(branch, project)
       .then((got) => {
         if (!mounted) return;
@@ -174,7 +245,7 @@ export default function FilesScreen({
     return () => {
       mounted = false;
     };
-  }, [branch, project]);
+  }, [branch, project, root]);
 
   const rows = useMemo(
     () => buildRows(entries, changed, dir, truncated),
@@ -202,12 +273,50 @@ export default function FilesScreen({
    *  and never up into the branch root it did not come from. */
   const home = () => setDir(start);
 
+  /**
+   * HAND A ROW'S PATH TO THE OPERATOR, or say why not.
+   *
+   * Nothing here assumes anything worked. The floor can be missing, the
+   * browser can refuse the clipboard outright, and both are ANSWERED under the
+   * row rather than swallowed - a copy button that always looks like it worked
+   * is worse than no copy button, because the operator's next move is to paste
+   * something that is not there.
+   *
+   * ONE ARGUMENT, because there is one path. A row's path is BOTH the key the
+   * mark and the answer hang on AND the thing that goes after the floor - the
+   * listing spells entry paths relative to the root it stands on, measured on
+   * the wire rather than assumed (a level three deep answers
+   * `app/src/phone/Reader.tsx`, not `Reader.tsx`). Passing it twice would have
+   * been two names for one fact and one more place for them to disagree.
+   *
+   * Args:
+   *   path: The row's path, relative to the root this level stands on.
+   */
+  const copy = async (path: string) => {
+    setSaid(null);
+    setCopied(null);
+    const machine = machinePath(floor, path);
+    if (!machine) {
+      setSaid({ path, text: NO_FLOOR });
+      return;
+    }
+    if (await copyText(machine)) setCopied(path);
+    else setSaid({ path, text: COPY_REFUSED });
+  };
+
   /* HOW MANY `up` PRESSES FROM HOME. The chip is drawn from two down, where it
      replaces them; one down is `up`'s own job, and a second chip pointing at
      the level `back` already reaches is chrome with nothing behind it. Both
      sides are branch-relative and `dir` only ever extends the floor, so the
      remainder IS the walk - counted, not re-derived from the tree. */
   const below = dir === start ? 0 : dir.slice(start.length).split("/").filter(Boolean).length;
+
+  /* WHAT THIS BROWSE IS CALLED. A branch names itself, and so does a project;
+     `home` and `aipass` name nothing, because the fence resolves them from the
+     kind alone - so `branch` is empty and the heading falls back to the kind,
+     which is the word the operator picked off the roster. Display only: what
+     goes on the wire is `branch` and `root`, untouched. */
+  const title = branch || root || "files";
 
   return (
     <section className="baud-phone-reader">
@@ -221,7 +330,8 @@ export default function FilesScreen({
           </button>
         ) : null}
         <span className="baud-phone-reader-title">
-          {branch}/{dir}
+          {title}
+          {dir ? `/${dir}` : ""}
         </span>
       </header>
 
@@ -244,54 +354,130 @@ export default function FilesScreen({
               /* PRESSABLE, NEVER `disabled` - this face's own rule, written on
                  `baud-phone-verb-refused`: a disabled button on touch has no
                  hover, no title and no answer. So the dead row stays tappable
-                 and answers with WHY it is dead, right underneath itself. */
-              <div key={row.path} className="baud-phone-file-dead">
-                <button
-                  type="button"
-                  className="baud-phone-file baud-phone-file-gone"
-                  onClick={() => setSaid(said === row.path ? null : row.path)}
-                >
-                  <span className="baud-phone-file-name">{row.name}</span>
+                 and answers with WHY it is dead, right underneath itself.
+                 AND IT COPIES, like every other row (FPLAN-0443 rider): a
+                 deleted file's path is one of the things a person most wants to
+                 hand to an agent, and the row is the only place it is still
+                 written down. */
+              <div key={row.path} className="baud-phone-file-block">
+                <div className="baud-phone-file-row baud-phone-file-gone">
+                  <button
+                    type="button"
+                    className="baud-phone-file"
+                    onClick={() =>
+                      setSaid(
+                        said?.path === row.path && said.text === GONE_ANSWER
+                          ? null
+                          : { path: row.path, text: GONE_ANSWER },
+                      )
+                    }
+                  >
+                    <span className="baud-phone-file-name">{row.name}</span>
+                  </button>
+                  <CopyButton done={copied === row.path} onCopy={() => copy(row.path)} />
                   <span className="baud-phone-file-chip">D</span>
-                </button>
-                {said === row.path ? (
-                  <p className="baud-phone-said">deleted - there is no file left to open</p>
-                ) : null}
+                </div>
+                {said?.path === row.path ? <p className="baud-phone-said">{said.text}</p> : null}
               </div>
             ) : (
-              <button
-                key={row.entry.path}
-                type="button"
-                /* ONE CLASS PER STATUS, named by the letter itself - the git
-                   app's own idiom (`baud-git-file-${chip}`), so the two screens
-                   cannot drift into two palettes for one fact. */
-                className={`baud-phone-file ${row.entry.is_dir ? "baud-phone-file-dir" : ""} ${
-                  row.chip ? `baud-phone-file-${row.chip}` : ""
-                } ${row.inside ? "baud-phone-file-inside" : ""}`}
-                onClick={() =>
-                  row.entry.is_dir
-                    ? setDir(row.entry.path)
-                    : onOpenFile(`${branch}/${row.entry.path}`, `${branch} · ${row.entry.name}`)
-                }
-              >
-                <span className="baud-phone-file-name">
-                  {row.entry.name}
-                  {row.entry.is_dir ? "/" : ""}
-                </span>
-                {row.chip ? <span className="baud-phone-file-chip">{row.chip}</span> : null}
-                {/* A DOT, NOT A LETTER. What this row knows is that something
-                    under it moved - not what, not how many, not whether the
-                    thing was edited or deleted. A chip would have to pick a
-                    letter to say that with, and every letter available claims
-                    more than the row has. So the marker says exactly the one
-                    true word, "inside", and the tap is how you learn the rest. */}
-                {row.inside ? <span className="baud-phone-file-dot" /> : null}
-              </button>
+              <div key={row.entry.path} className="baud-phone-file-block">
+                <div
+                  /* ONE CLASS PER STATUS, named by the letter itself - the git
+                     app's own idiom (`baud-git-file-${chip}`), so the two
+                     screens cannot drift into two palettes for one fact.
+                     THE ROW WEARS THEM NOW, not the button inside it: the chip
+                     moved out to make room for the copy button on its left, and
+                     it draws its border in `currentColor`. The colour has to be
+                     set somewhere both the name and the chip inherit it from,
+                     and that place is their common parent. */
+                  className={`baud-phone-file-row ${row.entry.is_dir ? "baud-phone-file-dir" : ""} ${
+                    row.chip ? `baud-phone-file-${row.chip}` : ""
+                  } ${row.inside ? "baud-phone-file-inside" : ""}`}
+                >
+                  <button
+                    type="button"
+                    className="baud-phone-file"
+                    onClick={() =>
+                      row.entry.is_dir
+                        ? setDir(row.entry.path)
+                        : onOpenFile(
+                            `${branch}/${row.entry.path}`,
+                            `${title} · ${row.entry.name}`,
+                          )
+                    }
+                  >
+                    <span className="baud-phone-file-name">
+                      {row.entry.name}
+                      {row.entry.is_dir ? "/" : ""}
+                    </span>
+                  </button>
+                  <CopyButton done={copied === row.entry.path} onCopy={() => copy(row.entry.path)} />
+                  {/* ONE 17px SLOT ON EVERY ROW, holding the chip, or the dot,
+                      or nothing. Chip and dot were always exclusive; what is
+                      new is that a row with NEITHER still reserves the space,
+                      so the copy button beside it lands in the same column all
+                      the way down the listing. A button that shifts 25px
+                      sideways between adjacent rows is a button a thumb misses.
+
+                      A DOT, NOT A LETTER. What that row knows is that something
+                      under it moved - not what, not how many, not whether the
+                      thing was edited or deleted. A chip would have to pick a
+                      letter to say that with, and every letter available claims
+                      more than the row has. So the marker says exactly the one
+                      true word, "inside", and the tap is how you learn the
+                      rest. */}
+                  <span
+                    className={
+                      row.chip
+                        ? "baud-phone-file-chip"
+                        : row.inside
+                          ? "baud-phone-file-dot"
+                          : "baud-phone-file-slot"
+                    }
+                  >
+                    {row.chip}
+                  </span>
+                </div>
+                {said?.path === row.entry.path ? (
+                  <p className="baud-phone-said">{said.text}</p>
+                ) : null}
+              </div>
             ),
           )}
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The copy button one row wears.
+ *
+ * A WORD, NOT A GLYPH, and both states are words. Every copy icon in circulation
+ * is two overlapping rectangles that nobody recognises at 17px, and the ones
+ * that read well live in font blocks this face cannot promise an Android phone
+ * has - a tofu box on every row is a worse outcome than a small word. "copied"
+ * replacing "copy" is also the state change itself: the label IS the answer,
+ * so there is no second element to look at.
+ *
+ * IT IS A SIBLING OF THE ROW, NOT A CHILD OF IT, and that is not a style
+ * choice - a button inside a button is invalid HTML and the browser is entitled
+ * to do anything at all with the tap. So the row became a flex line holding the
+ * name button, this, and the status slot, in that order.
+ *
+ * Args:
+ *   done: This row's path is the one on the clipboard.
+ *   onCopy: Put it there.
+ */
+function CopyButton({ done, onCopy }: { done: boolean; onCopy: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`baud-phone-copy ${done ? "baud-phone-copy-done" : ""}`}
+      onClick={onCopy}
+    >
+      {done ? "copied" : "copy"}
+    </button>
   );
 }
 

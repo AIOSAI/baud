@@ -191,6 +191,24 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/roster",
     unwrap: (body) => body?.branches ?? [],
   },
+  /* --------------------------------------------------------- the roots -- */
+  /* FPLAN-0443. The fence learned four kinds of word instead of one, and these
+     three entries are the WHOLE of what this face knows about that on the wire.
+     Deliberately: a root travels as one key beside arguments these two routes
+     already sent, so a correction from @api is this block and nothing else.
+
+     `root` NAMES THE KIND; the first component of the seam's `path` names the
+     thing WITHIN that kind, which is where a branch name already sat. So the
+     splitter below, the browser, its up-chip and the Reader all keep working
+     with no change - the only new thing anywhere is the kind, and it rides as
+     a key that is absent unless a caller named one. Absent is the branch
+     meaning these routes have always had, character for character. */
+  list_roots: {
+    // The roster the picker renders. A face that hardcoded this list would be
+    // a face that lies the day a project is added.
+    path: "/v1/roots",
+    unwrap: (body) => (Array.isArray(body?.roots) ? body.roots : []),
+  },
   list_dir_window: {
     // One level of a branch's tree, fenced on names. The seam's `path` is
     // `<branch>` or `<branch>/<subdir>`; entry paths come back RELATIVE to
@@ -198,11 +216,12 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/dir",
     query: (args) => {
       const split = splitBranchFile(String(args.path ?? ""));
-      return { branch: split.branch, dir: split.file };
+      return { branch: split.branch, dir: split.file, root: args.root as string };
     },
     unwrap: (body) => ({
       entries: body?.entries ?? [],
       truncated: Boolean(body?.truncated),
+      floor: floorOf(body),
     }),
   },
   read_file_text: {
@@ -210,7 +229,7 @@ const ROUTES: Record<string, Route> = {
     // there is no path parameter to abuse. The seam's single `path` argument
     // is split back into the two the fence wants.
     path: "/v1/files",
-    query: (args) => splitBranchFile(String(args.path ?? "")),
+    query: (args) => ({ ...splitBranchFile(String(args.path ?? "")), root: args.root as string }),
     // -> FileText, the shape types.ts mirrors from the Rust struct. The field
     //    names differ on the wire (`content` vs `diff`); the seam's callers
     //    must not have to care, so the rename happens here.
@@ -218,6 +237,7 @@ const ROUTES: Record<string, Route> = {
       path: `${body?.branch ?? ""}/${body?.file ?? ""}`,
       content: body?.content ?? "",
       truncated: Boolean(body?.truncated),
+      floor: floorOf(body),
     }),
   },
   git_diff_text: {
@@ -493,6 +513,29 @@ const NOT_YET: Record<string, string> = {
  * and the file named separately, so the split happens here - the one place
  * allowed to know both shapes.
  */
+/**
+ * The absolute path of the root an answer stands on (FPLAN-0443 rider).
+ *
+ * ONE READER FOR ONE KEY, and that is the whole reason it is a function rather
+ * than two inline reads. `floor` is a contract agreed with @api while both
+ * sides were being built in parallel; if what ships on the wire is spelled
+ * differently, this line is the correction and there is no second place for the
+ * name to hide. The same shape the roots round took, for the same reason.
+ *
+ * An absent key answers "" rather than undefined - the callers compose with it,
+ * and "" is the value that makes composition refuse instead of building half a
+ * path.
+ *
+ * Args:
+ *   body: The parsed answer body.
+ *
+ * Returns:
+ *   The machine path of the resolved root, or "" when the server did not say.
+ */
+function floorOf(body: any): string {
+  return typeof body?.floor === "string" ? body.floor : "";
+}
+
 function splitBranchFile(path: string): Query {
   // An ABSOLUTE path is the desktop's shape and it is refused here, loudly.
   // Stripping the leading slash and splitting anyway would ask @api's fence for

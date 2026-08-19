@@ -46,6 +46,13 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
   git_log: "the desktop reads its own working tree - this is the phone's git app",
   git_commit: "the desktop reads its own working tree - this is the phone's git app",
   git_remote: "the desktop opens the forge from a terminal beside the repository - this is the phone's git app",
+  /* FPLAN-0443. The roots roster is the host API's answer to "where else may a
+     phone stand". The desktop stands in the project it is seated in, on a
+     machine with a file manager three feet away, and its own reads resolve
+     under that seat - so there is no roster behind this name here. The day the
+     desktop wants roots it is the same roster through a Rust command, and this
+     line is what gets deleted to make room for it. */
+  list_roots: "the desktop browses the project it is seated in - the roots roster is the phone's fence",
 };
 
 /** A typed host call. The only `invoke` in the application. */

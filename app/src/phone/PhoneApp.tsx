@@ -86,6 +86,7 @@ import AgentSheet from "./AgentSheet";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
 import FilesScreen from "./FilesScreen";
+import RootsScreen from "./RootsScreen";
 import FleetWheel, { cardRef, openingCard } from "./FleetWheel";
 import GitApp from "./GitApp";
 import MemoryScreen from "./MemoryScreen";
@@ -178,6 +179,19 @@ interface OpenPane {
   /** File panes only: `<branch>/<relative>` - the pane's identity AND its
    *  read request, names-never-paths as everywhere on this face. */
   ref?: string;
+  /**
+   * FILE PANES ONLY: which KIND of word `ref`'s first component is - `home`,
+   * `project`, `aipass`, or `branch` (FPLAN-0443). Absent is the branch
+   * meaning every file pane had before the roots roster existed.
+   *
+   * PART OF `paneKey`, unlike `document` - and for the opposite reason. The
+   * key is the file's IDENTITY, and the same spelling under two roots is two
+   * different files: `README.md` in the home directory and `README.md` in the
+   * AIPass checkout are not one document seen twice. A key that dropped the
+   * root would front the wrong tab and show a stranger's file under a name the
+   * operator recognised.
+   */
+  root?: string;
   /** Which project the pane's branch lives in. Empty means the seat, which is
    *  what every pane meant before browsing went free. */
   project?: string;
@@ -262,7 +276,10 @@ function paneKey(pane: OpenPane): string {
   const where = pane.project ?? "";
   if (pane.mode === "shell") return `shell:${where}/${pane.name || "@project"}`;
   if (pane.mode === "watch") return pane.name ? `watch:${where}/${pane.name}` : "watch:@fleet";
-  if (pane.mode === "file") return `file:${where}/${pane.ref}`;
+  // The root joins the key because it is part of the file's identity - see
+  // `OpenPane.root`. Absent stays absent in the string, so every file pane
+  // opened before roots existed keys exactly as it did.
+  if (pane.mode === "file") return `file:${pane.root ?? ""}:${where}/${pane.ref}`;
   return `room:${where}/${pane.name}`;
 }
 
@@ -413,7 +430,15 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     name: string;
     project: string;
     start: string;
+    /** Which KIND of word `name` is, when the browse came off the roots
+     *  roster (FPLAN-0443). Absent for every door that names a citizen, which
+     *  is every door that existed before it. */
+    root?: string;
   } | null>(null);
+  /** THE FILES APP's first screen - the roster of places to stand. A boolean
+   *  because the roster IS the app's front door: picking a row opens a browse
+   *  and closes this, so there is never a second thing to remember. */
+  const [rootsOpen, setRootsOpen] = useState(false);
   /** Whose working memory is open - the card's `memory` door (compass #291).
    *  By NAME and PROJECT, the same address every read on this face takes. */
   const [memoryOf, setMemoryOf] = useState<{ name: string; project: string } | null>(null);
@@ -1144,6 +1169,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
            two, this is where the second one is named. */
         onOpenApp={(key) => {
           if (key === "git") setGitOpen(true);
+          if (key === "files") setRootsOpen(true);
         }}
       />
 
@@ -1232,6 +1258,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     title: pane.ref ?? "",
                     kind: "file",
                     project: pane.project,
+                    root: pane.root,
                   }}
                   /* THE ONE DESIGNED RENDER on this face, and it is opt-in per
                      pane: no flag, no renderer, and the Reader takes the same
@@ -1489,9 +1516,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              read once, into state, so a second browse arriving while one is
              open must be a new component rather than the old one holding the
              old floor. */
-          key={`${browsing.project}/${browsing.name}/${browsing.start}`}
+          key={`${browsing.root ?? ""}:${browsing.project}/${browsing.name}/${browsing.start}`}
           branch={browsing.name}
           project={browsing.project}
+          root={browsing.root}
           start={browsing.start}
           onOpenFile={(ref) => {
             const from = browsing;
@@ -1501,6 +1529,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               mode: "file",
               ref,
               project: from.project,
+              // The floor travels with the file: a read resolved against the
+              // wrong root does not fail, it finds a different file.
+              root: from.root,
               /* THE ONLY PLACE A DESIGNED DOCUMENT IS EVER ASKED FOR: the
                  browse floored at `artifacts` - the passport's records door -
                  tapping the one certificate at its one name. The card's files
@@ -1511,6 +1542,36 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             });
           }}
           onClose={() => setBrowsing(null)}
+        />
+      ) : null}
+      {/* THE FILES APP - the roster first, the browser behind it. Rendered
+          BEFORE the browser above for the same reason the browser renders
+          before the reader: each screen sits on top of the one it came from,
+          and `‹ back` lands where you were. */}
+      {rootsOpen ? (
+        <RootsScreen
+          onPick={(root) => {
+            setRootsOpen(false);
+            setBrowsing({
+              /* THE FIRST PATH COMPONENT. A branch and a project name
+                 themselves; `home` and `aipass` name nothing, and the fence
+                 resolves those from the KIND alone - so the kind stands in as
+                 the component rather than leaving it empty, which would send
+                 a leading slash the transport refuses by design. One
+                 expression, one place: nothing downstream has to know which
+                 kinds carry a name. */
+              name: root.name || root.kind,
+              /* NO PROJECT. The root IS the scope here - a project root names
+                 its project in `name`, and home and aipass belong to the
+                 machine rather than to any project. Sending the seat would ask
+                 the fence to resolve a root inside a project, which is not a
+                 question it has. */
+              project: "",
+              start: "",
+              root: root.kind,
+            });
+          }}
+          onClose={() => setRootsOpen(false)}
         />
       ) : null}
       {/* WORKING MEMORY - a screen, not an overlay on the card: it is read, at

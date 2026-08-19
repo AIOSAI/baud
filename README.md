@@ -467,6 +467,21 @@ pane command simply never matches, and the card falls back to the behaviour it
 had before. BAUD still CREATES only its own `baud-` rooms, and an existing
 `baud-<branch>` always wins over an outside session.
 
+**The row names its own room** (2026-08-18). Every snapshot row carries `room` —
+`baud-<branch>` in the anchor, `baud-<project>-<branch>` elsewhere, sanitized for
+tmux targets — spelled whether or not that session exists, because the name a
+live room *has* and the name a launch would *create* are one string. With
+`has_room` and `outside_room` beside it the row states the whole resolution: own
+room if it is live, else the outside session, else this name to create.
+
+It is published because the derivation had been *copied*. @api's attach lane had
+re-implemented the prefix, the scope rule and the character sanitizer in python
+to work out which session to attach a phone to, and a naming rule living in two
+runtimes disagrees with itself the first time either side changes one — landing
+not as an error but as *attached to a session that never existed*. BAUD names its
+own rooms, so BAUD says the name. It costs nothing to carry: the snapshot already
+built that string to answer `has_room`, and now it answers with it.
+
 The staged claude command is typed only where it can land at a prompt: into a
 room this spawn just created, or one the snapshot says holds no live claude.
 Attaching to a live claude types nothing — the click lands you mid-conversation.
@@ -623,7 +638,27 @@ untrue: claude's real threshold follows the model, so an opus-1m seat reading
 Failure mode is refusal. A settings file that exists but does not parse as a
 JSON object errors out and nothing is written — losing a deny-rule to a settings
 toggle is the worst bug this file could ship, and overwriting what we cannot
-read is never the safer choice. Writes land through a temp file in the same
+read is never the safer choice.
+
+**That was the doctrine and not the code until 2026-08-18**, and the gap is
+worth recording because it was invisible from every direction. `read_object`
+answered `{}` on *every* read error, not just a missing file — a permission bit,
+a mount that went away, a directory in the file's place. The chain that follows
+is silent all the way down: the gear reads blank, every dial renders at *unset*,
+and the next save writes a fresh three-key document over an operator's
+permission rules with nothing anywhere to report. @seedgo found it by
+cross-reading this module against @api's python mirror, which had been hardened
+against exactly this case and never told this side. The split is now by error
+kind — `NotFound` reads blank (a fresh branch is not a fault), **everything else
+refuses**, so the write that would have followed never happens. Two tests hold
+it: an unreadable file must not read as `{}`, and a patch over one leaves the
+file byte-for-byte as it was.
+
+One divergence from the python mirror survives on purpose and is reported rather
+than papered over: python also reads *not-a-directory* as blank, and
+`io::ErrorKind::NotADirectory` needs Rust 1.83 where this crate's MSRV is
+1.77.2. That case refuses here instead, which is the safe direction to be wrong
+in, and it is on the conformance list rather than hidden. Writes land through a temp file in the same
 directory and a rename, so a reader never sees a half-file. Keys come out in
 file order (serde_json is built with `preserve_order` since m13), so a one-key
 change no longer reshuffles a document somebody else wrote.
@@ -945,11 +980,11 @@ are not table rows because they are not JSON request/response: the room socket
 (`/v1/room/attach`) and the multipart upload (`/v1/files/upload`).
 
 The counts move as the seam grows, so they are stated as measured rather than
-carried forward: `host/index.ts` exports **39** typed verbs today (it was 26 when
-this section was written), the http table holds **28** rows across **22**
-distinct routes, and the built bundle contains **24** — those 22 plus the socket
+carried forward: `host/index.ts` exports **40** typed verbs today (it was 26 when
+this section was written), the http table holds **29** rows across **23**
+distinct routes, and the built bundle contains **25** — those 23 plus the socket
 and the upload. Re-measure rather than trust the sentence: the numbers are here
-to be checked, not believed.
+to be checked, not believed. Last measured 2026-08-18, after the roots door.
 
 **The refusal table now points both ways.** `transport.http.ts` has always
 refused the verbs a phone cannot perform *by name*; since DPLAN-0303
@@ -972,6 +1007,12 @@ the same from a phone.
 screen, proves the token against `/v1/whoami` before showing anything, and keeps
 it in `localStorage`. A refused token and an unreachable server are reported as
 different failures, because they send the operator to different places.
+
+*A read token stopped being a harmless mirror on 2026-08-18.* It still refuses
+every verb by name — but since the file lane learned a `home` root, it also
+reads whatever a person can read on that machine, private keys included. The
+ruling and the full exposure are recorded under* **The FILES app** *below; this
+note is here so the claim is not read as still-true from the top of the page.*
 
 **Browsing is free, and the seat is a default rather than a fence.** Patrick's
 ruling, 2026-08-16: view any agent's project files, open any passport, no
@@ -1980,6 +2021,155 @@ repository, and it is the most expensive read this face makes — a status over 
 tree with seventeen branches in it. Two minutes between reads is well inside the
 scale a repo-wide count moves on, and it makes the number a background fact
 rather than a poll.
+
+### The FILES app — the fence learns more than one kind of word
+
+*FPLAN-0443, 2026-08-18.* Patrick: *"we dont have a file explorer… rn I can only
+see into agent files, that file as is. and git changes shows changed files also
+good but I can't explore home. or project files outside agents."*
+
+**The browser was never the missing piece.** `FilesScreen` has been a real phone
+file manager since the wheel landed — one level at a time, an up chip, a Reader
+on the other side of a tap, status chips riding the rows — and it already opened
+at two different floors. What it had no way to do was stand anywhere except
+inside a citizen's directory, because **the fence answered exactly one kind of
+word**: a branch name. So this round is not "write a file explorer". It is
+*teach the fence more places to stand*, and let three existing components fall
+through unchanged.
+
+The apps layer's own comment promised the card would cost one row, and it did:
+`FILES` sits beside `GIT`, second entry in the same array.
+
+**The roster is the server's, and the face never constructs one.** `/v1/roots`
+publishes the places — `home`, every project in the census, the AIPass root,
+and the branches — each carrying a `kind`, a `name` and a `label`. The picker
+renders that and echoes `kind` and `name` back verbatim. A roster spelled into
+this face would be a roster that lies the day a project is added or renamed, and
+the fence would then refuse a row the picker had drawn as real. So the screen
+**refuses out loud rather than falling back**: no hardcoded home row, no "well,
+at least show the branches". If the roster cannot be read it says so in @api's
+own words and offers nothing, because a picker that invents one plausible entry
+is how an operator learns to distrust the other twelve.
+
+**One key on the wire, and it is absent by default.** `root` names the *kind*;
+the first component of the path names the thing *within* that kind, which is
+exactly where a branch name already sat. So the splitter, the browser, its
+up-chip and the Reader all keep working untouched — the only new thing anywhere
+is the kind, and it rides as a key that is omitted unless a caller names one.
+Absent means the branch meaning these routes have always had, character for
+character, which is the no-regression pin seen from this side.
+
+Every root names its first component, including the ones that name nothing:
+`home` and `aipass` stand in for themselves. That is not decoration — measured
+against the live server, `branch` is a **required** query field (`422` without
+it), and an empty first component would build a leading slash the transport
+refuses by design. One expression in one place, so nothing downstream has to
+know which kinds carry a name.
+
+**The root travels with the file, all the way to the tab.** A file opened out of
+the home directory is still a file, read by the same Reader through the same
+lane; the only thing that differs is which floor the server resolves it against,
+and that fact has to travel *with* the reference or the read lands somewhere
+else. It is also part of the pane's **identity**: `README.md` in the home
+directory and `README.md` in the AIPass checkout are not one document seen
+twice, so the root joins `paneKey` — where the certificate flag deliberately
+does not.
+
+**Status chips are off outside a branch root, and silently.** The rows lane is
+keyed *by a branch*: it answers what changed in one citizen's working tree.
+Outside one there is no branch to key on, and sending a root's name where a
+branch name goes would return either a refusal or — far worse — some same-named
+citizen's change set painted over a stranger's files. So the listing goes out
+plain, exactly the picture this screen drew before it learned to read status,
+and **no banner says anything is missing**: an unpainted row claims nothing,
+where a row painted clean would claim the file is unchanged. Never a false
+clean. Lighting them at repo grain for the project and aipass roots is real,
+named as a follow-on, and off here rather than guessed.
+
+**The desktop refuses the roster by name.** There is no Rust command behind
+`list_roots` and there should not be: the desk browses the project it is seated
+in, from a machine with a file manager three feet away. `transport.ts` says so
+in the mirror table, so the name fails as a designed absence rather than as
+tauri's *command not found*.
+
+**Measured before it was reported, and the dependency is honest.** As this
+shipped, `/v1/roots` answers `404` — @api's half was building in parallel. Two
+probes against the live host with a read token, revoked after: `root` is an
+unknown query parameter today and is **silently ignored**, so `?branch=devpulse&root=project`
+returns the branch byte-identically to the control. That is the wrong-picture
+case in miniature — and it is structurally unreachable, because the only way to
+reach a root browse is through a roster row, and there are no rows until the
+door exists. The face is complete and inert until @api lands, then live with no
+further change.
+
+> **It landed the same day, and the paragraph above is kept rather than
+> rewritten.** Re-measured 2026-08-18 against the live host: `/v1/roots` answers
+> `200` with a home, an AIPass checkout and eleven projects; `/v1/dir?branch=home&root=home`
+> lists the home directory and **echoes `root` back**, which is the ignored-key
+> hazard closing itself. The prediction in the paragraph above is what makes it
+> worth keeping — it was written before the answer was known, and it held.
+
+**The exposure, kept where it can be found.** With a `home` root and Patrick's
+standing *full operation now, security later* ruling, a **read-scope token reads
+`~/.ssh/`, `~/.aws/`, `~/.gnupg/`, dot-env files and `~/.claude/settings.json`
+from the phone over the tailnet.** The sentence elsewhere in this README that a
+read token is a harmless mirror is no longer true of the file lane. devpulse
+named the consequence before the ruling and it stands; this paragraph exists so
+that the day it is revisited nobody has to reconstruct what was known when. The
+reversal is small and nothing here forecloses it: a name deny-list in the
+server's read module, and an operate gate on the home arm alone.
+
+### A path you can hand to someone
+
+*FPLAN-0443 rider, 2026-08-18.* Every row the files screen paints — a file, a
+directory, and the row for a file git says is **gone** — carries a **copy**
+button, and so does the reader's header, because half the time you are already
+inside a file when you want its name. It copies the **machine path**.
+
+**Why it has to be the machine path, and why that needed the server.** Every
+path this face sends is a *name*: `<branch>/<relative>`, resolved by the server
+against a floor the phone never learns. That is exactly right for asking and
+exactly wrong for handing to a person — a relative path pasted into an agent's
+prompt resolves against wherever that agent happens to be standing, which is a
+different tree often enough to matter and is never flagged when it goes wrong.
+So `/v1/dir` and `/v1/files` gained one key, `floor`, the absolute path of the
+resolved root, and `app/src/phone/copyPath.ts` puts the relative back on the end
+of it. **No floor, no copy:** the button answers *"the server did not say where
+this root stands"* under the row rather than handing over half an answer.
+
+**The lane that exists because of the device it runs on.** This face is served
+over plain http on the tailnet, and `navigator.clipboard` is **undefined in an
+insecure context on Android Chrome** — the exact browser this face exists for. A
+copy button written against the modern API alone works on the desktop it was
+developed on and does nothing at all on the phone, silently. So the legacy
+`document.execCommand` textarea lane is not a fallback for old browsers; it is
+the only lane on the device that matters, and the modern one is the courtesy.
+The order is **synchronous-first** on purpose: `execCommand` only works inside
+the gesture that asked for it, and awaiting a promise ends that gesture, so the
+absent-API case never awaits anything.
+
+**Nothing is assumed to have worked.** Both lanes report — the promise resolves
+or rejects, `execCommand` answers a boolean — and the button shows `copied` only
+on a confirmed copy. A tick that appears whether or not the text moved is worse
+than no tick, because it is the operator's only way to know. The mark does not
+time out, either: the clipboard has no timer, so a tick that faded after two
+seconds would be claiming an expiry that never happened.
+
+**What the brief said and what measurement said.** The composition rule handed
+down was `floor + "/" + relative` with `filter(Boolean)` *"so no double slash"*.
+Run against real inputs it turned out not to be enough — a floor of `/` is
+truthy, so `["/", "notes.md"].filter(Boolean).join("/")` builds `//notes.md`,
+which is the one case the rule was written to prevent. No root resolves to `/`
+today, so it was latent rather than live; it is fixed and the five measured
+cases are written into the function's own doc.
+
+**What the layout cost, named.** A button cannot contain another button, so the
+row became a flex line of three things — the name, the copy button, the status
+slot — and the status chip moved out of the tap target to sit at the row's outer
+edge. Tapping the 17px chip no longer opens the file; tapping anywhere else on
+the row still does. Every row now reserves the chip's 17px whether it has a
+status or not, so the copy button lands in one column all the way down the
+listing instead of stepping sideways on every unchanged row.
 
 ### Git rides the row it belongs to
 

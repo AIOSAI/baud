@@ -18,6 +18,17 @@ export interface BranchStatus {
   interactive: boolean;
   has_history: boolean;
   resume_id: string | null;
+  /**
+   * This branch's own room, named whether or not it exists — `baud-<branch>`
+   * in the anchor, `baud-<project>-<branch>` elsewhere, tmux-sanitized. The
+   * name a live room HAS and the name a launch would CREATE are one string;
+   * `has_room` says which you are looking at, and `outside_room` names the
+   * session a door acts on when BAUD has no room here (m12).
+   *
+   * Read it, never rebuild it: the derivation lives in `room_name` and this
+   * field exists so no second copy of that rule has to.
+   */
+  room: string;
   has_room: boolean;
   outside_room: string | null;
   subagents: number;
@@ -69,6 +80,44 @@ export interface DirEntryInfo {
 export interface DirWindow {
   entries: DirEntryInfo[];
   truncated: boolean;
+  /**
+   * WHERE THIS LEVEL STANDS ON THE MACHINE (FPLAN-0443 rider) - the absolute
+   * path of the resolved root, @api's `floor`, carried through the seam under
+   * its own name. Every `path` above is relative to exactly this, so the two
+   * together are the only way this face can name a file to a person.
+   *
+   * OPTIONAL, AND THE ABSENCE MEANS SOMETHING RATHER THAN NOTHING: a server
+   * that has not learned the key yet leaves it undefined, and the copy button
+   * refuses out loud rather than handing over a relative path dressed as a
+   * machine one.
+   */
+  floor?: string;
+}
+
+/**
+ * ONE PLACE THE FILE LANE CAN STAND - a row of @api's `/v1/roots` roster
+ * (FPLAN-0443). PHONE-ONLY: the desktop resolves under the project it is
+ * seated in and has no roster behind it.
+ *
+ * MIRRORS NO RUST STRUCT, deliberately, and it is the first type here that
+ * does not. Roots are a property of the FENCE, and the fence is @api's - so
+ * this shape follows their door rather than a struct in `lib.rs`. The day the
+ * desktop wants roots it is the same roster behind a different transport, and
+ * this is the type it will use.
+ *
+ * THE FACE NEVER CONSTRUCTS ONE. `kind` and `name` come back from the server
+ * and are echoed to it verbatim on the next request; a roster the phone
+ * hardcoded would be a roster that lies the day a project is added. That is
+ * the whole reason the door exists rather than a constant.
+ */
+export interface RootEntry {
+  /** `branch` | `home` | `project` | `aipass` - the fence's own vocabulary. */
+  kind: string;
+  /** The name WITHIN that kind, empty where the kind names nothing. */
+  name: string;
+  /** What the row prints. Falls back to `name`, then to `kind`, when absent -
+   *  a missing label costs a nicer word and never a missing root. */
+  label: string;
 }
 
 /** Mirrors `FileText` in src-tauri/src/lib.rs. */
@@ -76,6 +125,16 @@ export interface FileText {
   path: string;
   content: string;
   truncated: boolean;
+  /**
+   * WHERE THE FILE STANDS ON THE MACHINE - @api's `floor` for the root this
+   * read resolved against (FPLAN-0443 rider).
+   *
+   * PHONE-ONLY AND OPTIONAL, and the struct this mirrors has no such field on
+   * purpose: the desktop's `path` already IS the machine path, so it never
+   * needed a floor to build one. Undefined here is the desktop, or a server
+   * that has not shipped the key.
+   */
+  floor?: string;
 }
 
 /** Mirrors `GitChanges` in src-tauri/src/lib.rs. */

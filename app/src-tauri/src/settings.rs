@@ -119,10 +119,39 @@ fn branch_dir(project: &crate::Project, agent: &str) -> Result<PathBuf, String> 
 /// does not parse as a JSON object is an ERROR, for readers as much as
 /// writers: showing empty fields for a file that actually sets values is a
 /// lie, and the write path must never treat unreadable as blank.
+///
+/// THE LINE ABOVE WAS THE DOCTRINE AND NOT THE CODE until 2026-08-18. Every
+/// read error - a permission bit, a mount that went away, a directory in the
+/// file's place - answered `{}`, so the gear rendered every dial at absent and
+/// the very next patch wrote a fresh three-key document over an operator's
+/// permission rules. Silently, because nothing in that chain had an error to
+/// report. @seedgo found it by cross-reading this file against @api's python
+/// mirror of it, which had been hardened against exactly this and whose
+/// reasoning is quoted in its own `read_object`.
+///
+/// So the split is by ERROR KIND, and only one kind reads blank:
+///
+/// - `NotFound` - nothing is there. A fresh branch, and not a fault.
+/// - everything else - something IS there and this process could not read it.
+///   The read fails, so the write that would have followed never happens.
+///
+/// One divergence from the python mirror is deliberate and reported rather
+/// than closed: it also reads `NotADirectoryError` as blank (a parent
+/// component that is a file, so the settings file genuinely cannot exist).
+/// `io::ErrorKind::NotADirectory` needs Rust 1.83 and this crate's MSRV is
+/// 1.77.2, so expressing it here means an errno match or an MSRV bump -
+/// neither of which belongs in a bug fix. Today that case refuses on this
+/// side, which is the safe direction to be wrong in.
 pub(crate) fn read_object(path: &Path) -> Result<Map<String, Value>, String> {
     let raw = match fs::read_to_string(path) {
         Ok(raw) => raw,
-        Err(_) => return Ok(Map::new()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Map::new()),
+        Err(err) => {
+            return Err(format!(
+                "could not read '{}' ({err}) - refusing to touch it",
+                path.display()
+            ))
+        }
     };
     if raw.trim().is_empty() {
         return Ok(Map::new());
@@ -560,6 +589,68 @@ mod tests {
         assert_eq!(set.model, Some(Some("opus".to_string())));
         assert_eq!(set.auto_compact_enabled, Some(Some(false)));
         assert_eq!(set.auto_compact_window, Some(Some(200000)));
+    }
+
+    /// THE SILENT-LOSS CASE, and the one this module's own doc comment always
+    /// forbade: "the write path must never treat unreadable as blank".
+    ///
+    /// A directory standing where the settings file belongs is the cheapest
+    /// unreadable-but-present file this harness can build - no privileges
+    /// involved, so it behaves the same for root and for a person. What it
+    /// proves is the general shape: `read_to_string` failed for a reason that
+    /// is NOT "nothing is there", and a blank document is then a claim nobody
+    /// can support.
+    #[test]
+    fn an_unreadable_file_refuses_rather_than_reading_blank() {
+        let root = settings_dir("unreadable");
+        let path = agent_file(&root);
+        fs::create_dir_all(&path).expect("a directory in the file's place");
+
+        let outcome = read_object(&path);
+        assert!(
+            outcome.is_err(),
+            "a file that exists and cannot be read must never read as {{}}"
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// The same fault seen from the write path, which is where it costs
+    /// something: seeded permission rules, a settings file that goes
+    /// unreadable, and a patch that must NOT proceed. Before the fix this
+    /// wrote a three-key document over @devpulse's deny list without a word.
+    ///
+    /// Unix only, and it SKIPS ITSELF under a uid that ignores the mode bits
+    /// rather than pretending to have tested something. The skip is measured,
+    /// not assumed: the test chmods the file and then tries to read it, and
+    /// only continues if the read actually failed.
+    #[cfg(unix)]
+    #[test]
+    fn a_write_over_an_unreadable_file_leaves_the_file_alone() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = settings_dir("locked");
+        let path = agent_file(&root);
+        fs::write(&path, SEEDED).expect("seed");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o000)).expect("lock");
+
+        if fs::read_to_string(&path).is_ok() {
+            // Running as root: the mode bits are advisory here and there is no
+            // unreadable file to test with. Say so by doing nothing.
+            let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o644));
+            let _ = fs::remove_dir_all(&root);
+            return;
+        }
+
+        let outcome = write_agent_settings_at(&path, &patch_model("opus"));
+        assert!(outcome.is_err(), "a patch over an unreadable file must refuse");
+
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("unlock");
+        assert_eq!(
+            fs::read_to_string(&path).expect("read back"),
+            SEEDED,
+            "the operator's file is byte-for-byte what it was"
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

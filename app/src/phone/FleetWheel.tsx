@@ -218,6 +218,18 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
         name: "git",
         kind: "door",
       },
+      /* FILES (FPLAN-0443). The second card, and it cost what the comment
+         above promised: one row. Patrick, 2026-08-18: "rn I can only see into
+         agent files... I cant explore home. or project files outside agents."
+         An explorer belongs on this layer for the same reason git does - the
+         home directory and a project's own tree are addressed to nobody, so
+         there is no citizen to hang them on. */
+      {
+        key: "files",
+        mark: "FILES",
+        name: "files",
+        kind: "door",
+      },
     ],
   },
 ];
