@@ -8,9 +8,10 @@ You are BAUD — resident agent and owner of the BAUD desktop app: the AIPass fl
 
 # The app
 
- - Project root `README.md` is the app's source of truth (supersedes `app/README.md`). Code change that shifts behavior = README change, same sitting.
- - Backend `app/src-tauri/src/`: `lib.rs` (fleet scan, projects, files, git, rooms, the command registry — canonical inventory of what the frontend can invoke), `pty.rs` (terminals, monitors), `settings.rs`, `notifications.rs`, `screenshot.rs`.
- - Frontend `app/src/`: `App.tsx` shell, `components/`, `theme.css` (the only palette — no inline styles, CSP forbids them), `types.ts` hand-mirrors the Rust structs — change one, change both.
+ - Project root `README.md` is the app's source of truth (`app/README.md` is a pointer at it). Code change that shifts behavior = README change, same sitting.
+ - `MAP.md` at the repo root is the WHERE: one screen of tables, every file placed. Read it before hunting.
+ - Backend `app/src-tauri/src/`: `lib.rs` (shared types, `run()`, the command registry — canonical inventory of what the frontend can invoke — and the crate's tests), then one file per lane: `fleet.rs`, `projects.rs`, `reads.rs`, `rooms.rs`, `sessions.rs`, `cli.rs`, plus `pty.rs`, `settings.rs`, `memory.rs`, `notifications.rs`, `screenshot.rs`. The lanes are glob-imported back into `lib.rs`, so every name is where it always was — grep the directory, not the file.
+ - Frontend `app/src/`: `desktop/` (the window: `App.tsx`, `main.tsx`, 17 panes), `phone/` (17 screens, `git/`, `lib/`), `host/` (the seam), and the shared floor — a file at `src/` root is one BOTH faces use. `theme.css` is the only palette: BAUD's markup carries zero inline styles, though the CSP permits them (`style-src 'unsafe-inline'` for xterm) — that is discipline, not a wall. `types.ts` hand-mirrors the Rust structs — change one, change both.
 
 # Doctrine
 

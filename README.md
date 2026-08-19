@@ -867,6 +867,10 @@ hooks_sound_get  hooks_sound_set
 memory_config_read  memory_config_write
 ```
 
+The registry stayed in `lib.rs` when the command functions moved into lanes
+beside it (2026-08-18). That was deliberate: one list of what a face may invoke
+is worth more than tidiness about which file the list sits in.
+
 Everything BAUD writes, in full: the two settings files, @memory's config,
 the hooks mute flag, the screenshot copy in `~/Pictures/BAUD/`, and bytes into
 a PTY. There is no write path to any file the reading room can show you.
@@ -890,7 +894,8 @@ projects/baud/
 │   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
 │   │   ├── phone/              the wheel face, 17 screens on top: shell, token door, fleet wheel, expanded agent card, passport sheet, files, monitor, reader, feed, verb chips, room doors, attached terminal, photo picker
 │   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
-│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible
+│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible,
+│   │   │                       and pollers — all four polling lanes, lifted out of the shell
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
@@ -898,7 +903,13 @@ projects/baud/
 │   │   ├── age.ts              relative-age formatting
 │   │   └── theme.css           the layout, written entirely in var(--baud-*)
 │   ├── src-tauri/src/
-│   │   ├── lib.rs              fleet scan, projects, files, git, rooms, command registry
+│   │   ├── lib.rs              the root: shared types, run(), the command registry — and the tests
+│   │   ├── fleet.rs            one pass over the branch directories, one snapshot out
+│   │   ├── projects.rs         the census and the seat
+│   │   ├── reads.rs            directories, file text, git changes and diffs, all behind one fence
+│   │   ├── rooms.rs            tmux sessions: named, scanned, killed, typed into
+│   │   ├── sessions.rs         who is actually awake — /proc, transcripts, subagents
+│   │   ├── cli.rs              baud --snapshot and the rest of the headless surface
 │   │   ├── pty.rs              terminals and monitor panes
 │   │   ├── notifications.rs    the bell's feed reader
 │   │   ├── settings.rs         the two config writers and the hooks flag

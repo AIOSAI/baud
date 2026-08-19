@@ -57,11 +57,13 @@ desktop-only, and since 2026-08-18 the directory says so.
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
 | `ProjectSwitch.tsx` · `Camera.tsx` · `Zoom.tsx` | Seat picker; capture; scale. |
 
-## The phone face — `src/phone/` (30 files on three shelves)
+## The phone face — `src/phone/` (31 files on three shelves)
 
-One column, one screen at a time. `PhoneApp.tsx` (1707 lines) is the shell:
-panes, seat, pollers, doors. Screens stay on top; the repository sub-app is in
-`phone/git/` and the no-JSX logic in `phone/lib/`.
+One column, one screen at a time. `PhoneApp.tsx` (1377 lines) is the shell:
+panes, seat, doors. Screens stay on top; the repository sub-app is in
+`phone/git/` and the no-JSX logic in `phone/lib/`. **The pollers are no longer
+in the shell** — all four moved to `lib/pollers.ts` on 2026-08-18, which is what
+took 330 lines out of the file above.
 
 **Screens and sheets**
 
@@ -93,6 +95,7 @@ row.
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
+| `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
 | `push.ts` | The push hook, inert until phase 7. |
 
@@ -141,17 +144,29 @@ the compiler will not tell you.
 
 ---
 
-## Rust — the desktop's backend, `src-tauri/src/` (6,529 lines)
+## Rust — the desktop's backend, `src-tauri/src/` (6,644 lines)
 
 | File | One line |
 |---|---|
-| `lib.rs` (4013) | Fleet scan, projects, files, git, rooms — and the **command registry** at the bottom (`generate_handler![...]`, 29 commands). That list is the canonical inventory of what a face can invoke. |
+| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 29 commands) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
+| `cli.rs` (628) | `baud --snapshot` and the rest of the headless surface. Every outcome serializes in full even when it failed, and the exit code agrees with the payload. |
+| `rooms.rs` (515) | tmux sessions: the name sanitizer, the pane scan, kill, capture, and the send door that types but cannot submit. |
+| `sessions.rs` (397) | Who is actually awake — `/proc` for the processes, transcripts for what they are doing, and the subagent count. |
+| `fleet.rs` (299) | One pass over the branch directories, one snapshot out. Every fallible read degrades to a default for that card and never fails the poll. |
+| `reads.rs` (282) | The read surface: directories, file text, git changes and diffs — all behind `fenced_path_in` against the seated root. |
+| `projects.rs` (239) | The census and the seat: registry seals, discovery, `ActiveProject`. |
 | `pty.rs` (717) | Terminals and monitors: spawn, write, resize, kill, and the shutdown hook that detaches tmux rather than killing it. |
 | `settings.rs` (762) | Reads and surgical writes of other owners' config files. Refuses rather than guesses. |
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
 | `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
 | `main.rs` (6) | Calls `lib.rs::run()`. |
+
+The six lanes above were split out of `lib.rs` on 2026-08-18 and are **glob-imported
+straight back into it** (`use rooms::*;` and friends). That is deliberate: every call
+site, and the whole test suite, names these items exactly as it did when they all
+lived in one file. If you cannot find a function, `grep` the directory rather than
+the file — the name did not change, only its address.
 
 Also: `Cargo.toml` (MSRV 1.77.2), `tauri.conf.json` (window, CSP, bundle off by
 design — no installers, deliberately), `capabilities/` (what the webview is
@@ -234,27 +249,20 @@ bundle is the one lane no robot builds; measured 2026-08-18, not yet fixed.
 
 ---
 
-## The mess list — what is left, 2026-08-18
+## The mess list — one entry left, 2026-08-18
 
-Patrick's cadence was *map first, moves second*, and the moves have started.
-**Items 1 to 5 are done** — FPLAN-0444, 2026-08-18: `app/README.md` reduced to a
-pointer, `src/components/` renamed to `src/desktop/`, `App.tsx` and `main.tsx`
-moved in with it, `phone/` folded onto its three shelves, and `tests/` made to say
-where the tests actually are. They are deleted from this list rather than ticked,
-on this list's own instruction: the map should describe the tree, not argue with
-it. The tree is described above; what follows is what still needs doing.
+Patrick's cadence was *map first, moves second*, and the moves are done. Items 1
+to 5 landed in FPLAN-0444 and items 6 and 7 in FPLAN-0445, both on 2026-08-18:
+`app/README.md` reduced to a pointer, `src/components/` renamed to `src/desktop/`,
+`App.tsx` and `main.tsx` moved in with it, `phone/` folded onto three shelves,
+`tests/` made to say where the tests actually are, PhoneApp's four pollers lifted
+into `lib/pollers.ts`, and `lib.rs` split into six lanes. Each is deleted rather
+than ticked, on this list's own instruction: the map should describe the tree, not
+argue with it. What the tree looks like now is everything above this line.
 
-The numbers are the original ranking and are kept so that a plan naming *items
-6-7* still names the same two things.
+What is left is one entry, and it is a decision rather than a task. Its number is
+the original ranking, kept so that a plan naming *item 8* still names this thing.
 
-6. **`PhoneApp.tsx` is 1707 lines and holds four concerns**: shell, pane
-   routing, the seat, and the pollers.
-   → Split the pollers out first (they are self-contained and now all share one
-   gate). Real, but churn on a file that works, so it waited for the cheap moves.
-7. **`lib.rs` is 4013 lines**: fleet scan, projects, files, git, rooms and the
-   registry.
-   → Split by lane, registry last. Same reasoning as 6, and more risk: it is the
-   file the desktop's whole command surface lives in.
 8. **`phone.css` is 3407 lines in one file.** Findable today because every rule
    is commented and the class prefixes are systematic.
    → Leave it. Listed so nobody re-discovers it as a problem: the map is the
