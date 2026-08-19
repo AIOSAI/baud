@@ -37,13 +37,8 @@ import { relativeAge } from "../age";
 import { notificationsFeed } from "../host";
 import { HostError } from "../host/transport.http";
 import type { NotificationEvent } from "../types";
+import { FEED_WINDOW, mergeEvents } from "./feed";
 import { onPushedEvent } from "./push";
-
-/** One window's worth. The server clamps its own maximum on top of this. */
-const WINDOW = 100;
-
-/** Reader-side retention, matching the desktop bell's default. */
-const KEEP = 200;
 
 interface FeedScreenProps {
   pollMs: number;
@@ -66,11 +61,11 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose }: Fe
 
   const poll = useCallback(async () => {
     try {
-      const window = await notificationsFeed(cursor.current, WINDOW);
+      const window = await notificationsFeed(cursor.current, FEED_WINDOW);
       cursor.current = window.cursor;
       setGap(window.gap ? (window.gap_reason ?? "events were lost before this window") : null);
       setError(null);
-      setEvents((seen) => merge(seen, window.events));
+      setEvents((seen) => mergeEvents(seen, window.events));
     } catch (cause) {
       setError(cause instanceof HostError ? cause.message : String(cause));
     }
@@ -148,17 +143,10 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose }: Fe
   );
 }
 
-/**
- * Newest first, no duplicates, capped.
- *
- * Keyed on timestamp AND title because the boundary event arrives twice by
- * design, and two different events can share a millisecond.
- */
-function merge(seen: NotificationEvent[], arriving: NotificationEvent[]): NotificationEvent[] {
-  const byKey = new Map(seen.map((event) => [`${event.ts}/${event.title}`, event]));
-  arriving.forEach((event) => byKey.set(`${event.ts}/${event.title}`, event));
-  return [...byKey.values()].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, KEEP);
-}
+/* The merge moved to `feed.ts` (DPLAN-0305) so the header's badge could take
+   the same rule. It was module-private here while this screen was the only
+   cursor-keeping reader; it stopped being that the day the badge got a cursor,
+   and one feed folded two ways is how a badge and a list start disagreeing. */
 
 /** Only kinds with a real colour get one; anything else stays plain. */
 function kindClass(kind: string): string {

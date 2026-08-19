@@ -292,6 +292,20 @@ const ROUTES: Record<string, Route> = {
      person. A guard here would replace those sentences with BAUD's guess at
      them, which is the one thing the error envelope exists to prevent. */
 
+  git_change_count: {
+    // THE SAME ROUTE, ANSWERED AS TWO NUMBERS (DPLAN-0305). The rows and the
+    // file names still arrive - a count-only parameter is @api's to add and
+    // this face does not wait on it - but nothing here builds an array out of
+    // them for a caller that only reads a length. Two pollers use this, and
+    // between them they ask about thirteen times a minute for the life of the
+    // app.
+    path: "/v1/git-changes",
+    query: (args) => ({ branch: args.branch as string, grain: args.grain as string }),
+    unwrap: (body) => ({
+      count: Number(body?.count ?? 0),
+      untracked: Number(body?.untracked ?? 0),
+    }),
+  },
   git_change_rows: {
     path: "/v1/git-changes",
     // A branch NAME, never a path: these callers are phone screens and there is

@@ -26,6 +26,7 @@ import type {
   BranchStatus,
   DirEntryInfo,
   DirWindow,
+  GitChangeCount,
   FeedWindow,
   FileText,
   FleetSnapshot,
@@ -181,6 +182,22 @@ export const gitChanges = (path: string, project = "", grain = "") =>
 /** Every changed path with git's own code beside it - the changes screen. */
 export const gitChangeRows = (branch: string, project = "", grain = "") =>
   call<GitChangeRows>("git_change_rows", { branch, project, grain });
+
+/**
+ * PHONE-ONLY. The change COUNT, with no list behind it (DPLAN-0305).
+ *
+ * A third name on the same route, for the same reason `notifications_read` and
+ * `notifications_feed` are two names on `/v1/feed`: the shape a caller needs is
+ * part of what it is asking for. A badge wants a number. Handing it an
+ * envelope and letting it call `.length` costs an array on every tick of a
+ * poller that runs for the life of the app.
+ *
+ * THE DESKTOP COUNTS THROUGH `gitChanges`, whose Rust command already answers
+ * exactly that - so this name is refused there rather than bound to the nearest
+ * plausible command.
+ */
+export const gitChangeCount = (branch: string, project = "", grain = "") =>
+  call<GitChangeCount>("git_change_count", { branch, project, grain });
 
 /**
  * ONE file's patch, as unified diff text a parser can consume.

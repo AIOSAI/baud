@@ -1091,7 +1091,9 @@ counts as unavailable, which is the same lie told in the other direction.
 **And the bell counts while that screen is shut**, which is the only stretch a
 badge is for. The feed screen polls its own cursor lane, but it mounts on open
 and unmounts on close — so nothing was counting during the entire period the
-number describes, and the bell was a bare glyph with no state at all. The count
+number describes, and the bell was a bare glyph with no state at all. *(The
+badge's own lane took the cursor too on 2026-08-18 — see* **Nothing polls a
+pocket** *below; when this was written it refetched the whole window.)* The count
 now lives a level up, on the desktop `Bell`'s model: poll the feed, hold a marker
 for how far the operator has read, badge the difference, key the marker per
 project because another project's feed is another history. It diverges from the
@@ -2170,6 +2172,63 @@ edge. Tapping the 17px chip no longer opens the file; tapping anywhere else on
 the row still does. Every row now reserves the chip's 17px whether it has a
 status or not, so the copy button lands in one column all the way down the
 listing instead of stepping sideways on every unchanged row.
+
+### Nothing polls a pocket
+
+*DPLAN-0305, 2026-08-18, from Patrick's "the more we add to baud I've noticed
+more and more lag".* @devpulse's audit measured this face at **~30.5 requests a
+minute on every screen, phone-screen-off included** — four pollers at the top of
+`PhoneApp` that ran for the life of the app and asked nobody whether anyone was
+looking. Two things changed; the intervals themselves deliberately did not.
+
+**A poll only runs while somebody is looking.** All four lanes — the fleet and
+roster snapshot, the wheel's per-branch git sweep, the bell's badge, the git
+app's repository count — now start through `phone/whileVisible.ts`, which stops
+the interval on `visibilitychange` and restarts it, **with one immediate tick**,
+when the screen comes back. The tick on wake is what makes the gate safe rather
+than merely cheap: a lane that only paused would hand back a wheel frozen at the
+moment the phone went into a pocket, where this hands back a wheel read at the
+moment you looked at it. Strictly fresher than before, at the instant it
+matters.
+
+*The browser's own background throttle is not this.* A hidden tab's timers are
+slowed to roughly once a minute — a courtesy, not a contract, differing by
+browser and not applying to an installed PWA the same way everywhere. Slowed is
+not stopped, and the host serves these on one event loop with blocking work in
+the handlers, so a request nobody will ever see is a slice of that loop the
+terminal's websocket does not get.
+
+**The badge stopped asking for the feed to count it.** The bell's poll fetched
+up to a hundred full events every ten seconds, forever, to render one number.
+Measured on the live host: **23,273 bytes an ask, and 228 with the cursor** the
+feed screen beside it has always used. The merge rule that makes a cursor safe —
+the server re-delivers the boundary event on purpose, at-least-once, because a
+dropped alert is worse than a duplicate — moved into `phone/feed.ts` so both
+readers fold one feed the same way. A badge and a list that count differently is
+the phone telling two stories about one feed, and the feed screen's own doc said
+so before the badge had a cursor to get wrong.
+
+**Two badges stopped building lists they never read.** The wheel's sweep asked
+for a branch's changed files and read only the count; the git app's repository
+badge asked for every changed row and read only `.length`. Both now ask through
+`git_change_count`, a third name on `/v1/git-changes` that unwraps to two
+numbers. The rows still cross the wire — a count-only parameter is @api's to
+add and this face does not wait on it — but nothing is materialised here for a
+number to be lifted back out of. The repository badge became `count +
+untracked`, which is the same number **by construction and not by coincidence**:
+the server appends every changed path to `rows`, counts the untracked ones
+separately and puts the rest in `files`, and `count` is `len(files)`. Measured
+three times on a live tree at 12 + 3 = 15 = `len(rows)`, and there is no cap on
+either side for them to drift through.
+
+**What did not change, and why it is listed here.** `POLL_MS` (10s) and
+`GIT_SWEEP_MS` (5s) are untouched: how stale a wheel is allowed to look is an
+operator-visible call, not a performance knob, and it is measured after these
+land rather than guessed alongside them. The request *rate while you are
+looking* is exactly what it was. The feed screen's own poller is screen-scoped —
+it stops existing when the screen closes — and is left ungated for now; it is
+the one lane that would still tick behind a locked phone, and only if you left
+that screen open.
 
 ### Git rides the row it belongs to
 

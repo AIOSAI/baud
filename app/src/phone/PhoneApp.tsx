@@ -52,10 +52,9 @@ import {
   agentRoster,
   baudSettingsRead,
   fleetSnapshot,
-  gitChangeRows,
-  gitChanges,
+  gitChangeCount,
   listProjects,
-  notificationsRead,
+  notificationsFeed,
 } from "../host";
 import { HostError, writeToken } from "../host/transport.http";
 import type {
@@ -85,6 +84,7 @@ import { interfacePrefs } from "../components/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
+import { FEED_WINDOW, mergeEvents } from "./feed";
 import FilesScreen from "./FilesScreen";
 import RootsScreen from "./RootsScreen";
 import FleetWheel, { cardRef, openingCard } from "./FleetWheel";
@@ -99,6 +99,7 @@ import { LockChip } from "./VerbChips";
 import { roomEnded } from "../intent";
 import { type PhoneMode, helpCommand, roomDoors } from "./rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./verbs";
+import { whileVisible } from "./whileVisible";
 
 /** The desktop's own middle cadence. A phone on cellular does not want 2s. */
 const POLL_MS = 10_000;
@@ -580,13 +581,13 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     }
   }, [onSignOut, project]);
 
-  useEffect(() => {
-    // `project` is a dependency through `poll`, so picking a row refetches
-    // immediately - the wheel re-seats without waiting out the interval.
-    void poll();
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [poll]);
+  /* GATED ON BEING LOOKED AT (DPLAN-0305). `project` is a dependency through
+     `poll`, so picking a row still refetches immediately - the wheel re-seats
+     without waiting out the interval. What changed is that the interval does
+     not run behind a pocketed phone, and that the first call belongs to
+     `whileVisible`, which makes the same promise on every wake: what the wheel
+     shows when you look at it was read when you looked. */
+  useEffect(() => whileVisible(() => void poll(), POLL_MS), [poll]);
 
   /**
    * CHANGED-FILE COUNTS FOR THE WHEEL'S BADGES - the slow lane.
@@ -650,7 +651,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       // The NAME with its PROJECT beside it, the address every read on this
       // face takes: the transport is fenced on names, and two projects can
       // hold a same-named branch.
-      gitChanges(ref.slice(cut + 1), ref.slice(0, cut))
+      /* THE COUNT LANE, not the list lane (DPLAN-0305). This badge has always
+         read `result.count` and dropped the file names on the floor; asking
+         through `gitChangeCount` means they are never built into an array to
+         be dropped from. The request on the wire is character-for-character
+         the one this sweep has always sent. */
+      gitChangeCount(ref.slice(cut + 1), ref.slice(0, cut))
         .then((result) => {
           if (mounted) setGitCounts((held) => ({ ...held, [ref]: result.count }));
         })
@@ -669,11 +675,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              one bad tick. The next slot that answers corrects it. */
         });
     };
-    step();
-    const timer = window.setInterval(step, GIT_SWEEP_MS);
+    const stop = whileVisible(step, GIT_SWEEP_MS);
     return () => {
       mounted = false;
-      window.clearInterval(timer);
+      stop();
     };
   }, [sweepKey]);
 
@@ -819,6 +824,21 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     });
   }, [snapshot, baudSettings, scope, scopeKnown, focusPane]);
 
+  /**
+   * HOW FAR THIS BADGE HAS READ THE FEED (DPLAN-0305).
+   *
+   * A ref rather than state, exactly as the feed screen holds its own: the
+   * cursor changes on every answer and nothing renders from it, so putting it
+   * in state would re-render the whole app for a string nobody draws.
+   *
+   * IT IS KEYED TO THE SEAT by being cleared beside the events below. The feed
+   * is read per project - `project` rides the generic lift in `call` - so a
+   * cursor carried across a seat change would ask the new project's feed to
+   * continue from the old one's position and answer with a window that is
+   * either empty or wrong.
+   */
+  const feedCursor = useRef<string | null>(null);
+
   /* The seat's own marker, re-read when the seat changes - and the events with
      it, because a stale list against a fresh marker would badge the wrong
      project's news for one poll. */
@@ -826,26 +846,49 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     setReadUpTo(window.localStorage.getItem(READ_KEY(project)) ?? "");
     setClearedUpTo(window.localStorage.getItem(CLEARED_KEY(project)) ?? "");
     setEvents([]);
+    feedCursor.current = null;
   }, [project]);
 
+  /**
+   * THE BADGE'S OWN READ OF THE FEED - now with the cursor the screen beside
+   * it has always had (DPLAN-0305).
+   *
+   * WHAT THIS WAS: `notificationsRead()`, no cursor, every ten seconds, for the
+   * life of the app - which asks the server for the most recent HUNDRED events
+   * in full every single time, to render a number. Measured on the live host:
+   * 23,273 bytes an ask. With the cursor, a steady-state tick is 228. The
+   * events themselves were never the point; the count of the ones newer than
+   * the read marker is.
+   *
+   * THE LIST NOW ACCUMULATES INSTEAD OF BEING REPLACED, which is not a side
+   * effect but the reason the cursor is safe here. Windows fold through the
+   * feed's own `mergeEvents`, the same rule the screen uses, so the badge and
+   * the list cannot count one feed two ways. Retention is the merge's
+   * (`FEED_KEEP`), and it is a HEAD: newest first, so what a cut discards is
+   * the oldest events, which are exactly the ones already below any read
+   * marker.
+   *
+   * THE GAP FLAG IS DELIBERATELY NOT READ HERE. A window that lost events says
+   * so, and that sentence belongs on the screen that can show it in words - a
+   * badge has one number and no room to say "and some are missing". The screen
+   * carries it, one tap away, unchanged.
+   */
   useEffect(() => {
     let mounted = true;
     const refresh = () => {
-      notificationsRead()
-        .then((next) => {
-          if (mounted) setEvents(next);
+      notificationsFeed(feedCursor.current, FEED_WINDOW)
+        .then((page) => {
+          if (!mounted) return;
+          feedCursor.current = page.cursor;
+          setEvents((seen) => mergeEvents(seen, page.events));
         })
         .catch(() => {
-          /* A failed poll keeps the last good list. The badge never invents
-             events, and the next tick retries anyway. */
+          /* A failed poll keeps the last good list AND the last good cursor.
+             The badge never invents events, and the next tick retries from
+             exactly where this one meant to start. */
         });
     };
-    refresh();
-    const timer = window.setInterval(refresh, POLL_MS);
-    return () => {
-      mounted = false;
-      window.clearInterval(timer);
-    };
+    return whileVisible(refresh, POLL_MS);
   }, [project]);
 
   /* The LATER of the two markers is the floor: a cleared event is read by
@@ -950,9 +993,19 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     if (!repoCitizen) return;
     let mounted = true;
     const read = () => {
-      gitChangeRows(repoCitizen, seat, "repo")
+      /* TWO NUMBERS, NOT THE ROWS THEY DESCRIBE (DPLAN-0305). This badge read
+         `rows.length` and dropped the rows; `count + untracked` is the same
+         number without the array, and it is the same number BY CONSTRUCTION
+         rather than by coincidence - @api's builder appends every changed path
+         to `rows`, increments `untracked` for the untracked ones and puts the
+         rest in `files`, and `count` is `len(files)` (git_reads.py:569-602).
+         Measured as well as read: 12 + 3 = 15 = len(rows), three times over on
+         a live tree. Nothing here caps or filters, so the two cannot drift. */
+      gitChangeCount(repoCitizen, seat, "repo")
         .then((got) => {
-          if (mounted) setRepoCounts((held) => ({ ...held, [seat]: got.rows.length }));
+          if (mounted) {
+            setRepoCounts((held) => ({ ...held, [seat]: got.count + got.untracked }));
+          }
         })
         .catch(() => {
           /* QUIET, AND WRITES NOTHING - the sweep's own rule, for the sweep's
@@ -963,11 +1016,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              words when it is opened. */
         });
     };
-    read();
-    const timer = window.setInterval(read, REPO_SWEEP_MS);
+    const stop = whileVisible(read, REPO_SWEEP_MS);
     return () => {
       mounted = false;
-      window.clearInterval(timer);
+      stop();
     };
   }, [repoCitizen, seat]);
 

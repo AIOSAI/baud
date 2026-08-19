@@ -52,6 +52,8 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
      under that seat - so there is no roster behind this name here. The day the
      desktop wants roots it is the same roster through a Rust command, and this
      line is what gets deleted to make room for it. */
+  git_change_count:
+    "the desktop counts through git_changes, which its own Rust command already answers - a second name for one number would be a second answer waiting to disagree",
   list_roots: "the desktop browses the project it is seated in - the roots roster is the phone's fence",
 };
 

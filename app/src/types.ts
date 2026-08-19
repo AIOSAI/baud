@@ -144,6 +144,28 @@ export interface GitChanges {
 }
 
 /**
+ * THE SAME QUESTION WITH NOTHING ATTACHED - @api's `/v1/git-changes` read for
+ * its two numbers alone (DPLAN-0305). PHONE-ONLY.
+ *
+ * It exists because two of this face's pollers ask for a change count and
+ * nothing else, and both were being answered with the whole list: the wheel's
+ * badge sweep (one branch every five seconds, forever) reads `count` and threw
+ * the file names away, and the git app's repo badge read `rows.length` and
+ * threw the rows away. The wire still carries them - dropping the payload is
+ * @api's `count_only` to add, not this face's to invent - but nothing is
+ * MATERIALISED here for a number to be lifted out of.
+ *
+ * `untracked` rides alongside rather than folded in, exactly as the server
+ * keeps it: `count` is what differs from HEAD and untracked files are not part
+ * of that, so a caller that wants every changed path adds the two and a caller
+ * that wants the tracked count does not.
+ */
+export interface GitChangeCount {
+  count: number;
+  untracked: number;
+}
+
+/**
  * The git-changes envelope WHOLE - @api's `/v1/git-changes` (DPLAN-0303).
  * PHONE-ONLY, and a second shape rather than a wider `GitChanges` on purpose.
  *
