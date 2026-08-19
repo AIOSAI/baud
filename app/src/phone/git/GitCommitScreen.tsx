@@ -23,8 +23,8 @@
 
 import { useEffect, useState } from "react";
 
-import { gitCommit } from "../host";
-import type { GitCommit } from "../types";
+import { gitCommit } from "../../host";
+import type { GitCommit } from "../../types";
 import GitFileRow from "./GitFileRow";
 
 /**

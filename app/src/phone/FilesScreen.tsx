@@ -42,8 +42,8 @@ import { useEffect, useMemo, useState } from "react";
 import { gitChangeRows, listDirWindow } from "../host";
 import { HostError } from "../host/transport.http";
 import type { DirEntryInfo } from "../types";
-import { COPY_REFUSED, NO_FLOOR, copyText, machinePath } from "./copyPath";
-import { chipOf, type GitChip } from "./gitStatus";
+import { COPY_REFUSED, NO_FLOOR, copyText, machinePath } from "./lib/copyPath";
+import { chipOf, type GitChip } from "./lib/gitStatus";
 
 /** What a gone row answers when it is tapped. */
 const GONE_ANSWER = "deleted - there is no file left to open";

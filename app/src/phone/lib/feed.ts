@@ -18,7 +18,7 @@
  * rather than appended blindly.
  */
 
-import type { NotificationEvent } from "../types";
+import type { NotificationEvent } from "../../types";
 
 /** One window's worth. The server clamps its own maximum on top of this. */
 export const FEED_WINDOW = 100;

@@ -21,8 +21,8 @@
 
 import { useEffect, useState } from "react";
 
-import { gitLog } from "../host";
-import type { GitCommitRow } from "../types";
+import { gitLog } from "../../host";
+import type { GitCommitRow } from "../../types";
 
 /**
  * How many commits to ask for.

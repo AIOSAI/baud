@@ -44,8 +44,8 @@ import type { BranchStatus } from "../types";
    where `App.tsx` reads `interfacePrefs` out of `InterfaceSettings`. One
    direction only: the panel knows nothing about this sheet. */
 import { SCROLL_MAX, SCROLL_MIN, SCROLL_NEUTRAL } from "./PhoneSettings";
-import { type PhoneMode, launchCommand, typeOnAttach } from "./rooms";
-import { type Scope, scopeRefusal } from "./verbs";
+import { type PhoneMode, launchCommand, typeOnAttach } from "./lib/rooms";
+import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /**
  * The key bar - the keys a thumb needs and a soft keyboard hides (DPLAN-0301).

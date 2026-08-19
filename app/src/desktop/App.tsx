@@ -1,33 +1,33 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges } from "./host";
+import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges } from "../host";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { deliveryText } from "./deliver";
+import { deliveryText } from "../deliver";
 
-import AgentSettings from "./components/AgentSettings";
-import Bell from "./components/Bell";
-import Camera from "./components/Camera";
-import FleetStrip from "./components/FleetStrip";
-import { interfacePrefs } from "./components/InterfaceSettings";
-import { GIT_POLL_MS, type LaunchMode } from "./components/BranchChip";
-import DiffView from "./components/DiffView";
-import FileTree from "./components/FileTree";
-import FileView from "./components/FileView";
-import InquiryPane, { helpCommand } from "./components/InquiryPane";
-import MonitorPane from "./components/MonitorPane";
-import PassportView from "./components/PassportView";
-import ProjectSwitch from "./components/ProjectSwitch";
-import SettingsDialog from "./components/SettingsDialog";
-import Terminal, { type TerminalHandle } from "./components/Terminal";
-import Zoom from "./components/Zoom";
-import { relativeAge } from "./age";
+import AgentSettings from "./AgentSettings";
+import Bell from "./Bell";
+import Camera from "./Camera";
+import FleetStrip from "./FleetStrip";
+import { interfacePrefs } from "./InterfaceSettings";
+import { GIT_POLL_MS, type LaunchMode } from "./BranchChip";
+import DiffView from "./DiffView";
+import FileTree from "./FileTree";
+import FileView from "./FileView";
+import InquiryPane, { helpCommand } from "./InquiryPane";
+import MonitorPane from "./MonitorPane";
+import PassportView from "./PassportView";
+import ProjectSwitch from "./ProjectSwitch";
+import SettingsDialog from "./SettingsDialog";
+import Terminal, { type TerminalHandle } from "./Terminal";
+import Zoom from "./Zoom";
+import { relativeAge } from "../age";
 import {
   clearRoomEnded,
   markRoomEnded,
   roomEnded,
   spendStartup,
   startupSpent,
-} from "./intent";
-import type { BaudSettings, BranchStatus, FleetSnapshot } from "./types";
+} from "../intent";
+import type { BaudSettings, BranchStatus, FleetSnapshot } from "../types";
 
 /**
  * Which door a card click would take for this branch - BranchChip's own

@@ -37,8 +37,9 @@ import { relativeAge } from "../age";
 import { notificationsFeed } from "../host";
 import { HostError } from "../host/transport.http";
 import type { NotificationEvent } from "../types";
-import { FEED_WINDOW, mergeEvents } from "./feed";
-import { onPushedEvent } from "./push";
+import { FEED_WINDOW, mergeEvents } from "./lib/feed";
+import { onPushedEvent } from "./lib/push";
+import { whileVisible } from "./lib/whileVisible";
 
 interface FeedScreenProps {
   pollMs: number;
@@ -71,11 +72,18 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose }: Fe
     }
   }, []);
 
-  useEffect(() => {
-    void poll();
-    const timer = window.setInterval(() => void poll(), pollMs);
-    return () => window.clearInterval(timer);
-  }, [poll, pollMs]);
+  /* GATED, THE LAST LANE ON THIS FACE (DPLAN-0305 rider). This one is
+     screen-scoped - it stops existing when the screen closes - so it was not
+     among the four app-lifetime pollers gated first. It is still the only lane
+     that can tick behind a locked phone: leave this screen open, put the phone
+     in a pocket, and it asks the host for a window every ten seconds until the
+     battery says otherwise.
+
+     The wake tick matters more here than anywhere else on the face. This is the
+     screen whose whole job is to be current, and a feed frozen at the moment
+     the phone was pocketed is worse than a slow one - so coming back reads
+     immediately, then resumes the cadence. */
+  useEffect(() => whileVisible(() => void poll(), pollMs), [poll, pollMs]);
 
   // The push hook, wired to its own inert implementation. It does nothing today
   // and is called anyway, so the day phase 7 lands the call site already exists

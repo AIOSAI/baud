@@ -27,10 +27,10 @@ import type { FileData } from "react-diff-view";
 // palette drives it instead of a second set of hexes being pasted over it.
 import "react-diff-view/style/index.css";
 
-import { gitFileDiff } from "../host";
-import type { GitFileDiff } from "../types";
+import { gitFileDiff } from "../../host";
+import type { GitFileDiff } from "../../types";
 import type { GitGrain } from "./GitApp";
-import { splitPath } from "./gitStatus";
+import { splitPath } from "../lib/gitStatus";
 
 interface GitDiffScreenProps {
   branch: string;

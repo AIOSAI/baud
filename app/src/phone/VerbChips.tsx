@@ -18,7 +18,7 @@ import { useState } from "react";
 
 import { HostError } from "../host/transport.http";
 import type { BranchStatus, VerbResult } from "../types";
-import { LOCK_VERB, PHONE_VERBS, type PhoneVerb, type Scope, screenIsAwake, scopeRefusal } from "./verbs";
+import { LOCK_VERB, PHONE_VERBS, type PhoneVerb, type Scope, screenIsAwake, scopeRefusal } from "./lib/verbs";
 
 /**
  * Ask the platform to verify the person, where the platform offers it.

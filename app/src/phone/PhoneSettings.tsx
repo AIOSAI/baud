@@ -9,10 +9,10 @@ import { useEffect, useRef, useState } from "react";
 import { version as BAUD_VERSION } from "../../package.json";
 import { baudSettingsRead, baudSettingsWrite } from "../host";
 import { apiOrigin } from "../host/transport.http";
-import InterfaceSettings from "../components/InterfaceSettings";
-import MemorySettings from "../components/MemorySettings";
+import InterfaceSettings from "../desktop/InterfaceSettings";
+import MemorySettings from "../desktop/MemorySettings";
 import type { BaudSettings } from "../types";
-import { type Scope, scopeRefusal } from "./verbs";
+import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /**
  * THE PHONE'S OWN SETTINGS SURFACE - the header gear's first screen.

@@ -21,8 +21,8 @@ import { gitChanges } from "../host";
 import type { BranchStatus } from "../types";
 import VerbChips from "./VerbChips";
 import { isAwake } from "./FleetWheel";
-import { type LaunchMode, helpCommand, roomDoors } from "./rooms";
-import { type Scope, scopeRefusal } from "./verbs";
+import { type LaunchMode, helpCommand, roomDoors } from "./lib/rooms";
+import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /** The files behind the figures, by the names @api's fence takes. */
 const MAIL_FILE = ".ai_mail.local/inbox.json";

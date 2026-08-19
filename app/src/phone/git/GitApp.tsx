@@ -42,8 +42,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { gitRemote } from "../host";
-import type { GitRemote } from "../types";
+import { gitRemote } from "../../host";
+import type { GitRemote } from "../../types";
 import GitChangesScreen from "./GitChangesScreen";
 import GitCommitScreen from "./GitCommitScreen";
 import GitCommitsScreen from "./GitCommitsScreen";

@@ -20,11 +20,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { gitChangeRows } from "../host";
-import type { GitRow } from "../types";
+import { gitChangeRows } from "../../host";
+import type { GitRow } from "../../types";
 import type { GitGrain } from "./GitApp";
 import GitFileRow from "./GitFileRow";
-import { splitPath } from "./gitStatus";
+import { splitPath } from "../lib/gitStatus";
 
 /**
  * HOW DEEP A GROUP CUTS, PER GRAIN - a number rather than a rule about this

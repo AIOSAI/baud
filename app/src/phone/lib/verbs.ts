@@ -28,8 +28,8 @@
  *      does not want it.
  */
 
-import { verbKill, verbLock, verbWake } from "../host";
-import type { BranchStatus, VerbResult } from "../types";
+import { verbKill, verbLock, verbWake } from "../../host";
+import type { BranchStatus, VerbResult } from "../../types";
 
 /** What a token is allowed to do, straight from `/v1/whoami`. */
 export type Scope = "read" | "operate" | string;

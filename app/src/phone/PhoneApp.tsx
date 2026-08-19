@@ -75,20 +75,20 @@ import type {
 // preference the desk does not have (terminal scroll speed, a thumb's problem);
 // see the header of PhoneSettings.tsx for why that became a screen rather than
 // a row in the shared panel or a second gear in this header.
-import AgentSettings from "../components/AgentSettings";
+import AgentSettings from "../desktop/AgentSettings";
 // `interfacePrefs` comes with the panel and is not re-derived here: it is the
 // one place absence or a hand-edited nonsense value becomes a default
 // (InterfaceSettings.tsx:56), and a second reading of `startup_agent` would be
 // a second chance for the two faces to disagree about what the file says.
-import { interfacePrefs } from "../components/InterfaceSettings";
+import { interfacePrefs } from "../desktop/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
-import { FEED_WINDOW, mergeEvents } from "./feed";
+import { FEED_WINDOW, mergeEvents } from "./lib/feed";
 import FilesScreen from "./FilesScreen";
 import RootsScreen from "./RootsScreen";
 import FleetWheel, { cardRef, openingCard } from "./FleetWheel";
-import GitApp from "./GitApp";
+import GitApp from "./git/GitApp";
 import MemoryScreen from "./MemoryScreen";
 import MonitorSheet from "./MonitorSheet";
 import PassportSheet from "./PassportSheet";
@@ -97,9 +97,9 @@ import Reader, { type ReadTarget } from "./Reader";
 import TerminalSheet from "./TerminalSheet";
 import { LockChip } from "./VerbChips";
 import { roomEnded } from "../intent";
-import { type PhoneMode, helpCommand, roomDoors } from "./rooms";
-import { PHONE_VERBS, type Scope, scopeRefusal } from "./verbs";
-import { whileVisible } from "./whileVisible";
+import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
+import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
+import { whileVisible } from "./lib/whileVisible";
 
 /** The desktop's own middle cadence. A phone on cellular does not want 2s. */
 const POLL_MS = 10_000;

@@ -14,7 +14,7 @@
  * row draws none - honest absence, not a zero.
  */
 
-import { chipOf, splitPath } from "./gitStatus";
+import { chipOf, splitPath } from "../lib/gitStatus";
 
 interface GitFileRowProps {
   /** The path as the row should READ - already relative to its group. */

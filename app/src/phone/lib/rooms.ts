@@ -15,8 +15,8 @@
  * the phone would be re-earning the bug.
  */
 
-import type { LaunchMode } from "../components/BranchChip";
-import type { BranchStatus } from "../types";
+import type { LaunchMode } from "../../desktop/BranchChip";
+import type { BranchStatus } from "../../types";
 
 export type { LaunchMode };
 
@@ -32,7 +32,7 @@ export type { LaunchMode };
  * a second thing to remember the day a second exception appears, and the two
  * faces would then disagree about what one card's `?` runs.
  */
-export { helpCommand } from "../components/InquiryPane";
+export { helpCommand } from "../../desktop/InquiryPane";
 
 /**
  * What the phone's terminal region can hold: one of the desktop's launch modes,

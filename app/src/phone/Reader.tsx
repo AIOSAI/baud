@@ -19,7 +19,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { gitDiffText, readFileText } from "../host";
 import { HostError } from "../host/transport.http";
-import { COPY_REFUSED, NO_FLOOR, copyText, machinePath, underRoot } from "./copyPath";
+import { COPY_REFUSED, NO_FLOOR, copyText, machinePath, underRoot } from "./lib/copyPath";
 
 export interface ReadTarget {
   /** `<branch>/<file>` for a file, or just the branch name for a diff. */

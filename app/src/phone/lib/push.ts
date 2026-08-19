@@ -22,7 +22,7 @@
  * evening.
  */
 
-import type { NotificationEvent } from "../types";
+import type { NotificationEvent } from "../../types";
 
 /** Where a pushed event would arrive from, once one can. */
 export type PushDestination = { kind: "ntfy"; topic: string } | { kind: "none" };

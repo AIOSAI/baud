@@ -1,0 +1,261 @@
+# BAUD — Map
+
+<!-- Breadcrumbs, not documentation: what exists and where to look. Depth lives
+     in README.md (the app's source of truth) and in the files themselves, which
+     carry their reasoning in their own doc comments. If a line here disagrees
+     with the tree, the tree is right and this file is stale — fix it. -->
+
+**One app, two faces, one seam between them and the machine.** The *desktop* is
+a Tauri window that talks to a Rust backend in the same process. The *phone* is
+the same React app built against an HTTP transport instead, served over the
+tailnet by @api's host. Neither face knows which one it is: they both call the
+same typed verbs, and a single alias in a vite config decides what those verbs
+turn into.
+
+Everything below is under `app/` unless it says otherwise.
+
+---
+
+## Start here — the five files that explain the shape
+
+| File | What it is |
+|---|---|
+| `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
+| `src/host/transport.ts` | The desktop's answer: `invoke` into Rust. |
+| `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
+| `vite.config.phone.ts` | **The whole port**, one alias: `./transport` → `transport.http.ts`. |
+| `src/types.ts` | The shapes both faces read — hand-mirrored from Rust. See *The type seam*. |
+
+---
+
+## Entry points
+
+| Where | What starts |
+|---|---|
+| `index.html` → `src/desktop/main.tsx` → `src/desktop/App.tsx` | The desktop window. |
+| `phone.html` → `src/phone/main.tsx` → `src/phone/PhoneApp.tsx` | The phone face. |
+| `src-tauri/src/main.rs` → `lib.rs::run()` | The Rust side; also `baud --snapshot`, the CLI the fleet read execs. |
+| `../src/baud/baud/apps/baud.py` | The AIPass branch shim (`drone @baud`). Nothing to do with the app. |
+
+---
+
+## The desktop face — `src/desktop/` (19 files)
+
+One window, panes inside it. `main.tsx` mounts, and `App.tsx` (929 lines) is the
+shell that owns the rest. The other 17 files are the panes themselves — they are
+desktop-only, and since 2026-08-18 the directory says so.
+
+| File | One line |
+|---|---|
+| `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
+| `FleetStrip.tsx` | The fleet, as a strip of cards. |
+| `BranchChip.tsx` | One agent's card: status, counts, doors. |
+| `FileTree.tsx` · `FileView.tsx` · `DiffView.tsx` | Browse, read, diff. |
+| `PassportView.tsx` | An agent's identity and memory, read. |
+| `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
+| `Bell.tsx` | The notification shade and its unread marker. |
+| `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
+| `ProjectSwitch.tsx` · `Camera.tsx` · `Zoom.tsx` | Seat picker; capture; scale. |
+
+## The phone face — `src/phone/` (30 files on three shelves)
+
+One column, one screen at a time. `PhoneApp.tsx` (1707 lines) is the shell:
+panes, seat, pollers, doors. Screens stay on top; the repository sub-app is in
+`phone/git/` and the no-JSX logic in `phone/lib/`.
+
+**Screens and sheets**
+
+| File | One line |
+|---|---|
+| `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen. |
+| `AgentSheet.tsx` | One agent's card, opened. |
+| `TerminalSheet.tsx` | The room, over a WebSocket. The other big one (1666 lines). |
+| `Reader.tsx` | Any file or diff, read. |
+| `FilesScreen.tsx` · `RootsScreen.tsx` | Browse a root; pick which root to stand on. |
+| `FeedScreen.tsx` | The feed, full height. |
+| `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
+| `PhoneSettings.tsx` | The phone's own settings. |
+| `MonitorSheet.tsx` | Logs. |
+| `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
+| `VerbChips.tsx` | The operate-scope buttons and their refusals. |
+
+**The git app — `src/phone/git/`** — a sub-app with its own screens:
+`GitApp.tsx` (the door) → `GitChangesScreen.tsx`, `GitCommitsScreen.tsx`,
+`GitCommitScreen.tsx`, `GitDiffScreen.tsx`, with `GitFileRow.tsx` as the shared
+row.
+
+**Logic modules — `src/phone/lib/`, no JSX** — the pieces screens share:
+
+| File | One line |
+|---|---|
+| `verbs.ts` | What each scope may do, and the sentence when it may not. |
+| `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
+| `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
+| `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
+| `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
+| `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
+| `push.ts` | The push hook, inert until phase 7. |
+
+---
+
+## The seam — how a face asks for anything
+
+```
+a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (desktop)
+                                                         →  fetch   (phone, via the vite alias)
+```
+
+- `src/host/index.ts` — **41 exported verbs**. Optional arguments use the
+  *omitted-key* pattern: a key that is empty is left off the payload entirely,
+  so the desktop's `invoke` object stays byte-identical.
+- `src/host/transport.http.ts` — a **30-row route table** over **23 distinct
+  `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
+  that renames the wire's fields to the seam's. Also `HostError`, the token
+  store, the room socket and the image upload.
+- **Two refusal tables, and they are the map of what each face cannot do:**
+  - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
+    phone does not.
+  - `NOT_ON_THIS_FACE` in `transport.ts` (7 rows) — verbs the phone has and the
+    desktop does not.
+  - A verb with no route is refused **by name with a reason**, never bound to
+    the nearest plausible path.
+
+## The type seam — TypeScript mirrors Rust BY HAND
+
+**`src/types.ts` (489 lines) is written by hand to match the Rust structs.
+Nothing generates it and nothing checks it.** Change a `#[derive(Serialize)]`
+struct in `src-tauri/src/` and you must change `types.ts` in the same sitting —
+the compiler will not tell you.
+
+- Each mirrored interface says which struct it mirrors, in its doc comment:
+  `/** Mirrors \`FileText\` in src-tauri/src/lib.rs. */`. That comment is the
+  index — grep `Mirrors \`` to list every mirrored pair.
+- Some interfaces mirror **nothing**: they are the phone's own shapes, answered
+  by @api rather than by Rust (`RootEntry`, `GitChangeRows`, `FeedWindow`,
+  `GitChangeCount`). Their docs say so, and say why.
+- Optional fields marked *phone-only* exist because one face's backend sends a
+  key the other's does not (`floor` on `DirWindow`/`FileText`).
+- **Backlog, not built:** `tauri-specta` would generate this file from the Rust
+  types and delete the hand-mirroring rule. Named here so the seam is findable
+  the day someone folds it in.
+
+---
+
+## Rust — the desktop's backend, `src-tauri/src/` (6,529 lines)
+
+| File | One line |
+|---|---|
+| `lib.rs` (4013) | Fleet scan, projects, files, git, rooms — and the **command registry** at the bottom (`generate_handler![...]`, 29 commands). That list is the canonical inventory of what a face can invoke. |
+| `pty.rs` (717) | Terminals and monitors: spawn, write, resize, kill, and the shutdown hook that detaches tmux rather than killing it. |
+| `settings.rs` (762) | Reads and surgical writes of other owners' config files. Refuses rather than guesses. |
+| `memory.rs` (728) | @memory's rollover config, edited from here. |
+| `notifications.rs` (155) | Reads the feed file off disk. |
+| `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
+| `main.rs` (6) | Calls `lib.rs::run()`. |
+
+Also: `Cargo.toml` (MSRV 1.77.2), `tauri.conf.json` (window, CSP, bundle off by
+design — no installers, deliberately), `capabilities/` (what the webview is
+allowed to call), `build.rs`, and two directories nobody edits: `gen/` (tauri's
+own) and `target/` (cargo's).
+
+## Host lanes — the phone's backend, and it is **not in this repo**
+
+The phone talks to @api's host server, which lives in the AIPass repo at
+`src/aipass/api/apps/handlers/host/`:
+
+| File there | Serves |
+|---|---|
+| `server.py` | The routes and the uvicorn app. |
+| `fleet.py` · `reads.py` · `git_reads.py` | `/v1/fleet`, `/v1/rooms`, `/v1/dir`, `/v1/files`, `/v1/git-changes`, `/v1/diff`. |
+| `feed.py` · `verbs.py` · `attach.py` | `/v1/feed`, the operate verbs, the room WebSocket. |
+| `tokens.py` · `config.py` · `settings.py` · `memory_config.py` · `uploads.py` | Auth, config, the settings lanes, image upload. |
+| `face.py` | **Serves this repo's `app/dist-phone/` off disk**, per request. |
+
+Changes there are @api's, not BAUD's. Cross-repo findings get mailed, not fixed.
+
+---
+
+## Look and feel
+
+| File | One line |
+|---|---|
+| `src/tokens/tokens.json` → `tokens.generated.css` | **The palette, as data.** `npm run tokens` regenerates the CSS; never hand-edit the generated file. |
+| `src/theme.css` (2092) | The desktop's stylesheet, and the **shared** floor — the phone loads it too. Written entirely in `var(--baud-*)`. |
+| `src/phone/phone.css` (3407) | Phone-only additions on top of `theme.css`. |
+| `app/public/` | PWA icons and `manifest.webmanifest`. |
+
+Load order is fixed and both `main.tsx` files state it: tokens → theme → phone.
+**No inline styles anywhere — the CSP forbids them.**
+
+## Shared floor — `src/*.ts`, read by both faces
+
+`types.ts` (the shapes) · `age.ts` (relative time) · `intent.ts` (what the
+operator meant) · `deliver.ts` (sending into a room) · `host/` · `tokens/` ·
+`vite-env.d.ts` (vite's own type shim, boilerplate).
+A file at `src/` root is one both faces use; anything face-specific lives in
+`desktop/` or `phone/`. The rule holds with no exceptions as of 2026-08-18 —
+`App.tsx` and `main.tsx` were the two, and they now sit with their own face.
+
+---
+
+## Build and deploy
+
+| Command | What it does |
+|---|---|
+| `npm run tauri dev` | Desktop dev: vite on **1420** (strict) plus a debug binary. |
+| `npm run dev:phone` | Phone dev: vite on **1421**, with the transport alias applied. |
+| `npm run build` | Desktop bundle → `app/dist/`. |
+| `npm run build:phone` | Phone bundle → `app/dist-phone/`. |
+| `npm run tauri build` | → `src-tauri/target/release/baud`. **The rebuild is the deploy** — the launcher execs that path, and `/v1/fleet` execs it as `baud --snapshot`. |
+| — | **The phone rebuild is also the deploy**: @api's `face.py` serves `dist-phone/` from disk per request. No restart. |
+
+**The audit lane, before claiming green:** `npx tsc --noEmit` · `cargo test
+--locked` · `cargo clippy --locked --all-targets -- -D warnings` · both builds.
+CI runs *almost* the same in `.github/workflows/ci.yml` — type-check, desktop
+build, cargo test, clippy. It does **not** run `build:phone`, so the phone
+bundle is the one lane no robot builds; measured 2026-08-18, not yet fixed.
+`release.yml` cuts releases.
+
+## Identity, memory, plans — the AIPass side of the repo
+
+| Where | What |
+|---|---|
+| `src/baud/baud/.trinity/` | Passport, session log, learnings, observations. Overflow rolls to @memory. |
+| `src/baud/baud/.aipass/` | The branch prompt injected every turn. |
+| `src/baud/baud/apps/` | The `drone @baud` CLI shim. |
+| `src/baud/baud/FPLAN-*.md` | Open plans. Closed ones are listed in `CLOSED_PLANS.local.json`. |
+| `README.md` (root, 2400 lines) | **The app's source of truth.** Every behaviour change lands here in the same sitting. |
+| `docs/design/` | Approved design artefacts (the wheel mockup). |
+| `AGENTS.md` · `CLAUDE.md` | The startup protocol for agents working in this repo. |
+| `BAUD_REGISTRY.json` | Machine-managed. Do not hand-edit. |
+| `MAP.md` (root) | This file. |
+| `app/README.md` | A pointer at the root README and this map. Nothing else lives there. |
+| `tests/` (root) | No tests. Its README names where they actually are: `src-tauri/` for Rust, nowhere for the frontend. |
+
+---
+
+## The mess list — what is left, 2026-08-18
+
+Patrick's cadence was *map first, moves second*, and the moves have started.
+**Items 1 to 5 are done** — FPLAN-0444, 2026-08-18: `app/README.md` reduced to a
+pointer, `src/components/` renamed to `src/desktop/`, `App.tsx` and `main.tsx`
+moved in with it, `phone/` folded onto its three shelves, and `tests/` made to say
+where the tests actually are. They are deleted from this list rather than ticked,
+on this list's own instruction: the map should describe the tree, not argue with
+it. The tree is described above; what follows is what still needs doing.
+
+The numbers are the original ranking and are kept so that a plan naming *items
+6-7* still names the same two things.
+
+6. **`PhoneApp.tsx` is 1707 lines and holds four concerns**: shell, pane
+   routing, the seat, and the pollers.
+   → Split the pollers out first (they are self-contained and now all share one
+   gate). Real, but churn on a file that works, so it waited for the cheap moves.
+7. **`lib.rs` is 4013 lines**: fleet scan, projects, files, git, rooms and the
+   registry.
+   → Split by lane, registry last. Same reasoning as 6, and more risk: it is the
+   file the desktop's whole command surface lives in.
+8. **`phone.css` is 3407 lines in one file.** Findable today because every rule
+   is commented and the class prefixes are systematic.
+   → Leave it. Listed so nobody re-discovers it as a problem: the map is the
+   fix, splitting it would break the cascade order that several rules depend on.

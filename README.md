@@ -7,6 +7,12 @@ the platform it actually works on (the activity scan reads `/proc`, the camera
 button speaks XDG portal; on other targets those two degrade to "nothing
 running" and an honest error).
 
+**Looking for where something lives rather than why it works? Read
+[MAP.md](MAP.md) first** — every piece of this repo in one screen of
+breadcrumbs: the screens, the transport seam, the Rust commands, the host lanes,
+the palette, the build lanes, and the entry points. This file is the *why* and
+it is long; the map is the *where* and it is not.
+
 Three sentences of doctrine, because everything else follows from them:
 
 - **The fleet view reads.** `fleet_snapshot` takes no path arguments, writes
@@ -877,11 +883,14 @@ plugin refuses any navigation off the app's own origin, so no stray link or
 projects/baud/
 ├── app/                        the desktop application
 │   ├── src/                    React + TypeScript frontend
-│   │   ├── App.tsx             window shell, tabs, launch, startup agent
-│   │   ├── components/         cards, terminal, panes, panels, header tools
+│   │   ├── desktop/            the desktop face — App.tsx (window shell, tabs, launch,
+│   │   │                       startup agent), main.tsx, and the 17 components:
+│   │   │                       cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
-│   │   ├── phone/              the wheel face: shell, token door, fleet wheel, expanded agent card, passport sheet, files, monitor, reader, feed, verb chips, room doors, attached terminal, photo picker
+│   │   ├── phone/              the wheel face, 17 screens on top: shell, token door, fleet wheel, expanded agent card, passport sheet, files, monitor, reader, feed, verb chips, room doors, attached terminal, photo picker
+│   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
+│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
@@ -902,13 +911,14 @@ projects/baud/
 │   ├── vite.config.phone.ts    the phone build — one alias, and that alias is the whole port
 │   ├── dist/                   vite output (build artifact, not tracked)
 │   ├── dist-phone/             phone bundle (build artifact, not tracked)
-│   └── README.md               a milestone-2-era description of the app; this file supersedes it
+│   └── README.md               a pointer at this file and MAP.md, and nothing else
 ├── src/baud/baud/              @baud — the project's resident agent
-├── tests/                      placeholder README only
+├── tests/                      no tests — a README naming where they actually live
 ├── .github/
 │   ├── workflows/ci.yml        the audit lane, run by a robot
 │   ├── workflows/release.yml   tag push -> tested build -> published release
 │   └── actions/                the Ubuntu build deps, shared by both workflows
+├── MAP.md                      the map — where every piece of this repo lives
 ├── BAUD_REGISTRY.json          the project seal
 ├── LICENSE                     MIT, mirroring the AIPass repo's own
 ├── CLAUDE.md, AGENTS.md        agent startup instructions
@@ -923,9 +933,12 @@ still empty. `BAUD_REGISTRY.json` names `src/baud/baud` as its one branch, which
 makes `src/baud` this project's fleet directory — seat BAUD in the BAUD project
 and you get exactly one card.
 
-**`tests/` is a placeholder.** Its README says so: BAUD's real tests live with
-their stack, in `app/src-tauri/`. There is no Python surface here and no
-frontend test runner installed.
+**`tests/` holds no tests.** Its README used to promise a framework layout that
+never arrived; it now names where the tests actually are. The Rust tests live in
+`app/src-tauri/src/`, in `#[cfg(test)]` modules beside the code they test. The
+frontend has no test runner installed at all — its checks are `tsc --noEmit` and
+the two bundle builds. There is no Python surface. A signpost that points
+somewhere beats a directory that only looks like a suite.
 
 **`CLAUDE.md` and `AGENTS.md`** carry the same startup protocol for the agent
 working in this directory (read `.trinity/`, use drone, keep memories current);
@@ -934,8 +947,18 @@ they are agent instructions, not documentation of the app.
 ## Development
 
 Stack: Tauri 2 with `portable-pty` and `ashpd` on the Rust side; React 19,
-xterm.js and CodeMirror 6 on the frontend; one plain stylesheet. There are no
-inline styles anywhere — the CSP forbids them.
+xterm.js and CodeMirror 6 on the frontend; one plain stylesheet. BAUD's own
+markup carries no inline styles — zero `style=` attributes across the entire
+frontend, every colour read out of `theme.css`.
+
+The CSP is not what enforces that, and the difference is worth one paragraph:
+`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'`.
+`script-src` stays `'self'` with no exception — no inline scripts, no CDN, no
+remote origin. `style-src` carries `'unsafe-inline'` for exactly one dependency:
+xterm.js styles its own DOM at runtime (row metrics, cursor, theme) through inline
+attributes and an injected `<style>` element, and without the exception the
+terminal renders unusable. So the absence of inline styles in BAUD's markup is a
+discipline the codebase keeps, not a wall the browser holds for it.
 
 `app/src/types.ts` mirrors the Rust structs by hand. Change one, change the
 other.
@@ -1388,7 +1411,7 @@ with no upside. Scope stays because it is the server's rule, not the client's.
 The desktop's remaining verbs stay withdrawn on the phone — shell, settings,
 watch — because each wants a pty or a native window on the machine itself. Cards
 render with `readOnly`, which suppresses exactly that button row. The push hooks
-(`src/phone/push.ts`) are still exported, empty and inert — a reservation with
+(`src/phone/lib/push.ts`) are still exported, empty and inert — a reservation with
 its gate named, the way `App.tsx` holds the terminal slot. There is also **no service worker**: an
 offline cache of a live fleet would show stale aliveness, which is the one lie
 this system keeps paying to avoid.
@@ -2135,7 +2158,7 @@ exactly wrong for handing to a person — a relative path pasted into an agent's
 prompt resolves against wherever that agent happens to be standing, which is a
 different tree often enough to matter and is never flagged when it goes wrong.
 So `/v1/dir` and `/v1/files` gained one key, `floor`, the absolute path of the
-resolved root, and `app/src/phone/copyPath.ts` puts the relative back on the end
+resolved root, and `app/src/phone/lib/copyPath.ts` puts the relative back on the end
 of it. **No floor, no copy:** the button answers *"the server did not say where
 this root stands"* under the row rather than handing over half an answer.
 
@@ -2183,7 +2206,7 @@ looking. Two things changed; the intervals themselves deliberately did not.
 
 **A poll only runs while somebody is looking.** All four lanes — the fleet and
 roster snapshot, the wheel's per-branch git sweep, the bell's badge, the git
-app's repository count — now start through `phone/whileVisible.ts`, which stops
+app's repository count — now start through `phone/lib/whileVisible.ts`, which stops
 the interval on `visibilitychange` and restarts it, **with one immediate tick**,
 when the screen comes back. The tick on wake is what makes the gate safe rather
 than merely cheap: a lane that only paused would hand back a wheel frozen at the
@@ -2203,7 +2226,7 @@ up to a hundred full events every ten seconds, forever, to render one number.
 Measured on the live host: **23,273 bytes an ask, and 228 with the cursor** the
 feed screen beside it has always used. The merge rule that makes a cursor safe —
 the server re-delivers the boundary event on purpose, at-least-once, because a
-dropped alert is worse than a duplicate — moved into `phone/feed.ts` so both
+dropped alert is worse than a duplicate — moved into `phone/lib/feed.ts` so both
 readers fold one feed the same way. A badge and a list that count differently is
 the phone telling two stories about one feed, and the feed screen's own doc said
 so before the badge had a cursor to get wrong.
@@ -2225,10 +2248,17 @@ either side for them to drift through.
 `GIT_SWEEP_MS` (5s) are untouched: how stale a wheel is allowed to look is an
 operator-visible call, not a performance knob, and it is measured after these
 land rather than guessed alongside them. The request *rate while you are
-looking* is exactly what it was. The feed screen's own poller is screen-scoped —
-it stops existing when the screen closes — and is left ungated for now; it is
-the one lane that would still tick behind a locked phone, and only if you left
-that screen open.
+looking* is exactly what it was.
+
+**And the fifth lane, one round later.** The feed screen's own poller is
+screen-scoped — it stops existing when the screen closes — so it was not among
+the four app-lifetime pollers gated first. It was still the only lane that could
+tick behind a locked phone: leave that screen open, pocket the phone, and it
+asked the host for a window every ten seconds until the battery said otherwise.
+It goes through the same gate now, and **`whileVisible` holds the only
+`setInterval` left in the phone face** — every repeating lane on this face is
+gated by construction rather than by discipline. The wake tick earns its keep
+most here, on the one screen whose whole job is to be current.
 
 ### Git rides the row it belongs to
 
