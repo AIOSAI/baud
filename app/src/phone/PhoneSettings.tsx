@@ -207,6 +207,27 @@ function bundleName(): string | null {
   }
 }
 
+/**
+ * WHICH TREE the bundle above was built from - stamped in at build time by
+ * `vite.config.phone.ts` (FPLAN-0446's deploy-record rider).
+ *
+ * `bundleName` answers "which FILE am I running", which is a different and
+ * weaker question: two builds from two different trees are two different files
+ * and neither name says which commit either came from. Rebuild-is-deploy has
+ * twice served a phone face no commit can produce, so this is the row that
+ * would have caught it - the sha, and whether the tree had uncommitted work in
+ * it when the bundle was written.
+ *
+ * `__BAUD_TREE__` is a define, so in DEV it does not exist at all; the row is
+ * omitted rather than shown empty, exactly as `bundleName` handles the same
+ * case. An absent row is honest, a wrong one is not.
+ */
+declare const __BAUD_TREE__: string | undefined;
+
+function treeStamp(): string | null {
+  return typeof __BAUD_TREE__ === "string" ? __BAUD_TREE__.replace("baud-tree ", "") : null;
+}
+
 /* ------------------------------------------------------------- the panel -- */
 
 interface PhoneSettingsProps {
@@ -369,6 +390,7 @@ export default function PhoneSettings({
   const onHome = screen === null || screen === "interface";
   const section = SECTIONS.find((entry) => entry.id === screen) ?? null;
   const bundle = bundleName();
+  const tree = treeStamp();
 
   return (
     <>
@@ -553,8 +575,8 @@ export default function PhoneSettings({
             </>
           ) : null}
 
-          {/* ABOUT: two honest facts and no third. Anything this face cannot
-              actually find out does not get a row - see `bundleName`. */}
+          {/* ABOUT: only facts this face can actually find out. Anything it
+              cannot gets no row at all - see `bundleName` and `treeStamp`. */}
           {screen === "about" ? (
             <>
               <div className="baud-settings-row">
@@ -567,8 +589,16 @@ export default function PhoneSettings({
                   <span className="baud-phone-settings-value">{bundle}</span>
                 </div>
               ) : null}
+              {tree ? (
+                <div className="baud-settings-row">
+                  <span className="baud-settings-label">tree</span>
+                  <span className="baud-phone-settings-value">{tree}</span>
+                </div>
+              ) : null}
               <span className="baud-settings-hint">
-                version from the build; bundle is the file this face is running from
+                version from the build; bundle is the file this face is running from; tree is
+                the commit it was built from, and whether that commit had uncommitted work
+                beside it
               </span>
             </>
           ) : null}

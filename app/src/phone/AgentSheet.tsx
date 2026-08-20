@@ -144,6 +144,19 @@ interface AgentSheetProps {
   isAttachedRoom: boolean;
   /** Close the client below. The room, the agent and the scrollback survive. */
   onDetach: () => void;
+  /**
+   * `end room` came back ok - the session behind this card is GONE.
+   *
+   * Distinct from `onDetach`, which closes a client and leaves the room
+   * running. This one fires on the machine's answer to a destructive verb, and
+   * the tab it leaves behind is not merely stale: since r5 the sheet under it
+   * RECONNECTS by itself, and @api attaches with `new-session -A` - attach-or-
+   * create - so a retry into an ended room does not fail, it builds a new empty
+   * one wearing the dead room's name. The reconnect lane would quietly undo the
+   * operator's own gesture ("an ended room stays dead until I resume it",
+   * Patrick, 08-12). So the client goes when the room goes.
+   */
+  onEnded: () => void;
   onClose: () => void;
 }
 
@@ -164,6 +177,7 @@ export default function AgentSheet({
   onAttach,
   isAttachedRoom,
   onDetach,
+  onEnded,
   onClose,
 }: AgentSheetProps) {
   /**
@@ -654,7 +668,7 @@ export default function AgentSheet({
             because dropping the row would take `end room` with it and strand
             rooms with no way to close them from a pocket. That is a capability
             loss, not a style change, so it is not mine to make silently. */}
-        <VerbChips branch={branch} scope={scope} />
+        <VerbChips branch={branch} scope={scope} onEnded={onEnded} />
 
         <p className="baud-agent-closer">tap outside to close</p>
       </section>

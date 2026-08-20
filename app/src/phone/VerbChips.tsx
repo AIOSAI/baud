@@ -56,9 +56,23 @@ async function verifyPerson(): Promise<"platform" | "tap"> {
 interface VerbChipsProps {
   branch: BranchStatus;
   scope: Scope;
+  /**
+   * The room this branch had is GONE - fired only when `end room` came back ok.
+   *
+   * WHY THIS EXISTS (FPLAN-0446 r5): the doctrine sentence in `PhoneApp` has
+   * always said a room drops its client on three gestures, one of which is end
+   * room - but nothing was wired to it, so a killed room left its tab sitting
+   * on a frame of a session that no longer existed. That was survivable while
+   * a detached sheet just sat there. It stopped being survivable the moment
+   * the sheet learned to reconnect by itself: @api attaches with `new-session
+   * -A`, which is attach-or-CREATE, so a retry into an ended room does not
+   * fail - it builds a new empty one wearing the dead room's name, and the
+   * phone would be quietly undoing the operator's own gesture.
+   */
+  onEnded?: () => void;
 }
 
-export default function VerbChips({ branch, scope }: VerbChipsProps) {
+export default function VerbChips({ branch, scope, onEnded }: VerbChipsProps) {
   const [pending, setPending] = useState<PhoneVerb | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -71,6 +85,10 @@ export default function VerbChips({ branch, scope }: VerbChipsProps) {
       const result: VerbResult = await verb.run(branch);
       // The chip reports what the MACHINE said, never that the request left.
       setSaid(result.ok ? (result.detail ?? `${verb.label} done`) : (result.detail ?? `${verb.label} refused`));
+      // ON THE MACHINE'S ANSWER, never on the request leaving - same rule the
+      // sentence above follows. A kill that was refused leaves the room alive,
+      // and closing its pane would be this face inventing an outcome.
+      if (result.ok && verb.id === "kill") onEnded?.();
     } catch (cause) {
       setSaid(cause instanceof HostError ? cause.message : String(cause));
     } finally {

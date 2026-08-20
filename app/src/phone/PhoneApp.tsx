@@ -104,6 +104,16 @@ import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
 const PROJECT_KEY = "baud-phone-project";
 
 /**
+ * How long the header name flashes before the reload actually kicks.
+ *
+ * Short enough that it never reads as a delay, long enough that the flash has
+ * landed on screen before the page goes away - the whole point is that the tap
+ * is acknowledged BEFORE the reconnect, because on a slow one the reload
+ * itself has nothing to show for a while.
+ */
+const RELOAD_ACK_MS = 200;
+
+/**
  * THE STARTUP AGENT'S ONE SHOT, spent for this PAGE LOAD.
  *
  * Patrick, 08-17: "In baud settings I have devpulse set as the default startup
@@ -456,6 +466,65 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    */
   const [typing, setTyping] = useState(false);
 
+  /**
+   * The header name is the reload button (Patrick, 2026-08-19: browser and OS
+   * gestures fight him for the refresh, so refreshing meant reaching for
+   * browser chrome every time).
+   *
+   * A FULL reload, not a re-poll, because that is the gesture being replaced:
+   * `location.reload()` has exactly the semantics of the browser refresh he
+   * already uses, and it is lossless here because nothing this face knows is
+   * only in this face - the seat is in localStorage, every room lives in tmux
+   * on the host, and the fleet is one poll away. That is why he refreshes
+   * freely today, and why this needs no confirm.
+   *
+   * The flag exists for the 200ms of acknowledgement BEFORE the reload kicks.
+   * A tap that does nothing visible on a slow reconnect reads as a dead
+   * button, and the operator's next move is to tap it again.
+   */
+  const [reloading, setReloading] = useState(false);
+
+  /**
+   * One tap, no ceremony: flash the name, then reload.
+   *
+   * THE ENTRY IS RE-READ OVER THE NETWORK FIRST, and that is not belt and
+   * braces - it is the fix for a measured lottery. FPLAN-0446 round 3 was
+   * declared failed live on evidence that turned out to be the OLD bundle
+   * still running after a reload through this very button.
+   *
+   * Why a reload can serve stale at all: the host answers `GET /` with an
+   * `etag` and a `last-modified` and NO `cache-control`, and a response with no
+   * explicit freshness lifetime MAY be cached heuristically - the usual browser
+   * rule being a tenth of the age since `last-modified`. So an entry document
+   * an hour old is treated as fresh for minutes, and a plain reload can be
+   * answered wholly from cache without asking the server. Content hashing makes
+   * that WORSE rather than better: the bundle names live inside that document,
+   * so a stale entry means the browser faithfully fetches yesterday's bundle.
+   * The assets are safe by construction; the entry that names them is the hole.
+   *
+   * `cache: "reload"` fetches from the network AND updates the HTTP cache, so
+   * the navigation that follows reads the fresh entry.
+   *
+   * THIS IS THE CLIENT HALF, NOT THE FIX. One `cache-control: no-cache` on the
+   * host's HTML response is the real answer and it is @api's lane (reported,
+   * with this measurement). This is what BAUD can do from its own side while
+   * that is pending, and it is deliberately best-effort: if the network read
+   * fails, the reload still happens, because a refresh button that refuses to
+   * refresh is worse than one that occasionally refreshes to the same bundle.
+   */
+  const reloadFace = useCallback(() => {
+    // Guarded, so a double-tap cannot queue two reloads or restart the flash.
+    setReloading((already) => {
+      if (already) return already;
+      window.setTimeout(() => {
+        void fetch(window.location.href, { cache: "reload", credentials: "same-origin" })
+          .catch(() => undefined)
+          .then(() => window.location.reload());
+      }, RELOAD_ACK_MS);
+      return true;
+    });
+  }, []);
+
   /* THE FOUR POLLING LANES LIVE IN `lib/pollers.ts` (FPLAN-0445). Each hook
      is called exactly where its effect used to be declared, because React runs
      effects in declaration order and that order is load-bearing here. */
@@ -793,7 +862,18 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   return (
     <div className={`baud-phone ${typing ? "baud-phone-typing" : ""}`}>
       <header className="baud-phone-head">
-        <span className="baud-phone-title">BAUD</span>
+        {/* THE NAME IS THE REFRESH. Nothing about how it LOOKS changes - the
+            button carries the span's own class and resets everything a button
+            brings with it - but its hit area reaches the screen's corner and
+            the header's full height, which is where a thumb actually lands. */}
+        <button
+          type="button"
+          className={`baud-phone-title ${reloading ? "baud-phone-title-going" : ""}`}
+          title="reload BAUD"
+          onClick={reloadFace}
+        >
+          BAUD
+        </button>
         {/* The name shown is the SNAPSHOT's own project - what is actually on
             the wheel - not the stored choice, so a refused or misspelled seat
             can never dress itself as the thing it failed to become. */}
@@ -1158,6 +1238,21 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           )}
           onDetach={() => {
             setExpanded(null);
+            closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
+          }}
+          /* THE ROOM IS GONE, so its client goes with it - the same pane and
+             the same key `onDetach` closes, on the machine's answer instead of
+             a door press. Only the `resume` pane: `end room` kills the AGENT's
+             session, and this branch's shell is a different one (`baud-shell-*`)
+             that survives it, so closing more than this would be the phone
+             inventing an outcome the verb never had.
+
+             The sheet deliberately STAYS OPEN. Every other handler here leads
+             with `setExpanded(null)` because a door press means "take me
+             somewhere"; this is a chip reporting back, and the chip renders the
+             machine's sentence inline - closing the sheet would delete the only
+             confirmation the operator gets that the room actually ended. */
+          onEnded={() => {
             closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
           }}
           onClose={() => setExpanded(null)}

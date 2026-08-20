@@ -68,10 +68,98 @@ body {
   border-bottom: 1px solid var(--baud-line);
 }
 
+/* THE NAME IS THE REFRESH (Patrick, 2026-08-19: browser and OS gestures fight
+   him for the refresh gesture, so refreshing meant reaching for browser chrome
+   every time). It is a button now, and the first job of these rules is that
+   nobody can tell: a button arrives with its own font, colour, background,
+   border and padding, and every one of them is handed straight back. */
 .baud-phone-title {
+  font: inherit;
   font-weight: 600;
   font-size: 0.85rem;
   letter-spacing: 0.08em;
+  /* THE WORDMARK'S OWN GREEN (Patrick, 2026-08-19: "it was green before now its
+     white. I liked the green"). It drinks the desktop wordmark's token rather
+     than a colour of its own, so BAUD is one identity wearing two sizes - and
+     the glow keeps the desktop's ratio (0.6em of the type size) instead of its
+     pixel count, because 12px of halo around 13.6px of text is a smudge.
+
+     Worth recording beside the fix: this name has resolved to --baud-ink in
+     every committed state since the face landed, and turning the span into a
+     button did not change that (measured: rgb(214, 226, 220) both ways). The
+     green he remembers was never in git - see the archaeology in the README. */
+  color: var(--baud-green);
+  text-shadow: 0 0 8px var(--baud-glow-green);
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  /* The origin for the hit area below. */
+  position: relative;
+  /* Take the header row's own height rather than the word's. The button
+     centres its label, so nothing moves - this only buys the hit area the
+     handful of pixels between a 16px word and the 22px row it sits in. */
+  align-self: stretch;
+  /* The grey wash Android paints over a tapped control: this button has its
+     own acknowledgement, and two of them read as a glitch. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* THE THUMB TARGET, and it is a pseudo-element for one reason: a thumb needs
+   more room than this word does, and the header is the one slim row Patrick
+   fought for ("probs 3 space"). So the HIT AREA grows and the LAYOUT does not
+   - not a pixel of the header moves, and the name does not shift or resize.
+
+   Where it reaches, and where it deliberately stops: left to the screen's own
+   edge, through the header's own padding where nothing else lives; up through
+   the notch inset to the very top; down to the header's bottom edge. Right by
+   10px of the 14px gap, so four pixels of dead space always stand between this
+   and the seat chip beside it. It does NOT reach below the header - an
+   overhang there would take taps from the wheel, and a refresh that eats a
+   card tap is a worse bug than a small target. */
+.baud-phone-title::after {
+  content: "";
+  position: absolute;
+  top: calc(-4px - env(safe-area-inset-top, 0px));
+  bottom: -4px;
+  left: calc(-1 * var(--baud-pad) / 1.5);
+  right: -10px;
+}
+
+/* Instant, and it costs no render: the finger is still down when this lands,
+   which is the half of the acknowledgement React cannot be fast enough for. */
+.baud-phone-title:active {
+  color: var(--baud-amber);
+  text-shadow: 0 0 8px var(--baud-glow-amber);
+}
+
+/* The other half - it fires ON the tap and holds for the 200ms before the
+   reload kicks, so the gesture is never silent while a slow reconnect thinks
+   about it. Amber because this is the machine working, not the machine
+   failing. */
+.baud-phone-title-going {
+  color: var(--baud-amber);
+  text-shadow: 0 0 8px var(--baud-glow-amber);
+  animation: baud-phone-reload-ack 200ms ease-out both;
+}
+
+@keyframes baud-phone-reload-ack {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.3;
+  }
+}
+
+/* Motion off, the STATE stays - the same rule the dispatched lamp follows. An
+   operator who cannot take a flash must still see that their tap landed. */
+@media (prefers-reduced-motion: reduce) {
+  .baud-phone-title-going {
+    animation: none;
+    opacity: 0.3;
+  }
 }
 
 /* The seat selector. The wrapper owns the header's flexible slot; the chip
@@ -1060,6 +1148,10 @@ body {
   box-shadow: 0 0 6px var(--baud-glow-amber);
 }
 
+/* THE ONE SLOT (r8). One rectangle, two modes: the baud composer, or the armed
+   bar. Both are laid out by this row, so the belt's rhythm - the padding, the
+   gap, the distance from the key row above - is identical across the flip and
+   nothing under his thumb moves except the contents. */
 .baud-phone-term-input {
   display: flex;
   /* Bottom-aligned so photo and send hold their size while the compose box
@@ -1143,7 +1235,21 @@ body {
      the terminal above is the centrepiece and keeps the rest. */
   resize: none;
   overflow-y: auto;
-  max-height: 7.2rem;
+  /* 8.6rem, up from 7.2 (r8), and the unit that matters is CHARACTERS VISIBLE
+     AT ONCE - which is what this cap is really for. Measured at 360px off this
+     stylesheet, not estimated:
+
+       before the merge   221px wide, ~23 chars a line, cap ~5.2 lines  ~120 ch
+       after, old cap     175px wide, ~17 chars a line, cap ~5.2 lines   ~89 ch
+       after, 8.6rem      175px wide, ~17 chars a line, cap ~6.6 lines  ~112 ch
+
+     The arm door beside it took 46px, so at the old cap the box would have
+     held a quarter less of his message than it did the day before - and this
+     box exists so that "what was typed ten words ago is still on screen".
+     The taller cap gives that back. It costs the terminal nothing except
+     while a long message is actually being composed, which is the one moment
+     the box is the thing being looked at rather than the room. */
+  max-height: 8.6rem;
   line-height: 1.35;
 }
 
@@ -2630,6 +2736,57 @@ body {
   position: relative;
 }
 
+/* ------------------------------------------------------- the corpse frame --
+   A detached room goes on showing its last frame, because that is all a
+   terminal emulator can do once the bytes stop - and for one evening that
+   frame was indistinguishable from a live room. This is the correction, and
+   it sits ON the picture that lies rather than in a line above it.
+
+   z-index 2 is chosen, not arbitrary: above the grid, BELOW the view column
+   and the fullscreen toggle (both 3), so zoom and fullscreen keep working on
+   a detached room - reading the last frame is exactly when somebody wants to
+   make it bigger. */
+.baud-phone-term-dead {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: var(--baud-pad);
+  text-align: center;
+  /* The house scrim, one step thinner than the card's (93%): the stale frame
+     stays readable underneath on purpose. It is the last true thing the room
+     said - it just is not now. */
+  background: color-mix(in srgb, var(--baud-bg) 86%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+/* The word itself. Amber because this is a state the operator must act on to
+   leave, not an error - nothing broke and nothing was lost. */
+.baud-phone-term-dead-word {
+  color: var(--baud-amber);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.baud-phone-term-dead-why {
+  color: var(--baud-ink-faint);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  max-width: 30ch;
+}
+
+/* In the overlay the button is centred by the flex column and owes nothing to
+   the sheet's horizontal rhythm, so it drops the margins it needs above. */
+.baud-phone-term-dead .baud-phone-term-reattach {
+  margin: 0;
+  padding: 10px 18px;
+}
+
 .baud-phone-term-full-toggle {
   position: absolute;
   top: 4px;
@@ -2765,6 +2922,109 @@ body {
   opacity: 0.75;
 }
 
+/* THE ARMED BAR - what the one slot becomes in typing mode (r8).
+
+   It was door C's own permanent row above the belt (round 4). Patrick ruled
+   that row away at 00:39 - "I dont need 2 comment boxes" - so the bar moved
+   INTO the compose row and fills it: same rectangle, same rhythm, same
+   radius as the field it replaces. Occupying the composer's footprint rather
+   than sitting above it is the safety property, not the tidiness one: there
+   is no second surface on screen to mis-aim at while this one is live.
+
+   LOUD, and the loudness is the point rather than decoration. Every keystroke
+   is leaving this face for a real program, and an operator who is unsure where
+   his keys are going is the entire bug this plan was opened for. */
+.baud-phone-term-typebar {
+  /* Fills the slot the composer had - the whole width inside the row's own
+     padding, so the belt keeps its rhythm across the mode change. */
+  flex: 1;
+  min-width: 0;
+  /* 11px is `send`'s and the field's, so the slot is the same height in both
+     modes and the belt does not jump under his thumb when he arms it. */
+  padding: 11px 10px;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  text-align: center;
+  /* The tap belongs to this bar, not to the OS: no double-tap delay, no
+     long-press text selection eating the gesture. */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: background 120ms linear, color 120ms linear;
+}
+
+.baud-phone-term-typebar-on {
+  background: var(--baud-bg-card-live);
+  border-color: var(--baud-amber);
+  box-shadow: 0 0 10px var(--baud-glow-amber);
+  color: var(--baud-amber);
+}
+
+/* THE DOOR INTO ARMED MODE, and the only thing the merge added to this row.
+
+   A WORD, NOT A GLYPH. It carried `⌨ room` for one build and the keyboard
+   glyph cost 18 of the 40 pixels; the word alone is also the stricter reading
+   of Patrick's rule, which is that a mode states itself in words. Nothing is
+   lost by dropping it: the title carries the whole sentence, and the tap it
+   opens replaces this row with a sentence.
+
+   40px EXACTLY - the paperclip's box, chosen so the two doors on the left of
+   the field are one shape and so this row's geometry is STATED rather than
+   grown from its contents. Nothing here may move while a photo uploads or the
+   field grows past a line; that is the paperclip's own rule and this control
+   is subject to it for the same reason.
+
+   THE WIDTH IS THE WHOLE COST OF THE MERGE and it was measured, not estimated:
+   360px viewport, the compose field goes 221px -> 175px, about 23 characters
+   a line down to 17. What it buys is 32px of belt - the belt goes 143px to
+   111px with the box empty, roughly two terminal rows, permanently. The field
+   below gets a taller max-height to pay for the extra wrapping; see it.
+
+   QUIET. Dim ink, the card's own background, no accent. Armed is where the
+   colour lives; a door that shouts before it has been opened would compete
+   with the room for a thumb's attention. */
+.baud-phone-term-arm {
+  flex: none;
+  width: 40px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  padding: 11px 0;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.baud-phone-term-arm:disabled {
+  /* Read-only room: still legible, so it reads as "not from this session"
+     rather than as a dead button - the rule every disabled control in this
+     belt follows. */
+  border-style: dashed;
+  color: var(--baud-ink-faint);
+  opacity: 1;
+}
+
+/* The room slides under the keyboard rather than shrinking - the transform is
+   set by the visualViewport effect, and the transition is what makes it read
+   as the room moving instead of the picture jumping. */
+.baud-phone-term-host {
+  transition: transform 140ms ease-out;
+}
+
+/* The typing probe's readout - armed only, and temporary by design. Small,
+   dim and on its own line so it never competes with the bar's own word. */
+
 /* The belt: key row + compose bar as one strip. The visualViewport effect
    lifts it above the soft keyboard by transform; the background is opaque
    because when lifted it rides OVER the terminal's bottom rows. */
@@ -2773,6 +3033,38 @@ body {
   will-change: transform;
   position: relative;
   z-index: 4;
+}
+
+/* The chip row's own field: the only door a soft keyboard has into the room,
+   and it opens onto BAUD rather than onto the pty (FPLAN-0446 round 3).
+
+   INVISIBLE, NEVER ABSENT. `display:none` and `visibility:hidden` both make an
+   element unfocusable, and focus is the entire mechanism - so this is a real,
+   rendered, one-pixel field that simply cannot be seen. `pointer-events: none`
+   means no thumb can ever land on it: the only way in is arming a modifier,
+   which is the stated intent this door exists to serve.
+
+   Absolutely positioned so gaining it costs the row no height, and anchored
+   inside the belt so focusing it never scrolls the page to somewhere else.
+
+   16px because a smaller font on a focused input makes some mobile browsers
+   zoom the whole page. Nothing is drawn at that size - the box is one pixel -
+   but the browser reads the number before it decides. */
+.baud-phone-term-proxy {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  outline: none;
+  opacity: 0;
+  font-size: 16px;
+  background: transparent;
+  color: transparent;
+  pointer-events: none;
 }
 
 /* --------------------------------------------------- passport marks (A) */

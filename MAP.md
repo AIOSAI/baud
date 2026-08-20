@@ -59,7 +59,7 @@ desktop-only, and since 2026-08-18 the directory says so.
 
 ## The phone face — `src/phone/` (31 files on three shelves)
 
-One column, one screen at a time. `PhoneApp.tsx` (1377 lines) is the shell:
+One column, one screen at a time. `PhoneApp.tsx` (1471 lines) is the shell:
 panes, seat, doors. Screens stay on top; the repository sub-app is in
 `phone/git/` and the no-JSX logic in `phone/lib/`. **The pollers are no longer
 in the shell** — all four moved to `lib/pollers.ts` on 2026-08-18, which is what
@@ -71,7 +71,7 @@ took 330 lines out of the file above.
 |---|---|
 | `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen. |
 | `AgentSheet.tsx` | One agent's card, opened. |
-| `TerminalSheet.tsx` | The room, over a WebSocket. The other big one (1666 lines). |
+| `TerminalSheet.tsx` | The room, over a WebSocket. The other big one (2983 lines). Owns the composer's delivery rule (a line goes out as a declared bracketed paste; the `\r` waits until the room has SHOWN it), the keyboard rule (no tap opens one into the terminal), and TYPING MODE - **one compose slot with two modes**: the baud box, or the armed bar that hands raw keys to xterm's own textarea. The mirror-diff lane is dead (r6) and the bar's own row is gone (r8) - both live in the same footprint now. The room SLIDES under the keyboard rather than being resized, for either mode. Re-states its grid to the pty on every return to the foreground, so a pty moved from the host side is corrected the moment he looks instead of leaving the phone clipping a window it does not fit. The chip row's one-pixel field is still the only soft-keyboard door for `ctrl`/`alt`; typing mode does not touch it. |
 | `Reader.tsx` | Any file or diff, read. |
 | `FilesScreen.tsx` · `RootsScreen.tsx` | Browse a root; pick which root to stand on. |
 | `FeedScreen.tsx` | The feed, full height. |
@@ -155,7 +155,7 @@ the compiler will not tell you.
 | `fleet.rs` (299) | One pass over the branch directories, one snapshot out. Every fallible read degrades to a default for that card and never fails the poll. |
 | `reads.rs` (282) | The read surface: directories, file text, git changes and diffs — all behind `fenced_path_in` against the seated root. |
 | `projects.rs` (239) | The census and the seat: registry seals, discovery, `ActiveProject`. |
-| `pty.rs` (717) | Terminals and monitors: spawn, write, resize, kill, and the shutdown hook that detaches tmux rather than killing it. |
+| `pty.rs` (797) | Terminals and monitors: spawn, write, resize, kill, the shutdown hook that detaches tmux rather than killing it, and the frame coalescer that gathers pty reads into one message per 60Hz frame. |
 | `settings.rs` (762) | Reads and surgical writes of other owners' config files. Refuses rather than guesses. |
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
@@ -196,7 +196,7 @@ Changes there are @api's, not BAUD's. Cross-repo findings get mailed, not fixed.
 |---|---|
 | `src/tokens/tokens.json` → `tokens.generated.css` | **The palette, as data.** `npm run tokens` regenerates the CSS; never hand-edit the generated file. |
 | `src/theme.css` (2092) | The desktop's stylesheet, and the **shared** floor — the phone loads it too. Written entirely in `var(--baud-*)`. |
-| `src/phone/phone.css` (3407) | Phone-only additions on top of `theme.css`. |
+| `src/phone/phone.css` (3699) | Phone-only additions on top of `theme.css`. |
 | `app/public/` | PWA icons and `manifest.webmanifest`. |
 
 Load order is fixed and both `main.tsx` files state it: tokens → theme → phone.
@@ -263,7 +263,7 @@ argue with it. What the tree looks like now is everything above this line.
 What is left is one entry, and it is a decision rather than a task. Its number is
 the original ranking, kept so that a plan naming *item 8* still names this thing.
 
-8. **`phone.css` is 3407 lines in one file.** Findable today because every rule
+8. **`phone.css` is 3699 lines in one file.** Findable today because every rule
    is commented and the class prefixes are systematic.
    → Leave it. Listed so nobody re-discovers it as a problem: the map is the
    fix, splitting it would break the cascade order that several rules depend on.

@@ -4,12 +4,30 @@
     <meta charset="UTF-8" />
     <!-- viewport-fit=cover so env(safe-area-inset-*) in phone.css is real on a
          notched device; without it the insets resolve to zero. -->
-    <!-- interactive-widget=resizes-content: Chrome 108+ stopped resizing the
-         LAYOUT viewport for the soft keyboard (only the visual one), which
-         hid the bottom key row behind the keys (DPLAN-0301). This opts back
-         into the resize on Chrome; Firefox ignores the token and the
-         visualViewport belt-lift in TerminalSheet carries that half. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- interactive-widget IS DELIBERATELY UNSET, which means the browser
+         default `resizes-visual`: the soft keyboard shrinks the VISUAL
+         viewport and leaves the layout one alone.
+
+         It was `resizes-content` from DPLAN-0301 until FPLAN-0446 r8, and that
+         token is what round 7 finally caught in the act. `resizes-content`
+         shrinks the layout viewport, so `100dvh` on `.baud-phone` shrinks with
+         it, so `.baud-phone-term-screen` shrinks, so the ResizeObserver in
+         TerminalSheet fits and RESIZES THE PTY - the room went to one or two
+         rows the moment the keyboard opened, and a TUI cannot paint a composer
+         in one row. The keyboard was silently rewriting the room's geometry.
+
+         Unset, the room keeps its ~26 rows while he types and slides under the
+         keyboard instead (the visualViewport effect in TerminalSheet: it lifts
+         the belt by `hidden`, which is now a real number again, and translates
+         the room so its last row clears the belt). Nothing is told to tmux, so
+         there is no reflow to survive.
+
+         The half this token used to carry - keeping the bottom key row off the
+         keys - is the belt lift's job on every browser now, exactly as it
+         already was on Firefox, which never honoured the token at all. If that
+         lift ever fails, the row hides: float the belt and floor the screen at
+         ~10 rows. It is not a return to `resizes-content`. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#070a09" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />

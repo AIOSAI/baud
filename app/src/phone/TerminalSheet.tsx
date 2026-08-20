@@ -93,6 +93,65 @@ function modifiedChar(char: string, ctrl: boolean, alt: boolean): string | null 
   return alt ? `\x1b${out}` : out;
 }
 
+/**
+ * What of `whole` the room has not been told yet, given what it has.
+ *
+ * One committed word can arrive through two doors - the events that build it
+ * and the event that finishes it - and which door speaks first depends on the
+ * browser. This is the whole of the de-duplication: a prefix already sent is
+ * subtracted, a word already contained in what was sent is dropped outright,
+ * and anything else is new and goes whole. Nothing here guesses; it compares.
+ */
+function unsaid(whole: string, said: string): string {
+  if (!whole) return "";
+  if (!said) return whole;
+  if (whole.startsWith(said)) return whole.slice(said.length);
+  return said.includes(whole) ? "" : whole;
+}
+
+/**
+ * An editing intent, as the bytes a terminal expects - AND IT NEVER READS THE
+ * FIELD (FPLAN-0446 round 6).
+ *
+ * Round 4 armed xterm's own textarea and let xterm deliver what landed in it.
+ * That works everywhere a keyboard TYPES INTO a field. Gboard with prediction
+ * on does not: it composes, and every one of xterm's delivery paths resolves
+ * the composition by reading `textarea.value` back out - `_finalizeComposition`
+ * takes `value.substring(start)` a tick after `compositionend`, and the
+ * "any textarea changes" lane diffs the value against a copy. If the value
+ * never took the word - and a preview drawn from the EVENT's data renders
+ * identically whether it did or not - every one of those reads is empty and
+ * the committed word goes nowhere. That is exactly what Patrick saw: the word
+ * visible while composing, gone on space, zero bytes at the pty.
+ *
+ * So BAUD stops reading the field and reads the INTENT, which carries its own
+ * payload: `data` on an insert, the inputType itself for a break or a delete.
+ * `null` means "not an intent this bar has bytes for" - the caller leaves it
+ * to the browser rather than inventing something, the same refusal
+ * `modifiedChar` makes.
+ */
+function editBytes(event: InputEvent): string | null {
+  switch (event.inputType) {
+    case "insertText":
+    case "insertReplacementText":
+    case "insertFromComposition":
+      return event.data ?? "";
+    case "insertFromPaste":
+      // Paste is the one intent whose payload is not on `data`.
+      return event.dataTransfer?.getData("text/plain") ?? event.data ?? "";
+    case "insertLineBreak":
+    case "insertParagraph":
+      // CR, not LF: a room's line discipline is what turns it into a newline.
+      return "\r";
+    case "deleteContentBackward":
+      return "\x7f";
+    case "deleteWordBackward":
+      return "\x17";
+    default:
+      return null;
+  }
+}
+
 interface ChipSpec {
   bytes: string;
   label: string;
@@ -251,17 +310,145 @@ const PAN_ACCELERATION = 3;
  * this control would have been a lie told to a deaf room.
  */
 /**
- * How many rows at the bottom of the grid count as "the place you type".
+ * `COMMENT_ROWS` STOOD HERE, and its absence is the round.
  *
- * A terminal is a character grid and nothing in it announces where the TUI's
- * input box is - there is no element to ask, only cells. So this is a
- * heuristic with a number, and the number is the tunable: claude's compose box
- * is a bordered box plus its hint line, which is four rows on a phone-sized
- * grid, and five gives a thumb a row of margin without reaching into the
- * transcript. A bare shell needs no special case - its prompt is the bottom
- * line, so "the bottom rows" is already the right answer there too.
+ * It answered "how many rows at the bottom count as the place you type" - a
+ * heuristic with a number, five, because a terminal is a character grid and
+ * nothing in it announces where a TUI's input box is. It was honest work for
+ * the question it was asked. Round 3 retired the QUESTION: no tap opens a
+ * keyboard into the room at all now, so there is no bottom region to
+ * recognise and no number to tune. See the touchstart handler for why.
  */
-const COMMENT_ROWS = 5;
+
+/**
+ * How long the submit byte will wait for the line to APPEAR before going
+ * anyway (FPLAN-0446 round 2b).
+ *
+ * Round 2 sent the line and its CR as two frames and let the far end sort out
+ * the order. It did not: the CR was acted on before the paste it followed had
+ * been committed, so a stale line submitted and the fresh text landed in the
+ * emptied box behind it. A bigger sleep would only have moved those odds - the
+ * commit is on the far end's clock, not this one, and nothing here can measure
+ * it. So the CR waits for PROOF instead: this face already renders every byte
+ * the room emits, so it can watch for the line to show up in the room's own
+ * buffer and submit the moment it does.
+ *
+ * The ceiling exists because proof is not guaranteed - a program that echoes
+ * nothing, or renders a placeholder instead of the text, would otherwise
+ * strand the line forever. Reaching it means falling back to exactly the
+ * behaviour round 2 shipped, which is the floor of this design rather than its
+ * intent, and it is generous enough that a slow room is not cut off.
+ */
+const SUBMIT_CEILING_MS = 600;
+
+/** How often to look. One frame: cheaper than it sounds, and it reads local. */
+const SUBMIT_LOOK_MS = 16;
+
+/**
+ * The shortest landmark worth trusting. Two characters of "ok" would match
+ * half the transcript; below this the handshake is weaker than no handshake,
+ * so it is skipped and the ceiling carries the send.
+ */
+const LANDMARK_MIN = 4;
+
+/** And the longest - a tail is enough, and it bounds the scan. */
+const LANDMARK_MAX = 32;
+
+/** A blur this soon after arming is the focus dance, not a dismissal. */
+const BLUR_GRACE_MS = 500;
+
+/**
+ * How long the box must hold still before its size is believed.
+ *
+ * A soft keyboard does not open in one step. It used to animate the LAYOUT
+ * viewport shut - phone.html asked for `interactive-widget=resizes-content`
+ * until r8 - and every frame of that animation was a ResizeObserver callback:
+ * a `fit()` and a resize frame per frame, a pty re-flowing a dozen times while
+ * the keys slid up, which is the frame collision benched as the mechanism
+ * behind the garbled lines. Waiting for the box to settle asks the pty once,
+ * for the size it actually ended at.
+ *
+ * With the token gone the keyboard no longer resizes this box AT ALL, so that
+ * particular storm cannot happen. The debounce stays because it was never only
+ * about the keyboard: a rotation, a pane opening or closing, and the belt
+ * changing height all move this box, and the pty should hear the size it came
+ * to rest at rather than every frame on the way there.
+ */
+const FIT_DEBOUNCE_MS = 120;
+
+/* ---------------------------------------------------------------- liveness --
+ * THE PHONE HAD NONE, AND THAT IS WHY IT PAINTED A CORPSE (FPLAN-0446 r5).
+ *
+ * The other end has liveness and uses it: uvicorn pings every 20s and hangs up
+ * on a pong that does not come back inside 20s (measured off Config's own
+ * signature, 2026-08-19). A browser has no ping API at all - the protocol's own
+ * ping/pong is answered down in the network stack, below JavaScript, and never
+ * surfaces here - so the room can be torn down on a clock this side does not
+ * share, and this side goes on rendering the last frame it was handed. A dead
+ * room and a quiet room look EXACTLY the same, which is what cost Patrick an
+ * evening of typing into nothing.
+ *
+ * Two lanes, and the phone FEATURE-DETECTS which one it is in rather than
+ * coupling to a server version:
+ *
+ *  - THE REAL ROUND TRIP, when the control channel answers. One probe
+ *    `{type:"ping"}` per socket; a `{type:"pong"}` back means this host has the
+ *    lane, and from then on liveness is MEASURED instead of guessed. Exactly
+ *    one probe, never a retry loop: a host without the lane writes a warning
+ *    line for every unknown control frame it is sent (`_handle_control`,
+ *    @api's `server.py:580` - read before this was built, which is also how it
+ *    is known that an unknown frame is IGNORED and never fatal), and a
+ *    keepalive that fills somebody else's log is a bug wearing a fix's coat.
+ *
+ *  - THE SILENCE GUESS, when it does not answer. That is the lane Patrick is
+ *    actually on tonight: @api's ping/pong is dispatched but not live on prod,
+ *    and it is not this face's business to know when it lands - a pong turns
+ *    the better lane on by itself, on whichever socket first gets one back.
+ */
+
+/**
+ * How long a room may say NOTHING before the phone stops believing it.
+ *
+ * NINETY SECONDS, AND THE NUMBER IS MEASURED, not felt. An idle agent room is
+ * not actually silent - tmux redraws its status bar - but it only emits when
+ * that bar's TEXT changes, so the gaps are long and uneven: benched on a live
+ * idle room, the longest gap between bytes was 29 SECONDS inside a 62-second
+ * window. A watchdog at 15s would therefore execute a perfectly healthy room
+ * about once a minute, and every one of those kills costs the desk a full
+ * repaint (`window-size smallest`, 5392 bytes benched for one column). Three
+ * times the worst measured gap is the margin. The cost of being wrong in this
+ * direction is one reattach; the cost of being wrong in the other is the
+ * corpse frame, and those two are not the same size.
+ */
+const SILENCE_MS = 90_000;
+
+/** How often the watchdog looks - WHILE VISIBLE ONLY. Nothing runs in a pocket. */
+const LIVENESS_TICK_MS = 10_000;
+
+/** With the control channel answering, a round trip is overdue after this long.
+ *  Three ticks' worth, so one lost tick is never on its own a verdict. */
+const PONG_DEAD_MS = 30_000;
+
+/**
+ * The reconnect ladder, in milliseconds, indexed by consecutive failures.
+ *
+ * The first rung is IMMEDIATE - a socket that died in front of somebody who is
+ * looking at it gets its retry now - and the rungs after it back off hard,
+ * because a room that refused twice will refuse the third time too and each
+ * attach costs the desk a repaint. @api's log caught 13 attaches in three
+ * minutes on the night this was written; this ladder makes that shape
+ * impossible without ever making the first recovery slow.
+ */
+const RECONNECT_MS = [0, 1_000, 3_000, 6_000, 12_000, 30_000];
+
+/** How many tries in a row before the phone stops and SAYS it stopped. A room
+ *  that is gone is not reachable by repetition, and the door never closes: the
+ *  overlay's button is always live, and looking away and back resets the count. */
+const RECONNECT_TRIES = RECONNECT_MS.length;
+
+/** A handshake already in flight is not a reason to start a second one - so the
+ *  lane looks again after this instead of counting a try. */
+const HANDSHAKE_POLL_MS = 1_000;
 
 const DEFAULT_FONT = 10;
 const MIN_FONT = 7;
@@ -399,6 +586,38 @@ export default function TerminalSheet({
   /** Bump to open a fresh socket onto the same room. */
   const [attempt, setAttempt] = useState(0);
   /**
+   * Consecutive attempts that never reached `onopen`. A REF, not state: the
+   * reconnect lane reads it to pick its rung and the attach effect resets it
+   * on a successful open, and neither of those is a reason to re-render - but
+   * putting it in the attach effect's dependencies WOULD be a reason to
+   * reattach, which is the exact churn this counter exists to bound.
+   */
+  const retries = useRef(0);
+  /** Is a retry armed right now? Rendered, because "reconnecting" and "gave up"
+   *  are different situations for the person holding the phone and a spinner
+   *  that means both is a lie in either direction. */
+  const [reconnecting, setReconnecting] = useState(false);
+  /**
+   * Has this sheet EVER been attached? Three states hide behind `!live` and
+   * they do not deserve the same sentence: opening for the first time (no
+   * frame has ever arrived, so there is no corpse to warn about), attached and
+   * then dropped (there is one, and it is the whole problem), and never got in
+   * at all. Without this the overlay flashes "detached - this is the last
+   * frame you were sent" over an empty grid during every normal open, which
+   * would be the same species of lie in the opposite direction.
+   */
+  const [opened, setOpened] = useState(false);
+  /**
+   * A retry the OPERATOR asked for: the ladder starts again from its first
+   * rung, because a thumb on the button is new information about whether the
+   * room is worth trying. Every hand-driven reattach goes through here, so the
+   * button and the photo lane can never drift apart on that rule.
+   */
+  const reattachNow = useCallback(() => {
+    retries.current = 0;
+    setAttempt((n) => n + 1);
+  }, []);
+  /**
    * The launch line is typed ONCE PER SHEET, never once per socket. A reattach
    * lands in a room that already has whatever the first attach started; typing
    * the command again would be the double-claude hazard arriving through the
@@ -509,6 +728,25 @@ export default function TerminalSheet({
   mods.current = { ctrl: ctrlMod, alt: altMod };
 
   /**
+   * THE CHIP ROW'S OWN FIELD - the only door a soft keyboard has into this
+   * sheet (FPLAN-0446 round 3, @devpulse's ruling).
+   *
+   * Arming ctrl or alt is TYPING INTENT, stated out loud, and it needs a
+   * keyboard to be worth anything: "ctrl then a letter" has a letter in it.
+   * That affordance used to open the IME against xterm's own helper textarea,
+   * which put composed characters one step from the pty - the exact lane that
+   * turns `/clear` into `/prep`.
+   *
+   * So the affordance stays and the TARGET moves. The keyboard opens against
+   * this field instead, which belongs to the chip row and never to the room.
+   * BAUD reads what lands in it, translates it, and writes bytes - so what
+   * crosses to the pty is a byte this file chose, never whatever an autocorrect
+   * decided a moment later. Composition cannot reach the room raw because
+   * composition never touches anything the room can see.
+   */
+  const proxy = useRef<HTMLInputElement | null>(null);
+
+  /**
    * Whether focusing this terminal is allowed to summon the soft keyboard.
    *
    * PATRICK'S RULING, from live use: "any time I touch the terminal the phone
@@ -534,15 +772,28 @@ export default function TerminalSheet({
    *
    * The cost of `readOnly` while the keyboard is disallowed: xterm's paste and
    * IME composition ride that textarea's own events. Neither is reachable
-   * without a keyboard or a paste menu, and both come back the moment the
-   * field is a typing field again - which is any tap on the bottom rows.
+   * without a keyboard or a paste menu.
+   *
+   * ROUND 3 MADE THE ANSWER PERMANENT. Every caller now passes `false`: no tap
+   * and no chip opens a keyboard into the room, so that cost is no longer a
+   * cost with a way back - it is the shape of the thing. The parameter stays
+   * because what this function DOES is still "decide", and a room that one day
+   * needs a live-keystroke mode (round 4, option ii) turns it back on here, in
+   * one place, rather than by rebuilding the mechanism.
    */
+  /** xterm's own hidden textarea: the room's real keyboard surface, and since
+   *  this round the ONLY one typing goes through. */
+  const helperField = useCallback(
+    () => host.current?.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea") ?? null,
+    [],
+  );
+
   const allowKeyboard = useCallback((allowed: boolean) => {
-    const field = host.current?.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    const field = helperField();
     if (!field) return;
     field.readOnly = !allowed;
     field.inputMode = allowed ? "text" : "none";
-  }, []);
+  }, [helperField]);
 
   /** A latch is spent by the keypress it modified; a lock survives it. */
   const consumeLatch = useCallback(() => {
@@ -598,6 +849,97 @@ export default function TerminalSheet({
     return true;
   }, []);
 
+  /**
+   * TYPING MODE (FPLAN-0446 round 4, door C - Patrick's ruling of 19:13 after
+   * testing all three doors on the probe: *"type a and b actually cover the
+   * typing by a bit. type c is only one that works."* A and B put their door
+   * ON the line he was typing; the bar does not.)
+   *
+   * Round 3 made the room a view and that closed the mis-aim trap. It also
+   * muted every room BAUD has - *"I cant type in any termi al now"* - because
+   * the trap and the capability came through the same door. This is the door
+   * back, and the difference from the one that was closed is that it is
+   * ARMED DELIBERATELY, on a fixed target, and BAUD translates instead of
+   * letting composition reach the pty.
+   */
+  const [typing, setTyping] = useState(false);
+  /** The live answer for the native handlers, which must not close over a
+   *  stale render. */
+  const typingOn = useRef(false);
+  useEffect(() => {
+    typingOn.current = typing;
+  }, [typing]);
+  /** When arming happened. Declared up here, beside the flag it belongs to,
+   *  because the attach effect below now reads it too. */
+  const armedAt = useRef(0);
+
+  /**
+   * THE COMPOSITION IN FLIGHT - what BAUD has already told the room about it,
+   * so the commit at the end cannot say it twice.
+   *
+   * A predictive keyboard announces one word through two doors: the events
+   * that build it, and `compositionend` carrying the finished thing. Which
+   * door delivers depends on the browser and on whether the commit arrives
+   * before or after the key that caused it, so the lane below listens at both
+   * and this ref is how the second one knows what the first already sent.
+   * `start` is the fallback's anchor: on a browser whose `compositionend`
+   * carries no data, the field is read from where the composition began -
+   * xterm's own algorithm, kept as the belt to the event-data braces.
+   *
+   * `text` is the third source, and it is not decoration: MEASURED in Chrome
+   * over CDP, a space delivered as a KEY while a composition is open commits
+   * the word with NO `compositionend` event at all - the only trace of it left
+   * anywhere is the last `compositionupdate`. Without this the word is lost on
+   * exactly the keystroke Patrick reported it lost on.
+   */
+  const composing = useRef({ on: false, text: "", sent: "", start: 0 });
+
+  /** Open the chip row's field, which is what summons the keyboard. */
+  const openProxy = useCallback(() => {
+    const field = proxy.current;
+    if (!field) return;
+    field.value = "";
+    field.focus();
+  }, []);
+
+  /** And shut it, which is what puts the keyboard away. */
+  const closeProxy = useCallback(() => {
+    const field = proxy.current;
+    if (!field) return;
+    field.value = "";
+    field.blur();
+  }, []);
+
+  const captureOne = useCallback(
+    (event: InputEvent) => {
+      const field = proxy.current;
+      if (!field) return;
+      const { ctrl, alt } = mods.current;
+      const ctrlOn = ctrl !== "idle";
+      const altOn = alt !== "idle";
+
+      // Nothing is ever COMMITTED to this field - it exists to be read, not to
+      // hold text - so every path below clears it.
+      event.preventDefault();
+      const typed = event.data ?? "";
+      field.value = "";
+      if (event.isComposing || typed.length !== 1) return;
+      if (!ctrlOn && !altOn) {
+        // Both modifiers were dropped while the keyboard was up. A bare letter
+        // is not this door's business - the room is a view - so it goes
+        // nowhere and the door shuts.
+        closeProxy();
+        return;
+      }
+      const bytes = modifiedChar(typed, ctrlOn, altOn);
+      if (bytes === null) return; // no byte exists for it; keep the latch armed
+      write(bytes);
+      consumeLatch();
+      if (ctrl !== "locked" && alt !== "locked") closeProxy();
+    },
+    [closeProxy, consumeLatch, write],
+  );
+
   useEffect(() => {
     if (!host.current) return;
     if (refusal) {
@@ -628,6 +970,126 @@ export default function TerminalSheet({
     // pops a keyboard the moment it appears is the behaviour this round is
     // here to end, and it would be back on every reattach otherwise.
     allowKeyboard(false);
+    // WHILE THE BAR IS ARMED, BAUD OWNS THE KEYBOARD AND XTERM OWNS THE VIEW.
+    // Every one of xterm's key paths resolves a soft-keyboard keystroke by
+    // reading the textarea back out - the composition finalizer and the
+    // value-diff lane both - so with the lane below sending from the events
+    // themselves, those paths can only repeat a keystroke or send an empty
+    // one. Returning false here is the whole cut: composition events are not
+    // key events, so the preview xterm paints is untouched.
+    //
+    // DISARMED, NOTHING CHANGES: `true` is xterm's normal behaviour, which is
+    // what a room with no keyboard pointed at it has always had.
+    xterm.attachCustomKeyEventHandler(() => !typingOn.current);
+    // ...and the BAR goes down with it. A reattach re-fences the field, so a
+    // bar still claiming to be armed would point at a lane that refuses - the
+    // same lying bar this round is closing, one layer further down.
+    typingOn.current = false;
+    setTyping(false);
+
+    // AN ARMED BAR WITH NO KEYBOARD BEHIND IT IS A LIE about where the next
+    // keystroke goes, and this round exists because of that class of lie. The
+    // back gesture, a swipe, or the OS reclaiming focus all arrive here as a
+    // blur, so the bar follows the keyboard down.
+    //
+    // The grace window is not decoration: arming focuses this field, and focus
+    // can settle through an intermediate blur. Disarming on that would switch
+    // the bar off the instant it came on - a dead feature wearing a live one's
+    // clothes, which is how door C looked from the outside.
+    const onHelperBlur = () => {
+      if (!typingOn.current) return;
+      if (Date.now() - armedAt.current < BLUR_GRACE_MS) return;
+      typingOn.current = false;
+      setTyping(false);
+      allowKeyboard(false);
+    };
+    const helper = helperField();
+    helper?.addEventListener("blur", onHelperBlur);
+
+    /** One typed thing, on its way to the room. User input scrolls the view
+     *  the way a chip does - `scrollOnUserInput` cannot, because nothing
+     *  reaches xterm's own input path while the bar is armed. */
+    const toRoom = (text: string) => {
+      if (!text) return;
+      if (composing.current.on) composing.current.sent += text;
+      xterm.scrollToBottom();
+      if (!write(throughMods(text))) setError(DETACHED);
+    };
+
+    const onCompositionStart = () => {
+      composing.current = { on: true, text: "", sent: "", start: helper?.value.length ?? 0 };
+    };
+
+    /** The word as it stands. xterm paints its preview from this same data -
+     *  reading it costs nothing and is the only record of a composition that
+     *  a key commits without ever ending. */
+    const onCompositionUpdate = (event: CompositionEvent) => {
+      composing.current.text = event.data ?? "";
+    };
+
+    /**
+     * THE COMMITTED WORD, taken from the event rather than the field.
+     *
+     * `compositionend.data` IS the committed string - it is the one place the
+     * word exists that does not depend on the textarea having accepted it.
+     * xterm distrusts it for CJK, where the final character can differ from
+     * what was composed, and reads the field instead; that trade is the right
+     * one for a desktop IME and the wrong one for Gboard, whose prediction
+     * commits Latin words the field never sees. Data first, field second: if
+     * a browser sends no data, the field is read from the composition's own
+     * start, which is xterm's algorithm run by BAUD.
+     */
+    const onCompositionEnd = (event: CompositionEvent) => {
+      const { on, text, sent, start } = composing.current;
+      composing.current = { on: false, text: "", sent: "", start: 0 };
+      const held = helper?.value ?? "";
+      // THE FIELD IS EMPTIED ON EVERY COMMIT, armed or not. It is a keyboard
+      // surface, never a document, and leaving text in it is what lets xterm's
+      // delayed read send this same word a second time a tick from now. It
+      // also stops the value growing without bound across a session.
+      if (helper) helper.value = "";
+      if (!typingOn.current || !on) return;
+      // Event data first, the field second, the last update third: three
+      // sources for one word, in order of how much each depends on something
+      // outside the event itself.
+      toRoom(unsaid(event.data || held.slice(start) || text, sent));
+    };
+
+    /**
+     * EVERYTHING THAT IS NOT A COMPOSITION: the space that commits a word, the
+     * digits and punctuation prediction never composes, Enter, backspace, a
+     * paste. xterm's own input handler drops these on Android - it requires
+     * `!composed || !keyDownSeen`, and a Gboard insert is composed while a
+     * keydown is still open, so both halves are false.
+     *
+     * Composing events are left ALONE and that is deliberate: they are what
+     * xterm paints the in-terminal preview from, and the preview is the half
+     * that already works.
+     */
+    const onHelperInput = (event: InputEvent) => {
+      if (!typingOn.current || event.isComposing) return;
+      const bytes = editBytes(event);
+      if (bytes === null) return;
+      // A NON-COMPOSING EDIT WHILE A COMPOSITION IS OPEN IS THE COMMIT.
+      // MEASURED, not assumed: a space dispatched as a key over CDP commits
+      // the word and fires no `compositionend` at all, so this insert is the
+      // only announcement the word will ever get. It goes out FIRST, in the
+      // order it was typed, and `on` stays true so a late `compositionend`
+      // still de-duplicates against what just went.
+      if (composing.current.on) toRoom(unsaid(composing.current.text, composing.current.sent));
+      // Refusing the edit keeps the field empty, which is both the hygiene
+      // above and the guarantee that xterm's value-reading paths have nothing
+      // to deliver behind BAUD's back.
+      event.preventDefault();
+      if (helper) helper.value = "";
+      toRoom(bytes);
+    };
+
+    const onBeforeInput = (event: Event) => onHelperInput(event as InputEvent);
+    helper?.addEventListener("compositionstart", onCompositionStart);
+    helper?.addEventListener("compositionupdate", onCompositionUpdate);
+    helper?.addEventListener("compositionend", onCompositionEnd);
+    helper?.addEventListener("beforeinput", onBeforeInput);
 
     let live: WebSocket;
     try {
@@ -652,8 +1114,62 @@ export default function TerminalSheet({
       }
     };
 
+    /* ---------------------------------------------------------- liveness --
+     * All of this is per-SOCKET, so it lives in the socket's own scope as
+     * plain locals rather than as refs: a new attach gets a new clock, and
+     * there is no way for the previous socket's last-heard-from to survive
+     * into the next one and answer for it.
+     */
+    /** When ANYTHING last arrived on this socket. Any frame is proof of life. */
+    let lastRx = Date.now();
+    /** When the last pong came back, and whether this host answers pings. */
+    let lastPong = 0;
+    let pongLane = false;
+    /** Set when the watchdog is the one closing, so the close can say why. */
+    let silenced = false;
+    let watchdog = 0;
+
+    /** The probe, and later the keepalive. Text frame: @api's split is text =
+     *  control, binary = keystrokes, so this can never be typed into the room. */
+    const ping = () => {
+      if (live.readyState !== WebSocket.OPEN) return;
+      live.send(JSON.stringify({ type: "ping" }));
+    };
+
+    const tick = () => {
+      if (live.readyState !== WebSocket.OPEN) return;
+      const now = Date.now();
+      if (pongLane) {
+        // MEASURED, not guessed: this host answers, so an unanswered round
+        // trip is the verdict and 90 seconds of quiet is not needed.
+        if (now - lastPong > PONG_DEAD_MS) {
+          silenced = true;
+          live.close();
+          return;
+        }
+        ping();
+        return;
+      }
+      if (now - lastRx > SILENCE_MS) {
+        silenced = true;
+        live.close();
+      }
+    };
+
+    /** The watchdog runs WHILE VISIBLE and at no other time. A socket that dies
+     *  in a pocket is found on the next look, not by a timer nobody is reading -
+     *  same rule as `whileVisible`, and the same reason. */
+    const watch = (on: boolean) => {
+      window.clearInterval(watchdog);
+      watchdog = 0;
+      if (on) watchdog = window.setInterval(tick, LIVENESS_TICK_MS);
+    };
+
     live.onopen = () => {
       setLive(true);
+      setOpened(true);
+      // This socket reached open, so the ladder starts from the bottom again.
+      retries.current = 0;
       setStatus(`attached · ${roomLabel}`);
       setError(null);
       // FIRST FRAME IS THE SIZE. @api opens the PTY at 80x24 until told
@@ -667,6 +1183,13 @@ export default function TerminalSheet({
       // it could not fit - the stacking status bar and the scattered echo
       // Patrick reported. The desk gets its size back when this client leaves.
       sendResize();
+      // THE PROBE, second frame and once per socket. If this host answers, the
+      // watchdog stops guessing from silence and starts measuring round trips;
+      // if it does not, this is the only ping it will ever be sent and the
+      // fallback carries the room. Either way nothing here waits on the answer.
+      ping();
+      lastRx = Date.now();
+      if (document.visibilityState === "visible") watch(true);
       // The command line, typed only where it can land at a prompt. Sent WITH
       // its newline - the operator pressed a launch door and running it is the
       // point, exactly as `Terminal.tsx` does after `ptyCreate`. ONCE per
@@ -714,10 +1237,35 @@ export default function TerminalSheet({
     };
 
     live.onmessage = (event) => {
+      // ANY frame is proof of life, whatever it carries and whether or not it
+      // is understood. This is the one line the whole silence watchdog rests
+      // on, so it runs FIRST and unconditionally.
+      lastRx = Date.now();
       // Terminal data is binary in both directions. Anything else on this
       // socket is not room output and is not painted as if it were.
       if (event.data instanceof ArrayBuffer) {
         xterm.write(new Uint8Array(event.data));
+        return;
+      }
+      // Text is CONTROL - @api's own split, read from the other side of the
+      // wire. The only question this client asks is the ping, so the only
+      // answer it looks for is the pong; anything else a future host says here
+      // is ignored quietly rather than treated as an error, because a client
+      // that breaks on an unrecognised control frame is a client that cannot
+      // be extended past.
+      if (typeof event.data !== "string") return;
+      let control: unknown;
+      try {
+        control = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (control && typeof control === "object" && (control as { type?: unknown }).type === "pong") {
+        lastPong = Date.now();
+        // FEATURE-DETECTED, never assumed, and it latches: one pong is proof
+        // this host has the lane, and it stays proof for the life of the
+        // socket. No version number is asked for or believed.
+        pongLane = true;
       }
     };
 
@@ -729,8 +1277,17 @@ export default function TerminalSheet({
 
     live.onclose = (event) => {
       socket.current = null;
+      watch(false);
       setLive(false);
-      setStatus("detached - the room and whatever runs in it are still there");
+      setStatus(
+        silenced
+          ? // NAMED, because this one is the phone's own doing and an operator
+            // owed the truth about a dead room is owed it about the kill too.
+            pongLane
+            ? "the room stopped answering - let go of the socket"
+            : "no bytes from the room for 90s - let go of the socket"
+          : "detached - the room and whatever runs in it are still there",
+      );
       // A stranded delivery is not lost and must not look lost: the file IS on
       // disk, and its path is one reattach away from being typed.
       const waiting = pending.current;
@@ -866,17 +1423,37 @@ export default function TerminalSheet({
       }
       panFrom = event.touches.length === 1 ? event.touches[0].clientY : null;
       panRest = 0;
-      // The keyboard decision is made HERE, on touchstart, and the timing is
-      // the whole mechanism: the focus that summons the keyboard comes from
-      // the mousedown the browser synthesises AFTER this, so by the time
-      // xterm focuses its textarea the field already knows whether it is
-      // allowed to open a keyboard. Nothing is prevented and nothing is
-      // fought - focus still happens exactly as before, which is what keeps
-      // the tap-forwards-to-tmux and select-a-word paths intact.
-      if (event.touches.length === 1) {
-        const at = cellUnder(event.touches[0].clientX, event.touches[0].clientY);
-        allowKeyboard(at.row > xterm.rows - COMMENT_ROWS);
-      }
+      // THE ROOM IS A VIEW. NO TAP OPENS A KEYBOARD INTO IT (FPLAN-0446
+      // round 3, contract C).
+      //
+      // This line used to read `allowKeyboard(at.row > rows - COMMENT_ROWS)`:
+      // a tap in the bottom five rows armed the IME so the operator could type
+      // into Claude Code's own compose box. That door was built on purpose and
+      // it became the trap. Patrick aims for the baud box, catches the room
+      // instead, and types BLIND into a box he cannot see - and mobile IME
+      // into a terminal is unwinnable by construction: composition and
+      // autocorrect mean the characters that arrive are not the characters he
+      // typed. He reproduced the ceiling of that on demand: /help in the CC
+      // box drove the slash menu to `prep`, the same way /clear once did,
+      // because his composed characters never reach it as keystrokes, the
+      // menu never filters, and Enter takes whatever is highlighted. The
+      // wrong command runs.
+      //
+      // So the door closes, and the mis-aim trap dies STRUCTURALLY rather than
+      // by being made more accurate: with no focus there is no blind typing to
+      // recover from. Everything focus is load-bearing for is untouched - the
+      // tap still reaches tmux as a click, xterm still runs its own word
+      // selection, and the timing that made this work is unchanged. Only the
+      // ANSWER is now always no.
+      //
+      // The stated-intent door survives elsewhere: arming a sticky opens the
+      // keyboard against the chip row's own field, where BAUD translates what
+      // it catches instead of letting composition reach the pty raw.
+      // ...unless the operator SAID otherwise. The bar is a stated intent and
+      // a tap inside the room is not a retraction of it - re-fencing here would
+      // disarm typing mode the first time he touched the thing he is typing
+      // into. Disarmed, this is exactly the round-3 refusal it always was.
+      if (event.touches.length === 1 && !typingOn.current) allowKeyboard(false);
     };
     const onTouchMove = (event: TouchEvent) => {
       if (selectingRef.current) {
@@ -1002,6 +1579,11 @@ export default function TerminalSheet({
     // echoes nothing back either way, so silence is exactly what a working room
     // looks like while you type into a closed one.
     const typed = xterm.onData((bytes) => {
+      // An empty string is not a keystroke. xterm's composition finalizer can
+      // fire one - it sends `value.substring(start, end)` unguarded when a key
+      // ends a composition - and forwarding it would put an empty frame on the
+      // wire for a word that was never typed.
+      if (!bytes) return;
       if (!write(throughMods(bytes))) setError(DETACHED);
     });
     // Rotate the phone, open the soft keyboard, and the client is a different
@@ -1013,12 +1595,77 @@ export default function TerminalSheet({
     // unchanged - a socket still lives only while somebody is looking - this is
     // the other half of that sentence, which was missing.
     const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") {
+        // NOTHING RUNS IN A POCKET, the watchdog least of all: a timer that
+        // executed sockets while nobody was looking would be manufacturing the
+        // very churn this round is cutting.
+        watch(false);
+        return;
+      }
       const open = socket.current;
-      if (!open || open.readyState !== WebSocket.OPEN) setAttempt((n) => n + 1);
+      // THE RECONNECT LANE OWNS THIS NOW. Until r5 this line bumped `attempt`
+      // itself, which made the foreground edge a second, independent source of
+      // attaches - it could fire while a handshake was already in flight and
+      // throw away a socket that was seconds from opening. One lane decides
+      // when a socket opens (the effect below), and it is watching this same
+      // event; here the only job left is to stop pretending an unopen socket
+      // is worth resizing.
+      if (!open || open.readyState !== WebSocket.OPEN) return;
+      // A FRESH LOOK STARTS A FRESH MEASUREMENT. The clock is about how long
+      // the ROOM has been quiet while somebody was watching it, and a phone in
+      // a pocket was not watching - carrying that dead time forward would
+      // execute a healthy room on the first tick after every pocket.
+      lastRx = Date.now();
+      if (pongLane) {
+        lastPong = Date.now();
+        ping();
+      }
+      watch(true);
+      // THE SIZE IS RE-STATED ON EVERY RETURN, not only at open.
+      //
+      // Until this line the phone declared its geometry exactly twice: once in
+      // `onopen`, and again whenever its OWN box changed and the observer below
+      // fired. That is a one-shot declaration wearing a listener's clothes -
+      // every way the pty moves from the HOST side leaves the phone's box
+      // untouched, so nothing fires, and the phone goes on rendering a window
+      // it no longer fits. The room drifts wider and taller than the client;
+      // the client clips it.
+      //
+      // Patrick reported the shape of exactly that: the right edge chopped and
+      // the agent rows gone, WITH the tmux status bar still sitting at the
+      // bottom. Those two are not in conflict once the pty is BIGGER than the
+      // client - the room draws its bar as the last line of the stream, so the
+      // bar is the one thing that survives; what is lost is the body above it,
+      // and the columns past the client's width. The bar being visible is
+      // evidence FOR the mismatch, not against it.
+      //
+      // So the phone re-states what it already knows the moment he looks at it.
+      // Same idiom as `whileVisible` and for the same reason: no clock, no
+      // poll, nothing runs in a pocket - the wheel is read when it is read. A
+      // resize to the size it already is costs one small frame and is a no-op
+      // at the pty, which is the point: it is safe to say always, so it can be
+      // said unconditionally rather than guessed at.
+      try {
+        fit.fit();
+      } catch {
+        // Sheet closing, element gone. Not a failure - same rule as below.
+        return;
+      }
+      sendResize();
     };
     document.addEventListener("visibilitychange", onVisible);
 
+    /** The fit the observer owes, once the box stops moving. */
+    let settle = 0;
+    const fitAndTell = () => {
+      try {
+        fit.fit();
+      } catch {
+        // The sheet is closing and the element is gone. Not a failure.
+        return;
+      }
+      sendResize();
+    };
     const observer = new ResizeObserver(() => {
       /* ROUND 1b, AND A HYPOTHESIS NEITHER OF US LISTED: THE PROBE'S OWN
        * A FIT MID-DRAG DROPS THE SELECTION, so a drag holds this observer off.
@@ -1032,13 +1679,11 @@ export default function TerminalSheet({
         drag.current.heldFit = true;
         return;
       }
-      try {
-        fit.fit();
-      } catch {
-        // The sheet is closing and the element is gone. Not a failure.
-        return;
-      }
-      sendResize();
+      // TRAILING, never leading: the size worth declaring is the one the box
+      // came to rest at, and a leading call would declare the first frame of
+      // the keyboard animation as if it were the answer.
+      window.clearTimeout(settle);
+      settle = window.setTimeout(fitAndTell, FIT_DEBOUNCE_MS);
     });
     observer.observe(host.current);
 
@@ -1049,6 +1694,15 @@ export default function TerminalSheet({
       screen.removeEventListener("touchcancel", onTouchCancel);
       screen.removeEventListener("click", swallowClick, true);
       screen.removeEventListener("contextmenu", onContextMenu);
+      helper?.removeEventListener("blur", onHelperBlur);
+      helper?.removeEventListener("compositionstart", onCompositionStart);
+      helper?.removeEventListener("compositionupdate", onCompositionUpdate);
+      helper?.removeEventListener("compositionend", onCompositionEnd);
+      helper?.removeEventListener("beforeinput", onBeforeInput);
+      // A fit owed to a sheet that is closing is not owed at all - the element
+      // it would measure is on its way out.
+      window.clearTimeout(settle);
+      watch(false);
       fitRef.current = null;
       resizeRef.current = null;
       document.removeEventListener("visibilitychange", onVisible);
@@ -1065,7 +1719,139 @@ export default function TerminalSheet({
     // `opener` is frozen at mount like `attachedTo`, so it can never re-run
     // this effect - it is listed because the effect reads it, not because it
     // moves.
-  }, [attachedTo, mode, opener, refusal, write, attempt, throughMods, allowKeyboard]);
+  }, [attachedTo, mode, opener, refusal, write, attempt, throughMods, allowKeyboard, helperField]);
+
+  /**
+   * THE RECONNECT LANE - one place, and the only place, that decides when a
+   * socket opens (FPLAN-0446 r5).
+   *
+   * Before this, coming back into view was the ONLY way a dead room came back:
+   * a socket that died while Patrick was looking straight at it stayed dead
+   * until he backgrounded the app and returned. That is the wrong shape twice
+   * over - it makes recovery depend on a gesture that has nothing to do with
+   * the failure, and it means the longer he sits watching a room the further
+   * he is from it working.
+   *
+   * So the ladder runs WHILE VISIBLE, and it is a ladder rather than a poll
+   * for a measured reason: the room is opened `window-size smallest`, so every
+   * attach drags the desk's window down to the phone's columns and pays for a
+   * full repaint on the other end (5392 bytes for a one-column change, benched
+   * 2026-08-19). Retrying is not free and is not owed to anyone at a fixed
+   * rate. First rung immediate, then 1s, 3s, 6s, 12s, 30s, then it STOPS and
+   * says it stopped - because a room that has refused six times running is
+   * gone, not slow, and the honest answer to gone is a button rather than an
+   * ever-turning wheel.
+   *
+   * Hidden means idle: no timer survives into a pocket, and coming back into
+   * view resets the count, because a fresh look is a fresh chance.
+   *
+   * ONE THING THIS DELIBERATELY DOES NOT DO, said out loud rather than left to
+   * be discovered: it does not ask whether this sheet's TAB is the one on
+   * screen. Every open pane stays mounted and stays attached on purpose - a
+   * room drops its client only on the operator's own gestures - so a
+   * background pane recovering its room is the doctrine working, and the
+   * alternative is switching to a tab and finding a corpse there instead. The
+   * bill is bounded by the ladder: N dead panes cost at most N x 6 attaches
+   * per look, not a flap per pane forever.
+   */
+  useEffect(() => {
+    // Attached, or never going to be - either way there is nothing to retry.
+    // A read token gets no socket at all (the refusal is the answer), and
+    // retrying an auth refusal would be asking the same question louder.
+    if (live || refusal) {
+      setReconnecting(false);
+      return;
+    }
+    let timer = 0;
+    const armIn = (wait: number) => {
+      window.clearTimeout(timer);
+      setReconnecting(true);
+      timer = window.setTimeout(() => {
+        const open = socket.current;
+        // A HANDSHAKE IN FLIGHT IS NOT A REASON TO START A SECOND ONE. This is
+        // the cheapest of this round's four cuts and the one that mattered
+        // most on the wire: opening over a CONNECTING socket abandons a
+        // connection that was about to work and bills the desk for both.
+        if (open && open.readyState === WebSocket.CONNECTING) {
+          armIn(HANDSHAKE_POLL_MS);
+          return;
+        }
+        // AND IT CAME BACK WHILE THE RUNG WAS TICKING. `live` is React state,
+        // so between the socket opening and this component re-rendering there
+        // is a window where the effect has not been torn down yet - reading
+        // the socket itself closes it. Without this the very first rung after
+        // a slow open would tear down a working room.
+        if (open && open.readyState === WebSocket.OPEN) {
+          setReconnecting(false);
+          return;
+        }
+        retries.current += 1;
+        setAttempt((n) => n + 1);
+      }, wait);
+    };
+    const arm = () => {
+      window.clearTimeout(timer);
+      if (document.visibilityState !== "visible" || retries.current >= RECONNECT_TRIES) {
+        setReconnecting(false);
+        return;
+      }
+      armIn(RECONNECT_MS[Math.min(retries.current, RECONNECT_MS.length - 1)]);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        window.clearTimeout(timer);
+        setReconnecting(false);
+        return;
+      }
+      // A FRESH LOOK IS A FRESH CHANCE. Whatever was true of the host a minute
+      // ago, he is holding the phone now and the first rung is immediate.
+      retries.current = 0;
+      arm();
+    };
+    arm();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+    // `attempt` is here so each attempt re-arms the next rung; the counter it
+    // reads is a ref precisely so this effect is the only thing that reattaches.
+  }, [live, refusal, attempt]);
+
+  /**
+   * THE PROXY'S EVENTS ARE ATTACHED NATIVELY, and that is this round's fix
+   * rather than a style preference.
+   *
+   * Door C shipped with these on React's `onBeforeInput`/`onInput` props and
+   * delivered ZERO bytes to any pty. `onBeforeInput` is NOT the native
+   * `beforeinput` event: React carries a legacy synthetic event of the same
+   * name, and what arrives at `nativeEvent` can be a `TextEvent` with no
+   * `inputType` on it at all - which is the one field this lane reads.
+   *
+   * The compose box's Enter has used a native listener since round 2 for
+   * exactly this reason, and that lane was accepted 10/10 on his device under
+   * predictive text all session. So this is not a new idea being tried on him;
+   * it is the idiom already PROVEN on this hardware, applied to the field that
+   * was left on the unproven one.
+   *
+   * Registered against the element rather than through React, so nothing here
+   * depends on which synthetic events a future React version decides to
+   * polyfill.
+   */
+  useEffect(() => {
+    const field = proxy.current;
+    if (!field) return;
+    const onBefore = (event: Event) => captureOne(event as InputEvent);
+    const onIn = () => {
+      // The modifier lane reads `beforeinput`; nothing needs the commit.
+    };
+    field.addEventListener("beforeinput", onBefore);
+    field.addEventListener("input", onIn);
+    return () => {
+      field.removeEventListener("beforeinput", onBefore);
+      field.removeEventListener("input", onIn);
+    };
+  }, [captureOne]);
 
   /**
    * THE BELT RIDES ABOVE THE SOFT KEYBOARD (DPLAN-0301, Patrick: "the bottom
@@ -1083,10 +1869,85 @@ export default function TerminalSheet({
     const vv = window.visualViewport;
     if (!vv) return;
     const place = () => {
-      const strip = belt.current;
-      if (!strip) return;
       const hidden = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      strip.style.transform = hidden > 0 ? `translateY(-${hidden}px)` : "";
+      const strip = belt.current;
+      if (strip) strip.style.transform = hidden > 0 ? `translateY(-${hidden}px)` : "";
+
+      /* WHAT THE KEYBOARD ACTUALLY COVERS OF *THIS BOX*, which is not the same
+       * number as `hidden` and is the defect that shipped with door C.
+       *
+       * `hidden` asks "how much shorter is the visual viewport than the layout
+       * one". It used to compute to ZERO on Chrome, because phone.html asked
+       * for `interactive-widget=resizes-content` and a browser that honours it
+       * shrinks the LAYOUT viewport too, so the two measurements fell together.
+       * Correct for the belt - it needs no lift when the layout already moved
+       * it - and exactly wrong as a slide distance, so the slide never ran on
+       * the device it was written for. Typing mode went out with its visibility
+       * fix silently disabled.
+       *
+       * That token is GONE as of r8 (see phone.html for the whole reason: it
+       * was also resizing the pty to one row every time the keyboard opened),
+       * so `hidden` is a real number on Chrome now and the belt lifts on every
+       * browser. The measurement below did not have to change for that, and
+       * that is the point of it - it reads the rendered box rather than doing
+       * viewport arithmetic, so it was already right for both worlds.
+       *
+       * So the room measures against the BELT'S REAL TOP EDGE, after the belt
+       * has been lifted - not against the viewport, and not against a number
+       * computed from viewport arithmetic.
+       *
+       * The viewport bottom is the wrong reference and a bench caught it before
+       * this shipped: the belt is lifted to sit ABOVE the keyboard, so it
+       * occupies the bottom of what can be seen. Sliding the room until its
+       * last row reached the visible bottom parked that row squarely behind the
+       * belt. The room has to clear the BELT, which is lower than the keyboard.
+       *
+       * Measuring the rendered rect also means this cannot drift from the
+       * layout again: the type bar moving inside the belt made the belt taller,
+       * and a formula built out of viewport numbers would have needed to be
+       * told. `getBoundingClientRect` already knows.
+       */
+
+      /* THE ROOM SLIDES, IT DOES NOT SHRINK (round 4's rows-floor answer).
+       *
+       * If he types INTO the room he has to SEE the line he is typing, and the
+       * keyboard covers the bottom of it - which is where every prompt lives.
+       *
+       * The obvious fix is to shrink this box so the fitter drops rows. That
+       * would be a pty resize on every keyboard open and close, and a re-render
+       * into a shorter pane is exactly the frame collision benched as the real
+       * mechanism behind the garbled lines. So the grid is left completely
+       * alone and simply MOVED: the bottom edge lands at the top of the lifted
+       * belt, the top of the scrollback goes off screen, and
+       * `.baud-phone-term-screen` clips it because it is already
+       * `overflow: hidden`.
+       *
+       * Nothing reflows, the room keeps every row, and tmux is never told
+       * anything - so there is no damage to bound rather than a bounded amount
+       * of it. The taps keep working too, and better: `cellUnder` measures
+       * `.xterm-rows` with `getBoundingClientRect`, which reports the
+       * TRANSFORMED box, so the slide corrects the aim instead of skewing it.
+       */
+      const room = host.current;
+      const box = room?.parentElement;
+      if (room && box && strip) {
+        // Measured with the slide OFF, so the reading is the box's true
+        // position and not a function of last frame's answer.
+        room.style.transform = "";
+        const beltTop = strip.getBoundingClientRect().top;
+        const covered = Math.max(0, box.getBoundingClientRect().bottom - beltTop);
+        /* COVERED, NOT ARMED (r8). The gate used to be `typing && covered`,
+         * from a world where the composer's keyboard SHRANK the room - the
+         * layout viewport went with it, so the bottom rows stayed on screen by
+         * losing rows. r8 dropped `interactive-widget=resizes-content` to stop
+         * that pty resize, and the same change means a composer keyboard now
+         * hides the room's bottom behind the belt instead of shrinking it.
+         * The prompt, and whatever he just sent, live in exactly those rows.
+         * So the slide runs for any keyboard: nothing is told to tmux either
+         * way, and with no keyboard `covered` is zero by construction, because
+         * the belt's top edge IS the screen box's bottom edge. */
+        if (covered > 0) room.style.transform = `translateY(-${covered}px)`;
+      }
     };
     vv.addEventListener("resize", place);
     vv.addEventListener("scroll", place);
@@ -1095,20 +1956,152 @@ export default function TerminalSheet({
       vv.removeEventListener("resize", place);
       vv.removeEventListener("scroll", place);
     };
+    // `typing` STAYS A DEPENDENCY even though the slide no longer reads it:
+    // the slot changes SHAPE with the mode, so the belt's height changes with
+    // it, and every number here is measured off the belt's rendered top edge.
+    // A mode flip fires no visualViewport event, so this is the only thing
+    // that re-measures - without it the room would keep the slide it computed
+    // against the other mode's belt.
+  }, [typing]);
+
+  /**
+   * What to watch for on screen: the line with every space taken out.
+   *
+   * Whitespace is dropped from BOTH sides of the comparison because the room
+   * is a grid - a line that wraps is broken across rows and a box pads what it
+   * draws, so spaces are the one thing that reliably does not survive the trip.
+   * A tail rather than the whole line, because the head is what a narrow box
+   * truncates first.
+   */
+  const landmark = useCallback((literal: string): string => {
+    const bare = literal.replace(/\s+/g, "");
+    return bare.length < LANDMARK_MIN ? "" : bare.slice(-LANDMARK_MAX);
   }, []);
+
+  /** How many times the room is showing that landmark right now. */
+  const showings = useCallback((mark: string): number => {
+    const xterm = term.current;
+    if (!xterm || !mark) return 0;
+    const buffer = xterm.buffer.active;
+    // The visible screen and one screen of scrollback above it: the compose box
+    // is at the bottom, and anything older cannot be this send's echo.
+    const from = Math.max(0, buffer.length - xterm.rows * 2);
+    let shown = "";
+    for (let row = from; row < buffer.length; row += 1) {
+      shown += buffer.getLine(row)?.translateToString(true) ?? "";
+    }
+    // Rows join with NO separator on purpose, so a wrapped line becomes one
+    // string again - and the whitespace comes out of the haystack too, because
+    // the landmark had its own taken out and half a comparison is no
+    // comparison. This was a real bug for about a minute: "enter test" on
+    // screen never matches the landmark "entertest".
+    return shown.replace(/\s+/g, "").split(mark).length - 1;
+  }, []);
+
+  /**
+   * Submit once the room has SHOWN the line - or once waiting stops being
+   * reasonable.
+   *
+   * This is the ordering guarantee round 2 assumed and did not have. The CR
+   * cannot overtake a paste that has already been drawn, so waiting for the
+   * drawing is waiting for the far end to be ready, on its clock rather than a
+   * guess at its clock. A line that never appears still submits, because a
+   * refusal to submit would be a worse failure than the one being fixed.
+   */
+  const submitOnceLanded = useCallback(
+    (mark: string, before: number) => {
+      let waited = 0;
+      const submit = () => {
+        // The CR is a separate write and can fail on its own. That leaves the
+        // line TYPED BUT UNSUBMITTED, which is visible in the room and
+        // finishable with the ⏎ chip - so name exactly that, not "not sent".
+        if (!write("\r")) {
+          setError("the line was typed but not submitted - the room detached mid-send. Reattach and press ⏎.");
+        }
+      };
+      if (!mark) {
+        // Too short to recognise on screen. One turn of the loop is still
+        // strictly better than the same frame, so it does not go out inline.
+        window.setTimeout(submit, SUBMIT_LOOK_MS);
+        return;
+      }
+      const look = window.setInterval(() => {
+        waited += SUBMIT_LOOK_MS;
+        const landed = showings(mark) > before;
+        if (!landed && waited < SUBMIT_CEILING_MS) return;
+        window.clearInterval(look);
+        submit();
+      }, SUBMIT_LOOK_MS);
+    },
+    [showings, write],
+  );
 
   /**
    * Send the staged line: type it, then submit it.
    *
-   * TWO WRITES, NOT ONE, and the split is the safety. The literal goes out with
-   * no newline anywhere near it; `\r` is a second, separate byte. It is the
-   * same property `--send-room` had to enforce in the backend, except a PTY
-   * gives it for free - nothing on this path can append a newline on the
-   * operator's behalf, so a paste can never run itself.
+   * THE SHAPE IS DECLARED, NOT RACED (FPLAN-0446 round 2, 2026-08-19).
+   *
+   * The old comment here claimed two writes WERE the safety. Measured, they
+   * were the bug. Two writes are two WebSocket frames are two writes into the
+   * PTY, and whether the far end reads them as one chunk or two is decided by
+   * the network: a forked PTY with the child in raw mode reads `line\r` as ONE
+   * chunk 30/30 at a 0ms gap and as TWO 30/30 at 1ms or more. A reader with
+   * paste detection - Ink, which Claude Code is built on - treats a CR buried
+   * inside a chunk as pasted text and does NOT submit, and a lone CR as the
+   * Enter key. That knife edge is the submit lottery Patrick called "actualky
+   * almost un usable": the same tap, the same button, a different answer.
+   *
+   * So the line now goes out in a shape that says what it IS. Bracketed paste
+   * marks the literal as pasted text, and the `\r` after the closing marker is
+   * outside it - unambiguously a keypress, no heuristic left to lose. The race
+   * still physically exists and no longer has a losing side; measured through a
+   * real tmux client, all four landings are correct:
+   *
+   *   markers, coalesced -> pane reads `ESC[200~line ESC[201~\r`   (CR outside)
+   *   markers, separated -> pane reads `ESC[200~line ESC[201~`, `\r`
+   *   no markers, either -> pane reads `line\r` or `line`, `\r`
+   *
+   * WHOSE MODE IS BEING READ, because round 1 named this instrument wrongly and
+   * the measurement corrected it: `modes.bracketedPasteMode` here does NOT
+   * report Claude Code. Every room is a tmux session and the phone is a tmux
+   * CLIENT, so the peer that parses these bytes is tmux, and tmux turns
+   * bracketed paste on for its own client unconditionally. That is not a flaw
+   * in the guard - it is exactly right, because the entity whose mode is read
+   * is the entity that will interpret the markers. tmux then normalises: it
+   * re-emits the paste with markers to a pane that asked for them and STRIPS
+   * them for a pane that did not (measured both ways), so a program with no
+   * paste detection never sees an escape sequence it did not ask for.
+   *
+   * The old promise still holds, and by the same mechanism: nothing here can
+   * append a newline on the operator's behalf, so a paste can never run itself.
+   *
+   * ROUND 2 FAILED HIS ACCEPTANCE, AND THE SHAPE WAS NOT ENOUGH (round 2b,
+   * same day). Send 1 passed. Send 2 stranded in Claude Code's box through
+   * these very markers, and the send after it submitted the STALE line while
+   * the fresh text did not appear at all. That signature is an ORDERING
+   * INVERSION at the far end, not a paste-detection heuristic: the CR is acted
+   * on before the paste it followed is committed, so it submits whatever the
+   * box held a moment ago and the pasted text lands in the emptied box behind
+   * it. It explains both observations with one mechanism.
+   *
+   * WHAT THE BENCH COULD AND COULD NOT SETTLE. bash's readline is a genuine
+   * bracketed-paste reader and it ran the line correctly on BOTH shapes, four
+   * for four - so this is not a general property of paste-aware readers, it is
+   * specific to the far end here, and no reader available to bench reproduces
+   * it. That is why the fix below waits for EVIDENCE instead of guessing at a
+   * debounce it cannot measure.
    */
   function send() {
     const literal = text;
     if (!literal || refusal) return;
+    // Ask the peer what it accepts rather than assuming. No terminal yet means
+    // no socket either, and `write` below refuses on its own.
+    const bracketed = term.current?.modes.bracketedPasteMode ?? false;
+    const staged = bracketed ? `\x1b[200~${literal}\x1b[201~` : literal;
+    // Counted BEFORE the write, so re-sending a line already on screen cannot
+    // be satisfied by the older copy of itself.
+    const mark = landmark(literal);
+    const before = showings(mark);
     // WRITE FIRST, CLEAR SECOND - and that order is the whole fix. The old
     // order cleared the field and THEN discovered the socket was dead, so
     // Patrick's typed message vanished out of the box into nothing while the
@@ -1117,18 +2110,84 @@ export default function TerminalSheet({
     // that made it look like it had.
     //
     // The text belongs to the operator until the bytes are known to have gone.
-    if (!write(literal)) {
+    if (!write(staged)) {
       setError(DETACHED);
       return;
     }
     setText("");
-    // The submit byte is separate on purpose (above) and can fail on its own.
-    // That leaves the line TYPED BUT UNSUBMITTED, which is visible in the room
-    // and finishable with the ⏎ chip - so name exactly that, not "not sent".
-    if (!write("\r")) {
-      setError("the line was typed but not submitted - the room detached mid-send. Reattach and press ⏎.");
-    }
+    submitOnceLanded(mark, before);
   }
+
+  /**
+   * The live `send`, for the native listener below - which registers ONCE and
+   * would otherwise close over the first render's empty text forever.
+   */
+  const sendNow = useRef(send);
+  useEffect(() => {
+    sendNow.current = send;
+  });
+
+  /**
+   * ONE SEND PER ENTER, however many ways the browser announces it.
+   *
+   * Enter is caught twice on purpose (see the listener below). On every browser
+   * measured, `preventDefault()` on the keydown suppresses the `beforeinput`
+   * that would follow - but "measured" is not "guaranteed", and a double submit
+   * would be a worse bug than the one this round is fixing. So the second
+   * announcement of the same Enter is dropped, and the flag clears on the next
+   * turn of the event loop so the NEXT Enter is its own.
+   */
+  const announced = useRef(false);
+  const submitOnce = useCallback(() => {
+    if (announced.current) return;
+    announced.current = true;
+    window.setTimeout(() => {
+      announced.current = false;
+    }, 0);
+    sendNow.current();
+  }, []);
+
+  /**
+   * ENTER, CAUGHT THE WAY ANDROID ACTUALLY SENDS IT (FPLAN-0446 round 2).
+   *
+   * The composer's `onKeyDown` tested `event.key === "Enter"` and nothing else,
+   * which is precisely the one signal Gboard does not deliver: with predictive
+   * text on, keydown arrives as `Unidentified` / keyCode 229 and the operator's
+   * intent only exists in `beforeinput`. So the handler never ran, the textarea
+   * took the break, and the sanitiser in `onChange` flattened it to a space -
+   * Patrick's third outcome, the one where Enter appears to do nothing at all.
+   * That is why it was Enter-only and the send button never shared it.
+   *
+   * BELT AND BRACES, the same reasoning as the `readOnly` + `inputMode` pair
+   * this file already uses for the keyboard: keep the keydown path and add the
+   * input-intent path, because the round must not hinge on which signal this
+   * month's keyboard fires. A NATIVE listener rather than React's synthetic
+   * `onBeforeInput`, because `inputType` and `isComposing` are the whole point
+   * and reading them off the real event removes any question of what React's
+   * wrapper does with them.
+   *
+   * `isComposing` is the guard: an Enter that closes an IME composition is the
+   * operator accepting a WORD, not submitting a line. Send on the next one.
+   */
+  useEffect(() => {
+    const field = compose.current;
+    if (!field) return;
+    const intent = (event: InputEvent) => {
+      if (event.isComposing) return;
+      if (event.inputType !== "insertLineBreak" && event.inputType !== "insertParagraph") return;
+      event.preventDefault();
+      submitOnce();
+    };
+    field.addEventListener("beforeinput", intent);
+    return () => field.removeEventListener("beforeinput", intent);
+    // `typing` IS A DEPENDENCY, and it is load-bearing rather than tidy. The
+    // slot swaps its contents for the armed bar, so this textarea UNMOUNTS on
+    // arm and a brand-new one mounts on disarm. Without `typing` here the
+    // effect would not re-run, `compose.current` would be a fresh element
+    // nobody listened to, and Enter would stop sending the moment he came back
+    // from typing mode - the composer's own lane, broken by a mode it is not
+    // even in. The dependency is what makes "morphs in place" safe.
+  }, [submitOnce, typing]);
 
   /**
    * Zoom the room's type - and then tell the room, which is the half that makes
@@ -1166,7 +2225,12 @@ export default function TerminalSheet({
     if (!field) return;
     field.style.height = "auto";
     field.style.height = `${field.scrollHeight}px`;
-  }, [text]);
+    // `typing` for the same reason as the Enter listener above: coming back
+    // from armed mode mounts a fresh textarea with no scripted height, and a
+    // half-written three-line message would be shown one line tall until the
+    // next keystroke. React keeps `text` across the swap; this keeps the shape
+    // of it.
+  }, [text, typing]);
 
   /* THE COPY LANE.
    *
@@ -1216,10 +2280,89 @@ export default function TerminalSheet({
     );
   }
 
-  /** A key chip. Same promise as every other control, so the same audit. */
+  /** A key chip. Same promise as every other control, so the same audit.
+   *
+   *  EVERY chip drops the mirror, and this is the single funnel that makes the
+   *  drift rule enforceable rather than aspirational: esc, tab, ^C, the arrows
+   *  and ⏎ all arrive here, and every one of them can move the room's cursor
+   *  or rewrite its line (tab-completion rewrites it outright). After any of
+   *  them BAUD no longer knows what the line holds, so it stops pretending to. */
   function press(bytes: string) {
+    // A chip IS user input, so the view goes where user input goes. xterm's
+    // `input()` would do this via `scrollOnUserInput`, and the spec asked for
+    // it, but routing chip bytes through `input()` sends them out of `onData`
+    // - the one lane that applies the sticky modifiers - and they have already
+    // been through it here. That is a double transform, so the scroll is taken
+    // directly and the bytes keep their single path.
+    term.current?.scrollToBottom();
     if (!write(bytes)) setError(DETACHED);
   }
+
+  /**
+   * THE TYPE BAR'S ONE JOB: arm, or disarm - and what it arms is now XTERM'S
+   * OWN TEXTAREA, not a field of BAUD's beside it.
+   *
+   * Door C typed into a hidden proxy and reconstructed the room's line by
+   * diffing that field against a remembered copy. That pattern is dead, and it
+   * is dead on evidence rather than taste: noVNC shipped it (PR #301, 2013,
+   * for our exact reason - Chrome Android sends no usable key events) and
+   * REMOVED it, because a mirror cannot know when the far end rewrites its own
+   * line (issue #357, closed 2015 without a fix). A tmux room rewrites its line
+   * constantly - tab completion, ctrl-R, prompt redraws, background output, vim
+   * modes - so every one of those desynced BAUD's copy, and the next keystroke
+   * paid for it with backspaces computed against text the operator never typed.
+   *
+   * The fence round 3 built is kept, but it moves from CAPABILITY to MODE.
+   * Disarmed, the textarea is still focusable and still xterm's - it just
+   * carries `inputMode="none"`, so a stray tap in the room raises no keyboard
+   * and the mis-aim trap stays shut. Armed, it is a normal text field and
+   * xterm handles it: composition, autocorrect commits and multi-byte input all
+   * resolve inside xterm before `onData` ever fires, which is the same lane the
+   * modifier chips have always trusted.
+   *
+   * What that buys without building it: xterm parks this textarea ON THE CURSOR
+   * CELL as the cursor moves, and paints in-progress composition there in the
+   * terminal's own font. TEXT APPEARS IN THE ROOM AS HE TYPES - the thing
+   * Patrick asked for - because the browser is drawing it where the room says
+   * the cursor is.
+   */
+  const toggleTyping = useCallback(() => {
+    // THE REF IS THE SOURCE, NOT THE UPDATER. This read the previous state
+    // inside a `setTyping` updater and did its work in there - focus and the
+    // flag - which is a side effect in a function React
+    // requires to be pure and is allowed to call more than once. A replay that
+    // saw the already-toggled value would flip the flag back to false while
+    // the committed state stayed true: a bar showing ARMED over a lane that
+    // believes it is idle, which is precisely how the live failure looked.
+    const now = !typingOn.current;
+    typingOn.current = now;
+    armedAt.current = Date.now();
+    setTyping(now);
+    // The mode is the fence, so flipping the mode IS the arm. Focus second:
+    // the tap on this bar is the user gesture that makes opening a keyboard
+    // allowed at all, and it only opens against a field that accepts text.
+    allowKeyboard(now);
+    if (now) term.current?.focus();
+    else helperField()?.blur();
+    /* AND THE RAIL IS TOLD, which it was not before r8 and now must be.
+     *
+     * `onComposeFocus` means what its comment says - "the soft keyboard is
+     * about to eat half the screen" - and in armed mode it is. Two reasons it
+     * has to be said HERE rather than left to the textarea's own handlers.
+     * The honest one: the keyboard is open in both modes, so a rail that only
+     * compacts for the composer is compacting for the wrong half of the
+     * feature. The mechanical one: the textarea now UNMOUNTS on arm, and an
+     * unmounted element fires no blur - so without this the rail would stay
+     * compacted forever after one trip through typing mode.
+     *
+     * LAST, AND THAT ORDER IS DELIBERATE. `term.current.focus()` above pulls
+     * focus off the compose textarea while it is still mounted, which fires
+     * its `onBlur` synchronously - and that handler says `false`. Said before
+     * the focus move, this would be overwritten by it and the rail would stay
+     * open over an armed room. Said after, it is the last word.
+     */
+    onComposeFocus?.(now);
+  }, [allowKeyboard, helperField, onComposeFocus]);
 
   /** A chip through the stickies: arrows are the one family that combine
    *  (Ctrl+arrow is word-jump/pane-nav in real rooms); everything else on
@@ -1276,7 +2419,9 @@ export default function TerminalSheet({
         pending.current = { bytes, path };
         setStatus(`saved · ${path}`);
         setError(`the photo is saved at ${path} but the room detached before it could be typed - reattaching to deliver it`);
-        setAttempt((n) => n + 1);
+        // The operator is waiting on a delivery, so this is a hand-driven
+        // retry and starts the ladder over, exactly as the button does.
+        reattachNow();
       }
     } catch (cause) {
       // The upload failed, so NOTHING was typed. Say which half broke - an
@@ -1313,21 +2458,11 @@ export default function TerminalSheet({
         <p className="baud-phone-term-status">{status}</p>
       )}
 
-      {/* THE DOOR BACK IN. Every sentence above tells the operator to reattach,
-          so there has to be something to press - a diagnosis with no remedy is
-          just a nicer way to be stuck. Rendered only while the socket is down,
-          because a reattach button on a live room is an invitation to churn a
-          working connection. Detached is a normal state here, not an error:
-          nothing was lost, the room is still running, and this is one tap. */}
-      {!refusal && !live ? (
-        <button
-          type="button"
-          className="baud-phone-term-reattach"
-          onClick={() => setAttempt((n) => n + 1)}
-        >
-          reattach to {roomLabel}
-        </button>
-      ) : null}
+      {/* THE DOOR BACK IN MOVED ONTO THE GRID (r5) - see the overlay below.
+          It was a line above the terminal, which is a line an operator can
+          scroll past, glance over, or simply not connect to the picture that
+          still looks like a room. The picture is what lies, so the correction
+          goes on the picture. */}
 
       {/* Refused, never hidden, and never a dead button: a read token gets the
           sheet, the reason, and no socket. */}
@@ -1339,6 +2474,39 @@ export default function TerminalSheet({
 
       <div className="baud-phone-term-screen">
         <div ref={host} className="baud-phone-term-host" />
+        {/* A DEAD ROOM HAS TO LOOK DEAD, and until this it did not.
+            xterm keeps painting the last frame it was handed - it can do
+            nothing else, the bytes simply stopped - so a detached room and a
+            quiet room are the same picture, and Patrick spent an evening
+            typing into one of them. The overlay is deliberately ON the grid
+            rather than above it: it covers the thing that is lying, it cannot
+            be scrolled away from, and it is where a thumb already is.
+            The stale frame stays legible underneath, dimmed. It is the last
+            true thing the room said and is often still worth reading - what it
+            must never again do is pass for now. */}
+        {!refusal && !live && (opened || !reconnecting) ? (
+          <div className="baud-phone-term-dead">
+            <p className="baud-phone-term-dead-word">{opened ? "detached" : "not attached"}</p>
+            <p className="baud-phone-term-dead-why">
+              {opened
+                ? `${roomLabel} is still running. This is the last frame the phone was sent, not the room now.`
+                : `the phone has not got into ${roomLabel}.`}
+            </p>
+            <button type="button" className="baud-phone-term-reattach" onClick={reattachNow}>
+              {reconnecting ? "reattaching…" : `reattach to ${roomLabel}`}
+            </button>
+            {/* Two different situations, said in two different sentences: a
+                retry is armed, or the phone has stopped trying by itself. A
+                UI that shows the same thing for both is telling one of them a
+                lie, and the one it lies to is the operator waiting on a
+                reconnection that is never coming. */}
+            <p className="baud-phone-term-dead-why">
+              {reconnecting
+                ? "trying again by itself while this screen is open"
+                : "not trying any more - the room did not answer. Tap to try again."}
+            </p>
+          </div>
+        ) : null}
         {/* ON the screen, not above it: a corner affordance costs no row, and
             in fullscreen it is also the way back out, which is exactly where a
             thumb looks for it. The toggle only sets a class on the section this
@@ -1438,6 +2606,18 @@ export default function TerminalSheet({
       {/* THE BELT: the key row and the compose bar, one strip, lifted above
           the soft keyboard by the visualViewport effect - see its comment. */}
       <div ref={belt} className="baud-phone-term-belt">
+        {/* THE TYPE BAR IS NOT HERE ANY MORE, and its row went back to the
+            terminal (r8, Patrick 00:39: *"type in this room, its going to be
+            the only chatbox we need... I dont need 2 comment boxes"*).
+
+            It was a permanent row above this belt, which is the cost door C
+            was chosen for paying honestly - and once typing mode worked, that
+            row was a SECOND compose surface parked above the first. The two
+            are now one slot at the bottom of this belt with two modes; see it
+            there. What did NOT merge is the mechanism: the room still takes
+            raw keys and the baud box still predicts, because per-keystroke
+            terminal input and predictive text cannot share one surface. This
+            round merges the FOOTPRINT, not the lane. */}
         {/* THE STRIP IS GONE; THE TWO DOORS IT CARRIED ARE NOT. Its readouts
             were instruments for one question - why a drag collapsed at 12-14
             characters - and that question is answered, so the amber dashed box
@@ -1478,6 +2658,53 @@ export default function TerminalSheet({
             </div>
           </div>
         ) : null}
+        {/* THE CHIP ROW'S OWN FIELD. It lives here, inside the row that owns
+            it, rather than off in a corner of the sheet - the keyboard this
+            opens belongs to these two buttons and to nothing else.
+
+            Visually absent, NOT display:none: a field that is not rendered
+            cannot take focus, and focus is the entire mechanism. It is one
+            pixel, transparent and unreachable by a thumb, so the only way in
+            is arming a modifier.
+
+            autoCorrect/autoCapitalize/spellCheck off, and it never holds a
+            value for longer than one event - there is nothing here for a
+            keyboard to predict FROM - which was the point until typing mode,
+            and it stays that way: typing mode no longer touches this field at
+            all - it arms xterm's own textarea instead. */}
+        <input
+          ref={proxy}
+          className="baud-phone-term-proxy"
+          type="text"
+          // NOT `aria-hidden` any more. It was, and a focused aria-hidden
+          // element is a contradiction the platform is entitled to resolve
+          // however it likes - which is a poor thing to be relying on when the
+          // whole feature is "this field receives the keyboard". A label
+          // instead: honest to assistive tech, and nothing refuses to attach.
+          aria-label="terminal keyboard input"
+          // UNCONTROLLED, and NOT readOnly. Both are load-bearing: a readOnly
+          // field fires no `beforeinput` at all - it is the very trick this
+          // sheet uses elsewhere to keep a keyboard shut - and a React-
+          // controlled value would fight the imperative clearing that keeps
+          // this field empty between keystrokes.
+          defaultValue=""
+          tabIndex={-1}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          // enterKeyHint so the soft keyboard offers a sensible return key
+          // while typing mode is armed - it is the room's Enter, not a form's.
+          enterKeyHint="send"
+          // `beforeinput` and `input` are attached NATIVELY in an effect below,
+          // NOT here - see it for why. React's `onBeforeInput` is a different
+          // event wearing the same name.
+          // NO onBlur. There was one, and it disarmed typing mode when this
+          // field lost the keyboard. Typing mode does not live here any more -
+          // it arms xterm's own textarea, and that textarea's blur is watched
+          // in the attach effect - so a handler here would be a no-op wearing
+          // a safety mechanism's clothes.
+        />
         <nav className="baud-phone-term-keys">
           {/* The sel toggle used to open this row. It moved into the terminal's
               view column on Patrick's placement - see it there. The row is back
@@ -1513,22 +2740,25 @@ export default function TerminalSheet({
                   // ARMING SUMMONS THE KEYBOARD (Patrick, first thumb test:
                   // "my keyboard would pop up so I can enter the next piece").
                   // A soft keyboard only exists while a field has focus, so
-                  // the latch focuses the terminal - the tap is a user
-                  // gesture, which is what lets focus() open the keys.
+                  // arming focuses one - the tap is a user gesture, which is
+                  // what lets focus() open the keys at all.
                   //
                   // ARMING A STICKY IS TYPING INTENT, stated rather than
                   // guessed at from a coordinate - so this lane opens the
                   // keyboard from anywhere in the room, and it is the answer
                   // for a room whose input is not at the bottom.
-                  if (state === "idle") {
-                    allowKeyboard(true);
-                    term.current?.focus();
-                  }
+                  //
+                  // ROUND 3 MOVED WHICH FIELD, not whether: the keyboard now
+                  // opens against the chip row's own input, never xterm's, so
+                  // what it produces is translated here instead of reaching
+                  // the pty as composition. Disarming shuts it again - a
+                  // keyboard with no modifier behind it has nothing to type.
+                  if (state === "idle") openProxy();
+                  else closeProxy();
                 }}
                 onHold={() => {
                   set("locked");
-                  allowKeyboard(true);
-                  term.current?.focus();
+                  openProxy();
                 }}
               >
                 {which}
@@ -1549,12 +2779,18 @@ export default function TerminalSheet({
           ))}
         </nav>
 
-        <div className="baud-phone-term-input">
-        {/* THE PICKER. `accept="image/*"` is the whole integration: Android
-            offers the camera AND the gallery from this one input, with no
-            native code and no permissions dance. `capture` is deliberately
-            NOT set - it would force the camera and lock out the screenshot
-            Patrick actually asked for. */}
+        {/* THE PICKER, and it sits OUTSIDE the slot on purpose. It is `hidden`,
+            so it costs the belt nothing wherever it hangs - and the slot below
+            swaps its contents for the armed bar, which would unmount this
+            input mid-upload if it lived in there. `sendPhoto` writes to
+            `picker.current` after an await; a ref that can go null under a
+            mode change is a race nobody would ever reproduce on purpose.
+
+            `accept="image/*"` is the whole integration: Android offers the
+            camera AND the gallery from this one input, with no native code and
+            no permissions dance. `capture` is deliberately NOT set - it would
+            force the camera and lock out the screenshot Patrick actually
+            asked for. */}
         <input
           ref={picker}
           className="baud-phone-term-picker"
@@ -1566,6 +2802,78 @@ export default function TerminalSheet({
             if (file) void sendPhoto(file);
           }}
         />
+        {/* ------------------------------------------------------ THE ONE SLOT
+            Patrick's ruling of 00:39, r8: one input footprint, not two. The
+            same rectangle carries both modes and MORPHS between them.
+
+              default - the baud composer, unchanged to the byte: attach, a
+                        predictive textarea (his voice dictation lands in it),
+                        commit-on-send with the draw handshake behind it.
+              armed   - raw keys to the room, and the whole rectangle says so.
+
+            THE MODE IS ALWAYS LITERAL WORDS, never a lit icon - his trust rule,
+            and the one thing this round could not trade away for width. Armed
+            reads its state in a whole sentence; disarmed, the door into it is
+            the word `room`.
+
+            THE COST IS NAMED, and MEASURED off the built stylesheet at 360px
+            rather than estimated. The arm door takes the compose field from
+            221px to 175px - ~23 characters a line down to ~17 - and its
+            max-height went up to hold roughly the same amount of his message
+            as before (~120 characters visible, now ~112; at the old cap it
+            would have been ~89). What it buys: the belt goes 143px to 111px
+            with the box empty, which is 32px - about two rows - handed back to
+            the terminal permanently. */}
+        {/* NO STATE CLASS ON THE ROW. There was one and it styled nothing: the
+            armed bar fills the slot on its own `flex: 1`, so the row needs to
+            know nothing about the mode. The mode is already legible from the
+            child that is mounted - `-typebar-on` or `-arm` - which is a truer
+            signal than a class the row carries on its behalf. */}
+        <div className="baud-phone-term-input">
+        {typing ? (
+        /* ARMED. Loud, and the loudness is the point: every keystroke is
+           leaving this face for a real program. The bar occupies the slot the
+           composer had, so there is no doubt about which surface is live - the
+           composer is not sitting beside it greyed out, inviting a mis-aim. It
+           is the whole control, and a tap anywhere on it stops. */
+        <button
+          type="button"
+          className="baud-phone-term-typebar baud-phone-term-typebar-on"
+          aria-pressed
+          title="typing goes to the room - tap to stop, put the keyboard away and get the baud box back"
+          // NO FOCUS THEFT - the rule `HoldButton` has carried since DPLAN-0301
+          // and the one door C failed to apply, which is the likeliest reason
+          // it typed nothing. Tapping a <button> gives IT the focus; the
+          // handler then moves focus elsewhere, and on a phone those two can
+          // land in either order. If the button's focus arrives second, the
+          // field is blurred the instant it was focused - keyboard gone or
+          // pointed at the wrong place, bar still showing armed.
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={toggleTyping}
+        >
+          typing → the room · raw keys · tap to stop
+        </button>
+        ) : (
+        <>
+        {/* THE DOOR IN. Leftmost, so the paperclip keeps its own rule - it sits
+            directly LEFT OF THE LINE IT WRITES INTO - and so the right edge of
+            the row stays what it has always been: send, under the thumb.
+            Quiet: dim ink, no accent, no glow. It is doing nothing yet, and it
+            must not compete with the room above it while that is true. */}
+        <button
+          type="button"
+          className="baud-phone-term-arm"
+          disabled={Boolean(refusal)}
+          aria-pressed={false}
+          title={
+            refusal ??
+            "type directly in the room: the keyboard opens, characters land in the room as you type, and autocorrect stays out of the way - this box is the predictive one and it comes back when you stop"
+          }
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={toggleTyping}
+        >
+          room
+        </button>
         {/* A PAPERCLIP, NOT THE WORD. Patrick, dictating: "just do the paperclip
             thing. And then make it just fill that space... paperclip on the
             left, you have send on the right." The word cost the line most of a
@@ -1645,8 +2953,10 @@ export default function TerminalSheet({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               // Without this a textarea would insert the newline AND send.
+              // It also suppresses the `beforeinput` that would otherwise
+              // announce the same Enter a second time - see `submitOnce`.
               event.preventDefault();
-              send();
+              submitOnce();
             }
           }}
         />
@@ -1655,10 +2965,17 @@ export default function TerminalSheet({
           className="baud-phone-term-send"
           disabled={Boolean(refusal) || !text}
           title={refusal ?? "type this line, then submit it"}
-          onClick={send}
+          // THE SAME PATH AS ENTER, to the byte. Patrick's own observation -
+          // "the send button is exactly as inconsistent" - is what proved the
+          // lottery lived below the keyboard, and the two must never be able
+          // to drift apart again. Sharing `submitOnce` also means a double tap
+          // cannot fire two sends.
+          onClick={submitOnce}
         >
           send
         </button>
+        </>
+        )}
         </div>
       </div>
     </section>

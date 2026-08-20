@@ -1137,6 +1137,63 @@ back to anything, so **leaving is the read** — the marker moves on close, neve
 on open, so nothing can be marked read while it is still arriving behind the
 screen you are looking at.
 
+**The name in the header is the refresh** *(Patrick, 2026-08-19: browser and OS
+gestures fight him for that gesture, so refreshing meant reaching for browser
+chrome every time)*. Tapping `BAUD` flashes it amber for 200ms and then does a
+full `location.reload()` — the same thing his browser refresh does, deliberately,
+because that is the gesture being replaced. It is lossless for the reason he
+already refreshes freely: nothing this face knows lives only in this face. The
+seat is in `localStorage`, every room is a tmux session on the host, and the
+fleet is one poll away. So there is no confirm, no double-tap, and no ceremony.
+
+The 200ms is not a delay, it is the acknowledgement. A tap that shows nothing
+until the page comes back reads as a dead button on a slow reconnect, and the
+operator's next move is to tap it again. `:active` paints amber while the finger
+is still down — instant, and it costs no render — and the flash holds through the
+reload.
+
+**And the name wears the wordmark's green** *(Patrick, same day, after thumb-
+testing it: "it was green before now its white. I liked the green")*. It drinks
+`--baud-green` and a glow at the desktop wordmark's own ratio — 0.6em of the type
+size, so 8px around 13.6px of text rather than the desk's 12px around 20px, which
+at this size would be a smudge. One identity in two sizes. The tap still answers
+amber, halo included, because amber on green is a state change you cannot miss
+and amber on pale was one you could.
+
+**Where the green had gone is worth more than the green.** It had never been
+there: `.baud-phone-title` resolves to `--baud-ink` in *every* committed state of
+this face, from the commit it was born in to the one before this round, and
+turning the span into a button did not change it — measured at
+`rgb(214, 226, 220)` both ways. But the phone CSS bundle can only ever have been
+one of four builds, one per commit that touched a stylesheet, and **the host's
+own access log names three bundles it has served — and two of them match no
+commit at all.** The bundler never moved in that window (the single dependency
+change since the face landed added a library), and the third bundle reproduces
+byte-for-byte today, so the mismatch is content and not tooling.
+
+So `rebuild-is-deploy` has twice served a phone face that was never committed,
+and it reverted silently the next time anyone built from a clean tree. That is
+the hole, named rather than shamed: the served-bytes check this repo already runs
+proves *tree matches serve*, which is not the same claim as *git matches serve*.
+The bundles themselves are unrecoverable — `emptyOutDir` wipes `dist-phone` on
+every build — so whether one of them carried a green name cannot be proven. It is
+the only window in which it could have existed, which makes his memory the most
+likely honest witness in the room.
+
+**Only the hit area grew.** The word is a `<button>` now and its position and
+size are unchanged to two decimal places: `x 12.00, y 6.14, 37.09 × 16.00` before
+and after, header height `31.00` both, measured in a headless browser against a
+control styled the way the span was. The thumb target is a pseudo-element, so the
+layout never learns about it: it reaches the screen's own left edge, up through
+the notch inset, down to the header's bottom edge, and right by 10 of the 14
+pixels of gap — leaving four pixels of dead space that always belong to nobody.
+That is **60 × 30** on a 360px face, plus whatever the safe-area inset adds when
+it is installed. It deliberately stops at the header's bottom edge: an overhang
+there would take taps from the wheel, and a refresh that eats a card tap is a
+worse bug than a target 14 pixels short of the 44px guideline. Going the rest of
+the way would cost either the header height Patrick fought for (*"probs 3
+space"*) or those wheel taps, so it is his ruling, not mine.
+
 **Three verbs, and refusal is a state rather than an absence.** The phone can
 now *wake* an agent, *end a room* and *lock the machine's screen* — chips under
 each card, plus one lock chip in the header, because there is one machine. Under
@@ -2270,6 +2327,514 @@ It goes through the same gate now, and **`whileVisible` holds the only
 `setInterval` left in the phone face** — every repeating lane on this face is
 gated by construction rather than by discipline. The wake tick earns its keep
 most here, on the one screen whose whole job is to be current.
+
+### One message a frame
+
+*DPLAN CPU round, 2026-08-19, from Patrick's measurement of his own laptop: with
+the desktop face open and doing nothing visible, the webview held 40% of a core
+and the backend 35% - **~75% steady**, after nearly four minutes of uptime.* His
+words were the whole brief: *"phone is my only option at these numbers."*
+
+**The suspects were wrong and the measurement said so.** A poll loop, an
+animation that never idles, a face that re-renders per event - none of them.
+Measured against a room attached and nothing printing in it, the whole face
+costs **~3.4% of a core**: the fleet snapshot is 40ms of CPU against a 5s
+cadence, the pty reader is a blocking read rather than a spin, the resize path
+is debounced through `cancelAnimationFrame`, and the two infinite `box-shadow`
+animations only exist while a card is actually dispatched or actually running
+sub-agents. The cost was never idle cost. It was **stream** cost.
+
+**And the stream's cost rides on the number of messages, not on their size.**
+Two loads through one attached room, same terminal, same window:
+
+| what the room printed | bytes | writes/s | cost |
+| --- | --- | --- | --- |
+| nothing | 0 | 0 | 3.4% |
+| a whole 48-row screen, 10x a second | ~44 kB/s | 10 | 32.9% |
+| ~200 tiny flushed writes a second | ~1.6 kB/s | 200 | **134.5%** |
+
+Twenty-seven times fewer bytes cost four times the CPU. That is the shape of an
+agent streaming tokens, and it was the shape of Patrick's laptop.
+
+**So a read stopped being a paint.** `pty.rs` gathers what the pty hands back
+for one 60Hz frame and crosses the bridge once, on a thread that sleeps on a
+condvar while the terminal is quiet - an idle terminal wakes nobody at all. The
+token stream falls to **90.9%**, and the two cases with nothing to merge do not
+move: 3.3% quiet, 31.1% for the bulk repaint. Nothing is dropped, nothing is
+reordered, and the exit event still crosses behind the last byte the session
+wrote. The only thing spent is up to one frame of latency on an echoed
+keystroke, which is less than the paint that character was waiting for anyway.
+
+**What is left is per-paint work, and the knob proves it.** Halving the budget
+to 33ms takes the same stream to 60.7% - close to linear in the frame rate. That
+says the remaining cost is the terminal drawing, not the bridge carrying, and it
+is why the next lever is the renderer rather than a smaller number here: BAUD's
+terminal runs xterm's **DOM renderer**, because a canvas or WebGL addon for
+xterm 6 exists only as a beta today. Taking a beta dependency into this face,
+and dropping the terminal below 60Hz, are both look-and-feel rulings rather than
+performance tricks, so neither was taken quietly.
+
+**Named and not fixed in the same round:** the desktop face has no visibility
+gate at all. Five `setInterval` lanes - the fleet snapshot, the roster, two git
+sweeps and the bell - run at full rate whether or not the window is on screen.
+`whileVisible` was built for the phone in DPLAN-0305 and never crossed over.
+That is real, it is cheap, and it is a different round from this one.
+
+### A line says what it is
+
+Output leaves the room one frame at a time; input arrives in a **declared
+shape**. Patrick's report of the phone composer was that pressing Enter did one
+of three things at random - sent and submitted, dropped the text into Claude
+Code's own box without submitting, or appeared to do nothing. Two independent
+causes, which is why it looked like luck.
+
+**The first is a race, and it was measured rather than reasoned about.** The
+composer wrote the line and its carriage return as two separate frames, which
+become two writes into the PTY. Whether the far end reads them as one chunk or
+two is decided by the network:
+
+| gap between the two writes | what the program reads |
+|---|---|
+| 0 ms | `line\r` as ONE chunk - 30/30 |
+| 1 ms and above | `line`, then `\r` - 30/30 |
+
+A knife edge at about a millisecond. A reader with paste detection - Ink, which
+Claude Code is built on - treats a CR buried inside a chunk as pasted text and
+does not submit, and a lone CR as the Enter key. Same tap, same button,
+different answer, decided by wifi.
+
+The cure is not a longer gap - a bigger sleep moves the odds without making
+anything certain. The line goes out wrapped in **bracketed paste**, so the
+literal is marked as pasted text and the `\r` after the closing marker sits
+outside it, unambiguously a keypress. Measured through a real tmux client, all
+four landings of the race are correct at the pane boundary.
+
+**And that was still not enough, which the device said and the bench could
+not.** On the first live run one send passed, the next stranded through those
+very markers, and the send after it submitted the *stale* line while the fresh
+text did not appear. One mechanism explains both: the CR is acted on before the
+paste it follows has been committed, so it submits whatever the box held a
+moment ago and the pasted text lands in the emptied box behind it. An ordering
+inversion, not a paste heuristic. Worth naming that bash's readline - a genuine
+bracketed-paste reader - handles both shapes correctly, four for four, so this
+is specific to the far end and no reader available here reproduces it.
+
+So **the submit byte now waits for proof rather than for a clock**. This face
+already renders every byte the room emits, so it watches the room's own buffer
+for the line to appear and submits the moment it does - the CR cannot overtake
+a paste that has already been drawn. Whitespace comes out of both sides of that
+comparison, because a wrapped line is broken across rows and a box pads what it
+draws. A line already on screen is counted before the send, so re-sending the
+same text cannot be satisfied by its own older copy. There is a ceiling: a
+program that echoes nothing still submits, because refusing to submit would be
+a worse failure than the one being fixed.
+
+**Whose mode is being read** is worth stating, because the obvious answer is
+wrong. Every room is a tmux session and the phone is a tmux *client*, so the
+peer parsing these bytes is tmux - and tmux enables bracketed paste on its own
+client unconditionally. That is exactly what makes reading it correct: the
+entity whose mode is read is the entity that interprets the markers. tmux then
+normalises, re-emitting the paste with markers to a pane that asked for them
+and **stripping them** for a pane that did not, so a program with no paste
+detection never sees an escape sequence it never requested.
+
+**The second cause was Enter itself.** The composer tested `event.key ===
+"Enter"` on keydown and nothing else, which is the one signal Gboard does not
+deliver: with predictive text on, keydown arrives as `Unidentified` and the
+intent only exists in `beforeinput`. The handler never ran, the textarea took
+the break, and the sanitiser flattened it to a space. Both signals are caught
+now, guarded by `isComposing` - an Enter that closes an IME composition is the
+operator accepting a word, not submitting a line - and de-duplicated, because a
+double submit would be worse than the bug being fixed.
+
+The send button and Enter run the identical path, to the byte. Patrick's own
+observation that the button was *exactly* as unreliable is what proved the race
+lived below the keyboard at all, and the two are now the same call so they
+cannot drift apart again.
+
+### The room is a view
+
+**No tap opens a keyboard into the terminal.** A tap in the bottom five rows
+used to arm the IME so the operator could type into Claude Code's own compose
+box - a door built on purpose, and the one that became the trap. Aiming for the
+baud box and catching the room instead meant typing *blind* into a box you
+cannot see, and mobile IME into a terminal is unwinnable by construction:
+composition and autocorrect mean the characters that arrive are not the
+characters you typed.
+
+Patrick reproduced the ceiling of that on demand. Typing `/help` in Claude
+Code's box drove its slash menu to **`prep`** - the same way `/clear` once did.
+His composed characters never reach the menu as keystrokes, so it never
+filters, and Enter takes whatever is highlighted. The wrong command runs. He
+caught it in time; the mechanism is now reproducible rather than folklore.
+
+So the door closes and the trap dies **structurally** rather than by being made
+more accurate - with no focus there is no blind typing to recover from. Every
+job focus was load-bearing for is untouched: a tap still reaches tmux as a
+click, xterm still runs its own word selection, and the timing that made that
+work is unchanged. Only the answer is now always no.
+
+**The stated-intent door survives, pointed somewhere safe.** Arming ctrl or alt
+is typing intent said out loud, and it needs a keyboard - "ctrl then a letter"
+has a letter in it. That keyboard now opens against a one-pixel field the chip
+row owns, never against the terminal. BAUD reads what lands in it, translates
+it, and writes the byte itself, so what crosses to the pty is a byte this app
+chose rather than whatever an autocorrect decided a moment later. Composition
+cannot reach the room raw because composition never touches anything the room
+can see. The field is caught with `beforeinput` for the round-2 reason - under
+a predictive keyboard the letter exists only in the composition - and a
+modifier is never cleared when that field loses focus, because the arrow chips
+honour a latched modifier and tapping one can move focus.
+
+**A bench, and one suspect eliminated.** With the keyboard up, the room shrinks
+and tmux's status bar lands at the new bottom, but Claude Code's composer row is
+not visible above it. Two suspects were named. The client's scroll offset is
+ruled out by the observation itself - if the true last row is at the bottom, the
+view is not scrolled up. And tmux is ruled out by measurement: a real client
+shrunk from 24 rows to 10 keeps a bottom-anchored UI at the bottom of the pane
+whether or not the program redraws on `SIGWINCH`. What the bench *did*
+reproduce is a frame taller than the room it must fit: at six rows of UI in four
+rows of pane, two frame lines collide on one row. That is the program's own
+rendering at a size this app asked for - which makes the lever a **floor on the
+rows BAUD will ask for**, not a fix here. Named, priced, not taken.
+
+### Typing goes back into the room, through a door that is stated
+
+Making the room a view closed the mis-aim trap and took something real with it.
+Patrick, the same evening: *"yea u guys pretty much took termial typing away I
+cant type in any termi al now... only via baud comment box."* The trap and the
+capability came through one door, and shutting it shut both — for **every** room,
+not just Claude Code's: a shell prompt, a REPL, any TUI.
+
+**The compose slot** is the door back, and it is one rectangle with two modes.
+Default it is the baud composer, unchanged: attach, a predictive textarea his
+voice dictation lands in, commit-on-send with the draw handshake behind it. Tap
+the `room` door on its left and the whole rectangle becomes the armed bar —
+`typing → the room · raw keys · tap to stop` — and every key goes to the pty.
+
+It did not start there. The door was picked off a probe of three candidates
+after Patrick tested all of them (*"type a and b actually cover the typing by a
+bit. type c is only one that works."*), and type c was a bar with **its own
+permanent row** between the room and the belt: the two cheaper doors cost no
+height but put their control on top of the line being typed. He bought the row
+knowingly. Then typing mode worked, and the row he had bought turned out to be a
+second compose surface parked above the first — *"type in this room, its going
+to be the only chatbox we need... I dont need 2 comment boxes"* (00:39,
+2026-08-20). So the bar moved into the composer's footprint and the row went
+back to the terminal: **32px, about two rows**, measured at 360px off the built
+stylesheet — the belt goes 143px to 111px with the box empty.
+
+**What merged is the footprint, not the mechanism.** The room still takes raw
+keys and the box still predicts, because the two cannot share one surface (see
+the trade below). One slot, two modes, and only ever one of them mounted — so
+there is no greyed-out second surface beside the live one to mis-aim at.
+
+**The cost is width, and it was measured rather than estimated.** The `room` door
+takes the compose field from 221px to 175px at 360px — about 23 characters a
+line down to 17 — so the same message wraps into more lines. The field's
+max-height went from 7.2rem to 8.6rem to pay for it: roughly 120 characters of
+his message were visible at once before, ~112 now, where the old cap would have
+left ~89. The door is a **word**, not a glyph, in a 40px box that matches the
+paperclip's: a mode states itself in words, which is Patrick's rule and the one
+thing this round would not trade for pixels.
+
+What arming does **not** do is reopen the old door. No tap on the terminal opens
+a keyboard, ever. What changed is *where the fence sits*:
+
+**Arming moves the mode, not the target.** Round 3's fence was built out of
+focusability — the room's own keyboard surface, xterm's hidden textarea, was made
+unable to raise a keyboard at all. That closed the trap and closed the only lane a
+terminal has for real typing with it. The fence stays and becomes a **mode**:
+disarmed, that textarea carries `inputMode="none"` and a stray tap in the room
+raises nothing; armed, it is an ordinary text field, the browser composes into it
+and xterm paints the in-progress word on the cursor cell. Disarming blurs it,
+which puts the keyboard away and empties it. **Who carries the finished word to
+the pty changed in round 6** — see below; xterm draws, BAUD delivers.
+
+**The mirror-diff is deleted, and it is deleted on evidence.** Door C typed into
+a hidden field of BAUD's own and reconstructed the room's line by diffing that
+field against a remembered copy. noVNC shipped that exact pattern — PR #301, 2013,
+for our exact reason, that Chrome on Android sends no usable key events — and then
+**removed** it, because a mirror cannot know when the far end rewrites its own line
+(issue #357, closed in 2015 without a fix). A tmux room rewrites its line
+constantly: tab completion, `ctrl-R`, prompt redraws, background output, vim's
+modes. Every one of those desyncs the copy, and the next keystroke pays for it
+with backspaces computed against text the operator never typed. Guacamole does
+ship a text-input mode, and it survives only on three invariants door C lacked —
+a zero-lifetime buffer, no remembered-value diff, and a flat refusal to interpret
+in-flight composition. What ships here needs none of them, because it keeps no
+copy of anything.
+
+**Round 6: xterm delivers a keystroke by reading the field back out, and a
+predictive keyboard never fills it.** Patrick, live, on the round that armed
+xterm's textarea: *"ok i can see what im typing but only the word im typing i
+press space it disappears"* — preview alive, committed word gone, and zero bytes
+at the pty to show for it. Every delivery path in xterm 6.0.0 resolves a
+soft-keyboard keystroke by reading `textarea.value`: `_finalizeComposition` takes
+`value.substring(start)` in a `setTimeout(0)` after `compositionend`, and the
+"any textarea changes" lane diffs the value against a copy. The **preview** is
+drawn from the *event's* `data`, never from the field — so it renders identically
+whether the field ever took the word or not. That is the whole of the illusion:
+the one visible thing was the one thing not reading the broken source.
+
+So BAUD stops reading the field and reads the **intent**, which carries its own
+payload: `compositionend.data` is the committed word, and `beforeinput` carries
+the space, the digits and punctuation prediction never composes, Enter (`\r`),
+backspace (`\x7f`) and paste — the ones xterm drops on Android, where its input
+handler requires `!composed || !keyDownSeen` and a Gboard insert is composed
+while a keydown is still open. While the bar is armed, `attachCustomKeyEventHandler`
+returns `false`, so **no key event reaches xterm at all**: the paths that could
+only repeat a keystroke or send an empty one are cut at the root. Composition
+events are not key events, so the preview is untouched by that cut.
+
+**Measured against a real Chrome IME, not reasoned about.** The lane was driven
+over CDP — `Input.imeSetComposition` and `Input.insertText` are the same code
+paths a soft keyboard drives — against a real xterm 6.0.0, in two worlds: a field
+that takes the composed text, and a field frozen empty (the device's evidence).
+Six scenarios, both worlds. The old lane reproduces Patrick's sentence exactly on
+the frozen field — `word+commit` delivers `''`, `word+spacekey` delivers `' '`,
+`word+enter` delivers `'\r'`: the punctuation arrives, the word never does. The
+new lane delivers the full string in all twelve runs, and the composition view is
+`active` while composing and hidden after, in both worlds.
+
+The probe also **caught a regression before the device did**: when the space
+arrives as a *key* while a composition is open, Chrome commits the word and fires
+**no `compositionend` at all** — the only trace left anywhere is the last
+`compositionupdate`. The first cut of this round blocked xterm's key path and had
+nothing to read, so it lost the word on exactly the keystroke the round exists to
+fix. Hence the third source: a non-composing edit arriving while a composition is
+open *is* the commit, and what was composed goes out first, in the order it was
+typed, de-duplicated against whatever already went.
+
+**What xterm's own textarea buys for free.** It is parked **on the cursor cell**
+as the cursor moves, and in-progress composition is painted there in the
+terminal's own font. Text appears in the room as it is typed — the thing Patrick
+asked for — because the browser draws it where the room says the cursor is. No
+code here draws it.
+
+**The honest trade, said on the bar.** Per-keystroke terminal input and predictive
+text cannot share one surface; nobody has shipped both. That is exactly why the
+merge above is a footprint and not a mechanism: the two modes share a rectangle
+because they can never share a surface. So the armed bar says which one you are
+in — `typing → the room · raw keys · tap to stop` — and stepping out of it gives
+the predictive box back, in the same place. Termux, the reference Patrick trusts,
+behaves identically: raw keys, no suggestion strip, dictation that prints on the
+pause instead of streaming.
+
+Round 6 softens that sentence rather than repealing it: a word Gboard *commits*
+now arrives whole, because BAUD reads the commit off the event. What still cannot
+be had is the strip's per-keystroke correction of a line the room owns — the room
+is not a text field, and nothing here pretends it is. The armed bar still reads
+`raw keys`, and that wording is now narrower than the truth; it stays until
+Patrick has judged the lane on the device, because renaming a control mid-test
+changes what he is testing.
+
+**The one-pixel field stays, for the modifiers only.** `ctrl` and `alt` still open
+the keyboard against the chip row's own input, where a letter is read, translated
+and written as a chosen byte. That lane never touched the room and does not now.
+
+**The room slides; it does not shrink.** If you type into a room you have to see
+the line you are typing, and the keyboard covers the bottom, which is where every
+prompt lives. Shrinking the box so the fitter drops rows would mean a pty resize
+on every keyboard open and close, and a re-render into a shorter pane is the
+frame collision behind the garbled lines. So the grid is left alone and moved:
+its bottom edge lands at the top of the lifted belt and the screen clips the
+rest. Nothing reflows, the room keeps every row, tmux is never told anything.
+
+The distance is measured against **the belt's rendered top edge**, not against
+the viewport. The belt is lifted to sit *above* the keyboard, so it — not the
+keyboard — is what the last row has to clear; sliding to the visible bottom
+parks that row squarely behind it. A rendered rectangle also stays true when the
+belt changes height, which it does on every mode flip. It was the only reference
+that survived the viewport change below, too: for a while the app asked for
+`interactive-widget=resizes-content`, and under that token any distance computed
+from viewport arithmetic collapsed to zero — the slide did nothing on exactly
+the device it was written for. `getBoundingClientRect` needed no telling.
+
+**And the slide runs for any keyboard, not only for armed mode.** The gate used
+to be *armed and covered*, from a world where the composer's keyboard shrank the
+room instead of hiding its bottom. It does not shrink it any more (below), so a
+composer keyboard would leave the prompt — and whatever he just sent — behind the
+belt. Nothing is told to tmux either way, and with no keyboard the distance is
+zero by construction, because the belt's top edge *is* the screen box's bottom
+edge.
+
+### The keyboard stopped resizing the room
+
+`phone.html` asked for `interactive-widget=resizes-content` from DPLAN-0301
+until 2026-08-20, to keep the bottom key row off the keys on Chrome. That token
+shrinks the **layout** viewport, and round 7 finally caught what else it was
+doing with that: `100dvh` on `.baud-phone` shrank with it, so
+`.baud-phone-term-screen` shrank, so the `ResizeObserver` fitted and **resized
+the pty**. The room went to one or two rows the moment the keyboard opened, and
+a TUI cannot paint a composer in one row. Claude Code was not eating his word —
+the room had no height to print it in.
+
+The token is now **unset**, which is the browser default `resizes-visual`: the
+keyboard shrinks only the visual viewport. The room keeps its ~26 rows and
+slides under the keyboard instead, and tmux is never told anything, so there is
+no reflow to survive. The half the token used to carry — keeping the key row off
+the keys — is the belt lift's job on every browser now, exactly as it always was
+on Firefox, which never honoured the token at all. If that lift ever fails the
+answer is to float the belt and floor the screen at ~10 rows; it is not a return
+to `resizes-content`.
+
+**And the fit still waits for the box to stop moving.** The observer's fit is
+debounced 120ms and **trailing**, so the pty is asked once, for the size the box
+came to rest at. That began as a defence against the keyboard animating the
+layout viewport shut a frame at a time — a `fit()` and a `resize` frame each,
+which is the re-render-into-a-shorter-pane collision the slide exists to avoid.
+The keyboard cannot do that any more, and the debounce stays because it was
+never only about the keyboard: a rotation, a pane opening, and the belt changing
+height all move this box. The immediate declarations are untouched: on attach,
+on a font change, on a fit held back through a drag, and on every return to
+visibility. Taps improve rather than degrade — the hit test measures the
+transformed box, so the slide corrects the aim instead of skewing it.
+
+One consequence worth naming: because characters reach the room as real bytes as
+they land, everything interactive works again — a shell's tab-completion and
+history, a REPL, and Claude Code's slash menu filtering as you type. The deaf
+menu dies as a side effect rather than as a feature.
+
+### A reload that actually reloads
+
+The header name reloads the face. It could serve a **stale** one, and did: a
+round was declared failed live on evidence that turned out to be the previous
+bundle still running after a reload through this very button.
+
+The host answers `GET /` with an `etag` and a `last-modified` and **no
+`cache-control`**, and a response with no explicit freshness lifetime may be
+cached heuristically — the usual browser rule being a tenth of the age since
+`last-modified`. So an entry document an hour old is treated as fresh for
+minutes and a plain reload can be answered wholly from cache. Content hashing
+makes that *worse* rather than better: the bundle names live inside that
+document, so a stale entry means the browser faithfully fetches yesterday's
+bundle. The assets are safe by construction; the entry that names them is the
+hole.
+
+The reload now re-reads the entry over the network first (`cache: "reload"`,
+which fetches from network **and** updates the HTTP cache) before navigating.
+This is the client half and not the fix — one `cache-control: no-cache` on the
+host's HTML response is the real answer, and it belongs to the API. It is also
+deliberately best-effort: if the network read fails the reload still happens,
+because a refresh button that refuses to refresh is worse than one that
+occasionally refreshes to the same bundle.
+
+### The phone re-states its size every time he looks at it
+
+*FPLAN-0446.* The phone is a real tmux client and sizes like one. It used to
+say so exactly twice: once when the socket opened, and again whenever its own
+box changed and the `ResizeObserver` fired. That reads like a listener and
+behaves like a one-shot — **every way a pty moves from the host side leaves the
+phone's box untouched**, so nothing fires, and the phone goes on rendering a
+window it no longer fits.
+
+What that looks like in the hand is a room drawn wider and taller than the
+client that is showing it: the right edge clipped mid-word, and the rows the
+program drew for a taller terminal simply absent. Reported here as "cut off at
+the bottom — I can no longer see all your agents", **with the tmux status bar
+still sitting at the bottom of the screen**. Those two are not in conflict, and
+the contradiction is worth writing down because it is the tell: once the pty is
+bigger than the client, the bar is the *last line of the stream*, so the bar is
+the one thing that survives. What is lost is the body above it and the columns
+past the client's width.
+
+So the size is re-stated on every return to the foreground. Same idiom as
+`whileVisible` and for the same reason — no clock, no poll, nothing running in
+a pocket. A resize to the size it already is costs one small frame and is a
+no-op at the pty, and that is the point: it is safe to say *always*, so it is
+said unconditionally instead of guessed at.
+
+What this does **not** claim: it is a self-healing path, not a diagnosis of one
+particular trigger. The room that prompted it could not be re-measured — by the
+time the report was read the phone had detached, and a session with no clients
+reports the size its last client held, not a live one. `window-size smallest`
+is set on these sessions and was verified set, so a client that reports its
+size holds the pane at it. The fix is aimed at the class: whatever moves the
+pty, the phone corrects it the moment he looks.
+
+### A dead room says so, and comes back by itself
+
+*FPLAN-0446 r5.* A detached room went on painting its last frame, because that
+is the only thing a terminal emulator can do once the bytes stop — and that
+frame is **indistinguishable from a quiet room**. The reattach door was a line
+*above* the grid, which is a line you can scroll past while the picture below it
+goes on looking alive. The picture is what lies, so the correction now sits **on
+the picture**: a scrim over the grid, the word `detached`, and the door in the
+middle of it. The stale frame stays legible underneath on purpose — it is the
+last true thing the room said — but it can never again pass for now. Zoom and
+fullscreen keep working through the scrim, because reading that last frame is
+exactly when somebody wants it bigger.
+
+Three states hide behind "not attached" and they get three sentences, not one:
+opening for the first time (no frame has ever arrived, so no scrim), attached
+and then dropped, and never got in at all.
+
+**Why the phone needed liveness of its own.** The other end has it and uses it:
+uvicorn pings every 20s and hangs up on a pong that does not come back inside
+20s. A browser has no ping API at all — the protocol's own ping/pong is answered
+down in the network stack, below JavaScript, and never surfaces — so the room
+can be torn down on a clock this side does not share. **The side with liveness
+kills the side without it, and the side without it paints the corpse.**
+
+Two lanes, and the phone **feature-detects** which one it is in rather than
+coupling to a server version:
+
+- **The real round trip.** One `{"type":"ping"}` per socket; a `{"type":"pong"}`
+  back means this host has the lane, and from then on liveness is measured —
+  a ping every 10s, dead if no answer inside 30s. Exactly one probe, never a
+  retry loop: a host *without* the lane writes a warning line for every unknown
+  control frame, and a keepalive that fills somebody else's log is a bug wearing
+  a fix's coat.
+- **The silence guess**, when nothing answers: **90 seconds** with no bytes at
+  all. The number is measured, not felt. An idle agent room is not silent — tmux
+  redraws its status bar — but only when that bar's *text* changes, so the gaps
+  are long and uneven: benched on a live idle room, the longest gap between
+  bytes was **29 seconds** inside a 62-second window. A watchdog at 15s would
+  execute a healthy room about once a minute. Three times the worst measured gap
+  is the margin, and the cost of being wrong in this direction is one reattach.
+
+Both lanes were proven on the wire against real servers before this shipped: the
+running host answers the probe with nothing and **keeps the socket open** (one
+warning line, room bytes still flowing), and a host carrying the ping handler
+answers `{"type": "pong"}` as a text frame in **2 ms**.
+
+**Coming back is a ladder, not a poll.** Before this, returning to the
+foreground was the *only* way a dead room came back — so a socket that died
+while he was looking straight at it stayed dead until he backgrounded the app
+and returned. Now the retry runs while the screen is up: immediate, then 1s, 3s,
+6s, 12s, 30s, and then it **stops and says it stopped**, because a room that has
+refused six times running is gone rather than slow, and the honest answer to
+gone is a button rather than a wheel that turns forever. Looking away and back
+resets the count; the button always works.
+
+The rungs exist because **retrying is not free**. These rooms are opened
+`window-size smallest`, so every attach drags the desk's window down to the
+phone's columns and bills the other end for a full repaint — 5392 bytes for a
+one-column change, benched. Three cuts fell out of the same measurement: the
+foreground edge no longer opens sockets on its own (one lane decides, and it is
+watching that same event), a handshake already in flight is never overtaken by a
+second one, and a socket that came back while a rung was ticking stands the rung
+down.
+
+Nothing here runs in a pocket. The watchdog stops when the screen goes away and
+starts again — with the clock reset — when he looks, because the question it
+asks is how long the room has been quiet *while somebody was watching it*.
+
+**An ended room stays ended, and the ladder is exactly why that needed saying.**
+A room that reconnects by itself can undo the operator's own gesture: @api
+attaches with `new-session -A` — attach-or-*create* — so a retry into a room
+that `end room` just killed does not fail. It builds a new empty session wearing
+the dead room's name, and the phone would quietly resurrect the thing he just
+ended (*"an ended room stays dead until I resume it"*, Patrick, 08-12). This was
+survivable while a detached sheet merely sat there; it stopped being survivable
+the moment the sheet learned to retry. So the client now goes when the room
+goes: the chip fires on the **machine's answer**, never on the request leaving,
+and a kill that was refused leaves the room alive and the tab open. Only that
+tab — `end room` ends the *agent's* session, and the branch's shell
+(`baud-shell-*`) is a different one that survives it, so closing more would be
+this face inventing an outcome the verb never had. The sheet itself stays open,
+because the chip's sentence is the only confirmation the gesture landed.
 
 ### Git rides the row it belongs to
 

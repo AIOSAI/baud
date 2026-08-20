@@ -45,7 +45,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -56,6 +56,37 @@ use tauri::ipc::Channel;
 /// PTY output is read in 4KB bites - big enough that a burst of output is a
 /// handful of IPC messages, small enough that the first prompt appears at once.
 const READ_BUFFER_BYTES: usize = 4096;
+
+/// One frame at 60Hz: the longest a byte waits in the reader before it crosses
+/// the bridge (DPLAN CPU round, 2026-08-19).
+///
+/// A read is not a paint. The pty hands back whatever has arrived, so an agent
+/// streaming tokens produced one IPC message per token - and the cost of this
+/// pipeline was MEASURED to ride on the number of messages, not on their size:
+/// ~200 tiny writes a second (1.6 kB/s) cost 134% of a core, while 10 large
+/// writes a second carrying 27x the bytes cost 33%. Gathering a frame's worth
+/// and sending it once collapses the storm into what the renderer would have
+/// drawn anyway: the same stream costs 91% with this cap in place, and the
+/// quiet and bulk cases do not move at all, because there is nothing there to
+/// merge. Nothing is dropped and nothing is reordered; the only thing spent is
+/// up to one frame of latency on an echoed keystroke, which is less than the
+/// paint that character was going to wait for regardless.
+///
+/// The knob is deliberately a FRAME BUDGET and not a rate limit: halving it to
+/// 33ms takes the same stream to 61%, so the cost that remains is per-paint
+/// work, not per-byte work. Going below 60Hz is a look-and-feel ruling, not a
+/// performance trick, so it is not taken here.
+const FRAME_MILLIS: u64 = 16;
+
+/// What the reader thread and the bridge thread share: the bytes waiting for
+/// the next frame, whether the pty has ended, and whether the window has gone.
+/// `closed` is what lets the reader stop filling a buffer nobody will drain.
+#[derive(Default)]
+struct Batch {
+    bytes: Vec<u8>,
+    ended: bool,
+    closed: bool,
+}
 
 /// The shell used when `$SHELL` is missing or empty.
 const FALLBACK_SHELL: &str = "/bin/bash";
@@ -464,27 +495,76 @@ fn stream_session(
 
     let stream_id = id.clone();
     let reader_thread = std::thread::spawn(move || {
+        let batch = Arc::new((Mutex::new(Batch::default()), Condvar::new()));
+
+        // The bridge end. It sleeps on the condvar while the pty is quiet, so
+        // an idle terminal wakes nobody at all, and it sends at most one
+        // message per frame while the pty is loud. It also owns the Exit
+        // event, which keeps the old ordering guarantee: every byte the
+        // session produced crosses before the frontend hears it ended.
+        let bridge = {
+            let batch = Arc::clone(&batch);
+            let stream_id = stream_id.clone();
+            std::thread::spawn(move || {
+                let (lock, signal) = &*batch;
+                loop {
+                    let mut waiting = lock.lock().unwrap_or_else(|p| p.into_inner());
+                    while waiting.bytes.is_empty() && !waiting.ended {
+                        waiting = signal.wait(waiting).unwrap_or_else(|p| p.into_inner());
+                    }
+                    if waiting.bytes.is_empty() {
+                        break; // ended, and everything it wrote is already sent
+                    }
+                    drop(waiting);
+                    // Let the rest of this frame land before paying for a crossing.
+                    std::thread::sleep(Duration::from_millis(FRAME_MILLIS));
+                    let bytes = {
+                        let mut waiting = lock.lock().unwrap_or_else(|p| p.into_inner());
+                        std::mem::take(&mut waiting.bytes)
+                    };
+                    let event = PtyEvent::Data {
+                        session: stream_id.clone(),
+                        base64: base64_encode(&bytes),
+                    };
+                    // A closed channel means the window went away first: say so
+                    // through the batch, so the reader stops filling a buffer
+                    // that no longer has anywhere to go.
+                    if on_data.send(event).is_err() {
+                        let mut waiting = lock.lock().unwrap_or_else(|p| p.into_inner());
+                        waiting.closed = true;
+                        break;
+                    }
+                }
+                let _ = on_data.send(PtyEvent::Exit { session: stream_id });
+            })
+        };
+
         let mut buffer = [0u8; READ_BUFFER_BYTES];
         loop {
             match reader.read(&mut buffer) {
                 // EOF: every slave handle is closed, so the process is gone.
                 Ok(0) => break,
                 Ok(count) => {
-                    let event = PtyEvent::Data {
-                        session: stream_id.clone(),
-                        base64: base64_encode(&buffer[..count]),
-                    };
-                    // A closed channel means the window went away first.
-                    if on_data.send(event).is_err() {
+                    let (lock, signal) = &*batch;
+                    let mut waiting = lock.lock().unwrap_or_else(|p| p.into_inner());
+                    if waiting.closed {
                         break;
                     }
+                    waiting.bytes.extend_from_slice(&buffer[..count]);
+                    drop(waiting);
+                    signal.notify_one();
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
                 Err(_) => break,
             }
         }
 
-        let _ = on_data.send(PtyEvent::Exit { session: stream_id });
+        {
+            let (lock, signal) = &*batch;
+            lock.lock().unwrap_or_else(|p| p.into_inner()).ended = true;
+            signal.notify_one();
+        }
+        let _ = bridge.join();
     });
 
     registry.sessions().insert(
