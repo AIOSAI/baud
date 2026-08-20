@@ -241,6 +241,7 @@ bundle is the one lane no robot builds; measured 2026-08-18, not yet fixed.
 | `src/baud/baud/FPLAN-*.md` | Open plans. Closed ones are listed in `CLOSED_PLANS.local.json`. |
 | `README.md` (root, 2400 lines) | **The app's source of truth.** Every behaviour change lands here in the same sitting. |
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
+| `docs/phone_input_AS_BUILT_2d744ac.md` | The phone's input system captured at one commit: viewport contract, the intent-reading typing lane, autocorrect, liveness, the one slot, the ended-room rule, known issues. Settings and line anchors, so the state can be rebuilt from the doc. |
 | `AGENTS.md` · `CLAUDE.md` | The startup protocol for agents working in this repo. |
 | `BAUD_REGISTRY.json` | Machine-managed. Do not hand-edit. |
 | `MAP.md` (root) | This file. |
