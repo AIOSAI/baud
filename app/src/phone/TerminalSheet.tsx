@@ -174,21 +174,53 @@ const CHIPS_LEFT: ReadonlyArray<ChipSpec> = [
   { bytes: "\x1b[Z", label: "⇧⇥", title: "Shift+Tab - cycle modes, both claude and codex" },
 ];
 
-/** Right of the stickies: panic button, arrows, submit. */
+/** Right of the stickies: panic button and submit. The arrows left this row -
+ *  see CHIPS_ARROWS. */
 const CHIPS_RIGHT: ReadonlyArray<ChipSpec> = [
   // Pre-baked despite sticky CTRL: interrupt is the panic button, and a
   // two-tap race against a runaway process is the wrong shape for one.
   { bytes: "\x03", label: "^C", title: "interrupt - the byte Ctrl+C sends" },
-  { bytes: "\x1b[D", label: "←", title: "Left arrow (latched CTRL/ALT modify it)", arrow: "D" },
-  { bytes: "\x1b[B", label: "↓", title: "Down arrow - menus, history. Does NOT scroll.", arrow: "B" },
-  { bytes: "\x1b[A", label: "↑", title: "Up arrow - menus, history. Does NOT scroll.", arrow: "A" },
-  { bytes: "\x1b[C", label: "→", title: "Right arrow (latched CTRL/ALT modify it)", arrow: "C" },
   {
     bytes: "\r",
     label: "⏎",
     title: "submit the line. HOLD: newline WITHOUT submitting (Ctrl+J - the one both TUIs honor)",
     hold: { bytes: "\n", title: "newline, no submit" },
   },
+];
+
+/**
+ * THE ARROWS, AND THEY LIVE IN THE TERMINAL'S VIEW COLUMN NOW - Patrick's
+ * placement 2026-08-20: *"remove the arrows and place them in the terminal
+ * chips just underneath the copy one... they're so small, I have a pretty hard
+ * time pressing those buttons"*.
+ *
+ * THE ERGONOMIC TRADE, stated because it is the whole point: the belt was
+ * ELEVEN chips across a phone, so every one of them was thumb-width at best
+ * and the arrows - the chips pressed most, one tap per menu row - were the
+ * ones that hurt. Moving four out leaves seven, which widens every chip that
+ * stayed AND buys the arrows a 31px square each in the view column. One edit,
+ * both halves better.
+ *
+ * IT BREAKS THE VIEW COLUMN'S OLD INVARIANT and that is deliberate, not an
+ * oversight. That column's rule was "nothing in here writes a byte to the
+ * room, it changes how the room is VIEWED" - arrows write bytes. The rule was
+ * a description of what happened to be there, not a promise to the operator;
+ * what the operator actually reads off that column is "controls that are not
+ * the keyboard row", and arrows belong to that far more than they belonged to
+ * a row they were crushing. What the column may NOT become is the keyboard
+ * row's overflow bin - if a fifth thing wants in, that is the round to re-ask.
+ *
+ * ORDER IS ↑ ↓ ← → rather than the belt's ← ↓ ↑ →: in a VERTICAL stack the
+ * pair that must be adjacent is up/down, because that is the pair that walks a
+ * menu and a history, and a thumb finds it by feel between them. Left/right
+ * are the rare pair here (line editing happens in the compose box, not the
+ * room) so they take the bottom.
+ */
+const CHIPS_ARROWS: ReadonlyArray<ChipSpec> = [
+  { bytes: "\x1b[A", label: "↑", title: "Up arrow - menus, history. Does NOT scroll.", arrow: "A" },
+  { bytes: "\x1b[B", label: "↓", title: "Down arrow - menus, history. Does NOT scroll.", arrow: "B" },
+  { bytes: "\x1b[D", label: "←", title: "Left arrow (latched CTRL/ALT modify it)", arrow: "D" },
+  { bytes: "\x1b[C", label: "→", title: "Right arrow (latched CTRL/ALT modify it)", arrow: "C" },
 ];
 
 /**
@@ -2587,8 +2619,8 @@ export default function TerminalSheet({
                 selectable": stem plus two serifs, same stroke idiom as the
                 paperclip and the header icons. */}
             <svg
-              width="14"
-              height="14"
+              width="17"
+              height="17"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -2600,6 +2632,34 @@ export default function TerminalSheet({
               <path d="M9 4h6M9 20h6M12 4v16" />
             </svg>
           </button>
+          {/* THE ARROWS, moved off the belt - see CHIPS_ARROWS for the ruling
+              and the ordering.
+
+              HoldButton, NOT a plain onClick like the three chips above it,
+              and that is load-bearing rather than tidy: its `onPointerDown`
+              calls `preventDefault` so a press cannot pull focus off the
+              terminal, and on a phone losing focus DISMISSES THE SOFT
+              KEYBOARD. Zoom and select never cared - they are pressed with the
+              keys already shut. An arrow is pressed mid-typing, walking a menu
+              with the keyboard up, so a plain button here would shut the keys
+              on the operator every single tap. Same reason the belt has always
+              used it (see its own comment).
+
+              `pressChip`, not `press`, so a latched CTRL/ALT still modifies
+              them - the sticky lives in the belt and the arrows now live here,
+              but the latch is component state that both read, so Ctrl+arrow
+              survives the move intact. */}
+          {CHIPS_ARROWS.map((chip) => (
+            <HoldButton
+              key={chip.label}
+              className="baud-phone-term-viewbtn baud-phone-term-arrowbtn"
+              disabled={Boolean(refusal)}
+              title={refusal ?? chip.title}
+              onTap={() => pressChip(chip)}
+            >
+              {chip.label}
+            </HoldButton>
+          ))}
         </div>
       </div>
 

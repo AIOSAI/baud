@@ -1024,6 +1024,13 @@ body {
   flex-direction: column;
   height: 100%;
   background: var(--baud-bg);
+  /* THE VIEW-COLUMN CHIP SIZE, ONE NUMBER (Patrick 2026-08-20: "make them a
+     lil bit bigger maybe 20%" — 26px was the original thumb guess, this is
+     26 × 1.2). It is a variable rather than four literals because the column's
+     `top` is DERIVED from it: the fullscreen toggle sits at 4px and the stack
+     starts one chip plus one gap below it, so a hand-typed offset silently
+     overlaps the toggle the next time the chips resize. */
+  --baud-term-chip: 31px;
 }
 
 .baud-phone-term-head {
@@ -1120,6 +1127,16 @@ body {
 .baud-phone-term-selrow-keys {
   display: flex;
   gap: 6px;
+}
+
+/* Copy and clear, 20% up with the view chips (same ruling, same night).
+   SCOPED TO THIS ROW ON PURPOSE: they borrow `.baud-phone-term-key` from the
+   belt's key row, and the belt is eleven chips wide on a phone - growing that
+   class outright would push CTRL back into the border-bleed this file already
+   fixed once. Two classes beat one, so this wins wherever it sits. */
+.baud-phone-term-selrow-keys .baud-phone-term-key {
+  font-size: 0.86rem;
+  padding-block: 13px;
 }
 
 /* The copy result, and it wraps on purpose - it is written once, after the
@@ -2792,8 +2809,8 @@ body {
   top: 4px;
   right: 6px;
   z-index: 3;
-  width: 26px;
-  height: 26px;
+  width: var(--baud-term-chip);
+  height: var(--baud-term-chip);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2802,14 +2819,18 @@ body {
   border-radius: 6px;
   color: var(--baud-ink-dim);
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.96rem;
   /* The room owns this rectangle's gestures; the button only wants the tap. */
   touch-action: manipulation;
   opacity: 0.75;
 }
 
-/* Eleven controls in one row on a phone, so they earn their width rather than
-   being padded to it. Height is what a thumb actually needs and is unchanged.
+/* SEVEN controls in one row on a phone (eleven until 2026-08-20, when the four
+   arrows moved to the terminal's view column - Patrick: *"it's a little
+   squashed"*, and it was). They still earn their width rather than being padded
+   to it: the whole point of the move is that the survivors get the slack, which
+   `flex: 1 1 auto` hands them automatically. Height is what a thumb actually
+   needs and is unchanged.
 
    AND THEY EARN IT FROM THEIR CONTENT, which is the fix for CTRL bleeding its
    border (Patrick's screenshot). `flex: 1` is `flex: 1 1 0%` - every slot gets
@@ -2898,7 +2919,9 @@ body {
    beneath - Patrick's placement. On the screen, costing zero rows. */
 .baud-phone-term-viewcol {
   position: absolute;
-  top: 34px;
+  /* Below the toggle, derived not typed: toggle top (4px) + one chip + the
+     column's own gap (4px). See --baud-term-chip. */
+  top: calc(8px + var(--baud-term-chip));
   right: 6px;
   z-index: 3;
   display: flex;
@@ -2907,8 +2930,8 @@ body {
 }
 
 .baud-phone-term-viewbtn {
-  width: 26px;
-  height: 26px;
+  width: var(--baud-term-chip);
+  height: var(--baud-term-chip);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2917,9 +2940,31 @@ body {
   border-radius: 6px;
   color: var(--baud-ink-dim);
   font-family: inherit;
-  font-size: 0.62rem;
+  font-size: 0.74rem;
   touch-action: manipulation;
   opacity: 0.75;
+}
+
+/* The arrows in the view column (Patrick's placement - see CHIPS_ARROWS).
+   Two differences from their neighbours, both because these are pressed and
+   the others are set-and-forget:
+
+   - a full-size glyph. "A+" is a label you read once; an arrow is a TARGET,
+     and 0.74rem draws a mark smaller than the box it has to be aimed at.
+   - less transparency. The column sits at 0.75 so it stays out of the way of
+     the room underneath, which is right for controls touched twice a session
+     and wrong for the ones walking a menu row by row. */
+.baud-phone-term-arrowbtn {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+/* A breath between the two families - view controls above, byte-writers
+   below. Selects exactly the first arrow (the one that follows a non-arrow
+   view chip), so re-ordering the column cannot strand the gap in the middle
+   of the arrows. */
+.baud-phone-term-viewbtn:not(.baud-phone-term-arrowbtn) + .baud-phone-term-arrowbtn {
+  margin-top: 8px;
 }
 
 /* THE ARMED BAR - what the one slot becomes in typing mode (r8).
