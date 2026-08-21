@@ -74,6 +74,7 @@ import FilesScreen from "./FilesScreen";
 import RootsScreen from "./RootsScreen";
 import FleetWheel, { cardRef, openingCard } from "./FleetWheel";
 import GitApp from "./git/GitApp";
+import MachineSheet from "./MachineSheet";
 import MemoryScreen from "./MemoryScreen";
 import MonitorSheet from "./MonitorSheet";
 import PassportSheet from "./PassportSheet";
@@ -381,6 +382,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    *  because the roster IS the app's front door: picking a row opens a browse
    *  and closes this, so there is never a second thing to remember. */
   const [rootsOpen, setRootsOpen] = useState(false);
+  /** Which monitor card is open, by key - null when none is. A key rather than
+   *  a boolean because one sheet serves every card and needs to know which. */
+  const [monitorCard, setMonitorCard] = useState<string | null>(null);
   /** Whose working memory is open - the card's `memory` door (compass #291).
    *  By NAME and PROJECT, the same address every read on this face takes. */
   const [memoryOf, setMemoryOf] = useState<{ name: string; project: string } | null>(null);
@@ -971,6 +975,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         onOpenApp={(key) => {
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
+          // The monitor layer's cards all open the same placeholder sheet,
+          // which reads the key to say WHICH reading it is not showing yet.
+          // Prefix-matched rather than listed: the wheel owns that card list,
+          // and a second place naming every card is a second place to forget.
+          if (key.startsWith("mon-")) setMonitorCard(key);
         }}
       />
 
@@ -1389,6 +1398,14 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           }}
           onClose={() => setRootsOpen(false)}
         />
+      ) : null}
+
+      {/* The machine placeholder - see MachineSheet for why it draws no numbers
+          rather than convincing ones. NAMED "machine", not "monitor", because
+          MonitorSheet above is already taken by the read-only WATCH pane over an
+          agent's room - two different things one word away from each other. */}
+      {monitorCard ? (
+        <MachineSheet card={monitorCard} onClose={() => setMonitorCard(null)} />
       ) : null}
       {/* WORKING MEMORY - a screen, not an overlay on the card: it is read, at
           length, and the reader idiom is what this face uses for reading. */}

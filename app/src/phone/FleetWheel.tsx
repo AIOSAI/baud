@@ -232,6 +232,50 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
       },
     ],
   },
+  /**
+   * THE MACHINE, and it is LAST because last is now the closest place.
+   *
+   * Patrick, 2026-08-20: *"the monitor's kind of like a quick flick - how's the
+   * computer doing, sometimes the fans are going crazy and the screen is locked
+   * and it's all the way across the room. Because I'm on the phone, so it'd be
+   * nice to have that at my fingertips."*
+   *
+   * Deepest row = one BACKWARD flick from the resting position, now that the
+   * stack loops (see `stepBy`). The two facts are one decision and neither
+   * works alone: bury it at the bottom of a bounded stack and it is the most
+   * expensive row on the face; add the loop and it becomes the cheapest.
+   *
+   * IT IS AN APP LAYER, not a new kind of thing, and that is the whole reason
+   * this round is small. A monitor sounds like a readout rather than a rail -
+   * but CPU, memory, temperature, network and disk ARE cards, so they get the
+   * rail, the snap, the notch and the tap-to-centre-then-open that the app
+   * layer already has. Zero new rendering. Patrick described the same shape
+   * from the other side: *"we scroll left or right... and then I can possibly
+   * open in a tab the actual system monitor where it shows all the processes."*
+   *
+   * PLACEHOLDERS, DECLARED AS SUCH. Nothing behind these cards is measured yet
+   * - there is no system-info crate in Cargo.toml, so live numbers need
+   * `sysinfo`, a snapshot command in Rust and an @api lane to serve it. That is
+   * a build, not a ride-along, and it was deliberately deferred: *"maybe if we
+   * can just do placeholders for now... I don't think we have to build it out
+   * completely right now."* The sheet each card opens SAYS it is unmeasured
+   * rather than drawing a convincing zero - a monitor that invents a number is
+   * worse than no monitor, because the whole point is trusting it from across
+   * the room.
+   */
+  {
+    key: "monitor",
+    name: "monitor",
+    empty: "nothing to measure on this face yet",
+    holds: "apps",
+    cards: [
+      { key: "mon-cpu", mark: "CPU", name: "cpu", kind: "door" },
+      { key: "mon-mem", mark: "MEM", name: "memory", kind: "door" },
+      { key: "mon-temp", mark: "TEMP", name: "temp", kind: "door" },
+      { key: "mon-net", mark: "NET", name: "network", kind: "door" },
+      { key: "mon-proc", mark: "PROC", name: "processes", kind: "door" },
+    ],
+  },
 ];
 
 /**
@@ -585,12 +629,9 @@ export default function FleetWheel({
   }, [flash]);
 
   /**
-   * Move up or down the stack.
-   *
-   * ENDS, NOT A LOOP. Two stacked pips draw a stack, and a stack has a top and
-   * a bottom - wrapping would make the pips jump the length of the indicator
-   * on what felt like one more nudge in the same direction. Out-of-range is a
-   * no-op, which is what the edge of a stack does.
+   * Go to a layer by its INDEX. Absolute, and still bounded - a pip tap names
+   * a real position, so an out-of-range index here is a bug, not a gesture.
+   * The wrapping lives one function down, where the relative moves are.
    */
   const switchTo = useCallback(
     (next: number) => {
@@ -608,8 +649,40 @@ export default function FleetWheel({
     [layer],
   );
 
-  /** Move `delta` layers from wherever we are. The touch lane's one verb. */
-  const stepBy = useCallback((delta: number) => switchTo(layer + delta), [layer, switchTo]);
+  /**
+   * Move `delta` layers from wherever we are. The touch lane's one verb.
+   *
+   * IT IS A LOOP NOW - Patrick's ruling 2026-08-20, and it OVERTURNS what stood
+   * here. The old rule was "ENDS, NOT A LOOP": two stacked pips draw a stack, a
+   * stack has a top and a bottom, and wrapping makes the pip jump the length of
+   * the indicator on what felt like one more nudge in the same direction. That
+   * observation is still true and is not what decided it.
+   *
+   * What decided it is that the last layer and the first are now ONE FLICK
+   * APART, and the monitor was put last precisely to collect that. From the
+   * resting position (the seated project) the machine's vitals are a single
+   * backward flick, where a bounded stack would have charged four forward ones
+   * for the deepest row. Patrick's case for it is the one that matters: *"the
+   * fans going crazy and the screen is locked and it's all the way across the
+   * room, and I'm on the phone"* - a glance that costs four gestures is not a
+   * glance. A wheel that stops is a list; this one is named a wheel.
+   *
+   * The modulo is written twice on purpose: JS `%` keeps the sign of the left
+   * operand, so a single `%` sends a backward step off the bottom to -1 instead
+   * of to the last layer.
+   *
+   * The PIPS still draw a ladder and so the dot still leaps on the lap. Left
+   * that way deliberately: which layer you are on is the true thing they say,
+   * and they say it correctly. If the leap reads wrong under a thumb, the fix
+   * is to draw them as a ring rather than to take the loop away.
+   */
+  const stepBy = useCallback(
+    (delta: number) => {
+      const count = WHEELS.length;
+      switchTo(((layer + delta) % count + count) % count);
+    },
+    [layer, switchTo],
+  );
 
   /**
    * THE VERTICAL FLICK, ON A NON-PASSIVE TOUCH LISTENER.
