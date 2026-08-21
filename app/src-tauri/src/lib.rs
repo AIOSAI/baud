@@ -176,12 +176,17 @@ pub struct BranchStatus {
     /// someone is at the wheel.
     pub interactive: bool,
     /// An INTERACTIVE claude transcript exists for this directory - there is a
-    /// conversation plain `-c` will continue.
+    /// conversation plain `-c` could continue. Since FPLAN-0448 this is the
+    /// FALLBACK door: it steers the resume button only when `resume_id` is
+    /// absent.
     pub has_history: bool,
-    /// Newest transcript's session id when the only history is headless
-    /// dispatch runs: `-c` refuses those, but `--resume <id>` opens them
-    /// interactively. `None` when `has_history` is true (use `-c`) or when
-    /// there are no transcripts at all (nothing to resume).
+    /// The session the resume door opens interactively via `--resume <id>`:
+    /// the branch's own session pointer (`.ai_mail.local/session.json`,
+    /// written by dispatch on every wake - FPLAN-0447) when it is valid, else
+    /// the newest transcript when only headless dispatch history exists (`-c`
+    /// refuses those). `None` when there is no usable pointer and either
+    /// interactive history exists (plain `-c` continues it) or there are no
+    /// transcripts at all.
     pub resume_id: Option<String>,
     /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
     /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.

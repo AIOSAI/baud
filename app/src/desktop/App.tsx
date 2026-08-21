@@ -359,9 +359,17 @@ export default function App() {
   // The claude command line is staged for rooms that can take it - freshly
   // created, or sitting at a prompt with no live claude (`typeIfAttached`);
   // an attach onto a live claude types nothing, because the "input" would
-  // land in claude's message box. Resume takes whichever door exists: `-c`
-  // for interactive history, `--resume <id>` when only headless dispatch
-  // transcripts do (`-c` refuses those). Single-quoted so odd paths survive
+  // land in claude's message box. Resume aims where the seat actually is:
+  // `--resume <id>` whenever the backend serves one — the dispatch-written
+  // session pointer first, else the only-headless-history fallback — and
+  // `-c` only when no id exists but interactive history does. The id door
+  // outranks `-c` because `-c` can never enter a dispatched session
+  // (FPLAN-0448). KNOWN GAP, deliberate: a FRESH launch here creates a
+  // session the pointer never learns about, so the next resume aims at the
+  // pointer, not at it. Closing that means minting an id and writing the
+  // pointer file from this side — pointer WRITES stay with dispatch and the
+  // boot shim until the sweeper plan settles who else may hold the pen.
+  // Single-quoted so odd paths survive
   // the shell. `command claude` skips the bashrc boot shim (@hooks
   // session_boot): its continue/new menu is redundant here - the button
   // press already made that choice.
@@ -380,6 +388,23 @@ export default function App() {
   // prevent. (Built and reverted the same sitting on Patrick's ruling; the
   // verified findings live in FPLAN-0412 Phase 0.)
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
+    // DISPATCHED MEANS WORKING, AND RESUME THERE IS TAKEOVER (FPLAN-0449).
+    // Two claudes on one session id migrate the session's background-task
+    // state to the newer PID: the dispatch's tasks are stopped out from
+    // under it and the job dies mid-run, unreplied - measured live
+    // 2026-08-20 (DPLAN-0310, the OSPREY intercept). The presence gate
+    // blocks the newer seat's PROMPTS but cannot block that migration, so
+    // the door itself must step aside: a resume onto a working branch opens
+    // the read-only watch pane instead. Belt to the card's braces - the
+    // card already swaps its resume button for "working", but the startup
+    // agent calls launch() directly through cardMode and must hit the same
+    // wall. Fresh stays a door: a new session id steals nothing. And an
+    // INTERACTIVE branch is exempt: that launch is an attach to the
+    // existing room, which starts no second claude.
+    if (mode === "resume" && branch.dispatched && !branch.interactive) {
+      monitorBranch(branch);
+      return;
+    }
     // A seat exists from here on - the startup agent stands down (m11 p6).
     seatedRef.current = true;
     // The operator opening this card is the one door that revives an ended
@@ -389,10 +414,10 @@ export default function App() {
     const resume =
       mode !== "resume"
         ? ""
-        : branch.has_history
-          ? " -c"
-          : branch.resume_id
-            ? ` --resume ${quote(branch.resume_id)}`
+        : branch.resume_id
+          ? ` --resume ${quote(branch.resume_id)}`
+          : branch.has_history
+            ? " -c"
             : "";
     terminalRef.current?.launch({
       room: branch.name,
@@ -405,7 +430,7 @@ export default function App() {
     });
     // A launch is a statement of intent: bring the terminal forward.
     setActiveTab(TERMINAL_TAB);
-  }, []);
+  }, [monitorBranch]);
 
   // The startup agent (m11 phase 6): ONCE per app run, as soon as the first
   // snapshot and the settings have both landed, BAUD opens the seat the

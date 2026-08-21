@@ -139,9 +139,13 @@ pub(crate) fn read_branch(
     status.interactive = sessions
         .iter()
         .any(|session| !session.headless && session.cwd.starts_with(&canonical));
+    // FPLAN-0448: the branch's own session pointer (written by dispatch on
+    // every wake) outranks the transcript-scan guess — the scan's `-c` door
+    // can never enter a dispatched session. No pointer → the old guess, so a
+    // branch that predates the pointer resumes exactly as before.
     let (has_history, resume_id) = claude_history(&canonical);
     status.has_history = has_history;
-    status.resume_id = resume_id;
+    status.resume_id = session_pointer(&canonical).or(resume_id);
     status.subagents = subagent_count(&canonical);
 
     // Named once and used twice: the badge asks whether this session exists,

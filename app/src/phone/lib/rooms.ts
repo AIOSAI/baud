@@ -69,9 +69,10 @@ export const isAttached = (branch: BranchStatus): boolean =>
   (branch.has_room || branch.outside_room !== null) && branch.interactive;
 
 /**
- * Two ways back into a conversation (BranchChip.tsx:160): `-c` for interactive
- * history, `--resume <id>` for a branch whose only transcripts are headless
- * dispatch runs. Either one earns a resume button.
+ * Two ways back into a conversation (BranchChip.tsx:160): `--resume <id>`
+ * when the backend serves one (the dispatch-written session pointer first,
+ * else the only-headless-history fallback), `-c` only when no id exists but
+ * interactive history does. Either one earns a resume button.
  */
 export const canResume = (branch: BranchStatus): boolean =>
   branch.has_history || branch.resume_id !== null;
@@ -106,13 +107,33 @@ export const typeOnAttach = (branch: BranchStatus): boolean => !branch.interacti
  * choice.
  */
 export function launchCommand(branch: BranchStatus, mode: LaunchMode): string {
+  // RESUME ON A DISPATCHED CARD IS AN INTERCEPT (Patrick's ruling 2026-08-20,
+  // the round-five correction): stop the working agent FIRST, then resume its
+  // chat. Two claudes can never share a session id - the harness migrates the
+  // session's task state to the newer PID and the job dies SILENTLY, unreplied
+  // (the OSPREY kill, DPLAN-0310) - so joining a live dispatch without
+  // stopping it cannot exist. The honest door stops it on purpose, visibly
+  // (reclaim prints what it kills), and inherits the chat whole. The `sleep 2`
+  // lets the SIGTERM'd claude release the session before the successor claims
+  // it - without the gap the two overlap and the death notice lands in the
+  // new seat.
+  if (mode === "resume" && branch.dispatched && branch.resume_id) {
+    return (
+      `cd ${quote(branch.path)} && drone @hooks sessions reclaim @${branch.name}` +
+      ` && sleep 2 && command claude --permission-mode bypassPermissions --resume ${quote(branch.resume_id)}`
+    );
+  }
+  // The id door outranks `-c` (FPLAN-0448): `resume_id` carries the branch's
+  // own session pointer when one is valid, and `-c` can never enter a
+  // dispatched session - it refuses headless transcripts outright. Same
+  // ordering as App.tsx's slot; the two must change together.
   const resume =
     mode !== "resume"
       ? ""
-      : branch.has_history
-        ? " -c"
-        : branch.resume_id
-          ? ` --resume ${quote(branch.resume_id)}`
+      : branch.resume_id
+        ? ` --resume ${quote(branch.resume_id)}`
+        : branch.has_history
+          ? " -c"
           : "";
   return `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`;
 }
@@ -144,13 +165,30 @@ export function roomDoors(branch: BranchStatus): RoomDoor[] {
     ];
   }
   const doors: RoomDoor[] = [];
-  if (canResume(branch)) {
+  // A DISPATCHED branch is working, headless. The resume door STAYS, but it
+  // is an intercept and says so: `launchCommand` stops the agent first
+  // (reclaim), then resumes its chat - because two claudes on one session id
+  // is a silent kill (the OSPREY intercept, DPLAN-0310), the only honest
+  // resume is one that stops the job on purpose, visibly. Patrick's ruling
+  // 2026-08-20 after round five: the first cut of this guard REMOVED the
+  // door, which protected the job by making the intercept untestable - the
+  // operator's seat outranks the job, so the door came back with teeth
+  // instead of absence. Requires resume_id (the dispatch always writes the
+  // pointer); without one there is no chat to inherit and no door.
+  if (canResume(branch) && branch.dispatched && branch.resume_id) {
+    doors.push({
+      mode: "resume",
+      label: "▸ resume ⚡",
+      title:
+        "INTERCEPT: stop the working agent, then continue in its chat - the job ends, the conversation survives",
+    });
+  } else if (canResume(branch) && !branch.dispatched) {
     doors.push({
       mode: "resume",
       label: "▸ resume",
-      title: branch.has_history
-        ? "attach and continue this branch's last conversation"
-        : "attach and resume the last dispatch transcript",
+      title: branch.resume_id
+        ? "attach and resume this branch's recorded session"
+        : "attach and continue this branch's last conversation",
     });
   }
   doors.push({

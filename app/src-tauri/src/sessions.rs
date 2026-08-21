@@ -174,6 +174,52 @@ pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
     (false, newest)
 }
 
+/// The branch's own record of which session its seat lives in — written by
+/// ai_mail's dispatch on every wake (`.ai_mail.local/session.json`,
+/// FPLAN-0447). FPLAN-0448: the resume door consults it FIRST, because the
+/// mtime-and-marker guesswork in [`claude_history_in`] can never enter a
+/// dispatched session (`-c` refuses headless transcripts outright), and the
+/// marker itself is a heuristic — a session Patrick resumed interactively on
+/// 2026-08-20 carried zero snapshot records. The pointer is a written record;
+/// everything else in this file is inference. Record outranks inference.
+///
+/// Trust needs all three: the file parses, its `cwd` names THIS directory
+/// (a moved or copied branch inherits a pointer aimed at the original
+/// directory's transcripts), and the transcript actually exists (`--resume`
+/// on a missing id fails the launch outright). Anything less is `None` and
+/// the caller falls back to the transcript scan — same fail-quiet rule as
+/// the rest of the card.
+pub(crate) fn session_pointer(branch_dir: &Path) -> Option<String> {
+    let home = match std::env::var("HOME") {
+        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
+        _ => return None,
+    };
+    let transcripts = home
+        .join(".claude")
+        .join("projects")
+        .join(transcript_dir_name(branch_dir));
+    session_pointer_in(branch_dir, &transcripts)
+}
+
+pub(crate) fn session_pointer_in(branch_dir: &Path, transcripts: &Path) -> Option<String> {
+    let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("session.json")).ok()?;
+    let pointer: Value = serde_json::from_str(&raw).ok()?;
+    let session_id = pointer.get("session_id")?.as_str()?.trim().to_string();
+    // A separator in the id would let a hand-edited pointer aim `--resume`
+    // outside the transcript dir via the join below. Refuse the dangerous,
+    // not the untidy — everything dispatch mints is a bare uuid.
+    if session_id.is_empty() || session_id.contains(['/', '\\']) {
+        return None;
+    }
+    if Path::new(pointer.get("cwd")?.as_str()?) != branch_dir {
+        return None;
+    }
+    if !transcripts.join(format!("{session_id}.jsonl")).is_file() {
+        return None;
+    }
+    Some(session_id)
+}
+
 /// Sub-agents are invisible to the process table: they run INSIDE the parent
 /// claude process, so m2.5's `/proc` scan can never see one. The truth lives
 /// in the session transcript - spawning a sub-agent leaves an assistant
@@ -394,4 +440,81 @@ pub(crate) fn read_tail(path: &Path, max_bytes: u64) -> String {
         return String::new();
     }
     String::from_utf8_lossy(&tail).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A branch dir and a transcript dir, isolated per test. The pointer file
+    /// format is the FPLAN-0447 contract: session_pointer.py's write_pointer
+    /// is the only production writer, these literals mirror its payload.
+    fn scratch(tag: &str) -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!("baud-pointer-{tag}-{}", std::process::id()));
+        let branch = base.join("branch");
+        let transcripts = base.join("transcripts");
+        fs::create_dir_all(branch.join(".ai_mail.local")).unwrap();
+        fs::create_dir_all(&transcripts).unwrap();
+        (branch, transcripts)
+    }
+
+    fn plant_pointer(branch: &Path, session_id: &str, cwd: &Path) {
+        let payload = format!(
+            r#"{{"session_id":"{session_id}","set_at":"2026-08-20T19:00:00-07:00","set_by":"wake","cwd":"{}"}}"#,
+            cwd.display()
+        );
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+    }
+
+    #[test]
+    fn a_valid_pointer_names_its_session() {
+        let (branch, transcripts) = scratch("valid");
+        plant_pointer(&branch, "aaaa-bbbb", &branch);
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        assert_eq!(
+            session_pointer_in(&branch, &transcripts),
+            Some("aaaa-bbbb".to_string())
+        );
+    }
+
+    #[test]
+    fn a_pointer_for_another_directory_is_refused() {
+        // A moved or copied branch inherits a pointer aimed at the ORIGINAL
+        // directory's transcripts; resuming those grafts foreign memory.
+        let (branch, transcripts) = scratch("moved");
+        plant_pointer(&branch, "aaaa-bbbb", Path::new("/somewhere/else"));
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+    }
+
+    #[test]
+    fn a_pointer_without_a_transcript_is_refused() {
+        // `--resume <missing id>` fails the launch outright — the guess scan
+        // costs nothing by comparison.
+        let (branch, transcripts) = scratch("gone");
+        plant_pointer(&branch, "aaaa-bbbb", &branch);
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+    }
+
+    #[test]
+    fn no_pointer_file_is_simply_none() {
+        let (branch, transcripts) = scratch("absent");
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+    }
+
+    #[test]
+    fn a_malformed_pointer_is_none_not_a_crash() {
+        let (branch, transcripts) = scratch("garbage");
+        fs::write(branch.join(".ai_mail.local").join("session.json"), "not json{").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+    }
+
+    #[test]
+    fn a_blank_or_traversing_id_is_refused() {
+        let (branch, transcripts) = scratch("fence");
+        plant_pointer(&branch, "  ", &branch);
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        plant_pointer(&branch, "../../escape", &branch);
+        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+    }
 }

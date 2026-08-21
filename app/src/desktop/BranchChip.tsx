@@ -378,14 +378,32 @@ export default function BranchChip({
               </button>
             ) : (
               <>
-                {canResume ? (
+                {/* A dispatched agent is WORKING in its session, headless. A
+                    resume there is takeover, not spectate: the second claude
+                    steals the session's background-task state and the job
+                    dies mid-run, unreplied — measured live 2026-08-20
+                    (DPLAN-0310, the OSPREY intercept; the presence gate
+                    blocks prompts but cannot block that migration). So the
+                    resume door steps aside and the same click spectates via
+                    the watch pane. Fresh stays: a new session id steals
+                    nothing. */}
+                {canResume && branch.dispatched ? (
+                  <button
+                    type="button"
+                    className="baud-chip-launch baud-chip-launch-quiet"
+                    title={`agent is working (dispatched) — resume would kill its background tasks; watch instead, or wait for it to finish`}
+                    onClick={() => onMonitor(branch)}
+                  >
+                    ⏳ working
+                  </button>
+                ) : canResume ? (
                   <button
                     type="button"
                     className="baud-chip-launch"
                     title={
-                      branch.has_history
-                        ? `cd ${branch.path} and continue the claude conversation`
-                        : `cd ${branch.path} and reopen the last dispatch transcript`
+                      branch.resume_id
+                        ? `cd ${branch.path} and resume the branch's recorded session`
+                        : `cd ${branch.path} and continue the claude conversation`
                     }
                     onClick={() => onLaunch(branch, "resume")}
                   >
