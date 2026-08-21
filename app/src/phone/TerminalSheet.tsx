@@ -330,11 +330,24 @@ const PAN_ACCELERATION = 3;
 /**
  * Terminal type size: default, and the range the zoom chips travel.
  *
- * DOWN FROM 11, on Patrick's "smaller" - and the default matters more than the
- * range because most sessions never touch the chips. 10px is the smallest size
- * that still reads as text rather than texture on a 420px-wide phone; below
- * that the operator is squinting at a room they cannot act on, which buys rows
- * at the cost of the thing the rows are for.
+ * THE DEFAULT IS THE FLOOR NOW - Patrick 2026-08-20: *"zoom terminal default
+ * setting, I'd like to test full zoom out as default"*. Written as `MIN_FONT`
+ * rather than as the number 7, because the ruling is "start fully zoomed out",
+ * not "start at seven" - if the floor ever moves, the default is supposed to
+ * move with it.
+ *
+ * IT OVERRULES WHAT STOOD HERE, and the old reasoning is kept because it may
+ * yet be right: 11 came down to 10 on an earlier "smaller" from him, and the
+ * comment then claimed 10 was the smallest size that still reads as text
+ * rather than texture on a 420px-wide phone - below it, the argument went, the
+ * operator squints at a room they cannot act on, buying rows at the cost of
+ * what the rows are for. That was a judgement about legibility made by the
+ * person doing the reading, and the same person has now asked to go past it
+ * twice. His eyes, his call - and this is explicitly a TEST, so the number is
+ * expected to come back up if it reads as texture in practice.
+ *
+ * Nothing is trapped either way: the zoom chips still travel the full range
+ * from here, so a session that wants bigger type is one tap from it.
  *
  * ZOOMING OUT BUYS REAL COLUMNS. That is only true because the resize lane
  * works: fewer pixels per cell means more cells, FitAddon measures them, and
@@ -482,9 +495,12 @@ const RECONNECT_TRIES = RECONNECT_MS.length;
  *  lane looks again after this instead of counting a try. */
 const HANDSHAKE_POLL_MS = 1_000;
 
-const DEFAULT_FONT = 10;
 const MIN_FONT = 7;
 const MAX_FONT = 18;
+/** Fully zoomed out on open - see the block above. Declared AFTER MIN_FONT
+ *  because these are module-level consts: reading MIN_FONT before its own
+ *  declaration is a TDZ ReferenceError at import time, not a hoisted zero. */
+const DEFAULT_FONT = MIN_FONT;
 
 /** What a close code means to the person holding the phone (@api's contract).
  *
