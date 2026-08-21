@@ -1508,14 +1508,21 @@ body {
   color: var(--baud-ink);
 }
 
-.baud-wheel-notch {
-  width: 0;
-  height: 0;
-  margin: 2px auto 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 6px solid var(--baud-wheel-accent);
-}
+/* THE NOTCH IS GONE (Patrick, 2026-08-21): *"remove the little arrow at the
+   bottom that points to the card - we don't need that arrow, because when I
+   hold a card it just lights up anyway. So that arrow is basically real estate
+   we don't need."*
+
+   He is right, and the file already proves it: `.baud-wheel-center` gives the
+   centred card an accent border, a 14px glow and brighter name ink, on agents
+   and app cards alike. Two marks were answering one question, and the quieter
+   one was costing 8px of vertical on a face where the terminal is fighting for
+   every row.
+
+   WHAT THE NOTCH WAS FOR is worth keeping written down, because it was not
+   decoration: it "names the centre as a PLACE, so the fleet has a current agent
+   rather than just a scrolled list". That job is unchanged and still done - by
+   the glow, which says the same thing louder and for free. */
 
 /* ------------------------------------------------------------ app cards --
    The fourth layer's cards (DPLAN-0303). SQUARES, because one glance has to
@@ -2098,14 +2105,26 @@ body {
    geometry moves, and the centred card would drift under the operator's thumb
    the moment the keyboard opened. */
 
-.baud-phone-typing .baud-wheel-avatar {
-  width: 30px;
-  height: 30px;
-  font-size: 0.7rem;
-}
+/* THE CARDS DO NOT SHRINK ANY MORE (Patrick, 2026-08-21: *"I'm thinking we
+   keep the larger size only"*). What stood here shrank every avatar to 30px
+   and set font-size 0.7rem with it, and it carried a bug the whole time: app
+   cards deliberately use 0.55rem so a four- or five-letter mark fits the 44px
+   box, and `.baud-phone-typing .baud-wheel-avatar` is two classes to their
+   one - so it WON, and typing gave app cards a BIGGER font in a SMALLER box.
+   That is the "text bleeds out of the boxes" he reported, and it could only
+   ever hit the app layer: an agent wearing two initials survives the squeeze,
+   FILES and TEMP do not. The rule was written when this rail held agents only
+   and never met the layer that came later.
 
+   Deleting the size change fixes the bleed and the complaint in one move, and
+   costs nothing structural - card WIDTH was already untouched here on purpose
+   (see the note above), so the snap geometry never depended on the height.
+
+   THE VERTICAL SAVING IS STILL TAKEN, just not out of the cards: names, the
+   current line and the footer still go while the keyboard is up. That was the
+   real point of compacting - the terminal is the centrepiece and must not
+   shrink - and it survives without touching the one thing he has to aim at. */
 .baud-phone-typing .baud-wheel-name,
-.baud-phone-typing .baud-wheel-notch,
 .baud-phone-typing .baud-phone-current,
 .baud-phone-typing .baud-phone-foot {
   display: none;

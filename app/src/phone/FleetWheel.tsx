@@ -12,8 +12,14 @@
  * WHY A WHEEL AT ALL. The column worked and did not scale: seventeen cards is a
  * scroll-to-find, and the fleet's whole point is knowing at a glance who is
  * awake. A rail makes the entire fleet one flick, and gives the phone something
- * the desktop does not have - a CURRENT agent, the one under the notch, that
+ * the desktop does not have - a CURRENT agent, the LIT one at the centre, that
  * everything context-bound can follow.
+ *
+ * VOCABULARY NOTE, because the word outlived the thing: comments below say
+ * "under the notch" to mean that centre. The notch was a small arrow drawn
+ * beneath the centred card and it was removed 2026-08-21 - the centred card's
+ * own accent border and glow say the same thing without the 8px. Where you read
+ * "the notch", read "the centre".
  *
  * THE SCROLL IS THE BROWSER'S. `scroll-snap-type: x mandatory` plus native
  * overflow scrolling, deliberately NOT a hand-written pan: momentum, snap
@@ -40,8 +46,9 @@
  * the array below, one more pip, one more flash. What it DID need is a second
  * card shape, because "a surface" and "a citizen" must be one glance apart -
  * apps are rounded SQUARES in ember orange, agents stay circles in fleet green,
- * and the accent travels through the pips, the notch and the flash together so
- * arriving on the apps layer reads as one move rather than four.
+ * and the accent travels through the pips, the centred card's glow and the
+ * flash together so arriving on the apps layer reads as one move rather than
+ * four.
  *
  * AN APP CARD IS NEVER THE CURRENT AGENT. It carries no `data-name`, so the
  * centre report that drives the terminal, the sheet and the whole context-bound
@@ -248,8 +255,8 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
    * IT IS AN APP LAYER, not a new kind of thing, and that is the whole reason
    * this round is small. A monitor sounds like a readout rather than a rail -
    * but CPU, memory, temperature, network and disk ARE cards, so they get the
-   * rail, the snap, the notch and the tap-to-centre-then-open that the app
-   * layer already has. Zero new rendering. Patrick described the same shape
+   * rail, the snap, the centre glow and the tap-to-centre-then-open that the
+   * app layer already has. Zero new rendering. Patrick described the same shape
    * from the other side: *"we scroll left or right... and then I can possibly
    * open in a tab the actual system monitor where it shows all the processes."*
    *
@@ -862,7 +869,7 @@ export default function FleetWheel({
           </div>
         ) : null}
         {/* THE APP CARDS - the same card, the same rail, the same snap and the
-            same notch, drawn as SQUARES so one glance separates a surface from
+            same centre glow, drawn as SQUARES so one glance separates a surface from
             a citizen without reading a word. No dot: a lamp answers "is anyone
             awake in there", and there is nobody in a git repository.
             `data-app` instead of `data-name` is what keeps this layer out of
@@ -986,10 +993,15 @@ export default function FleetWheel({
           );
         })}
       </div>
-      {/* The notch is the whole reason the wheel reads as a wheel: it names the
-          centre as a PLACE, so the fleet has a current agent rather than just a
-          scrolled list. */}
-      <div className="baud-wheel-notch" />
+      {/* THE NOTCH STOOD HERE and is gone (Patrick, 2026-08-21) - the arrow
+          under the centre. Its job was to name the centre as a PLACE, so the
+          fleet has a current agent rather than a scrolled list, and that job is
+          not being dropped: `.baud-wheel-center` already gives the centred card
+          an accent border, a glow and brighter name ink. Two marks, one
+          question, and the arrow was the quiet one paying 8px of vertical rent
+          on a face where the terminal wants every row. His words: "when I hold
+          a card it just lights up anyway, so that arrow is basically real
+          estate we don't need." */}
 
       {/* WHICH WHEEL AM I ON is never allowed to be a mystery, and it is
           answered twice on purpose. The pips are standing and silent - they
