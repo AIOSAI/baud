@@ -175,19 +175,28 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
   const citizenClass = line(identity, "citizen_class") ?? branch.citizen_class;
 
   /**
-   * The passport number, printed the way a passport prints one.
+   * TWO NUMBERS, TWO MEANINGS (Patrick's ruling, 2026-08-24).
    *
-   * The registry issues a UUID; a document shows a serial. So the first segment
-   * is printed in upper case and the WHOLE id rides the title attribute -
-   * shortened, never invented, and nothing is hidden from anyone who long
-   * presses it.
+   * `citizenship.citizen_id` is the citizen's OWN unique id - minted in its
+   * registry's branches[] entry, stamped into the passport by @spawn. That is
+   * the PASSPORT NUMBER: no two agents share one.
    *
-   * KNOWN DATA WART, rendered rather than papered over: six branches currently
-   * carry the SAME registry_id. That is @spawn's data problem, and a face that
-   * quietly de-duplicated it would be hiding the only place it is visible.
+   * `citizenship.registry_id` is the id of the REGISTRY that holds the
+   * citizen - AIPASS_REGISTRY's own metadata.id for the core fleet, each
+   * project registry's for its own. Every passport in a registry carries the
+   * same one BY DESIGN: it is the lock binding agent to branch registry. An
+   * earlier reading of it as "18 duplicate passport numbers" was this sheet's
+   * old label talking, not the data - the predecessor of this comment called
+   * that a KNOWN DATA WART, and the wart was ours.
+   *
+   * A registry issues UUIDs; a document shows a serial. First segment upper
+   * case, the WHOLE id on the title attribute - shortened, never invented,
+   * nothing hidden from a long press.
    */
+  const serialOf = (id: string | null): string | null =>
+    id ? id.split("-")[0].toUpperCase() : null;
+  const citizenId = line(citizenship, "citizen_id");
   const registryId = line(citizenship, "registry_id");
-  const serial = registryId ? registryId.split("-")[0].toUpperCase() : "UNREGISTERED";
 
   /**
    * The stamps, and each one is a fact with a source.
@@ -293,8 +302,12 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
             ))}
           </dl>
 
-          {/* ISSUED and PASSPORT NO. side by side, because that is the one row
-              on a real passport where two short facts share a line. */}
+          {/* ISSUED, PASSPORT NO. and BRANCH REG NO. share the line, because
+              that is the row on a real passport where short facts sit side by
+              side. Passport no. is the citizen's unique id; Branch reg no. is
+              the registry lock every sibling shares - two different numbers,
+              and printing the shared one as "Passport no." was the mislabel
+              this row used to carry. */}
           <dl className="baud-pass-fieldrow">
             <div className="baud-pass-field">
               <dt>Issued</dt>
@@ -302,8 +315,17 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
             </div>
             <div className="baud-pass-field">
               <dt>Passport no.</dt>
+              <dd
+                className="baud-pass-serial"
+                title={citizenId ?? "no citizen id on this passport yet — @spawn stamps it"}
+              >
+                {serialOf(citizenId) ?? "UNISSUED"}
+              </dd>
+            </div>
+            <div className="baud-pass-field">
+              <dt>Branch reg no.</dt>
               <dd className="baud-pass-serial" title={registryId ?? "no registry id on this passport"}>
-                {serial}
+                {serialOf(registryId) ?? "UNREGISTERED"}
               </dd>
             </div>
           </dl>

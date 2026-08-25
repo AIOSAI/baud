@@ -159,6 +159,20 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
   const line = (source: Record<string, unknown>, key: string): string | null =>
     typeof source[key] === "string" && source[key] !== "" ? (source[key] as string) : null;
 
+  /**
+   * A field that is a STRING on most passports and a LIST on some - measured,
+   * not assumed: @devpulse and @aipass carry `traits` as arrays. A string-only
+   * reader printed their populated Traits as an em-dash here, which is the
+   * phone sheet's exact warning come true on this face.
+   */
+  const lines = (source: Record<string, unknown>, key: string): string[] => {
+    const held = source[key];
+    if (typeof held === "string") return held === "" ? [] : [held];
+    if (Array.isArray(held)) return held.filter((each): each is string => typeof each === "string" && each !== "");
+    return [];
+  };
+  const traits = lines(identity, "traits");
+
   // The class the FILE claims, falling back to the snapshot's copy of the same
   // field - the passport read is fenced to the seated project, so a roster
   // card gets no document and the strip's value is all there is.
@@ -221,11 +235,30 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
               <dt>Purpose</dt>
               <dd>{line(identity, "purpose") ?? "—"}</dd>
               <dt>Traits</dt>
-              <dd>{line(identity, "traits") ?? "—"}</dd>
+              <dd>{traits.length > 0 ? traits.join(" · ") : "—"}</dd>
               <dt>Issued</dt>
               <dd>{line(branchInfo, "created") ?? "—"}</dd>
+              {/* TWO NUMBERS, TWO MEANINGS (Patrick's ruling, 2026-08-24):
+                  citizen_id is the citizen's own unique id - the passport
+                  number, no two agents share one. registry_id is the id of
+                  the REGISTRY holding the citizen, shared by every sibling BY
+                  DESIGN - the lock to the branch registry. This row used to
+                  print the shared lock as "Passport no.", which is how a
+                  fleet-wide audit briefly read as 18 duplicate passports. */}
               <dt>Passport no.</dt>
-              <dd className="baud-passport-serial">{line(citizenship, "registry_id") ?? "unregistered"}</dd>
+              <dd
+                className="baud-passport-serial"
+                title="the citizen's own unique id — no two agents share one"
+              >
+                {line(citizenship, "citizen_id") ?? "unissued"}
+              </dd>
+              <dt>Branch reg no.</dt>
+              <dd
+                className="baud-passport-serial"
+                title="the registry's own id — shared by every citizen it holds"
+              >
+                {line(citizenship, "registry_id") ?? "unregistered"}
+              </dd>
               <dt>Address</dt>
               <dd>{line(branchInfo, "email") ?? "—"}</dd>
               <dt>Project</dt>

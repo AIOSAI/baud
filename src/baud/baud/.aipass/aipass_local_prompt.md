@@ -1,4 +1,5 @@
 # BAUD — Branch Prompt
+<!-- Before editing or adding to this file: read .aipass/PROMPT_STYLE.md (repo root) — the prompt format rules. -->
 
 <!-- Injected every turn. Breadcrumbs only — depth lives in the root README, .trinity/ memories, and the code. Format: .aipass/PROMPT_STYLE.md -->
 

@@ -304,8 +304,11 @@ function HoldButton({
 
 /** tmux's own default: `WheelUpPane` sends `-N 5 scroll-up` in copy-mode.
  *  Read off `list-keys`, not assumed. Rebinding it makes a pan faster or
- *  slower - never broken - so this is a tuning constant, not a contract. */
-const LINES_PER_NOTCH = 5;
+ *  slower - never broken - so this is a tuning constant, not a contract.
+ *  Exported for `MonitorSheet`, whose pan always takes the local-scrollback
+ *  branch below (it has no room to forward a wheel event to) and shares the
+ *  same feel rather than inventing a second number for it. */
+export const LINES_PER_NOTCH = 5;
 
 /**
  * How much faster than 1:1 a pan travels. Patrick: "scrolling work. its slow
@@ -324,8 +327,10 @@ const LINES_PER_NOTCH = 5;
  * is a percentage OF. It stays here rather than moving into the settings file
  * because an absent key must leave this file computing exactly what it
  * computed before the knob existed - see the pan handler.
+ *
+ * Exported for `MonitorSheet` - same reason as `LINES_PER_NOTCH` above.
  */
-const PAN_ACCELERATION = 3;
+export const PAN_ACCELERATION = 3;
 
 /**
  * Terminal type size: default, and the range the zoom chips travel.
@@ -495,8 +500,10 @@ const RECONNECT_TRIES = RECONNECT_MS.length;
  *  lane looks again after this instead of counting a try. */
 const HANDSHAKE_POLL_MS = 1_000;
 
-const MIN_FONT = 7;
-const MAX_FONT = 18;
+/** Exported for MonitorSheet's zoom - one range for both faces, same reason
+ *  as LINES_PER_NOTCH above. */
+export const MIN_FONT = 7;
+export const MAX_FONT = 18;
 /** Fully zoomed out on open - see the block above. Declared AFTER MIN_FONT
  *  because these are module-level consts: reading MIN_FONT before its own
  *  declaration is a TDZ ReferenceError at import time, not a hoisted zero. */
