@@ -191,6 +191,16 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/roster",
     unwrap: (body) => body?.branches ?? [],
   },
+  machine_vitals: {
+    // THE MACHINE'S VITALS (FPLAN-0561 row 3). @skills owns the reading and its
+    // meaning, @api proxies it verbatim, this face draws it - so the body IS the
+    // reading and there is nothing to unwrap. NO QUERY, EVER: the route answers
+    // any parameter with 400 machine_parameters_refused, a cache-buster
+    // included, and it needs none - the server caches 1 s single-flight. A
+    // refusal (psutil_missing, switched_off) is a 503 carrying the owner's
+    // sentence as error.message, which `errorFrom` already hands through.
+    path: "/v1/machine",
+  },
   /* --------------------------------------------------------- the roots -- */
   /* FPLAN-0443. The fence learned four kinds of word instead of one, and these
      three entries are the WHOLE of what this face knows about that on the wire.

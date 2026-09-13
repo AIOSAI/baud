@@ -904,6 +904,7 @@ projects/baud/
 │   │   │                       verb chips, attached terminal, settings
 │   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
 │   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible,
+│   │   │                       machine — the monitor row's lane and its card faces,
 │   │   │                       and pollers — all four polling lanes, lifted out of the shell
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
@@ -2224,6 +2225,53 @@ that the day it is revisited nobody has to reconstruct what was known when. The
 reversal is small and nothing here forecloses it: a name deny-list in the
 server's read module, and an operate gate on the home arm alone.
 
+### The monitor row — the machine, live on the face
+
+The wheel's last layer is the machine (FPLAN-0561; every clause ruled in
+DPLAN-0341). Six cards — CPU, MEM, TEMP, FAN, NET, PROC — each carrying its live
+headline, because Patrick ruled the glance is the point: *"a big 100% door a.
+live on face"*, and *"6th card is in"* for the fan, the case he named when he
+asked for the row (*"the fans going crazy and the screen is locked and it's all
+the way across the room"*). Built 2026-09-13; his live verdict on the S24 closes
+the row.
+
+**Three owners, one piece each.** @skills publishes `machine_vitals()` and owns
+every meaning in it — which sensor is the CPU, which rows are nonsense, what an
+absence is called. @api proxies it verbatim on `GET /v1/machine` behind a 1 s
+single-flight cache. BAUD draws it and decides nothing else. The Rust half the
+placeholder round planned never happened: `sysinfo` has no fan API at all, and
+psutil reads the fan today. The desktop has no command behind `machine_vitals`,
+and its transport refuses the name out loud rather than failing at the IPC.
+
+**The faces.** CPU and MEM draw their percent with a ring of the same percent.
+TEMP draws the package °C with a ring of celsius over the sensor's own
+`critical`, amber from 85% of the sensor's `high` and red at `high` itself (both
+lines are 100 °C on the MacBook this was built on). FAN draws the percent of its
+range with the ring; a fan with an rpm but no range (`no_range`) draws the rpm
+and no ring. NET (sent plus received, per second) and PROC (a count) have no
+range and never wear one. Colour is the temperature's alone — the only reading
+that publishes a line to be warm against. The ring sits inside the card's border
+rather than outside it as the mock drew it, because the centred card's scale
+already spends the rail's vertical headroom and an outside ring was cut off on
+exactly the card being read.
+
+**Absence is not zero.** A section the host cannot give draws a dash — and on a
+gauge a dead ring — and its sheet prints the skill's own sentence for the reason,
+with the detail when there is one. `warming`, the first read after the server
+starts, has no CPU or network window yet and renders the same way. A 503
+(`psutil_missing`, `switched_off`) turns every face to a dash and the sheet
+prints the owner's message.
+
+**Read while looked at, and only on that row.** `lib/machine.ts` polls every 2 s
+— past the server's 1 s cache, so every read is a fresh sample — through
+`whileVisible`, and only while the monitor row is the visible wheel. Leaving the
+row stops the lane and forgets the reading, so arriving again shows bare marks
+until a fresh answer lands rather than last visit's numbers dressed as live ones.
+The sheet opens over the wheel without moving its layer, so it stays live. The
+route takes no query parameters, ever — a cache-buster included. PROC's list —
+what is running, by cost — is a deferred row with its own route, and its sheet
+says so.
+
 ### A path you can hand to someone
 
 *FPLAN-0443 rider, 2026-08-18.* Every row the files screen paints — a file, a
@@ -2339,6 +2387,12 @@ It goes through the same gate now, and **`whileVisible` holds the only
 `setInterval` left in the phone face** — every repeating lane on this face is
 gated by construction rather than by discipline. The wake tick earns its keep
 most here, on the one screen whose whole job is to be current.
+
+**And the machine lane, gated twice** (FPLAN-0561, 2026-09-13). It goes through
+`whileVisible` like every other lane, and ALSO only runs while the monitor row is
+the visible wheel — the wheel reports its layer up, and leaving the row tears the
+lane down and forgets its reading. So the one lane on this face that polls every
+2 s costs nothing on any other layer, and nothing in a pocket.
 
 ### One message a frame
 

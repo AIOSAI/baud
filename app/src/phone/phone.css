@@ -1560,6 +1560,195 @@ body {
   line-height: 1;
 }
 
+/* ------------------------------------------------------- monitor faces --
+   FPLAN-0561 row 3, Patrick's ruling A (2026-09-12): the monitor cards carry
+   their live headline, with the mark shrunk to a caption under it. A GAUGE card
+   - one whose reading has a range of its own - also wears a ring: the track in
+   the line colour, the value traced clockwise from top centre as a percent of
+   THAT range. NET and PROC have no range and draw no ring, because a number
+   with no scale must not wear one. An absent reading is a dash with a dead ring.
+
+   THE RING IS INSIDE THE BORDER, NOT OUTSIDE IT AS THE MOCK DREW IT. The rail's
+   11px of vertical headroom (see `.baud-wheel`) is already ~10px spent by the
+   centred card's scale(1.28) - anything drawn past the box's own edge on the
+   centred card, which is the card being read, is cut by the rail's
+   overflow-y. Inside the border it cannot clip, and the centred card keeps its
+   accent border and glow, which a ring on top of the border would have covered. */
+.baud-wheel-avatar-face {
+  flex-direction: column;
+  gap: 1px;
+  letter-spacing: 0;
+}
+
+.baud-wheel-face-value {
+  color: var(--baud-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.baud-wheel-face-value small {
+  color: var(--baud-ink-dim);
+  font-size: 0.5rem;
+  font-weight: 600;
+}
+
+/* A dash is not a number, so it does not get the number's ink. */
+.baud-wheel-face-absent {
+  color: var(--baud-ink-faint);
+}
+
+/* Six characters or more ("999KB/s", "3.6krpm") overran the box at the normal
+   size - rendered and measured, not guessed - so a long face steps down. */
+.baud-wheel-face-long {
+  font-size: 0.64rem;
+}
+
+.baud-wheel-face-long small {
+  font-size: 0.42rem;
+}
+
+.baud-wheel-face-mark {
+  color: var(--baud-apps);
+  font-size: 0.42rem;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+
+/* The padding box of a 44px card with a 2px border is 40px, and the ring's
+   40-unit viewBox is drawn edge to edge inside it. */
+.baud-wheel-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.baud-wheel-ring-track {
+  stroke: var(--baud-line);
+}
+
+.baud-wheel-ring-value {
+  stroke: var(--baud-green);
+}
+
+/* Warm and hot are the TEMPERATURE's alone - the only reading that publishes a
+   line to be warm against. See TEMP_WARM_FRACTION in lib/machine.ts. */
+.baud-wheel-ring-warm .baud-wheel-ring-value {
+  stroke: var(--baud-amber);
+}
+
+.baud-wheel-ring-hot .baud-wheel-ring-value {
+  stroke: var(--baud-red);
+}
+
+/* DASHED, not merely dim. The mock's 35% track could not be told from no ring
+   at all once rendered, and the difference is the whole message: a dashed ring
+   says "a gauge belongs here and has no reading", where a NET or PROC card with
+   no ring says "this reading has no range". Dash lengths are in pathLength
+   units (100 round the card). */
+.baud-wheel-ring-dead .baud-wheel-ring-track {
+  stroke: var(--baud-ink-faint);
+  stroke-dasharray: 2 3;
+}
+
+/* --------------------------------------------------------- machine sheet --
+   What a monitor card opens to (FPLAN-0561 row 3): a headline, the section's
+   values as label/value rows, and the honest line - the skill's own sentence,
+   in the quiet voice rather than the error one, because an absent sensor is a
+   fact about this machine and not a failure of the face. */
+.baud-machine {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--baud-gap) / 2);
+  padding: 0 calc(var(--baud-pad) / 1.5) var(--baud-pad);
+}
+
+.baud-machine-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: calc(var(--baud-gap) / 2);
+}
+
+.baud-machine-value {
+  color: var(--baud-ink);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.baud-machine-value small {
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 2px;
+}
+
+.baud-machine-value-absent {
+  color: var(--baud-ink-faint);
+}
+
+.baud-machine-note {
+  color: var(--baud-ink-dim);
+  font-size: 0.72rem;
+}
+
+.baud-machine-rows {
+  margin: 0;
+}
+
+.baud-machine-rows div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--baud-line);
+  font-size: 0.72rem;
+}
+
+.baud-machine-rows dt {
+  color: var(--baud-ink-dim);
+}
+
+.baud-machine-rows dd {
+  margin: 0;
+  color: var(--baud-ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.baud-machine-honest {
+  margin: 0;
+  padding: 4px 10px;
+  border-left: 2px solid var(--baud-line-strong);
+  color: var(--baud-ink-dim);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.baud-machine-honest-absent {
+  border-left-color: var(--baud-amber);
+}
+
+.baud-machine-detail {
+  display: block;
+  color: var(--baud-ink-faint);
+  font-size: 0.64rem;
+  overflow-wrap: anywhere;
+}
+
+.baud-machine-meta {
+  margin: 0;
+  color: var(--baud-ink-faint);
+  font-size: 0.64rem;
+}
+
 /* ------------------------------------------------------- stacked wheels --
    A vertical flick on the rail changes which agents it holds. Everything
    here is an OVERLAY on the wrap: the rail's own box is untouched, which is

@@ -36,6 +36,7 @@ import type {
   GitFileDiff,
   GitLog,
   GitRemote,
+  MachineVitals,
   MemoryConfig,
   NotificationEvent,
   ProjectListing,
@@ -59,6 +60,15 @@ export const fleetSnapshot = (project?: string) =>
 
 /** Every project's citizens, for the roster tabs - one sweep, not one per card. */
 export const agentRoster = () => call<BranchStatus[]>("agent_roster");
+
+/* ----------------------------------------------------------- the machine -- */
+
+/** The machine's vitals, for the phone's monitor layer (FPLAN-0561). NO
+ *  ARGUMENTS, EVER: the route refuses any query parameter, a cache-buster
+ *  included, and passing none is also what keeps the generic project lift in
+ *  the http transport from adding one. The server's own 1 s cache is what
+ *  keeps any number of phones at one read. */
+export const machineVitals = () => call<MachineVitals>("machine_vitals");
 
 /* -------------------------------------------------------------- projects -- */
 

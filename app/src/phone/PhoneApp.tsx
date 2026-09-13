@@ -96,6 +96,7 @@ import {
   useGitSweep,
   useRepoCount,
 } from "./lib/pollers";
+import { machineFaces, useMachineVitals } from "./lib/machine";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
 
@@ -768,6 +769,17 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   /** The app cards' badges, by card key. One entry today; the shape is the
    *  wheel's, so a second app is a second key and no new plumbing. */
   const appBadges = useMemo(() => ({ git: repoCounts[seat] }), [repoCounts, seat]);
+  /**
+   * WHICH WHEEL LAYER IS SHOWING, by key - reported up by the wheel, which owns
+   * the stack. The machine lane reads only while this is the monitor row
+   * (FPLAN-0561): nothing polls a pocket, and nothing polls a layer nobody is
+   * on. The machine sheet opens OVER the wheel without moving its layer, so the
+   * sheet stays live exactly as long as the row it was opened from.
+   */
+  const [wheelLayer, setWheelLayer] = useState<string | null>(null);
+  const machine = useMachineVitals(wheelLayer === "monitor");
+  /** The monitor cards' faces - from the same read the sheet draws. */
+  const appFaces = useMemo(() => machineFaces(machine), [machine]);
   /** Is the git app open. A boolean, not a screen name: the app owns its own
    *  stack of screens, so this face only knows whether it is showing. */
   const [gitOpen, setGitOpen] = useState(false);
@@ -967,6 +979,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         centered={current ? cardRef(current) : null}
         attached={activePane?.name ?? null}
         appBadges={appBadges}
+        appFaces={appFaces}
+        onLayer={setWheelLayer}
         onCenter={setCentered}
         onExpand={setExpanded}
         /* THE FOURTH LAYER'S DOOR. One key today and a switch would be one
@@ -975,8 +989,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         onOpenApp={(key) => {
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
-          // The monitor layer's cards all open the same placeholder sheet,
-          // which reads the key to say WHICH reading it is not showing yet.
+          // The monitor layer's cards all open the one machine sheet, which
+          // reads the key to know WHICH reading to draw.
           // Prefix-matched rather than listed: the wheel owns that card list,
           // and a second place naming every card is a second place to forget.
           if (key.startsWith("mon-")) setMonitorCard(key);
@@ -1400,12 +1414,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
 
-      {/* The machine placeholder - see MachineSheet for why it draws no numbers
-          rather than convincing ones. NAMED "machine", not "monitor", because
+      {/* The machine's vitals - what a monitor card opens to, drawn from the
+          same read as the card faces. NAMED "machine", not "monitor", because
           MonitorSheet above is already taken by the read-only WATCH pane over an
           agent's room - two different things one word away from each other. */}
       {monitorCard ? (
-        <MachineSheet card={monitorCard} onClose={() => setMonitorCard(null)} />
+        <MachineSheet card={monitorCard} read={machine} onClose={() => setMonitorCard(null)} />
       ) : null}
       {/* WORKING MEMORY - a screen, not an overlay on the card: it is read, at
           length, and the reader idiom is what this face uses for reading. */}

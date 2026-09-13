@@ -159,6 +159,56 @@ interface AppCard {
   kind: "door" | "link";
 }
 
+/**
+ * WHAT A LIVE APP CARD DRAWS instead of its bare mark - the monitor row's
+ * faces (FPLAN-0561 row 3, Patrick's ruling A: live values on the face).
+ *
+ * The card stays the same card: rail, snap, centre glow and tap-to-centre-
+ * then-open are untouched. What it gains is a headline with the mark shrunk to
+ * a caption under it, and - for a reading with a range of its own - a ring.
+ * The derivation lives in `lib/machine.ts`; this is only the shape it hands in.
+ */
+export interface AppFace {
+  /** The headline, already formatted: "14", "1.3k", or "—" for absent. */
+  value: string;
+  /** Drawn small beside the value: "%", "°C", "KB/s". */
+  unit?: string;
+  /** No reading - the dash is drawn in the faint ink, not as a number. */
+  absent: boolean;
+  /**
+   * `none`: no range, so no ring (NET, PROC, a fan with no_range).
+   * `dead`: a gauge whose reading is absent - the full track, dimmed.
+   * Otherwise the percent of the card's OWN range, and the tone it is drawn in.
+   */
+  ring: "none" | "dead" | { percent: number; tone: "normal" | "warm" | "hot" };
+}
+
+/** A card's outline, traced clockwise from top centre in the 40-unit padding
+ *  box INSIDE the card's 2px border - inside, because the rail's headroom is
+ *  already spent by the centred card's scale (see phone.css, monitor faces).
+ *  `pathLength` 100 makes a percent a dash length directly. */
+const RING_PATH = "M20 1H31A8 8 0 0 1 39 9V31A8 8 0 0 1 31 39H9A8 8 0 0 1 1 31V9A8 8 0 0 1 9 1Z";
+
+/** The ring behind a gauge card. SVG attributes, not a style attribute - the
+ *  face's no-inline-styles discipline holds with an exact percent. */
+function AppRing({ ring }: { ring: AppFace["ring"] }) {
+  if (ring === "none") return null;
+  const tone = ring === "dead" ? "dead" : ring.tone;
+  return (
+    <svg className={`baud-wheel-ring baud-wheel-ring-${tone}`} viewBox="0 0 40 40" aria-hidden="true">
+      <path className="baud-wheel-ring-track" d={RING_PATH} pathLength={100} />
+      {ring === "dead" ? null : (
+        <path
+          className="baud-wheel-ring-value"
+          d={RING_PATH}
+          pathLength={100}
+          strokeDasharray={`${ring.percent} 100`}
+        />
+      )}
+    </svg>
+  );
+}
+
 type WheelLayer = AgentLayer | AppLayer;
 
 /**
@@ -254,21 +304,20 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
    *
    * IT IS AN APP LAYER, not a new kind of thing, and that is the whole reason
    * this round is small. A monitor sounds like a readout rather than a rail -
-   * but CPU, memory, temperature, network and disk ARE cards, so they get the
+   * but CPU, memory, temperature, fan, network and processes ARE cards, so they get the
    * rail, the snap, the centre glow and the tap-to-centre-then-open that the
    * app layer already has. Zero new rendering. Patrick described the same shape
    * from the other side: *"we scroll left or right... and then I can possibly
    * open in a tab the actual system monitor where it shows all the processes."*
    *
-   * PLACEHOLDERS, DECLARED AS SUCH. Nothing behind these cards is measured yet
-   * - there is no system-info crate in Cargo.toml, so live numbers need
-   * `sysinfo`, a snapshot command in Rust and an @api lane to serve it. That is
-   * a build, not a ride-along, and it was deliberately deferred: *"maybe if we
-   * can just do placeholders for now... I don't think we have to build it out
-   * completely right now."* The sheet each card opens SAYS it is unmeasured
-   * rather than drawing a convincing zero - a monitor that invents a number is
-   * worse than no monitor, because the whole point is trusting it from across
-   * the room.
+   * LIVE ON THE FACE since FPLAN-0561 row 3 (Patrick, 2026-09-12: *"a big 100%
+   * door a. live on face"*; *"6th card is in."* - FAN, the case he named). Each
+   * card carries its headline and a gauge card a ring = percent of its own
+   * range, from `GET /v1/machine` - @skills' reading, proxied by @api, read
+   * only while this row is the visible wheel. An absent reading draws a dash,
+   * never a zero: a monitor that invents a number is worse than no monitor,
+   * because the whole point is trusting it from across the room. The keys are
+   * stable - the sheet keys on them - and FAN sits between TEMP and NET.
    */
   {
     key: "monitor",
@@ -279,6 +328,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
       { key: "mon-cpu", mark: "CPU", name: "cpu", kind: "door" },
       { key: "mon-mem", mark: "MEM", name: "memory", kind: "door" },
       { key: "mon-temp", mark: "TEMP", name: "temp", kind: "door" },
+      { key: "mon-fan", mark: "FAN", name: "fan", kind: "door" },
       { key: "mon-net", mark: "NET", name: "network", kind: "door" },
       { key: "mon-proc", mark: "PROC", name: "processes", kind: "door" },
     ],
@@ -398,6 +448,16 @@ interface FleetWheelProps {
    * that never happened.
    */
   appBadges: Readonly<Record<string, number | undefined>>;
+  /**
+   * What each APP card's face should draw instead of its bare mark, by card
+   * key - and absent for a card with nothing measured to show. The monitor row
+   * is the only layer that has any today (FPLAN-0561).
+   */
+  appFaces: Readonly<Record<string, AppFace | undefined>>;
+  /** Which layer is showing, by key, whenever it changes. The shell reads the
+   *  machine only while this is the monitor row - the wheel owns the stack, so
+   *  the wheel is what says where it is. */
+  onLayer: (key: string) => void;
   onCenter: (name: string) => void;
   /** A tap on the card that is ALREADY centered - the only way in. */
   onExpand: (name: string) => void;
@@ -414,6 +474,8 @@ export default function FleetWheel({
   centered,
   attached,
   appBadges,
+  appFaces,
+  onLayer,
   onCenter,
   onExpand,
   onOpenApp,
@@ -472,6 +534,11 @@ export default function FleetWheel({
   /** How many cards the rail is actually holding, whichever kind they are -
    *  what the empty line, the ghost card and the paint effect all key on. */
   const held = apps ? apps.length : shown.length;
+
+  /* Say which layer is showing. Keyed on the layer's key, not the index, so a
+     render that changes nothing reports nothing. */
+  const layerKey = wheel.key;
+  useEffect(() => onLayer(layerKey), [onLayer, layerKey]);
 
   /**
    * Paint the wheel for the current scroll position.
@@ -876,6 +943,7 @@ export default function FleetWheel({
             the current-agent report - see the file header. */}
         {(apps ?? []).map((card) => {
           const badge = appBadges[card.key];
+          const face = appFaces[card.key];
           return (
             <div
               key={card.key}
@@ -884,14 +952,34 @@ export default function FleetWheel({
             >
               <button
                 type="button"
-                className="baud-wheel-avatar baud-wheel-avatar-app"
+                className={`baud-wheel-avatar baud-wheel-avatar-app ${face ? "baud-wheel-avatar-face" : ""}`}
                 title={
                   card.kind === "link"
                     ? `${card.name} — opens outside this face`
                     : `${card.name} — this project's ${card.name} surface`
                 }
               >
-                {card.mark}
+                {/* A LIVE FACE: the headline, the mark as its caption, and the
+                    ring when the reading has a range. No face: the bare mark. */}
+                {face ? (
+                  <>
+                    <AppRing ring={face.ring} />
+                    {/* A LONG FACE - "999KB/s", "3.6krpm" - steps its type down,
+                        measured in headless Chrome against the built CSS: at the
+                        normal size six characters or more overran the 44px box. */}
+                    <span
+                      className={`baud-wheel-face-value ${face.absent ? "baud-wheel-face-absent" : ""} ${
+                        face.value.length + (face.unit?.length ?? 0) >= 6 ? "baud-wheel-face-long" : ""
+                      }`}
+                    >
+                      {face.value}
+                      {face.unit && !face.absent ? <small>{face.unit}</small> : null}
+                    </span>
+                    <span className="baud-wheel-face-mark">{card.mark}</span>
+                  </>
+                ) : (
+                  card.mark
+                )}
                 {/* ABSENT UNTIL MEASURED, and absent at zero too - the agent
                     cards' own rule, for the agent cards' own reason: a badge is
                     a "how much" and a nought is not one. The two absences are

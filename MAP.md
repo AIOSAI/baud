@@ -57,9 +57,9 @@ desktop-only, and since 2026-08-18 the directory says so.
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
 | `ProjectSwitch.tsx` · `Camera.tsx` · `Zoom.tsx` | Seat picker; capture; scale. |
 
-## The phone face — `src/phone/` (31 files on three shelves)
+## The phone face — `src/phone/` (33 files on three shelves)
 
-One column, one screen at a time. `PhoneApp.tsx` (1471 lines) is the shell:
+One column, one screen at a time. `PhoneApp.tsx` (1502 lines) is the shell:
 panes, seat, doors. Screens stay on top; the repository sub-app is in
 `phone/git/` and the no-JSX logic in `phone/lib/`. **The pollers are no longer
 in the shell** — all four moved to `lib/pollers.ts` on 2026-08-18, which is what
@@ -78,6 +78,7 @@ took 330 lines out of the file above.
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
 | `MonitorSheet.tsx` | Logs. |
+| `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
 
@@ -95,6 +96,7 @@ row.
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
+| `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
 | `push.ts` | The push hook, inert until phase 7. |

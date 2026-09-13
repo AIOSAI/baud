@@ -55,6 +55,12 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
   git_change_count:
     "the desktop counts through git_changes, which its own Rust command already answers - a second name for one number would be a second answer waiting to disagree",
   list_roots: "the desktop browses the project it is seated in - the roots roster is the phone's fence",
+  /* FPLAN-0561. The monitor layer is a glance at the machine from across the
+     room. The desktop IS on the machine, with its own system monitor a click
+     away, so there is no Rust command behind this name - the read is @skills',
+     served by @api, and only the phone asks for it. */
+  machine_vitals:
+    "the desktop sits on the machine it would be reading - the monitor layer is the phone's glance from across the room",
 };
 
 /** A typed host call. The only `invoke` in the application. */

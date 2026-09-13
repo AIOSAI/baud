@@ -480,6 +480,99 @@ export interface MemoryConfig {
   per_branch: BranchOverride[];
 }
 
+/* ---------------------------------------------------------- the machine -- */
+
+/**
+ * Mirrors the dict @skills' `machine_vitals()` publishes (`lib/system_status/
+ * handler.py`), which @api serves verbatim on `GET /v1/machine` (FPLAN-0561).
+ * NOT a Rust struct - the desktop has no command behind this name - and NOT a
+ * place any meaning lives: which sensor is the CPU and what an absence is
+ * called are the skill's, and its README section "machine_vitals() - The
+ * Published Read" is the source this is kept against.
+ *
+ * Every section carries these four beside its values. `reason` is one of the
+ * skill's codes - platform, no_sensor, no_allowlisted_sensor, read_failed,
+ * warming, no_range - typed as a string because the set is the skill's, and a
+ * code it adds next month must arrive as itself rather than as a type error.
+ */
+export interface MachineSection {
+  available: boolean;
+  reason: string | null;
+  /** The skill's own sentence for `reason` - the words the face prints. */
+  sentence: string | null;
+  /** The specifics (an exception, a recipe), when there are any. */
+  detail: string | null;
+}
+
+/** A fan's rpm floor and ceiling, read from sysfs by the skill (Linux only). */
+export interface MachineRange {
+  min: number;
+  max: number;
+}
+
+/** One row of `fan.fans[]` - every fan the allowlist admits, not only the headline one. */
+export interface MachineFanRow {
+  chip: string | null;
+  label: string | null;
+  current: number | null;
+  range: MachineRange | null;
+  percent_of_range: number | null;
+  reason: string | null;
+  sentence: string | null;
+  detail: string | null;
+}
+
+/**
+ * The whole reading. EVERY value key is always present, and null when the host
+ * cannot give it - NEVER 0. A face that turns one of these nulls into a zero has
+ * invented a measurement.
+ */
+export interface MachineVitals {
+  /** True on every 200 - a refusal arrives as a 503, not as `ok: false`. */
+  ok: boolean;
+  schema: number;
+  /** ISO-8601 UTC. @api caches for 1 s, so this can trail the request by that much. */
+  sampled_at: string;
+  cpu: MachineSection & { percent: number | null; window_s: number | null };
+  load: MachineSection & { one: number | null; five: number | null; fifteen: number | null };
+  memory: MachineSection & {
+    total_bytes: number | null;
+    used_bytes: number | null;
+    available_bytes: number | null;
+    percent: number | null;
+  };
+  swap: MachineSection & {
+    total_bytes: number | null;
+    used_bytes: number | null;
+    free_bytes: number | null;
+    percent: number | null;
+  };
+  temp: MachineSection & {
+    chip: string | null;
+    label: string | null;
+    celsius: number | null;
+    /** The SENSOR'S own lines - never a constant on this face. */
+    high: number | null;
+    critical: number | null;
+    /** The chips reported when none was on the allowlist. */
+    seen: string[] | null;
+  };
+  fan: MachineSection & {
+    label: string | null;
+    current: number | null;
+    range: MachineRange | null;
+    percent_of_range: number | null;
+    fans: MachineFanRow[] | null;
+    seen: string[] | null;
+  };
+  network: MachineSection & {
+    sent_bytes_per_s: number | null;
+    recv_bytes_per_s: number | null;
+    window_s: number | null;
+  };
+  processes: MachineSection & { count: number | null };
+}
+
 /** Mirrors `MemoryConfigPatch` in src-tauri/src/memory.rs. */
 export interface MemoryConfigPatch {
   caps: { key: string; max_chars: number }[];
