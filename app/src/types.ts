@@ -23,13 +23,16 @@ export interface BranchStatus {
    * in the anchor, `baud-<project>-<branch>` elsewhere, tmux-sanitized. The
    * name a live room HAS and the name a launch would CREATE are one string;
    * `has_room` says which you are looking at, and `outside_room` names the
-   * session a door acts on when BAUD has no room here (m12).
+   * session a door acts on when the own room holds no claude - absent, or a
+   * shell waiting (ruled B, 2026-09-07: an empty room never outranks a seat).
    *
    * Read it, never rebuild it: the derivation lives in `room_name` and this
    * field exists so no second copy of that rule has to.
    */
   room: string;
   has_room: boolean;
+  /** The own room exists AND holds a claude. Only then does it silence outside_room (ruled B, 2026-09-07). */
+  own_room_live: boolean;
   outside_room: string | null;
   subagents: number;
   new_mail: number;

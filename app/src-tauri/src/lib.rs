@@ -169,8 +169,11 @@ pub struct BranchStatus {
     /// invents next month arrives without a second plumbing trip through the
     /// snapshot, the types file and the transports.
     pub citizen_class: String,
-    /// `.ai_mail.local/.dispatch.lock` exists - a dispatched agent is working
-    /// the branch right now.
+    /// `.ai_mail.local/.dispatch.lock` names a process that is ALIVE - a
+    /// dispatched agent is working the branch right now. The lock's existence
+    /// is not enough (FPLAN-0492): ai_mail reclaims a stale lock only on the
+    /// next dispatch, so after a reboot a dead lock kept cards in the
+    /// dispatched wheel for hours. See `dispatch_lock_live`.
     pub dispatched: bool,
     /// A live interactive claude session (no `-p`) has its cwd in this branch -
     /// someone is at the wheel.
@@ -205,20 +208,34 @@ pub struct BranchStatus {
     /// that never existed" rather than as an error. BAUD names its own rooms,
     /// so BAUD says the name. Read this field; never rebuild it.
     ///
-    /// NOT ALWAYS THE SESSION A DOOR ACTS ON, and that distinction is the
-    /// whole of m12: when `has_room` is false, the branch's live claude may be
-    /// sitting in a session BAUD never made, and
+    /// NOT ALWAYS THE SESSION A DOOR ACTS ON. When
+    /// [`own_room_live`](Self::own_room_live) is false the branch's live
+    /// claude may be sitting in a session BAUD never made, and
     /// [`outside_room`](Self::outside_room) names it. The resolution is: own
-    /// room if it exists, else `outside_room`, else this name to create.
+    /// room while a claude is in it, else `outside_room`, else the own room
+    /// if it merely exists, else this name to create. That is ruled B
+    /// (Patrick, 2026-09-07, ONE ROOM step 2): a room holding no claude never
+    /// outranks a live seat. m12 had the own room win whenever it EXISTED,
+    /// and an empty `baud-` room hid the live seat from both faces (09-04).
     pub room: String,
     /// A `baud-<branch>` tmux session exists - the agent has a living room
-    /// to attach to, whether or not anything is running inside it.
+    /// to attach to, whether or not anything is running inside it. Does NOT
+    /// by itself decide which session the doors act on; that is
+    /// [`own_room_live`](Self::own_room_live).
     pub has_room: bool,
+    /// This branch's own room exists AND holds a pane running a claude -
+    /// interactive or dispatched-headless alike, the same pane test the
+    /// outside-room scan uses. Only while this is true does the own room
+    /// silence `outside_room`; when it is false with `has_room` true the room
+    /// is a shell waiting, and a live seat elsewhere outranks it (ruled B).
+    /// Always false when `has_room` is false.
+    pub own_room_live: bool,
     /// A live claude sitting in a tmux session BAUD did NOT create, with its
     /// pane seated in this branch - the boot shim's `aipass-<branch>`, a
     /// `telegram-<branch>` wake, a hand-rolled session. Only ever set when
-    /// the branch's own room is absent, so the card knows which session its
-    /// doors will act on. `None` is the ordinary case (m12).
+    /// the branch's own room holds no live claude - absent, or a shell
+    /// waiting - so the card knows which session its doors will act on.
+    /// `None` is the ordinary case.
     pub outside_room: Option<String>,
     /// Sub-agents running inside this branch's live claude session(s) right
     /// now - unmatched Agent/Task spawn calls in recent transcripts. See
@@ -254,6 +271,7 @@ impl BranchStatus {
             resume_id: None,
             room: String::new(),
             has_room: false,
+            own_room_live: false,
             outside_room: None,
             subagents: 0,
             new_mail: 0,
@@ -1411,6 +1429,139 @@ mod tests {
 
         let scoped = read_branch(&branch, "ai_mail".into(), "VERA-STUDIO", &[], &quiet, Some("vera-studio"));
         assert_eq!(scoped.room, "baud-vera-studio-ai_mail");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// FPLAN-0492 item 1: the dispatched wheel reads the LOCK PID and requires
+    /// it alive, not the lock's existence. ai_mail reclaims a stale lock only
+    /// on the next dispatch after its 600 s window, so after a reboot a dead
+    /// lock kept cards dispatched for hours. The live lock has four keys
+    /// (pid, timestamp, branch, subject) and its pid is the dispatch monitor,
+    /// not a claude - the `/proc` claude pass cannot see it, `/proc/<pid>` is
+    /// stat'ed directly. Mutation: revert to `.exists()` and the dead-pid,
+    /// pid-less and unparseable arms all go red.
+    #[test]
+    fn dispatched_requires_the_lock_pid_alive() {
+        let base = std::env::temp_dir().join(format!("baud-locklive-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let branch = base.join("worker");
+        let lock_dir = branch.join(".ai_mail.local");
+        fs::create_dir_all(&lock_dir).unwrap();
+        let lock = lock_dir.join(".dispatch.lock");
+        let quiet = RoomScan::default();
+        let dispatched = || read_branch(&branch, "worker".into(), "AIPASS", &[], &quiet, None).dispatched;
+
+        // No lock at all: not dispatched, as before.
+        assert!(!dispatched(), "no lock must read not dispatched");
+
+        // A live pid - our own - in the lock's real four-key shape.
+        fs::write(
+            &lock,
+            format!(
+                r#"{{"pid": {}, "timestamp": "2026-09-07T19:35:00", "branch": "{}", "subject": "daemon wake"}}"#,
+                std::process::id(),
+                branch.display()
+            ),
+        )
+        .unwrap();
+        assert!(dispatched(), "a lock naming a live pid reads dispatched");
+
+        // A dead pid: spawn a child and reap it - never a made-up number.
+        let mut child = Command::new("true").spawn().expect("spawn `true`");
+        let pid = child.id();
+        child.wait().expect("reap the child");
+        // ARMED: the pid is really gone before the claim below is made. If
+        // this fails the pin is not measuring death (zombie, pid reuse).
+        assert!(
+            !std::path::Path::new("/proc").join(pid.to_string()).exists(),
+            "reaped child {pid} is still in /proc - the dead-pid pin is not armed"
+        );
+        fs::write(
+            &lock,
+            format!(r#"{{"pid": {pid}, "timestamp": "2026-09-07T19:35:00", "branch": "x"}}"#),
+        )
+        .unwrap();
+        assert!(!dispatched(), "a lock naming a dead pid reads not dispatched");
+
+        // No pid key at all.
+        fs::write(&lock, r#"{"timestamp": "2026-09-07T19:35:00", "branch": "x"}"#).unwrap();
+        assert!(!dispatched(), "a lock with no pid reads not dispatched");
+        // Unparseable JSON.
+        fs::write(&lock, "{not json").unwrap();
+        assert!(!dispatched(), "an unparseable lock reads not dispatched");
+        // Pid 0 is never a process, whatever /proc says about it.
+        fs::write(&lock, r#"{"pid": 0}"#).unwrap();
+        assert!(!dispatched(), "pid 0 reads not dispatched");
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// FPLAN-0492 item 2, ruled B (Patrick, 2026-09-07, ONE ROOM step 2): a
+    /// room holding no claude never outranks a live seat. The card's
+    /// `outside_room` and the doors' `door_session` are read against the SAME
+    /// hand-built scan so the two cannot drift apart. Mutation: restore the
+    /// `if has_room { None }` arm and the empty-room-with-a-seat case goes red.
+    #[test]
+    fn an_empty_own_room_never_hides_a_live_seat() {
+        let base = std::env::temp_dir().join(format!("baud-ruledb-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let branch = base.join("worker");
+        fs::create_dir_all(&branch).unwrap();
+        let canonical = branch.canonicalize().unwrap();
+        let own = room_name(None, "worker");
+        let seat = "aipass-worker".to_string();
+        let row = |scan: &RoomScan| read_branch(&branch, "worker".into(), "AIPASS", &[], scan, None);
+
+        // Own room LIVE (a claude in it) and a seat elsewhere: the room wins.
+        let mut scan = RoomScan::default();
+        scan.names.insert(own.clone());
+        scan.names.insert(seat.clone());
+        scan.agent_panes.push((own.clone(), canonical.clone()));
+        scan.agent_panes.push((seat.clone(), canonical.clone()));
+        let card = row(&scan);
+        assert!(card.has_room && card.own_room_live);
+        assert_eq!(card.outside_room, None, "a live own room silences the seat");
+        assert_eq!(scan.door_session(&own, Some(&canonical)).as_deref(), Some(own.as_str()));
+
+        // Own room exists but EMPTY, live seat elsewhere: the seat is named,
+        // the new field says why, and the doors go to the seat too.
+        let mut scan = RoomScan::default();
+        scan.names.insert(own.clone());
+        scan.names.insert(seat.clone());
+        scan.agent_panes.push((seat.clone(), canonical.clone()));
+        let card = row(&scan);
+        assert!(card.has_room, "the empty room still exists");
+        assert!(!card.own_room_live, "an empty room holds no claude");
+        assert_eq!(card.outside_room.as_deref(), Some("aipass-worker"), "the seat is not hidden");
+        assert_eq!(scan.door_session(&own, Some(&canonical)).as_deref(), Some("aipass-worker"));
+
+        // No own room, live seat elsewhere: today's behaviour, unchanged.
+        let mut scan = RoomScan::default();
+        scan.names.insert(seat.clone());
+        scan.agent_panes.push((seat.clone(), canonical.clone()));
+        let card = row(&scan);
+        assert!(!card.has_room && !card.own_room_live);
+        assert_eq!(card.outside_room.as_deref(), Some("aipass-worker"));
+        assert_eq!(scan.door_session(&own, Some(&canonical)).as_deref(), Some("aipass-worker"));
+
+        // Own room exists, empty, NO seat: nothing outside, and the doors
+        // still reach the waiting shell.
+        let mut scan = RoomScan::default();
+        scan.names.insert(own.clone());
+        let card = row(&scan);
+        assert!(card.has_room && !card.own_room_live);
+        assert_eq!(card.outside_room, None);
+        assert_eq!(scan.door_session(&own, Some(&canonical)).as_deref(), Some(own.as_str()));
+
+        // No room and no seat: None everywhere, and the fenced-name door
+        // (no dir) has nothing to find either.
+        let scan = RoomScan::default();
+        let card = row(&scan);
+        assert!(!card.has_room && !card.own_room_live);
+        assert_eq!(card.outside_room, None);
+        assert_eq!(scan.door_session(&own, Some(&canonical)), None);
+        assert_eq!(scan.door_session(&own, None), None);
 
         let _ = fs::remove_dir_all(&base);
     }

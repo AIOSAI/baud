@@ -283,7 +283,7 @@ seated in (Patrick, 2026-08-13, accepting the design on those grounds). Making
 the fenced commands project-scoped would fill every card in and cost that
 signal — it stays this way on purpose, not for want of the wiring.
 
-- **Lamp** — amber pulse: dispatched (`.ai_mail.local/.dispatch.lock` exists).
+- **Lamp** — amber pulse: dispatched (`.ai_mail.local/.dispatch.lock` names a live pid).
   Steady green: interactive (a live claude with no `-p`/`--print` has its cwd
   inside the branch). Dim: neither.
 - **Avatar** — the agent's initials in a disc, and the door to its passport.
@@ -455,8 +455,9 @@ recorded only after tmux confirms the kill: a room that refused to die is still
 alive, and BAUD says so instead of pretending. This exists because the ruling
 was broken the day it was made — see *The startup agent* under Settings.
 
-**Sessions BAUD did not create.** A branch whose own room is absent can still
-hold a live agent: @hooks' boot shim seats a typed `claude` in `aipass-<branch>`,
+**Sessions BAUD did not create.** A branch whose own room is absent — or exists
+but holds no claude (ruled B, 2026-09-07: a room holding no claude never outranks
+a live seat; the row's `own_room_live` says which) — can still hold a live agent: @hooks' boot shim seats a typed `claude` in `aipass-<branch>`,
 the Telegram fleet wakes agents in `telegram-<branch>`. The snapshot reads panes,
 not just session names, so those show up as the branch's `outside_room` and the
 card's doors act on them: the badge wears a `⧉` and names the session on hover,
@@ -477,8 +478,12 @@ had before. BAUD still CREATES only its own `baud-` rooms, and an existing
 `baud-<branch>` in the anchor, `baud-<project>-<branch>` elsewhere, sanitized for
 tmux targets — spelled whether or not that session exists, because the name a
 live room *has* and the name a launch would *create* are one string. With
-`has_room` and `outside_room` beside it the row states the whole resolution: own
-room if it is live, else the outside session, else this name to create.
+`has_room`, `own_room_live` and `outside_room` beside it the row states the whole
+resolution: own room while a claude is in it, else the outside session, else the
+own room if it merely exists, else this name to create. Until ruled B
+(2026-09-07) the own room won whenever it *existed*, and an empty `baud-` room hid
+a live seat from both faces — and from the doors, which resolve through the same
+rule (`RoomScan::door_session`).
 
 It is published because the derivation had been *copied*. @api's attach lane had
 re-implemented the prefix, the scope rule and the character sanitizer in python
@@ -831,7 +836,7 @@ targets the command returns an honest error.
 | citizen | `.trinity/passport.json` exists |
 | manager | that passport's `identity.citizen_class` reads `manager` |
 | roster tabs | the same per-project scan, run over every project in the census |
-| dispatched | `.ai_mail.local/.dispatch.lock` exists |
+| dispatched | `.ai_mail.local/.dispatch.lock` names a pid that is alive (the dispatch monitor; `/proc/<pid>` stat'ed directly) |
 | interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
 | resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
@@ -852,7 +857,7 @@ Every fallible read degrades to a default and records the failure in the payload
 ## The command surface
 
 `invoke_handler` in `app/src-tauri/src/lib.rs` is the canonical inventory —
-26 commands, and nothing reaches the backend that is not on this list:
+29 commands, and nothing reaches the backend that is not on this list:
 
 ```
 fleet_snapshot  agent_roster  list_projects  project_switch
@@ -865,6 +870,7 @@ agent_settings_read  agent_settings_write
 baud_settings_read  baud_settings_write
 hooks_sound_get  hooks_sound_set
 memory_config_read  memory_config_write
+memory_config_set  memory_config_set_default  memory_config_push
 ```
 
 The registry stayed in `lib.rs` when the command functions moved into lanes
@@ -892,7 +898,10 @@ projects/baud/
 │   │   │                       cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
-│   │   ├── phone/              the wheel face, 17 screens on top: shell, token door, fleet wheel, expanded agent card, passport sheet, files, monitor, reader, feed, verb chips, room doors, attached terminal, photo picker
+│   │   ├── phone/              the wheel face — main.tsx, PhoneApp.tsx (the shell) and 15 screens:
+│   │   │                       token door, fleet wheel, expanded agent card, passport sheet, certificate,
+│   │   │                       files, roots, memory, machine vitals, agent monitor, reader, feed,
+│   │   │                       verb chips, attached terminal, settings
 │   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
 │   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible,
 │   │   │                       and pollers — all four polling lanes, lifted out of the shell
@@ -926,7 +935,7 @@ projects/baud/
 ├── src/baud/baud/              @baud — the project's resident agent
 ├── tests/                      no tests — a README naming where they actually live
 ├── .github/
-│   ├── workflows/ci.yml        the audit lane, run by a robot
+│   ├── workflows/ci.yml        the audit lane minus build:phone, run by a robot
 │   ├── workflows/release.yml   tag push -> tested build -> published release
 │   └── actions/                the Ubuntu build deps, shared by both workflows
 ├── MAP.md                      the map — where every piece of this repo lives
@@ -1511,7 +1520,7 @@ launch line in `App.tsx`; the seam names what BAUD does (`ptyCreate`, `roomKill`
 Checks, all expected clean:
 
 ```
-cd app/src-tauri && cargo test      # 81 unit tests; compiling IS the Rust type check
+cd app/src-tauri && cargo test      # 101 unit tests; compiling IS the Rust type check
 cd app/src-tauri && cargo clippy    # lints
 cd app && npx tsc --noEmit          # TypeScript type check
 cd app && npm run build             # tsc && vite build - the frontend must actually build
@@ -1519,11 +1528,14 @@ cd app && npm run build:phone       # the phone face - same components, HTTP tra
 ```
 
 There is no seedgo audit lane for this repo: seedgo's checks target AIPass
-Python branches, and BAUD is Rust and TypeScript. The four commands above are
+Python branches, and BAUD is Rust and TypeScript. The five commands above are
 the audit.
 
-`.github/workflows/ci.yml` runs those same four as a robot on every push to
-`main` and every pull request — two parallel jobs (`frontend`, `rust`) on a
+`.github/workflows/ci.yml` runs FOUR OF THOSE FIVE as a robot on every push to
+`main` and every pull request. **`build:phone` is not one of them** — the phone
+bundle is never built by CI, so a change that breaks only the phone entry passes
+green and is caught by a person or not at all. Measured 2026-08-24 by reading
+the workflow; `MAP.md` carries the same note — two parallel jobs (`frontend`, `rust`) on a
 pinned `ubuntu-24.04`, with clippy's warnings denied rather than merely
 printed. The runner installs Tauri v2's Ubuntu prerequisites and **tmux**,
 because two of the Rust tests spawn real detached tmux sessions; they are not

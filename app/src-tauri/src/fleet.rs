@@ -14,6 +14,42 @@ use serde_json::Value;
 
 use crate::*;
 
+/// Whether `.ai_mail.local/.dispatch.lock` names a process that is alive.
+///
+/// The lock is JSON written by ai_mail's dispatcher: `pid`, `timestamp`,
+/// `branch`, and a `subject` the brief's three-key reading did not know
+/// about - extra keys are tolerated, only an integer `pid` is required. That
+/// pid is the DISPATCH MONITOR (`dispatch_monitor.py @<branch>`, python3),
+/// not the claude it watches - measured on a live lock during a real dispatch
+/// (FPLAN-0492) - so the `/proc` claude pass can never vouch for it and
+/// `/proc/<pid>` is stat'ed directly instead: one syscall, no second walk of
+/// the process table.
+///
+/// The existence test this replaces was the bug: ai_mail reclaims a stale
+/// lock only on the NEXT dispatch after its 600 s window, so after a reboot
+/// a dead lock kept a card in the dispatched wheel for hours (2.5 h
+/// measured). A missing, unreadable, pid-less or dead-pid lock reads not
+/// dispatched.
+pub(crate) fn dispatch_lock_live(branch_dir: &Path) -> bool {
+    let Ok(text) = fs::read_to_string(join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH)) else {
+        return false;
+    };
+    let Ok(lock) = serde_json::from_str::<Value>(&text) else {
+        return false;
+    };
+    let Some(pid) = lock.get("pid").and_then(Value::as_u64) else {
+        return false;
+    };
+    pid_alive(pid)
+}
+
+/// A process with this pid exists right now: `/proc/<pid>` is a directory.
+/// Pid 0 is never a process. A zombie keeps its entry until reaped, which is
+/// the right reading - the dispatcher's own reap is what ends a wake.
+pub(crate) fn pid_alive(pid: u64) -> bool {
+    pid != 0 && Path::new("/proc").join(pid.to_string()).is_dir()
+}
+
 /// Count mailbox messages by status straight from `inbox.json`.
 ///
 /// Closed mail is archived out of the file, so the inbox only ever holds
@@ -128,7 +164,7 @@ pub(crate) fn read_branch(
         String::new()
     };
     status.manager = status.citizen_class == "manager";
-    status.dispatched = join_all(branch_dir, &DISPATCH_LOCK_RELATIVE_PATH).exists();
+    status.dispatched = dispatch_lock_live(branch_dir);
 
     // /proc reports kernel-canonical cwds; canonicalize the branch dir so a
     // symlinked AIPASS_ROOT still matches. starts_with is component-wise, so
@@ -153,9 +189,14 @@ pub(crate) fn read_branch(
     // exactly the duplication this field exists to retire upstream.
     status.room = room_name(room_scope, &status.name);
     status.has_room = rooms.names.contains(&status.room);
-    // Only when BAUD has no room here: a card with its own room already knows
-    // which session its doors act on, and that one wins (m12).
-    status.outside_room = if status.has_room {
+    status.own_room_live = rooms.holds_claude(&status.room);
+    // Ruled B (Patrick, 2026-09-07, ONE ROOM step 2): a room holding no claude
+    // never outranks a live seat. The own room silences the outside seat only
+    // while a claude is actually IN it - `own_room_live`, not `has_room`. The
+    // old arm keyed on `has_room`, so an empty `baud-` room hid the live seat
+    // from both faces (the 09-04 blank terminal). The doors follow the same
+    // rule through `RoomScan::door_session`.
+    status.outside_room = if status.own_room_live {
         None
     } else {
         rooms.agent_session_in(&canonical)

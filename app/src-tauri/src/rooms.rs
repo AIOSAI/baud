@@ -77,6 +77,37 @@ impl RoomScan {
         found.first().map(|name| (*name).clone())
     }
 
+    /// Whether the session named `session` holds a pane running a claude - the
+    /// one question ruled B turns on (Patrick, 2026-09-07, ONE ROOM step 2): a
+    /// room that exists but holds no claude is a shell waiting, and it never
+    /// outranks a live seat elsewhere in the branch. Pane-command test, the
+    /// same one `agent_panes` is built from, so an interactive claude and a
+    /// dispatched headless one both count as "holds a claude".
+    pub(crate) fn holds_claude(&self, session: &str) -> bool {
+        self.agent_panes.iter().any(|(name, _)| name == session)
+    }
+
+    /// The session a branch's DOORS act on, given its own room's name and its
+    /// canonical dir: the own room while a claude is in it, else the outside
+    /// session holding this branch's claude, else the own room if it merely
+    /// exists (a shell waiting - attach reaches it, end room ends it), else
+    /// `None`. `dir` is `None` when the branch name failed the path fence.
+    ///
+    /// ONE derivation for `branch_session` (attach, end, the headless seam)
+    /// written against the same pane list `read_branch` computes the card
+    /// from, so the door and the card cannot disagree: before ruled B the own
+    /// room won whenever it EXISTED (m12), and an empty `baud-` room hid a
+    /// live seat from both faces while these doors opened the empty room.
+    pub(crate) fn door_session(&self, own: &str, dir: Option<&Path>) -> Option<String> {
+        if self.holds_claude(own) {
+            return Some(own.to_string());
+        }
+        if let Some(seat) = dir.and_then(|dir| self.agent_session_in(dir)) {
+            return Some(seat);
+        }
+        self.names.contains(own).then(|| own.to_string())
+    }
+
     /// Every session whose claude pane holds an INTERACTIVE claude, sorted and
     /// deduplicated. BAUD's own rooms are included here - unlike
     /// [`Self::agent_session_in`], which answers "whose room is this?" and so
@@ -154,24 +185,31 @@ pub(crate) fn parse_panes(text: &str) -> RoomScan {
     scan
 }
 
-/// The live tmux session a branch's doors act on: BAUD's own room when it
-/// exists, otherwise the outside session holding this branch's claude (m12).
-/// `None` means nothing is running for this branch - a launch would create
-/// the room, an end has nothing to do.
+/// The live tmux session a branch's doors act on: BAUD's own room while a
+/// claude is in it, otherwise the outside session holding this branch's
+/// claude, otherwise the own room if it merely exists. `None` means nothing
+/// is running for this branch - a launch would create the room, an end has
+/// nothing to do. The rule itself is [`RoomScan::door_session`], pinned
+/// against a hand-built scan; this is the live-tmux wrapper.
+///
+/// Ruled B (Patrick, 2026-09-07): a room holding no claude never outranks a
+/// live seat. Until then the own room won whenever it existed (m12), which
+/// is how an empty `baud-` room blanked both faces on 09-04.
 pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<String> {
     let own = room_name(project.room_scope().as_deref(), branch_name);
     let scan = scan_rooms();
-    if scan.names.contains(&own) {
-        return Some(own);
-    }
     // The branch dir is derived HERE, from the seated project - the frontend
     // names a branch, never a path. A name that is not a single directory
-    // component is refused rather than resolved.
-    if branch_name.is_empty() || branch_name.contains(['/', '\\']) || branch_name.starts_with('.') {
-        return None;
-    }
-    let canonical = project.fleet_dir.join(branch_name).canonicalize().ok()?;
-    scan.agent_session_in(&canonical)
+    // component is refused rather than resolved: no dir, so no outside seat.
+    let fenced = branch_name.is_empty()
+        || branch_name.contains(['/', '\\'])
+        || branch_name.starts_with('.');
+    let canonical = if fenced {
+        None
+    } else {
+        project.fleet_dir.join(branch_name).canonicalize().ok()
+    };
+    scan.door_session(&own, canonical.as_deref())
 }
 
 /// End a branch's session for real - the ONE door that ends one (Patrick
