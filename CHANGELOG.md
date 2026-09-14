@@ -12,6 +12,8 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-14
+
 ### Added
 
 - **Phone: the cpu page shows the cores** (FPLAN-0586). One bar per core, the thread and core counts with the clock speed, and a plain caption on the load averages. The row that repeated the headline is gone.

@@ -1,6 +1,6 @@
 [package]
 name = "baud"
-version = "0.1.0"
+version = "0.2.0"
 description = "BAUD - the AIPass desktop fleet monitor"
 authors = ["AIPass"]
 edition = "2021"

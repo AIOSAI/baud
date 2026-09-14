@@ -3037,13 +3037,15 @@ no title and no answer.
 
 ## Versions and releases
 
-BAUD is versioned with semantic versioning. The current version is **0.1.0**,
-declared in three files that must always agree — change one, change all three:
+BAUD is versioned with semantic versioning. The current version is **0.2.0**,
+declared in three files that must always agree — change one, change all three
+(and `Cargo.lock` and `package-lock.json` record the same number, because CI
+builds `--locked`):
 
 ```
-app/package.json                  "version": "0.1.0"
-app/src-tauri/Cargo.toml          version = "0.1.0"
-app/src-tauri/tauri.conf.json     "version": "0.1.0"   <- what the built binary reports
+app/package.json                  "version": "0.2.0"
+app/src-tauri/Cargo.toml          version = "0.2.0"
+app/src-tauri/tauri.conf.json     "version": "0.2.0"   <- what the built binary reports
 ```
 
 While the repo is private the version stays on `0.x`, and the leading zero is
