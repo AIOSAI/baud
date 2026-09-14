@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Added
+
+- **`baud-cli`, the headless binary** (FPLAN-0589). The same crate and the same reader as `baud`, built with the new `gui` cargo feature off: the six headless verbs (`--snapshot`, `--list-projects`, `--roster`, `--end-room`, `--capture-room`, `--send-room`) with the same arguments, output and exit codes, no window, and no GTK, webkit, javascriptcore or soup linked. A server or container with no desktop can answer the host API's fleet, census, roster and room lanes, and the API prefers it to the desktop binary. Releases carry it as `baud-cli-<tag>-linux-x86_64` with its sha256 in `SHA256SUMS.txt`, and CI fails if `ldd` shows it linking a GUI library.
+
 ## [0.2.0] — 2026-09-14
 
 ### Added
@@ -86,5 +90,6 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AIOSAI/baud/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AIOSAI/baud/releases/tag/v0.1.0

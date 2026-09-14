@@ -105,6 +105,19 @@ pub(crate) fn citizen_class_of(branch_dir: &Path) -> String {
         .to_owned()
 }
 
+/// Read a `quick_status` count that may be a number or a list of items.
+///
+/// Moved from reads.rs by FPLAN-0589 without a line of it changing: the fleet
+/// read is its only caller, and reads.rs now builds only with the window.
+pub(crate) fn count_field(quick_status: &Value, key: &str) -> u64 {
+    match quick_status.get(key) {
+        Some(Value::Number(number)) => number.as_u64().unwrap_or(0),
+        Some(Value::Array(items)) => items.len() as u64,
+        Some(Value::String(text)) => text.trim().parse::<u64>().unwrap_or(0),
+        _ => 0,
+    }
+}
+
 /// Overlay whatever `DASHBOARD.local.json` has to say onto a branch status.
 ///
 /// Mail counts are NOT taken from here - see [`mail_counts_in`].
@@ -284,7 +297,8 @@ pub(crate) fn branches_of(
 /// all and sweeps only projects the backend discovered itself. One `/proc`
 /// pass and one tmux round-trip serve every project, so the sweep costs the
 /// same two syscall storms a single snapshot already pays.
-#[tauri::command]
+// Also the roster behind baud-cli's --roster, so only the command half is gated.
+#[cfg_attr(feature = "gui", tauri::command)]
 pub fn agent_roster() -> Result<Vec<BranchStatus>, String> {
     let anchor = anchor_project()?;
     let sessions = scan_claude_sessions();
@@ -314,6 +328,7 @@ pub fn agent_roster() -> Result<Vec<BranchStatus>, String> {
 /// The fleet view's one command. Read-only by construction: it takes no
 /// path arguments, so the frontend cannot steer where it reads - it can only
 /// pick a seat from the backend's own census via [`project_switch`].
+#[cfg(feature = "gui")]
 #[tauri::command]
 pub fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
     let project = match active_project(&state) {

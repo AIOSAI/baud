@@ -59,6 +59,7 @@ pub struct ProjectListing {
 /// `None` means the anchor. Only [`project_switch`] ever writes it, and only
 /// to a project the backend discovered itself - the frontend cannot steer
 /// BAUD into an arbitrary directory by name or by path.
+#[cfg(feature = "gui")]
 #[derive(Default)]
 pub struct ActiveProject(Mutex<Option<Project>>);
 
@@ -172,6 +173,7 @@ pub(crate) fn discover_projects(anchor: &Project) -> Vec<Project> {
 
 /// The seated project, defaulting to the anchor. Every command that reads
 /// the filesystem resolves through here.
+#[cfg(feature = "gui")]
 pub(crate) fn active_project(state: &ActiveProject) -> Result<Project, String> {
     let seated = state
         .0
@@ -191,6 +193,7 @@ pub(crate) fn active_project(state: &ActiveProject) -> Result<Project, String> {
 /// scope without any command ever accepting a path from the webview. An
 /// unknown name is an error, never a fallback to the seat: silently acting on
 /// the wrong project is how an end-room kills a session nobody asked about.
+#[cfg(feature = "gui")]
 pub(crate) fn project_named(
     name: Option<&str>,
     state: &ActiveProject,
@@ -206,6 +209,7 @@ pub(crate) fn project_named(
 }
 
 /// The switcher menu: every discovered project, the seated one flagged.
+#[cfg(feature = "gui")]
 #[tauri::command]
 pub fn list_projects(state: tauri::State<'_, ActiveProject>) -> Result<Vec<ProjectListing>, String> {
     let anchor = anchor_project()?;
@@ -223,6 +227,7 @@ pub fn list_projects(state: tauri::State<'_, ActiveProject>) -> Result<Vec<Proje
 
 /// Seat the fleet view in a discovered project. The name must match the
 /// census exactly - there is deliberately no way to hand this command a path.
+#[cfg(feature = "gui")]
 #[tauri::command]
 pub fn project_switch(name: String, state: tauri::State<'_, ActiveProject>) -> Result<(), String> {
     let anchor = anchor_project()?;

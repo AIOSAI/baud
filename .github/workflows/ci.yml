@@ -5,6 +5,10 @@ name: CI
 # tests, and both vite builds: the desktop bundle and the phone bundle. If this
 # file and that section ever disagree, one of them is lying; fix both.
 #
+# Beyond the six, the rust job builds baud-cli - the headless binary, the same
+# crate with the gui feature off - and fails if ldd shows it linking a GUI
+# library (FPLAN-0589, 2026-09-14).
+#
 # The phone build is the face in daily use, and until 2026-09-13 no lane built
 # it: a change that broke only the phone entry went green. DPLAN-0313 named the
 # gap on 2026-08-21; DPLAN-0343 slice 1 closed it.
@@ -112,3 +116,20 @@ jobs:
       # Compiling IS the Rust type check; clippy adds the lints, and CI denies
       # what a human is merely shown.
       - run: cargo clippy --all-targets --locked -- -D warnings
+
+      # baud-cli, the headless doors: the same crate with the gui feature off, so
+      # the host API's fleet, census, roster and room lanes run on a machine with
+      # no desktop. Its own invocation on purpose - built beside the app, feature
+      # unification would switch gui back on.
+      - run: cargo build --release --locked --no-default-features --bin baud-cli
+      # The point of the binary, asserted. A GUI library in its link list means the
+      # gate leaked, and a server without GTK could not start it.
+      - name: baud-cli links no GUI library
+        run: |
+          binary=target/release/baud-cli
+          linked=$(ldd "$binary")
+          echo "$linked"
+          if echo "$linked" | grep -Ei 'libgtk|libwebkit|libjavascriptcore|libsoup'; then
+            echo "baud-cli links a GUI library - the gui feature gate leaked"
+            exit 1
+          fi

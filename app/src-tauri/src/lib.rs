@@ -79,37 +79,62 @@
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
+// The seat's lock (projects.rs), which only the window has.
+#[cfg(feature = "gui")]
 use std::sync::Mutex;
 
 use serde::Serialize;
+#[cfg(feature = "gui")]
 use tauri::Manager;
 
 // THE LANES, split out of this file by FPLAN-0445. It held 4013 lines and six
 // concerns; each module below carries one of them, moved verbatim. Rust privacy
 // does the rest: a child module can already read this file's private items, so
 // only what LEFT needed a visibility prefix.
+//
+// `memory`, `notifications`, `pty`, `reads`, `screenshot` and `settings` serve
+// the window alone - its dials, bell, terminal, reading room and capture - so
+// they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
+// `sessions` are the reader, which the desktop binary and baud-cli share.
 mod cli;
 mod fleet;
+#[cfg(feature = "gui")]
 mod memory;
+#[cfg(feature = "gui")]
 mod notifications;
 mod projects;
+#[cfg(feature = "gui")]
 mod pty;
+#[cfg(feature = "gui")]
 mod reads;
 mod rooms;
+#[cfg(feature = "gui")]
 mod screenshot;
 mod sessions;
+#[cfg(feature = "gui")]
 mod settings;
 
 // The six lanes are glob-imported straight back, and that is the point: every
 // call site in this file, in the tests below, and in each sibling module keeps
 // naming these items exactly as it did when they all lived here. A move that
 // renames things is not a move.
+//
+// Nothing outside the tests names a cli item any more - the three baud-cli
+// needs are re-exported below - so its glob serves the tests alone.
+#[cfg(test)]
 use cli::*;
 use fleet::*;
 use projects::*;
+// Likewise reads: run() names its commands by path, so only the window's tests
+// below use the glob.
+#[cfg(all(test, feature = "gui"))]
 use reads::*;
 use rooms::*;
 use sessions::*;
+
+// baud-cli's way in (src/bin/baud_cli.rs): the headless entry itself, and the
+// usage block it prints when handed none of the six verbs.
+pub use cli::{program_name, run_headless, usage};
 
 /// Marker directory that identifies an AIPass root: `<root>/src/aipass`.
 const FLEET_RELATIVE_DIR: [&str; 2] = ["src", "aipass"];
@@ -370,6 +395,10 @@ pub(crate) fn resolve_aipass_root() -> Result<PathBuf, String> {
     ))
 }
 
+/// The desktop app: a headless verb answers and exits, anything else opens the
+/// window. Only with the gui feature - baud-cli calls [`run_headless`] itself
+/// and has no window to open.
+#[cfg(feature = "gui")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -1188,6 +1217,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn viewer_text_refuses_binary_and_flags_truncation() {
         assert!(viewer_text(b"\x7fELF\x00\x01".to_vec(), 1024).is_err());
@@ -1199,6 +1229,7 @@ mod tests {
         assert_eq!((cut.as_str(), truncated), ("0123", true));
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn git_changes_and_diff_see_uncommitted_edits() {
         // A real throwaway repo: the machine has git (BAUD's doctrine leans
@@ -1249,6 +1280,7 @@ mod tests {
         let _ = fs::remove_dir_all(&repo);
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn project_total_counts_new_files_the_cards_cannot_see() {
         // The whole reason this counter exists: `diff HEAD` is blind to files
@@ -1823,6 +1855,7 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn the_fence_follows_the_given_root() {
         let base = std::env::temp_dir().join(format!("baud-fence-test-{}", std::process::id()));
@@ -1860,6 +1893,7 @@ mod tests {
     ///
     /// Returns `(base, root)` - `base` to delete, `root` canonicalized because
     /// the fence compares canonical paths.
+    #[cfg(feature = "gui")]
     fn resolve_fixture(tag: &str) -> (PathBuf, PathBuf) {
         let base = std::env::temp_dir().join(format!("baud-{tag}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
@@ -1873,6 +1907,7 @@ mod tests {
         (base, root)
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn resolve_paths_only_links_real_fenced_files() {
         let (base, root) = resolve_fixture("resolve-test");
@@ -1901,6 +1936,7 @@ mod tests {
         let _ = fs::remove_dir_all(&base);
     }
 
+    #[cfg(feature = "gui")]
     #[test]
     fn resolve_paths_prefers_the_seated_branch_dir() {
         // `README.md` is ambiguous: the seated room's copy must win over the

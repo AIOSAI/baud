@@ -5,6 +5,8 @@ description = "BAUD - the AIPass desktop fleet monitor"
 authors = ["AIPass"]
 edition = "2021"
 rust-version = "1.77.2"
+# Two binaries (below), so `cargo run` and tauri's CLI need telling which one is the app.
+default-run = "baud"
 
 # Tauri 2 convention: the app logic lives in a library so that the desktop
 # binary and the (future) mobile entry points share one implementation.
@@ -12,11 +14,41 @@ rust-version = "1.77.2"
 name = "baud_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# The desktop app. It IS the window, so it needs the gui feature; a build
+# without it skips this binary instead of failing on it.
+[[bin]]
+name = "baud"
+path = "src/main.rs"
+required-features = ["gui"]
+
+# The headless doors alone: cli.rs's six verbs, no window, no tauri, no GTK.
+# The host API prefers it, and a server or container with no desktop can run
+# it. Build it on its own, feature-free - built beside the app in one cargo
+# invocation, feature unification would drag gui back in:
+#   cargo build --release --locked --no-default-features --bin baud-cli
+[[bin]]
+name = "baud-cli"
+path = "src/bin/baud_cli.rs"
+
+[features]
+# gui is everything the desktop window needs: tauri and its build step, the
+# opener plugin, the terminal (portable-pty), the screenshot portal (ashpd)
+# and every #[tauri::command] wrapper. On by default, so `npm run tauri dev`, `npm run tauri build` and a
+# bare `cargo test` build what they always built.
+default = ["gui"]
+gui = [
+    "dep:tauri",
+    "dep:tauri-build",
+    "dep:tauri-plugin-opener",
+    "dep:portable-pty",
+    "dep:ashpd",
+]
+
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = [], optional = true }
 serde = { version = "1", features = ["derive"] }
 # preserve_order keeps a parsed document in FILE order instead of sorting it.
 # Both writers here edit files that belong to someone else (claude's settings,
@@ -27,8 +59,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 chrono = "0.4"
 # The operator's terminal: a real PTY, not a pipe. Line discipline, job
 # control, and $TERM behaviour all depend on it.
-portable-pty = "0.9"
-tauri-plugin-opener = "2.5.4"
+portable-pty = { version = "0.9", optional = true }
+tauri-plugin-opener = { version = "2.5.4", optional = true }
 
 # Unix teardown signals the shell's whole process group, not just the shell
 # PID - orphaned children are the classic terminal-emulator leak.
@@ -36,7 +68,7 @@ tauri-plugin-opener = "2.5.4"
 libc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.12.3", default-features = false, features = ["tokio"] }
+ashpd = { version = "0.12.3", default-features = false, features = ["tokio"], optional = true }
 
 [profile.release]
 codegen-units = 1

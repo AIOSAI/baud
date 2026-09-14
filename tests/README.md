@@ -9,13 +9,14 @@ tests gets run by nobody.
 
 | Stack | Where | How it is run |
 | --- | --- | --- |
-| Rust backend | `app/src-tauri/src/` — `#[cfg(test)]` modules in the file they test | `cargo test --locked` |
+| Rust backend | `app/src-tauri/src/` — `#[cfg(test)]` modules in the file they test | `cargo test --locked` (101), and with `--no-default-features` the 58 that need no window |
 | TypeScript | `app/src/` — `*.test.ts` beside the module they pin (vitest) | `npm test`, beside `npx tsc --noEmit`, `npm run build` and `npm run build:phone` |
 | Python | *no surface* — `src/baud/baud/apps/baud.py` is the drone shim, not app code | — |
 
 `.github/workflows/ci.yml` is the audit lane the robot runs: `npx tsc --noEmit`,
 `npm test`, `npm run build`, `npm run build:phone`, `cargo test --locked`,
-`cargo clippy --all-targets --locked -- -D warnings`.
+`cargo clippy --all-targets --locked -- -D warnings`, then a `baud-cli` build with
+`--no-default-features` that fails if `ldd` shows a GUI library linked.
 
 **The TypeScript tests cover pure functions only**: the lock and monitor face
 derivations, the delivery quoting and the copy path - no DOM, no network, no faked

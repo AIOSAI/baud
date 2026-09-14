@@ -13,6 +13,11 @@ name: Release
 # Each release also carries the built phone bundle, baud-phone-<tag>.tar.gz,
 # with its sha256 in the same SHA256SUMS.txt. The AIPass installer will fetch
 # the phone face from BAUD's latest release, so the release is what it installs.
+#
+# And each carries baud-cli-<tag>-linux-x86_64, the headless binary: the same
+# crate built with the gui feature off - the six headless verbs, no window, no
+# GTK linked - for the host API on a machine with no desktop (FPLAN-0589). Its
+# sha256 joins the same SHA256SUMS.txt.
 on:
   push:
     tags: ["v*"]
@@ -79,10 +84,16 @@ jobs:
       - run: npm run tauri build
         working-directory: app
 
+      # baud-cli, in its own cargo invocation after the app rather than folded into
+      # it: built together, feature unification would switch gui back on and compile
+      # tauri into the one binary that must not carry it.
+      - run: cargo build --release --locked --no-default-features --bin baud-cli
+        working-directory: app/src-tauri
+
       # The phone face (vite.config.phone.ts). Built BEFORE the binary is staged:
-      # the bundle stamps `git status` into itself, and the staged binary and
+      # the bundle stamps `git status` into itself, and the staged binaries and
       # SHA256SUMS.txt are untracked files at the checkout root, so a build after
-      # them would stamp a clean tag as "+2 dirty".
+      # them would stamp a clean tag as "+3 dirty".
       - run: npm run build:phone
         working-directory: app
 
@@ -95,6 +106,23 @@ jobs:
           cp "$binary" "baud-${GITHUB_REF_NAME}-linux-x86_64"
           ls -lh "baud-${GITHUB_REF_NAME}-linux-x86_64"
           sha256sum "baud-${GITHUB_REF_NAME}-linux-x86_64" | tee SHA256SUMS.txt
+
+      # The headless binary, named the same way. ci.yml's ldd check runs again here
+      # because a tag can point at a commit CI never saw, and a baud-cli that links
+      # GTK is the one thing this asset must never be.
+      - name: Stage the headless binary
+        run: |
+          binary=app/src-tauri/target/release/baud-cli
+          test -x "$binary"
+          linked=$(ldd "$binary")
+          echo "$linked"
+          if echo "$linked" | grep -Ei 'libgtk|libwebkit|libjavascriptcore|libsoup'; then
+            echo "baud-cli links a GUI library - the gui feature gate leaked"
+            exit 1
+          fi
+          cp "$binary" "baud-cli-${GITHUB_REF_NAME}-linux-x86_64"
+          ls -lh "baud-cli-${GITHUB_REF_NAME}-linux-x86_64"
+          sha256sum "baud-cli-${GITHUB_REF_NAME}-linux-x86_64" | tee -a SHA256SUMS.txt
 
       # Pack exactly what @api's face.py serves: phone.html and the other files at
       # the top of dist-phone, plus the assets/ mount. No other directory there is
@@ -121,5 +149,6 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             "baud-${GITHUB_REF_NAME}-linux-x86_64" \
+            "baud-cli-${GITHUB_REF_NAME}-linux-x86_64" \
             "baud-phone-${GITHUB_REF_NAME}.tar.gz" \
             SHA256SUMS.txt

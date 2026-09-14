@@ -218,6 +218,7 @@ pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<Str
 /// session too when the branch has no room of its own: the agent the card
 /// shows alive is the agent this button ends, or the operator cannot end it
 /// at all (Patrick-caught 2026-08-12, `aipass-aipass`).
+#[cfg(feature = "gui")]
 #[tauri::command]
 pub fn room_kill(
     branch_name: String,

@@ -532,22 +532,49 @@ pub(crate) fn send_exit_code(outcome: &SendOutcome) -> i32 {
     i32::from(outcome.error.is_some())
 }
 
+/// The six verbs, one usage line each, under `program` - the name the caller
+/// typed. The desktop binary and baud-cli print the same block; only the name
+/// differs.
+pub fn usage(program: &str) -> String {
+    [
+        format!("usage: {program} --snapshot [--project <name>]"),
+        format!("       {program} --end-room <branch> [--project <name>]"),
+        format!("       {program} --capture-room <branch> [--project <name>] [--lines <N>]"),
+        format!("       {program} --send-room <branch> [--project <name>] (--text <s> | --key <NAME>)"),
+        format!("       {program} --list-projects"),
+        format!("       {program} --roster"),
+    ]
+    .join("\n")
+}
+
+/// The name this process was started as, for its own stderr: `baud` for the
+/// desktop binary, `baud-cli` for the headless one. `baud` when the OS will not
+/// say.
+pub fn program_name() -> String {
+    std::env::args_os()
+        .next()
+        .as_deref()
+        .map(std::path::Path::new)
+        .and_then(std::path::Path::file_name)
+        .and_then(|name| name.to_str())
+        .unwrap_or("baud")
+        .to_string()
+}
+
 /// Run the headless half if the command line asked for it.
 ///
 /// Returns the process exit code, or `None` to mean "carry on and open the
 /// window". Errors never produce partial output: the JSON object is
 /// serialized whole before a byte reaches stdout.
-pub(crate) fn run_headless(args: &[String]) -> Option<i32> {
+///
+/// Public for baud-cli, which hands it the arguments and exits with its code.
+pub fn run_headless(args: &[String]) -> Option<i32> {
     match parse_invocation(args) {
         Invocation::Window => None,
         Invocation::Usage(problem) => {
-            eprintln!("baud: {problem}");
-            eprintln!("usage: baud --snapshot [--project <name>]");
-            eprintln!("       baud --end-room <branch> [--project <name>]");
-            eprintln!("       baud --capture-room <branch> [--project <name>] [--lines <N>]");
-            eprintln!("       baud --send-room <branch> [--project <name>] (--text <s> | --key <NAME>)");
-            eprintln!("       baud --list-projects");
-            eprintln!("       baud --roster");
+            let program = program_name();
+            eprintln!("{program}: {problem}");
+            eprintln!("{}", usage(&program));
             Some(2)
         }
         Invocation::Snapshot { project } => {
@@ -556,14 +583,14 @@ pub(crate) fn run_headless(args: &[String]) -> Option<i32> {
                 Ok(json) => {
                     println!("{json}");
                     if let Some(error) = &snapshot.error {
-                        eprintln!("baud: {error}");
+                        eprintln!("{}: {error}", program_name());
                     }
                     Some(snapshot_exit_code(&snapshot))
                 }
                 // Serializing our own struct cannot realistically fail, but
                 // claiming success on an empty stdout would be a lie.
                 Err(error) => {
-                    eprintln!("baud: could not serialize the snapshot: {error}");
+                    eprintln!("{}: could not serialize the snapshot: {error}", program_name());
                     Some(1)
                 }
             }
@@ -616,12 +643,12 @@ pub(crate) fn emit<T: Serialize>(outcome: &T, error: Option<&str>, code: i32) ->
         Ok(json) => {
             println!("{json}");
             if let Some(error) = error {
-                eprintln!("baud: {error}");
+                eprintln!("{}: {error}", program_name());
             }
             Some(code)
         }
         Err(error) => {
-            eprintln!("baud: could not serialize the result: {error}");
+            eprintln!("{}: could not serialize the result: {error}", program_name());
             Some(1)
         }
     }

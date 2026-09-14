@@ -56,14 +56,17 @@ which is how the release app's ancestor-walk finds its anchor.
 
 ## The headless doors — the same answers, without a window
 
-The binary has a second entry point. Each headless flag prints one JSON object
-on stdout and exits, opening no window and touching no tauri state:
+The binary has a second entry point, and a headless twin, `baud-cli` (below).
+Each headless flag prints one JSON object on stdout and exits, opening no window
+and touching no tauri state:
 
 ```
-baud --snapshot     [--project <name>]
-baud --end-room     <branch> [--project <name>]
-baud --capture-room <branch> [--project <name>] [--lines <N>]
-baud --send-room    <branch> [--project <name>] (--text <literal> | --key <NAME>)
+baud --snapshot      [--project <name>]
+baud --list-projects
+baud --roster
+baud --end-room      <branch> [--project <name>]
+baud --capture-room  <branch> [--project <name>] [--lines <N>]
+baud --send-room     <branch> [--project <name>] (--text <literal> | --key <NAME>)
 ```
 
 One verb per process. Writing both is a usage error rather than a precedence
@@ -74,9 +77,10 @@ It exists so that **"which agents are alive" has exactly one implementation.**
 The phone arc puts a host API in front of the same fleet (DPLAN-0300), and the
 alternative was a second room-judgment written in Python — which would drift
 from this one, and on the day it drifted neither answer could be trusted. One
-binary rather than a separate `baud-snapshot` tool for the same reason a step
-further out: a second artifact is a second version that can silently disagree
-with the GUI, and the release pin is one binary.
+reader rather than a separate `baud-snapshot` tool, for the same reason a step
+further out: a second implementation is a second version that can silently
+disagree with the GUI. `baud-cli` is a second binary but not a second reader —
+the same crate, the same `run_headless`, cut from the same tag.
 
 - **stdout** is always one `FleetSnapshot` object, whole and newline-terminated
   — the same shape the window's `fleet_snapshot` command returns. A failed read
@@ -95,6 +99,43 @@ with the GUI, and the release pin is one binary.
 - **It resolves the anchor by walking up from the working directory**, exactly
   as the window does, so a caller whose CWD sits outside the tree gets exit 1
   and must either run inside it or set `AIPASS_ROOT`.
+
+### `baud-cli` — the same doors, with no desktop
+
+The desktop `baud` links the whole GUI stack even to print a snapshot — 129
+shared objects, webkit2gtk and GTK 3 among them — so a server or a container
+with no desktop could not start it, and a fresh install's phone showed *The baud
+binary was not found* over an empty fleet. Patrick chose to fix the shape rather
+than write a Python re-reader (2026-09-14, FPLAN-0589): `baud-cli` is a second
+binary target in the same crate, `src-tauri/src/bin/baud_cli.rs`, which hands its
+arguments to `run_headless` and exits with its code.
+
+- **The six verbs answer exactly as above**: same arguments, same stdout, same
+  exit codes. `baud` keeps answering them too. Error lines on stderr carry the
+  name the process was started as, `baud:` or `baud-cli:`.
+- **It never opens a window.** With no verb, or none of the six, it prints the
+  six to stderr and exits `2` with stdout empty.
+- **It is built with the `gui` feature off**, which is what keeps GTK out:
+  `cargo build --release --locked --no-default-features --bin baud-cli`. `gui`
+  is on by default, so `npm run tauri dev`, `npm run tauri build` and
+  `cargo test` build what they always built; it gates tauri, the opener plugin,
+  the terminal, the screenshot portal and every `#[tauri::command]` wrapper. The
+  lanes only the window uses (`memory`, `notifications`, `pty`, `reads`,
+  `screenshot`, `settings`) build only with it. Give `baud-cli` its own cargo
+  invocation: built beside the app, feature unification switches `gui` back on.
+- **It links libc, libgcc_s and the loader, and nothing else** — about 520 KB.
+  CI builds it and fails if `ldd` names libgtk, libwebkit, libjavascriptcore or
+  libsoup. A bare `ubuntu:24.04` container with no packages added runs it:
+  `--roster` exits `0` inside a tree with `src/aipass`, and outside any tree
+  exits `1` with the envelope saying so.
+- **The host API prefers it.** @api resolves the binary per request, in the
+  order FPLAN-0589 pins: its `baud_bin` setting, then
+  `~/.aipass/baud/bin/baud-cli` (where `aipass baud install` lands it), then
+  this checkout's `target/release/baud-cli`, then `target/release/baud`, then
+  `baud-cli` and `baud` on `PATH`. That resolution is @api's code; this repo
+  ships the binary.
+- **Releases carry it** as `baud-cli-v<version>-linux-x86_64`, beside the
+  desktop binary, with its sha256 in the same `SHA256SUMS.txt`.
 
 ### `--end-room` — the kill seam
 
@@ -926,7 +967,8 @@ projects/baud/
 │   │   ├── settings.rs         the two config writers and the hooks flag
 │   │   ├── memory.rs           @memory's dials, read and surgically written
 │   │   ├── screenshot.rs       the XDG portal client
-│   │   └── main.rs             thin binary entry
+│   │   ├── main.rs             thin binary entry — the desktop app, gui feature on
+│   │   └── bin/baud_cli.rs     baud-cli — the six headless verbs, no window, no GTK
 │   ├── src-tauri/capabilities/ the permission grant
 │   ├── phone.html              the phone face's entry document
 │   ├── public/                 the PWA manifest and its icons
@@ -1557,6 +1599,10 @@ the audit.
 every pull request. `build:phone` joined the frontend job on 2026-09-13
 (DPLAN-0343); before that a change that broke only the phone entry passed green.
 `npm test` joined the same evening, after the type check and before the builds.
+Since 2026-09-14 the `rust` job also builds `baud-cli` with the `gui` feature off
+and fails if `ldd` shows it linking a GUI library (FPLAN-0589). After touching the
+feature gate, run `cargo test` and `cargo clippy` with `--no-default-features` as
+well: 58 tests need no window, and all 101 run with `gui` on.
 Two parallel jobs (`frontend`, `rust`) on a
 pinned `ubuntu-24.04`, with clippy's warnings denied rather than merely
 printed. The runner installs Tauri v2's Ubuntu prerequisites and **tmux**,
@@ -3063,13 +3109,14 @@ version range in a manifest — is the statement of which BAUD and which AIPass
 are known to work together (Patrick's ruling, 2026-08-12).
 
 **Cutting a release is one human step.** Tags are `v<version>`, so this one is
-`v0.1.0`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`
+`v0.2.0`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`
 does the rest: it runs the test suite, builds with `npm run tauri build` (the
 same command the Development section calls the deploy), and publishes a GitHub
 release named after the tag with `baud-v<version>-linux-x86_64` and a
 `SHA256SUMS.txt` attached. Each release also carries the built phone bundle as
 `baud-phone-v<version>.tar.gz`, the servable `dist-phone/` tree, with its sha256 in
-the same `SHA256SUMS.txt`. It tests before it ships on purpose: a tag can be
+the same `SHA256SUMS.txt`, and so does `baud-cli-v<version>-linux-x86_64`, the
+headless binary (see *The headless doors*). It tests before it ships on purpose: a tag can be
 pointed at any commit, and "it was probably green on main" is not evidence.
 
 @baud has no git write, so @devpulse pushes the tag.

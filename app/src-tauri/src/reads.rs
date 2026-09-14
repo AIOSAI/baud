@@ -15,7 +15,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Serialize;
-use serde_json::Value;
 
 use crate::*;
 
@@ -269,14 +268,4 @@ pub fn git_project_changes(state: tauri::State<'_, ActiveProject>) -> Result<Git
 #[tauri::command]
 pub fn git_diff_text(path: String, state: tauri::State<'_, ActiveProject>) -> Result<FileText, String> {
     git_diff_in(&fenced_path_in(&active_project(&state)?.root, &path)?)
-}
-
-/// Read a `quick_status` count that may be a number or a list of items.
-pub(crate) fn count_field(quick_status: &Value, key: &str) -> u64 {
-    match quick_status.get(key) {
-        Some(Value::Number(number)) => number.as_u64().unwrap_or(0),
-        Some(Value::Array(items)) => items.len() as u64,
-        Some(Value::String(text)) => text.trim().parse::<u64>().unwrap_or(0),
-        _ => 0,
-    }
 }

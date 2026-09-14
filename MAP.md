@@ -35,6 +35,7 @@ Everything below is under `app/` unless it says otherwise.
 | `index.html` → `src/desktop/main.tsx` → `src/desktop/App.tsx` | The desktop window. |
 | `phone.html` → `src/phone/main.tsx` → `src/phone/PhoneApp.tsx` | The phone face. |
 | `src-tauri/src/main.rs` → `lib.rs::run()` | The Rust side; also `baud --snapshot`, the CLI the fleet read execs. |
+| `src-tauri/src/bin/baud_cli.rs` → `lib.rs::run_headless()` | `baud-cli`: the six headless verbs with no window, built with the `gui` feature off. The binary the host API prefers. |
 | `../src/baud/baud/apps/baud.py` | The AIPass branch shim (`drone @baud`). Nothing to do with the app. |
 
 ---
@@ -152,7 +153,7 @@ the compiler will not tell you.
 
 | File | One line |
 |---|---|
-| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 29 commands) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
+| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 29 commands; `run()` builds only with the `gui` feature) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
 | `cli.rs` (628) | `baud --snapshot` and the rest of the headless surface. Every outcome serializes in full even when it failed, and the exit code agrees with the payload. |
 | `rooms.rs` (515) | tmux sessions: the name sanitizer, the pane scan, kill, capture, and the send door that types but cannot submit. |
 | `sessions.rs` (397) | Who is actually awake — `/proc` for the processes, transcripts for what they are doing, and the subagent count. |
@@ -164,7 +165,8 @@ the compiler will not tell you.
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
 | `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
-| `main.rs` (6) | Calls `lib.rs::run()`. |
+| `main.rs` (6) | Calls `lib.rs::run()`. The desktop app, so it builds only with the `gui` feature. |
+| `bin/baud_cli.rs` (27) | `baud-cli`: hands its arguments to `run_headless` and exits with its code; with no verb it prints the six and exits 2. Built `--no-default-features`, it links no GTK. |
 
 The six lanes above were split out of `lib.rs` on 2026-08-18 and are **glob-imported
 straight back into it** (`use rooms::*;` and friends). That is deliberate: every call
@@ -172,7 +174,13 @@ site, and the whole test suite, names these items exactly as it did when they al
 lived in one file. If you cannot find a function, `grep` the directory rather than
 the file — the name did not change, only its address.
 
-Also: `Cargo.toml` (MSRV 1.77.2), `tauri.conf.json` (window, CSP, bundle off by
+**The `gui` feature** (default on) gates tauri, the opener plugin, the terminal, the
+screenshot portal, every `#[tauri::command]` wrapper and `run()`. With it off,
+`memory`, `notifications`, `pty`, `reads`, `screenshot` and `settings` drop out, and
+what is left — `cli`, `fleet`, `projects`, `rooms`, `sessions` — is the reader
+`baud-cli` is built from (FPLAN-0589).
+
+Also: `Cargo.toml` (MSRV 1.77.2; the `gui` feature and the two binaries), `tauri.conf.json` (window, CSP, bundle off by
 design — no installers, deliberately), `capabilities/` (what the webview is
 allowed to call), `build.rs`, and two directories nobody edits: `gen/` (tauri's
 own) and `target/` (cargo's).
@@ -227,13 +235,16 @@ A file at `src/` root is one both faces use; anything face-specific lives in
 | `npm run build:phone` | Phone bundle → `app/dist-phone/`. |
 | `npm test` | vitest over `src/**/*.test.ts` - the pure derivations. |
 | `npm run tauri build` | → `src-tauri/target/release/baud`. **The rebuild is the deploy** — the launcher execs that path, and `/v1/fleet` execs it as `baud --snapshot`. |
+| `cargo build --release --locked --no-default-features --bin baud-cli` | → `src-tauri/target/release/baud-cli`, the headless binary. Its own invocation: beside the app, feature unification turns `gui` back on. |
 | — | **The phone rebuild is also the deploy**: @api's `face.py` serves `dist-phone/` from disk per request. No restart. |
 
 **The audit lane, before claiming green:** `npx tsc --noEmit` · `npm test` ·
 `cargo test --locked` · `cargo clippy --locked --all-targets -- -D warnings` ·
 both builds. CI runs the same in `.github/workflows/ci.yml` — type-check,
 frontend tests, desktop build, phone build, cargo test, clippy; `build:phone` and
-`npm test` joined on 2026-09-13 (DPLAN-0343). `release.yml` cuts releases.
+`npm test` joined on 2026-09-13 (DPLAN-0343). The `rust` job also builds `baud-cli`
+headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
+`cargo test` and clippy with `--no-default-features` too. `release.yml` cuts releases.
 
 ## Identity, memory, plans — the AIPass side of the repo
 
