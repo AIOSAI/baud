@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "dev:phone": "npm run tokens && vite --config vite.config.phone.ts",
-    "build:phone": "npm run tokens && tsc && vite build --config vite.config.phone.ts"
+    "build:phone": "npm run tokens && tsc && vite build --config vite.config.phone.ts",
+    "test": "vitest run --dir src"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.4",
@@ -36,6 +37,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.11"
   }
 }

@@ -304,7 +304,9 @@ function ProjectPick({ current, onPick }: { current: string; onPick: (name: stri
         title="switch project"
         onClick={() => void toggle()}
       >
-        {current}
+        {/* Its own span so the name can wrap and clamp on its own while the
+            caret stays put at the end - see .baud-phone-project-name. */}
+        <span className="baud-phone-project-name">{current}</span>
         <span className="baud-phone-project-caret">▾</span>
       </button>
       {open ? (

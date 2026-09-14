@@ -36,6 +36,7 @@ import type {
   GitFileDiff,
   GitLog,
   GitRemote,
+  LockState,
   MachineVitals,
   MemoryConfig,
   NotificationEvent,
@@ -69,6 +70,12 @@ export const agentRoster = () => call<BranchStatus[]>("agent_roster");
  *  the http transport from adding one. The server's own 1 s cache is what
  *  keeps any number of phones at one read. */
 export const machineVitals = () => call<MachineVitals>("machine_vitals");
+
+/** Whether the machine's screen is locked - the header lock chip's read
+ *  (FPLAN-0585). READ scope, because a lock's position is observation; locking
+ *  it stays `verbLock` under operate. No arguments, ever, for the same reason as
+ *  the machine read above. */
+export const lockState = () => call<LockState>("lock_state");
 
 /* -------------------------------------------------------------- projects -- */
 

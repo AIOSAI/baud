@@ -907,6 +907,7 @@ projects/baud/
 │   │   │                       machine — the monitor row's lane and its card faces,
 │   │   │                       and pollers — all four polling lanes, lifted out of the shell
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
+│   │   ├── **/*.test.ts        vitest pins beside the module they test - pure functions only (npm test)
 │   │   ├── tokens/             the palette as data, and the CSS generated from it
 │   │   ├── types.ts            hand-kept mirrors of the Rust structs
 │   │   ├── intent.ts           operator decisions that outlive a remount
@@ -936,9 +937,14 @@ projects/baud/
 ├── src/baud/baud/              @baud — the project's resident agent
 ├── tests/                      no tests — a README naming where they actually live
 ├── .github/
-│   ├── workflows/ci.yml        the audit lane minus build:phone, run by a robot
+│   ├── workflows/ci.yml        the audit lane, both builds included, run by a robot
 │   ├── workflows/release.yml   tag push -> tested build -> published release
-│   └── actions/                the Ubuntu build deps, shared by both workflows
+│   ├── actions/                the Ubuntu build deps, shared by both workflows
+│   ├── ISSUE_TEMPLATE/         bug report and feature request templates
+│   ├── PULL_REQUEST_TEMPLATE.md what changed, the six checks, the docs that moved
+│   └── dependabot.yml          weekly grouped updates: npm, cargo, actions
+├── CHANGELOG.md                what each release changed, and what waits in Unreleased
+├── SECURITY.md                 the security model, and how to report a problem
 ├── MAP.md                      the map — where every piece of this repo lives
 ├── BAUD_REGISTRY.json          the project seal
 ├── LICENSE                     MIT, mirroring the AIPass repo's own
@@ -957,7 +963,8 @@ and you get exactly one card.
 **`tests/` holds no tests.** Its README used to promise a framework layout that
 never arrived; it now names where the tests actually are. The Rust tests live in
 `app/src-tauri/src/`, in `#[cfg(test)]` modules beside the code they test. The
-frontend has no test runner installed at all — its checks are `tsc --noEmit` and
+frontend's tests are vitest files beside the modules they pin (`*.test.ts` under
+`app/src/`), pure functions only, run by `npm test` alongside `tsc --noEmit` and
 the two bundle builds. There is no Python surface. A signpost that points
 somewhere beats a directory that only looks like a suite.
 
@@ -1211,6 +1218,19 @@ a read-scoped token every chip is **still there**, dimmed, carrying the sentence
 that says why it will not fire; hiding them would make a designed absence look
 exactly like a broken build. Patrick's own phone token stays read-scoped, so
 that dimmed state is the everyday one, not an error path.
+
+**The header lock chip reads the lock, too** (FPLAN-0585, 2026-09-13). Away from
+home, a glance should answer *did I lock the laptop?* — so the chip polls
+`GET /v1/lock` (@skills' `lock_state()`, relayed verbatim by @api, read scope)
+every 5 s while the app is looked at, re-reads at once and again a second after a
+tap because the lock lands async, and forgets the reading when the app goes away.
+An OPEN shackle in green is unlocked. The closed shackle in amber is locked —
+attention, not failure, since red on this face means dead or refused. The closed
+shackle, dim and with a dashed border, is *unknown*: the machine could not tell,
+or the read failed, and the title carries the reason. Unknown is never drawn as
+unlocked. Before the first answer the chip is exactly what it was, and because the
+read rides the read scope, a read-scoped token sees the lock's position even
+though its tap is refused.
 
 `wake` names a branch, a project and a message — and **no model**, because the
 branch's own config decides what wakes in it (Patrick's ruling). The project
@@ -1524,19 +1544,20 @@ Checks, all expected clean:
 cd app/src-tauri && cargo test      # 101 unit tests; compiling IS the Rust type check
 cd app/src-tauri && cargo clippy    # lints
 cd app && npx tsc --noEmit          # TypeScript type check
+cd app && npm test                  # vitest - the pure derivations, pinned beside their modules
 cd app && npm run build             # tsc && vite build - the frontend must actually build
 cd app && npm run build:phone       # the phone face - same components, HTTP transport
 ```
 
 There is no seedgo audit lane for this repo: seedgo's checks target AIPass
-Python branches, and BAUD is Rust and TypeScript. The five commands above are
+Python branches, and BAUD is Rust and TypeScript. The six commands above are
 the audit.
 
-`.github/workflows/ci.yml` runs FOUR OF THOSE FIVE as a robot on every push to
-`main` and every pull request. **`build:phone` is not one of them** — the phone
-bundle is never built by CI, so a change that breaks only the phone entry passes
-green and is caught by a person or not at all. Measured 2026-08-24 by reading
-the workflow; `MAP.md` carries the same note — two parallel jobs (`frontend`, `rust`) on a
+`.github/workflows/ci.yml` runs all six as a robot on every push to `main` and
+every pull request. `build:phone` joined the frontend job on 2026-09-13
+(DPLAN-0343); before that a change that broke only the phone entry passed green.
+`npm test` joined the same evening, after the type check and before the builds.
+Two parallel jobs (`frontend`, `rust`) on a
 pinned `ubuntu-24.04`, with clippy's warnings denied rather than merely
 printed. The runner installs Tauri v2's Ubuntu prerequisites and **tmux**,
 because two of the Rust tests spawn real detached tmux sessions; they are not
@@ -2261,6 +2282,16 @@ with the detail when there is one. `warming`, the first read after the server
 starts, has no CPU or network window yet and renders the same way. A 503
 (`psutil_missing`, `switched_off`) turns every face to a dash and the sheet
 prints the owner's message.
+
+**The cpu page shows the cores** (FPLAN-0586, 2026-09-13; Patrick: *"when i open
+it id expect to see the cores"*). One bar per online CPU in the skill's `cores`
+list — never one per configured count, which can differ — then one line of what
+the machine has (*4 threads on 2 cores · 1.1 GHz, up to 3.3*), then the three load
+averages with a caption saying what they mean against the live thread count. The
+percent row, which repeated the headline, is gone, and the sample window rides the
+sampled line. While the section is warming the bars give way to the skill's
+sentence, never to zero-height bars; any count or clock the host cannot give
+prints a dash, and a missing clock's reason (`detail`) sits under that line.
 
 **Read while looked at, and only on that row.** `lib/machine.ts` polls every 2 s
 — past the server's 1 s cache, so every read is a fresh sample — through
@@ -3034,10 +3065,15 @@ are known to work together (Patrick's ruling, 2026-08-12).
 does the rest: it runs the test suite, builds with `npm run tauri build` (the
 same command the Development section calls the deploy), and publishes a GitHub
 release named after the tag with `baud-v<version>-linux-x86_64` and a
-`SHA256SUMS.txt` attached. It tests before it ships on purpose: a tag can be
+`SHA256SUMS.txt` attached. Each release also carries the built phone bundle as
+`baud-phone-v<version>.tar.gz`, the servable `dist-phone/` tree, with its sha256 in
+the same `SHA256SUMS.txt`. It tests before it ships on purpose: a tag can be
 pointed at any commit, and "it was probably green on main" is not evidence.
 
 @baud has no git write, so @devpulse pushes the tag.
+
+What each release changed, and what is waiting for the next one, is in
+[`CHANGELOG.md`](CHANGELOG.md): every row that lands adds its line under Unreleased.
 
 ## How it got here
 

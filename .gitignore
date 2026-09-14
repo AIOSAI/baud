@@ -48,3 +48,12 @@ Thumbs.db
 # state. It stays visible in status until someone rules on where it belongs.
 .backup/
 .chroma/
+
+# Local secrets and scratch - never source. The host API's token receipts land
+# in ~/.secrets by default, but `issue-token --out FILE` can put one anywhere,
+# and a receipt is a live credential. docs.local/ is the AIPass scratch
+# convention, untracked by design.
+.env
+.env.*
+*.token
+docs.local/

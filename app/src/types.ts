@@ -533,7 +533,21 @@ export interface MachineVitals {
   schema: number;
   /** ISO-8601 UTC. @api caches for 1 s, so this can trail the request by that much. */
   sampled_at: string;
-  cpu: MachineSection & { percent: number | null; window_s: number | null };
+  cpu: MachineSection & {
+    percent: number | null;
+    window_s: number | null;
+    /** Busy percent per ONLINE logical CPU, in index order, over the same window
+     *  as `percent` - null while warming, never a list with holes. One bar per
+     *  entry: this, not `logical`, is how many bars there are. */
+    cores: number[] | null;
+    /** The CONFIGURED counts - instant, so present even while warming. */
+    logical: number | null;
+    physical: number | null;
+    /** The package clock now and its ceiling, in MHz. Null when the host has no
+     *  cpu_freq; the section stays available and `detail` says why. */
+    mhz: number | null;
+    mhz_max: number | null;
+  };
   load: MachineSection & { one: number | null; five: number | null; fifteen: number | null };
   memory: MachineSection & {
     total_bytes: number | null;
@@ -571,6 +585,30 @@ export interface MachineVitals {
     window_s: number | null;
   };
   processes: MachineSection & { count: number | null };
+}
+
+/**
+ * Mirrors the dict @skills' `lock_state()` publishes (`lib/screen_lock`), relayed
+ * verbatim by @api on `GET /v1/lock` (FPLAN-0585). Not a Rust struct, and not a
+ * place any meaning lives: which reader answered and what "cannot tell" is
+ * called are the skill's.
+ *
+ * `ok` and `locked` AGREE - @api refuses any body where they do not, so a
+ * `locked: false` can never ride an `ok: false`. `ok: false` is still a 200: the
+ * machine answered that it COULD NOT TELL, and `locked` is null. That is drawn as
+ * unknown, never as unlocked.
+ */
+export interface LockState {
+  ok: boolean;
+  /** True locked, false unlocked, null when the machine could not tell. */
+  locked: boolean | null;
+  /** Which read answered: "loginctl" or "dbus". */
+  method: string | null;
+  session: string | null;
+  /** When `ok` is false: no_session, no_reader or read_failed - the skill's codes. */
+  reason: string | null;
+  /** The skill's own sentence, on answers too: "The screen is unlocked, per logind session 3." */
+  detail: string | null;
 }
 
 /** Mirrors `MemoryConfigPatch` in src-tauri/src/memory.rs. */

@@ -9,11 +9,15 @@ name: Release
 # tauri build` is the same command the README documents as the deploy, and
 # `bundle.active` is false in tauri.conf.json, so it produces
 # app/src-tauri/target/release/baud rather than installers.
+#
+# Each release also carries the built phone bundle, baud-phone-<tag>.tar.gz,
+# with its sha256 in the same SHA256SUMS.txt. The AIPass installer will fetch
+# the phone face from BAUD's latest release, so the release is what it installs.
 on:
   push:
     tags: ["v*"]
 
-# Creating the release and uploading the asset is the only write this repo's
+# Creating the release and uploading its assets is the only write this repo's
 # automation does.
 permissions:
   contents: write
@@ -75,6 +79,13 @@ jobs:
       - run: npm run tauri build
         working-directory: app
 
+      # The phone face (vite.config.phone.ts). Built BEFORE the binary is staged:
+      # the bundle stamps `git status` into itself, and the staged binary and
+      # SHA256SUMS.txt are untracked files at the checkout root, so a build after
+      # them would stamp a clean tag as "+2 dirty".
+      - run: npm run build:phone
+        working-directory: app
+
       # Name the asset after the tag: a bare `baud` file downloaded from three
       # different releases is three indistinguishable files on disk.
       - name: Stage the binary
@@ -84,6 +95,21 @@ jobs:
           cp "$binary" "baud-${GITHUB_REF_NAME}-linux-x86_64"
           ls -lh "baud-${GITHUB_REF_NAME}-linux-x86_64"
           sha256sum "baud-${GITHUB_REF_NAME}-linux-x86_64" | tee SHA256SUMS.txt
+
+      # Pack exactly what @api's face.py serves: phone.html and the other files at
+      # the top of dist-phone, plus the assets/ mount. No other directory there is
+      # servable, so a stray one fails the release instead of shipping. tar runs
+      # from inside dist-phone, so the archive root is the bundle itself.
+      - name: Pack the phone bundle
+        run: |
+          archive="baud-phone-${GITHUB_REF_NAME}.tar.gz"
+          test -f app/dist-phone/phone.html
+          test -d app/dist-phone/assets
+          stray=$(find app/dist-phone -mindepth 1 -maxdepth 1 -type d ! -name assets)
+          if [ -n "$stray" ]; then echo "not servable by face.py: $stray"; exit 1; fi
+          tar -C app/dist-phone --sort=name --owner=0 --group=0 --numeric-owner -czf "$archive" .
+          tar -tzvf "$archive"
+          sha256sum "$archive" | tee -a SHA256SUMS.txt
 
       # `gh` is preinstalled on the runner, so the publish step needs no
       # third-party action and no token beyond the one this workflow was given.
@@ -95,4 +121,5 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             "baud-${GITHUB_REF_NAME}-linux-x86_64" \
+            "baud-phone-${GITHUB_REF_NAME}.tar.gz" \
             SHA256SUMS.txt

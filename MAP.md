@@ -97,9 +97,11 @@ row.
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
+| `lock.ts` | The header lock chip's lane: `GET /v1/lock` every 5 s while the app is looked at, re-read at once and 1 s after a tap, forgotten when the app goes away - and which of four faces (unread, unlocked, locked, unknown) a reading means. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
 | `push.ts` | The push hook, inert until phase 7. |
+| `lock.test.ts` · `machine.test.ts` · `copyPath.test.ts` | vitest pins of what those modules promise - pure functions only, no DOM, no network. `npm test` runs them. |
 
 ---
 
@@ -207,7 +209,7 @@ Load order is fixed and both `main.tsx` files state it: tokens → theme → pho
 ## Shared floor — `src/*.ts`, read by both faces
 
 `types.ts` (the shapes) · `age.ts` (relative time) · `intent.ts` (what the
-operator meant) · `deliver.ts` (sending into a room) · `host/` · `tokens/` ·
+operator meant) · `deliver.ts` (sending into a room) · `deliver.test.ts` (its quoting rule, pinned) · `host/` · `tokens/` ·
 `vite-env.d.ts` (vite's own type shim, boilerplate).
 A file at `src/` root is one both faces use; anything face-specific lives in
 `desktop/` or `phone/`. The rule holds with no exceptions as of 2026-08-18 —
@@ -223,15 +225,15 @@ A file at `src/` root is one both faces use; anything face-specific lives in
 | `npm run dev:phone` | Phone dev: vite on **1421**, with the transport alias applied. |
 | `npm run build` | Desktop bundle → `app/dist/`. |
 | `npm run build:phone` | Phone bundle → `app/dist-phone/`. |
+| `npm test` | vitest over `src/**/*.test.ts` - the pure derivations. |
 | `npm run tauri build` | → `src-tauri/target/release/baud`. **The rebuild is the deploy** — the launcher execs that path, and `/v1/fleet` execs it as `baud --snapshot`. |
 | — | **The phone rebuild is also the deploy**: @api's `face.py` serves `dist-phone/` from disk per request. No restart. |
 
-**The audit lane, before claiming green:** `npx tsc --noEmit` · `cargo test
---locked` · `cargo clippy --locked --all-targets -- -D warnings` · both builds.
-CI runs *almost* the same in `.github/workflows/ci.yml` — type-check, desktop
-build, cargo test, clippy. It does **not** run `build:phone`, so the phone
-bundle is the one lane no robot builds; measured 2026-08-18, not yet fixed.
-`release.yml` cuts releases.
+**The audit lane, before claiming green:** `npx tsc --noEmit` · `npm test` ·
+`cargo test --locked` · `cargo clippy --locked --all-targets -- -D warnings` ·
+both builds. CI runs the same in `.github/workflows/ci.yml` — type-check,
+frontend tests, desktop build, phone build, cargo test, clippy; `build:phone` and
+`npm test` joined on 2026-09-13 (DPLAN-0343). `release.yml` cuts releases.
 
 ## Identity, memory, plans — the AIPass side of the repo
 
@@ -242,13 +244,15 @@ bundle is the one lane no robot builds; measured 2026-08-18, not yet fixed.
 | `src/baud/baud/apps/` | The `drone @baud` CLI shim. |
 | `src/baud/baud/FPLAN-*.md` | Open plans. Closed ones are listed in `CLOSED_PLANS.local.json`. |
 | `README.md` (root, 2400 lines) | **The app's source of truth.** Every behaviour change lands here in the same sitting. |
+| `CHANGELOG.md` | Keep a Changelog shape: what each release changed, and the Unreleased lines waiting for the next. Every row that lands adds its line. |
+| `SECURITY.md` | The security model (your machine, your tailnet, per-device tokens, what a token reaches) and how to report. Dated; it moves after the scheduled security session. |
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/phone_input_AS_BUILT_2d744ac.md` | The phone's input system captured at one commit: viewport contract, the intent-reading typing lane, autocorrect, liveness, the one slot, the ended-room rule, known issues. Settings and line anchors, so the state can be rebuilt from the doc. |
 | `AGENTS.md` · `CLAUDE.md` | The startup protocol for agents working in this repo. |
 | `BAUD_REGISTRY.json` | Machine-managed. Do not hand-edit. |
 | `MAP.md` (root) | This file. |
 | `app/README.md` | A pointer at the root README and this map. Nothing else lives there. |
-| `tests/` (root) | No tests. Its README names where they actually are: `src-tauri/` for Rust, nowhere for the frontend. |
+| `tests/` (root) | No tests. Its README names where they actually are: `src-tauri/` for Rust, `*.test.ts` beside their modules under `app/src/` for the frontend. |
 
 ---
 

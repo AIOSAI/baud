@@ -96,11 +96,29 @@ function sheetBody(card: string, { reading, refusal }: MachineRead): ReactNode {
 
 /* ------------------------------------------------------------- the cards -- */
 
+/**
+ * THE CORES (FPLAN-0586 row 2). Patrick, 2026-09-13: *"when i open it id expect
+ * to see the cores, not really sure what all this even is"*. So the page is the
+ * headline, one bar per CPU, what the machine has, and the load averages with a
+ * caption - every row says what it is in words. The percent row (the headline
+ * again) is cut, and the sample window rides the sampled line.
+ */
 function CpuBody({ reading: { cpu, load, sampled_at } }: { reading: MachineVitals }) {
   return (
     <>
       <Headline value={cpu.percent === null ? "—" : fixed(cpu.percent, 1)} unit="%" note="busy" />
-      <Section section={cpu} rows={[["percent", percent(cpu.percent)], ["window", seconds(cpu.window_s)]]} />
+      {/* One bar per entry the skill LISTS - the online CPUs - never one per
+          configured count, which can differ. Null while warming, and then the
+          section's own sentence stands in: never zero-height bars. */}
+      {cpu.cores ? <CoreBars cores={cpu.cores} /> : null}
+      <Section section={cpu} rows={[]} />
+      <p className="baud-machine-counts">
+        {countsLine(cpu)}
+        {/* No cpu_freq leaves the section available with the reason in
+            `detail` - said here, under the dashes it explains, unless the
+            section's own sentence above already carries it. */}
+        {cpu.available && !cpu.sentence && cpu.detail ? <span className="baud-machine-detail">{cpu.detail}</span> : null}
+      </p>
       <Section
         section={load}
         rows={[
@@ -109,9 +127,45 @@ function CpuBody({ reading: { cpu, load, sampled_at } }: { reading: MachineVital
           ["load · 15 min", fixed(load.fifteen, 2)],
         ]}
       />
-      <Sampled at={sampled_at} />
+      {load.available ? (
+        <p className="baud-machine-caption">
+          tasks wanting a CPU, averaged over 1, 5 and 15 minutes; equal to the thread count
+          {cpu.logical === null ? "" : ` (${cpu.logical})`} means every thread busy, above it means queueing.
+        </p>
+      ) : null}
+      <Sampled at={sampled_at} over={cpu.window_s} />
     </>
   );
+}
+
+/** A bar per core. The fill is an SVG width, not a style attribute - the face's
+ *  no-inline-styles discipline, the same way the wheel's ring holds it. */
+function CoreBars({ cores }: { cores: number[] }) {
+  return (
+    <div className="baud-machine-bars">
+      {cores.map((busy, index) => (
+        <div key={index} className="baud-machine-bar">
+          <span className="baud-machine-bar-label">core {index}</span>
+          <svg className="baud-machine-bar-track" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+            <rect className="baud-machine-bar-fill" x="0" y="0" width={Math.max(0, Math.min(100, busy))} height="6" />
+          </svg>
+          <span className="baud-machine-bar-value">{fixed(busy, 1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** "4 threads on 2 cores · 1.1 GHz, up to 3.3". Every piece is a dash when its
+ *  value is null, never 0; equal counts say the cores once. */
+function countsLine(cpu: MachineVitals["cpu"]): string {
+  const counted = (n: number | null, one: string) => `${n ?? "—"} ${one}${n === 1 ? "" : "s"}`;
+  const counts =
+    cpu.logical !== null && cpu.logical === cpu.physical
+      ? counted(cpu.physical, "core")
+      : `${counted(cpu.logical, "thread")} on ${counted(cpu.physical, "core")}`;
+  const ghz = (mhz: number | null) => (mhz === null ? "—" : (mhz / 1000).toFixed(1));
+  return `${counts} · ${ghz(cpu.mhz)} GHz, up to ${ghz(cpu.mhz_max)}`;
 }
 
 function MemoryBody({ reading: { memory, swap, sampled_at } }: { reading: MachineVitals }) {
@@ -270,7 +324,7 @@ function Rows({ rows }: { rows: Array<[string, string]> }) {
 function Section({ section, rows }: { section: MachineSection; rows: Array<[string, string]> }) {
   return (
     <>
-      {section.available ? <Rows rows={rows} /> : null}
+      {section.available && rows.length > 0 ? <Rows rows={rows} /> : null}
       {!section.available || section.sentence ? (
         <Honest absent>
           {section.sentence ?? `unavailable (${section.reason ?? "no reason given"})`}
@@ -288,11 +342,12 @@ function Honest({ absent = false, children }: { absent?: boolean; children: Reac
   return <p className={`baud-machine-honest ${absent ? "baud-machine-honest-absent" : ""}`}>{children}</p>;
 }
 
-function Sampled({ at }: { at: string }) {
+function Sampled({ at, over = null }: { at: string; over?: number | null }) {
   const when = new Date(at);
   return (
     <p className="baud-machine-meta">
-      sampled {Number.isNaN(when.getTime()) ? at : when.toLocaleTimeString()} · @skills via @api
+      sampled {Number.isNaN(when.getTime()) ? at : when.toLocaleTimeString()}
+      {over === null ? "" : ` over ${over.toFixed(1)} s`} · @skills via @api
     </p>
   );
 }

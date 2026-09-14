@@ -1,8 +1,13 @@
 name: CI
 
-# BAUD's own audit lane, run by a robot. These are the same four checks the
-# README documents for a human — cargo test, cargo clippy, tsc, vite build. If
-# this file and that section ever disagree, one of them is lying; fix both.
+# BAUD's own audit lane, run by a robot. These are the same six checks the
+# README documents for a human — cargo test, cargo clippy, tsc, the frontend
+# tests, and both vite builds: the desktop bundle and the phone bundle. If this
+# file and that section ever disagree, one of them is lying; fix both.
+#
+# The phone build is the face in daily use, and until 2026-09-13 no lane built
+# it: a change that broke only the phone entry went green. DPLAN-0313 named the
+# gap on 2026-08-21; DPLAN-0343 slice 1 closed it.
 #
 # Two jobs, not one: the Rust compile is the long pole (tauri pulls a large
 # dependency tree) and the frontend has nothing to wait for. The Rust build
@@ -29,7 +34,7 @@ env:
 
 jobs:
   frontend:
-    name: frontend (tsc + vite build)
+    name: frontend (tsc + tests + desktop and phone builds)
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -46,9 +51,19 @@ jobs:
       # silently under the robot.
       - run: npm ci
       - run: npx tsc --noEmit
+      # The frontend tests: vitest over the pure derivations (the lock and monitor
+      # faces, the delivery quoting, the copy path). Before the builds, because
+      # they take seconds and a broken promise is the cheaper failure to hear
+      # about first.
+      - run: npm test
       # `npm run build` is `tsc && vite build` — the type check above is the
       # documented lane's own step, and the build proves the bundle is real.
       - run: npm run build
+      # The phone face: a second vite entry (vite.config.phone.ts) over the same
+      # components with the HTTP transport aliased in. Same job, not a new one -
+      # it needs nothing the desktop build did not already install, so a second
+      # runner would only buy a second npm ci.
+      - run: npm run build:phone
 
   rust:
     name: rust (test + clippy)

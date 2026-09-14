@@ -1,0 +1,40 @@
+# Dependency updates, kept quiet: weekly, and each ecosystem's minor and patch
+# bumps grouped into one pull request. A major version still arrives on its own,
+# because a major is a change to read. At most three open pull requests per
+# ecosystem.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/app"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "cargo"
+    directory: "/app/src-tauri"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps"
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # "/" covers .github/workflows. The composite action under .github/actions
+  # uses no other action, so it has nothing to update.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions-minor-patch:
+        update-types: ["minor", "patch"]

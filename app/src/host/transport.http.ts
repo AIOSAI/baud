@@ -201,6 +201,15 @@ const ROUTES: Record<string, Route> = {
     // sentence as error.message, which `errorFrom` already hands through.
     path: "/v1/machine",
   },
+  lock_state: {
+    // THE LOCK'S POSITION (FPLAN-0585 row 3), beside the machine read and the
+    // same shape: @skills reads it, @api relays the dict verbatim, the header
+    // chip draws it. Read scope - locking stays verb_lock, under operate. NO
+    // QUERY, EVER: any parameter is a 400, and the server caches 1 s
+    // single-flight. `ok: false` ("could not tell") is a 200 carrying the
+    // skill's sentence; only a door that broke is a 503 lock_door_failed.
+    path: "/v1/lock",
+  },
   /* --------------------------------------------------------- the roots -- */
   /* FPLAN-0443. The fence learned four kinds of word instead of one, and these
      three entries are the WHOLE of what this face knows about that on the wire.

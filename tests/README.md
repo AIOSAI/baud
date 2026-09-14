@@ -10,18 +10,20 @@ tests gets run by nobody.
 | Stack | Where | How it is run |
 | --- | --- | --- |
 | Rust backend | `app/src-tauri/src/` — `#[cfg(test)]` modules in the file they test | `cargo test --locked` |
-| TypeScript | *no test runner is installed* | `npx tsc --noEmit`, then `npm run build` and `npm run build:phone` |
+| TypeScript | `app/src/` — `*.test.ts` beside the module they pin (vitest) | `npm test`, beside `npx tsc --noEmit`, `npm run build` and `npm run build:phone` |
 | Python | *no surface* — `src/baud/baud/apps/baud.py` is the drone shim, not app code | — |
 
 `.github/workflows/ci.yml` is the audit lane the robot runs: `npx tsc --noEmit`,
-`npm run build`, `cargo test --locked`, `cargo clippy --all-targets --locked -- -D warnings`.
+`npm test`, `npm run build`, `npm run build:phone`, `cargo test --locked`,
+`cargo clippy --all-targets --locked -- -D warnings`.
 
-**The TypeScript side has no automated tests**, said plainly rather than left to be
-discovered. What it has instead is the type-check, both bundle builds, and per-round
-behaviour pins — small node scripts run against the compiled modules with a faked clock
+**The TypeScript tests cover pure functions only**: the lock and monitor face
+derivations, the delivery quoting and the copy path - no DOM, no network, no faked
+clock. Everything that renders or talks to the host is proven instead by the type-check,
+both bundle builds, and per-round behaviour pins — small node scripts run against the compiled modules with a faked clock
 or document, always alongside a control showing the old behaviour, and reported in the
 round they belong to. Those are deliberately not stored here: a pin measures one round's
 claim, and a drawer of stale pins would read like a suite while proving nothing.
 
-If a frontend test runner is ever installed, it belongs in `app/` beside `package.json` —
-not here. This directory stays for a Python surface that does not exist yet.
+The runner, vitest, is installed in `app/` beside `package.json`, and its tests sit beside
+their modules — not here. This directory stays for a Python surface that does not exist yet.

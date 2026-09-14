@@ -680,6 +680,8 @@ export default function TerminalSheet({
    */
   const launched = useRef(false);
   /** A delivery that outlived its socket, waiting for the next open. */
+  /** `path` is every path of the stranded delivery, space-joined - one photo
+   *  or a picked set, it is what the status and the error lines read out. */
   const pending = useRef<{ bytes: string; path: string } | null>(null);
   /** The fitter and the resize sender, reached the same way and for the same
    *  reason: zoom has to re-measure and re-declare the geometry, and both of
@@ -2450,14 +2452,44 @@ export default function TerminalSheet({
    * AND NO ENTER. The path lands in the operator's line, wrapped in spaces so it
    * joins whatever they were already typing, and sits there. Submitting is
    * theirs. Third time this rule has carried tonight; it is doctrine.
+   *
+   * SEVERAL AT ONCE (Patrick 2026-09-13: *"when i want to add a file/screen
+   * shot I can't multi select"*). The picker takes a set now, and the set is
+   * ONE delivery: every upload first, in the order picked, then a single write
+   * of every path - `deliveryText` always took a list, the desktop's own
+   * screenshot rule, so the line reads the same whether one path or five. An
+   * upload that fails is named and the ones that landed are still typed:
+   * nothing on the host's disk is thrown away, and nothing is claimed for a
+   * file that never got there.
    */
-  async function sendPhoto(file: File) {
+  async function sendPhotos(files: File[]) {
     setSending(true);
     setError(null);
-    setStatus(`uploading ${file.name}…`);
+    const paths: string[] = [];
+    const failed: string[] = [];
     try {
-      const path = await uploadImage(file);
-      const bytes = deliveryText([path]);
+      for (const [index, file] of files.entries()) {
+        setStatus(files.length > 1 ? `uploading ${index + 1}/${files.length} · ${file.name}…` : `uploading ${file.name}…`);
+        try {
+          paths.push(await uploadImage(file));
+        } catch (cause) {
+          failed.push(`${file.name}: ${cause instanceof HostError ? cause.message : String(cause)}`);
+        }
+      }
+      if (paths.length === 0) {
+        // Every upload failed, so NOTHING was typed. Say which half broke - an
+        // operator who thinks a path is in their line will press Enter on it.
+        setError(`photo not sent: ${failed.join("; ")}`);
+        setStatus(`attached · ${roomLabel}`);
+        return;
+      }
+      const path = paths.join(" ");
+      const bytes = deliveryText(paths);
+      // Some landed and some did not: the line gets the ones that landed, and
+      // the error names the rest, so the count on screen is the count typed.
+      if (failed.length > 0) {
+        setError(`${paths.length} of ${files.length} sent - not sent: ${failed.join("; ")}`);
+      }
       if (write(bytes)) {
         setStatus(`delivered · ${path}`);
       } else {
@@ -2478,15 +2510,6 @@ export default function TerminalSheet({
         // retry and starts the ladder over, exactly as the button does.
         reattachNow();
       }
-    } catch (cause) {
-      // The upload failed, so NOTHING was typed. Say which half broke - an
-      // operator who thinks a path is in their line will press Enter on it.
-      setError(
-        cause instanceof HostError
-          ? `photo not sent: ${cause.message}`
-          : `photo not sent: ${String(cause)}`,
-      );
-      setStatus(`attached · ${roomLabel}`);
     } finally {
       setSending(false);
       // Clear the input, or picking the SAME photo twice fires no change event.
@@ -2865,7 +2888,7 @@ export default function TerminalSheet({
         {/* THE PICKER, and it sits OUTSIDE the slot on purpose. It is `hidden`,
             so it costs the belt nothing wherever it hangs - and the slot below
             swaps its contents for the armed bar, which would unmount this
-            input mid-upload if it lived in there. `sendPhoto` writes to
+            input mid-upload if it lived in there. `sendPhotos` writes to
             `picker.current` after an await; a ref that can go null under a
             mode change is a race nobody would ever reproduce on purpose.
 
@@ -2873,16 +2896,18 @@ export default function TerminalSheet({
             camera AND the gallery from this one input, with no native code and
             no permissions dance. `capture` is deliberately NOT set - it would
             force the camera and lock out the screenshot Patrick actually
-            asked for. */}
+            asked for. `multiple` lets the gallery hand over a set - the whole
+            set is one delivery, see `sendPhotos`. */}
         <input
           ref={picker}
           className="baud-phone-term-picker"
           type="file"
           accept="image/*"
+          multiple
           hidden
           onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void sendPhoto(file);
+            const files = Array.from(event.target.files ?? []);
+            if (files.length > 0) void sendPhotos(files);
           }}
         />
         {/* ------------------------------------------------------ THE ONE SLOT

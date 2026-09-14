@@ -33,8 +33,8 @@
  * `//notes.md`, which is the one case the rule was written to prevent. Measured
  * against the running function rather than reasoned about, five cases:
  *
- *     ("/home/patrick", "app/src/main.ts") -> /home/patrick/app/src/main.ts
- *     ("/home/patrick", "")                -> /home/patrick
+ *     ("/home/alice", "app/src/main.ts")    -> /home/alice/app/src/main.ts
+ *     ("/home/alice", "")                  -> /home/alice
  *     ("/", "notes.md")                    -> /notes.md      (was //notes.md)
  *     ("", "app/src/main.ts")              -> ""             (refuse, no floor)
  *     (undefined, "x")                     -> ""             (refuse, no floor)

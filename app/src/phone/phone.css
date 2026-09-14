@@ -168,6 +168,13 @@ body {
   position: relative;
   margin-right: auto;
   min-width: 0;
+  /* TAKES THE ROW'S SLACK rather than sizing to the name. Sized to the name,
+     the chip inside got exactly its own max-content width back, and a
+     sub-pixel shortfall was enough to break the last letter of AIPASS onto a
+     second line (Patrick 2026-09-13: *"now it's actually wrapping AI pass
+     which it wasn't wrapping before"*). With the slack, a short name has room
+     to spare and a long one is still bounded by the row. */
+  flex: 1 1 auto;
 }
 
 .baud-phone-project {
@@ -176,16 +183,56 @@ body {
   padding: 0;
   color: var(--baud-ink-dim);
   font-family: inherit;
-  font-size: 0.75rem;
+  /* 0.75 until 2026-09-13, and 0.68 for ten minutes: the header's flexible
+     slot is ~51px on the S24 and AIPASS at 0.75 needs 52, so it bled a pixel
+     for weeks and wrapped AIPAS/S the moment the chip was bound to its slot.
+     Patrick: *"the character size needs to be smaller"*. 0.6 is `sign out`'s
+     size two chips over; AIPASS needs ~44px at it and sits on one line with
+     room, VERA-STUDIO wraps once at its hyphen. */
+  font-size: 0.6rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  /* A long project name shrinks to dots - it must never grow the row. */
-  max-width: 44vw;
+  /* BOUND TO ITS SLOT, and it wraps (Patrick 2026-09-13, S24 screenshot:
+     *"vera studio actually bleeds into the terminal button"*). The old rule
+     capped this at 44vw and ellipsized - but the wrapper is the header's
+     flexible slot and shrinks below that on a phone, while an inline-flex
+     button sizes to its content, so the name simply drew past the slot into
+     the shell chip. Two lines cost nothing: the row is already two lines tall
+     because `sign out` wraps in its own chip, so VERA-STUDIO breaks at its
+     hyphen and the header does not grow a pixel. The name span clamps at two
+     lines, which is the guarantee the old dots gave. */
+  max-width: 100%;
   min-width: 0;
+  text-align: left;
+  line-height: 1.1;
+}
+
+.baud-phone-project-name {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  /* BREAKS AT A HYPHEN ONLY, never inside a word. This shipped for twenty
+     minutes as `overflow-wrap: anywhere` and Patrick caught the one case that
+     rule is wrong for: AIPASS-SITE and VERA-STUDIO broke cleanly at their
+     hyphen, but plain AIPASS - the one name the slot did NOT squeeze - came
+     back as AIPAS / S. A shrink-to-fit box that is exactly its text's width
+     gets rounded a fraction short, and with a break allowed anywhere the last
+     letter falls to line two. With breaks only at hyphens a whole word cannot
+     wrap at all, so an exact fit stays one line. The price: a long name with
+     no hyphen is clipped at the slot's edge instead of broken - the names on
+     this wheel are short and hyphenated, so that is the cheaper wrong. */
+  overflow-wrap: normal;
+  word-break: normal;
+  /* SLACK PAST THE TEXT. The same short-by-a-fraction box that used to wrap
+     the S now clipped it (Patrick's 16:24 shot: *"almost lol... see its
+     underlapping now"*) - the phone measures the run with fractional advances
+     and paints it a pixel or two wider, and overflow: hidden trims exactly
+     that much off the last glyph. Three pixels of padding sit inside the
+     clip, so the run has room to land; the caret's 4px gap follows it. */
+  padding-right: 3px;
 }
 
 .baud-phone-project-caret {
@@ -927,6 +974,33 @@ body {
   display: inline-flex;
   align-items: center;
   padding: 3px 7px;
+}
+
+/* THE LOCK'S POSITION, read (FPLAN-0585 row 3). Colour and border STYLE only -
+   no size, padding or width moves, because the header was tuned this afternoon
+   and a chip that changes box with the lock would shift the row it sits in.
+   A READ-scoped token may read the lock but not tap it, and sees the same faces:
+   `.baud-phone-lock` above already out-ranks `.baud-phone-verb-refused` by file
+   order, so the refused dashed look never reached this chip (measured in a
+   headless render) - the solid borders below only make that explicit. Before the
+   first answer none of these apply and the chip is exactly what it was. */
+.baud-phone-lock-unlocked {
+  border-style: solid;
+  color: var(--baud-green);
+}
+
+/* Amber, not red: red on this face means dead or refused, and a locked laptop
+   is neither. One token to change if Patrick wants red. */
+.baud-phone-lock-locked {
+  border-style: solid;
+  color: var(--baud-amber);
+}
+
+/* Could not tell - or could not ask. The wheel's dead-ring idiom: a dashed
+   outline says "a reading belongs here and there is none". */
+.baud-phone-lock-unknown {
+  border-style: dashed;
+  color: var(--baud-ink-dim);
 }
 
 /* ----------------------------------------------------- asking me first -- */
@@ -1747,6 +1821,63 @@ body {
   margin: 0;
   color: var(--baud-ink-faint);
   font-size: 0.64rem;
+}
+
+/* THE CPU PAGE'S CORES (FPLAN-0586 row 2). One bar per ONLINE CPU the skill
+   lists, filled in the ring's own green on the line-coloured track - the
+   monitor's colour idiom. The fill is an SVG width attribute, not a style. */
+.baud-machine-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.baud-machine-bar {
+  display: grid;
+  grid-template-columns: 3.4rem 1fr 3rem;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+}
+
+.baud-machine-bar-label {
+  color: var(--baud-ink-dim);
+}
+
+.baud-machine-bar-track {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--baud-line);
+  overflow: hidden;
+}
+
+.baud-machine-bar-fill {
+  fill: var(--baud-green);
+}
+
+.baud-machine-bar-value {
+  color: var(--baud-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* What the machine has, in words: threads, cores, and the clock. */
+.baud-machine-counts {
+  margin: 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.72rem;
+}
+
+/* The line that makes a row readable without knowing the jargon. */
+.baud-machine-caption {
+  margin: 0;
+  color: var(--baud-ink-faint);
+  font-size: 0.64rem;
+  line-height: 1.4;
 }
 
 /* ------------------------------------------------------- stacked wheels --
@@ -3022,7 +3153,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--baud-bg-panel);
+  /* Half the panel colour - see .baud-phone-term-viewbtn, same ruling. */
+  background: color-mix(in srgb, var(--baud-bg-panel) 50%, transparent);
   border: 1px solid var(--baud-line);
   border-radius: 6px;
   color: var(--baud-ink-dim);
@@ -3143,7 +3275,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--baud-bg-panel);
+  /* HALF THE PANEL COLOUR, not a solid (Patrick 2026-09-13: *"sometimes I
+     can't read the words behind them... it is just a little annoying. Let's
+     see if we can just reduce that... 50%"*). The element opacity below fades
+     glyph and box together, so it was left alone and the fill was cut on its
+     own: the mark stays as legible as before, the room shows through the box.
+     The arrows ride the same fill at their own opacity (next rule). */
+  background: color-mix(in srgb, var(--baud-bg-panel) 50%, transparent);
   border: 1px solid var(--baud-line);
   border-radius: 6px;
   color: var(--baud-ink-dim);

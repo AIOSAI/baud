@@ -18,6 +18,7 @@ import { useState } from "react";
 
 import { HostError } from "../host/transport.http";
 import type { BranchStatus, VerbResult } from "../types";
+import { lockFace, lockLine, useLockState } from "./lib/lock";
 import { LOCK_VERB, PHONE_VERBS, type PhoneVerb, type Scope, screenIsAwake, scopeRefusal } from "./lib/verbs";
 
 /**
@@ -175,11 +176,29 @@ export default function VerbChips({ branch, scope, onEnded }: VerbChipsProps) {
  *
  * Not destructive - a locked screen unlocks - so it does not ask first. It does
  * still respect scope, and it says what the machine said.
+ *
+ * IT READS THE LOCK TOO (FPLAN-0585 row 3; Patrick, 2026-09-13: away from home,
+ * a glance answers "did I lock the laptop?"). Four faces, from `lib/lock.ts`:
+ * - UNLOCKED: the OPEN shackle, green - open is live.
+ * - LOCKED: the closed shackle, amber - attention, not failure. Red on this face
+ *   means dead or refused, and a locked laptop is neither.
+ * - UNKNOWN: the closed shackle, dim, DASHED border - the wheel's dead-ring idiom.
+ *   The machine could not tell, or the read failed, and the title says which.
+ *   Never drawn as unlocked.
+ * - UNREAD, before the first answer: exactly the chip this was before it could
+ *   read anything.
+ * The READ rides the read scope, so a read-scoped token sees the lock's position
+ * even though its tap is refused - the title still says so.
  */
 export function LockChip({ scope }: { scope: Scope }) {
   const [said, setSaid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const refusal = scopeRefusal(scope);
+  const { read, reread } = useLockState();
+  const face = lockFace(read);
+  /** The reading's own sentence first, then what the tap last heard (or why a
+   *  tap would be refused). Before any reading, exactly the old title. */
+  const title = [lockLine(read), said ?? refusal ?? LOCK_VERB.title].filter(Boolean).join(" — ");
 
   async function press() {
     if (refusal) {
@@ -194,14 +213,19 @@ export function LockChip({ scope }: { scope: Scope }) {
       setSaid(cause instanceof HostError ? cause.message : String(cause));
     } finally {
       setBusy(false);
+      // Read the lock's position back rather than assume the tap worked: at
+      // once, and again a second later, because the lock lands async.
+      reread();
     }
   }
 
   return (
     <button
       type="button"
-      className={`baud-phone-lock ${refusal ? "baud-phone-verb-refused" : ""}`}
-      title={said ?? refusal ?? LOCK_VERB.title}
+      className={`baud-phone-lock ${refusal ? "baud-phone-verb-refused" : ""} ${
+        face === "unread" ? "" : `baud-phone-lock-${face}`
+      }`}
+      title={title}
       onClick={() => void press()}
     >
       {busy ? (
@@ -219,7 +243,9 @@ export function LockChip({ scope }: { scope: Scope }) {
           aria-hidden="true"
         >
           <rect x="3" y="11" width="18" height="11" rx="2" />
-          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          {/* OPEN: the shackle's right leg lifts clear of the body. Every other
+              face - locked, unknown, unread - is the closed shackle. */}
+          {face === "unlocked" ? <path d="M7 11V7a5 5 0 0 1 9.9-1" /> : <path d="M7 11V7a5 5 0 0 1 10 0v4" />}
         </svg>
       )}
     </button>

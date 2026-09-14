@@ -61,6 +61,10 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
      served by @api, and only the phone asks for it. */
   machine_vitals:
     "the desktop sits on the machine it would be reading - the monitor layer is the phone's glance from across the room",
+  /* FPLAN-0585. The header lock chip reads whether the laptop is locked, which
+     is a question only a device AWAY from the laptop needs to ask. */
+  lock_state:
+    "the desktop is the screen whose lock it would be reading - the lock chip is the phone's answer to 'did I lock it'",
 };
 
 /** A typed host call. The only `invoke` in the application. */
