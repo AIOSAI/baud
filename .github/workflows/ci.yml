@@ -94,7 +94,7 @@ jobs:
       - name: Ensure clippy is present
         run: rustup component add clippy
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           # Cache paths are workspace-relative — `defaults.run.working-directory`
           # does not apply to action inputs.
