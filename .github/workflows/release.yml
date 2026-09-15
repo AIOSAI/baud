@@ -41,7 +41,7 @@ jobs:
     name: build and publish
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # tmux is requested here too, unlike a plain build, because this job runs
       # the test suite before it ships anything — see the gate below.
