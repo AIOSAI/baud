@@ -3,8 +3,10 @@
  * it (FPLAN-0561 row 3, every clause ruled in DPLAN-0341).
  *
  * WHAT IS MEASURED. `GET /v1/machine` is @skills' `machine_vitals()` relayed
- * verbatim by @api: cpu, load, memory, swap, temp, fan, network and processes,
- * each carrying `available` / `reason` / `sentence` / `detail` beside its
+ * verbatim by @api: cpu, load, memory, swap, temp, fan, network, processes and,
+ * from schema 2 (2026-10-12), battery - optional on the type, since an older
+ * skill omits the key - each carrying `available` / `reason` / `sentence` /
+ * `detail` beside its
  * values. Which sensor is the CPU, which rows are nonsense, what an absence is
  * called - all of that is the skill's. This file decides only how a reading
  * LOOKS: a headline, a unit, and whether it has earned a ring.
@@ -20,6 +22,7 @@ import { machineVitals } from "../../host";
 import { HostError } from "../../host/transport.http";
 import type { MachineVitals } from "../../types";
 import type { AppFace } from "../FleetWheel";
+import { batteryFace } from "./battery";
 import { whileVisible } from "./whileVisible";
 
 /**
@@ -111,11 +114,11 @@ function relayed(body: MachineVitals): { code: string; message: string } {
 
 /** The cards whose reading has a range of its own - so a dead ring is how their
  *  absence looks. NET and PROC have no range, and never wear a ring. */
-const GAUGES = new Set(["mon-cpu", "mon-mem", "mon-temp", "mon-fan"]);
+const GAUGES = new Set(["mon-cpu", "mon-mem", "mon-temp", "mon-fan", "mon-bat"]);
 
 /** Every monitor card this derivation draws. The wheel owns the card list; this
  *  is the list of derivations, which is why a key can appear in both. */
-const MONITOR_KEYS = ["mon-cpu", "mon-mem", "mon-temp", "mon-fan", "mon-net", "mon-proc"];
+const MONITOR_KEYS = ["mon-cpu", "mon-mem", "mon-temp", "mon-fan", "mon-net", "mon-proc", "mon-bat"];
 
 /** An absent reading: a dash, never a zero - and on a gauge a dead ring, so the
  *  card's shape still says what would be there. */
@@ -146,6 +149,7 @@ export function machineFaces({ reading, refusal }: MachineRead): Record<string, 
       processes.available && processes.count !== null
         ? { value: compact(processes.count), absent: false, ring: "none" }
         : absent("mon-proc"),
+    "mon-bat": batteryFace(reading.battery),
   };
 }
 

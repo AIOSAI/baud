@@ -15,6 +15,7 @@ and every change that lands adds its line there in the same sitting.
 ### Added
 
 - **Phone: links in a room open on a tap**, and a links panel lists the room's URLs with open and copy; a copy says whether it landed and shows the text to copy by hand when it cannot know.
+- **Phone: a BAT card on the monitor wheel.** The battery's charge with a ring, a mark when plugged in, and warm or hot only against the low and critical lines the host publishes while discharging; its sheet shows state, time left and those lines.
 
 ## [0.2.1] — 2026-09-14
 

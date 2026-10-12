@@ -32,7 +32,7 @@ describe("machineFaces", () => {
     expect(machineFaces({ reading: null, refusal: null })).toEqual({});
   });
 
-  it("draws every card as a dash on a refusal, with a dead ring only on the four gauges", () => {
+  it("draws every card as a dash on a refusal, with a dead ring only on the five gauges", () => {
     const faces = machineFaces({ reading: null, refusal: { code: "switched_off", message: "the machine read is off" } });
     expect(faces).toEqual({
       "mon-cpu": { ...dash, ring: "dead" },
@@ -41,6 +41,7 @@ describe("machineFaces", () => {
       "mon-fan": { ...dash, ring: "dead" },
       "mon-net": { ...dash, ring: "none" },
       "mon-proc": { ...dash, ring: "none" },
+      "mon-bat": { ...dash, ring: "dead" },
     });
   });
 

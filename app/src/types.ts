@@ -585,6 +585,22 @@ export interface MachineVitals {
     window_s: number | null;
   };
   processes: MachineSection & { count: number | null };
+  /**
+   * The battery (schema 2, 2026-10-12). OPTIONAL because a skill that answers
+   * schema 1 has no such key: the face draws that as absent and says so, and
+   * never infers a battery from a missing key.
+   */
+  battery?: MachineSection & {
+    /** Charge, 0-100. */
+    percent: number | null;
+    plugged: boolean | null;
+    state: "charging" | "discharging" | "full" | "unknown";
+    /** A real count only. Null on mains (unlimited) or when unknown; `detail` says which. */
+    seconds_left: number | null;
+    /** The host's published lines in percent (UPower), or null when none is published. */
+    low: number | null;
+    critical: number | null;
+  };
 }
 
 /**

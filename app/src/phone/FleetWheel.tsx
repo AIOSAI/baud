@@ -304,7 +304,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
    *
    * IT IS AN APP LAYER, not a new kind of thing, and that is the whole reason
    * this round is small. A monitor sounds like a readout rather than a rail -
-   * but CPU, memory, temperature, fan, network and processes ARE cards, so they get the
+   * but CPU, memory, temperature, fan, network, processes and battery ARE cards, so they get the
    * rail, the snap, the centre glow and the tap-to-centre-then-open that the
    * app layer already has. Zero new rendering. Patrick described the same shape
    * from the other side: *"we scroll left or right... and then I can possibly
@@ -318,6 +318,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
    * never a zero: a monitor that invents a number is worse than no monitor,
    * because the whole point is trusting it from across the room. The keys are
    * stable - the sheet keys on them - and FAN sits between TEMP and NET.
+   * The order: CPU, MEM, TEMP, FAN, NET, PROC, BAT.
    */
   {
     key: "monitor",
@@ -331,6 +332,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
       { key: "mon-fan", mark: "FAN", name: "fan", kind: "door" },
       { key: "mon-net", mark: "NET", name: "network", kind: "door" },
       { key: "mon-proc", mark: "PROC", name: "processes", kind: "door" },
+      { key: "mon-bat", mark: "BAT", name: "battery", kind: "door" },
     ],
   },
 ];

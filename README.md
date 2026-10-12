@@ -2326,12 +2326,14 @@ server's read module, and an operate gate on the home arm alone.
 ### The monitor row — the machine, live on the face
 
 The wheel's last layer is the machine (FPLAN-0561; every clause ruled in
-DPLAN-0341). Six cards — CPU, MEM, TEMP, FAN, NET, PROC — each carrying its live
+DPLAN-0341). Seven cards — CPU, MEM, TEMP, FAN, NET, PROC, BAT — each carrying its live
 headline, because Patrick ruled the glance is the point: *"a big 100% door a.
 live on face"*, and *"6th card is in"* for the fan, the case he named when he
 asked for the row (*"the fans going crazy and the screen is locked and it's all
 the way across the room"*). Built 2026-09-13; his live verdict on the S24 closes
-the row.
+the row. BAT, last (2026-10-12), reads the battery section of `/v1/machine`, tones
+only against the low and critical lines the host publishes, and a host with no
+battery draws the dash.
 
 **Three owners, one piece each.** @skills publishes `machine_vitals()` and owns
 every meaning in it — which sensor is the CPU, which rows are nonsense, what an
@@ -2347,8 +2349,10 @@ TEMP draws the package °C with a ring of celsius over the sensor's own
 lines are 100 °C on the MacBook this was built on). FAN draws the percent of its
 range with the ring; a fan with an rpm but no range (`no_range`) draws the rpm
 and no ring. NET (sent plus received, per second) and PROC (a count) have no
-range and never wear one. Colour is the temperature's alone — the only reading
-that publishes a line to be warm against. The ring sits inside the card's border
+range and never wear one. Colour belongs to the readings that publish a line to
+be warm against: the temperature (its sensor's `high` and `critical`) and, since
+2026-10-12, the battery while discharging (UPower's low and critical lines, when
+the host has them). The ring sits inside the card's border
 rather than outside it as the mock drew it, because the centred card's scale
 already spends the rail's vertical headroom and an outside ring was cut off on
 exactly the card being read.

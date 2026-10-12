@@ -28,6 +28,7 @@
 import type { ReactNode } from "react";
 
 import type { MachineSection, MachineVitals } from "../types";
+import { PREDATES_BATTERY, timeLeftText } from "./lib/battery";
 import { type MachineRead, bytesText, rateText } from "./lib/machine";
 
 /** The sheet's title per card. An unknown key titles itself rather than blanking. */
@@ -38,6 +39,7 @@ const TITLES: Record<string, string> = {
   "mon-fan": "fan",
   "mon-net": "network",
   "mon-proc": "processes",
+  "mon-bat": "battery",
 };
 
 export default function MachineSheet({
@@ -89,6 +91,8 @@ function sheetBody(card: string, { reading, refusal }: MachineRead): ReactNode {
       return <NetworkBody reading={reading} />;
     case "mon-proc":
       return <ProcessBody reading={reading} />;
+    case "mon-bat":
+      return <BatteryBody reading={reading} />;
     default:
       return <p className="baud-phone-empty">a reading this face does not have a name for yet</p>;
   }
@@ -284,6 +288,47 @@ function ProcessBody({ reading: { processes, sampled_at } }: { reading: MachineV
           its own route and cache (names and counts only, never arguments), so
           this line says what is not wired rather than leaving it to be guessed. */}
       <Honest>what is running, by what it costs, is a deferred row with its own route — not wired yet.</Honest>
+      <Sampled at={sampled_at} />
+    </>
+  );
+}
+
+/**
+ * THE BATTERY (2026-10-12). Charge, what the power is doing, and time left, with
+ * the host's own low and critical lines when it publishes them. An older skill
+ * sends no battery key at all, and that is said rather than drawn as an empty
+ * machine.
+ */
+function BatteryBody({ reading: { battery, sampled_at } }: { reading: MachineVitals }) {
+  if (!battery) {
+    return (
+      <>
+        <Headline value="—" />
+        <Honest absent>{PREDATES_BATTERY}</Honest>
+        <Sampled at={sampled_at} />
+      </>
+    );
+  }
+  return (
+    <>
+      <Headline
+        value={battery.percent === null ? "—" : fixed(battery.percent, 0)}
+        unit="%"
+        note={battery.state === "unknown" ? undefined : battery.state}
+      />
+      <Section
+        section={battery}
+        rows={[
+          ["state", battery.state],
+          ["plugged in", battery.plugged === null ? "—" : battery.plugged ? "yes" : "no"],
+          ["time left", timeLeftText(battery.seconds_left, battery.plugged)],
+          ...(battery.low === null ? [] : [["low line", percent(battery.low)] as [string, string]]),
+          ...(battery.critical === null ? [] : [["critical line", percent(battery.critical)] as [string, string]]),
+        ]}
+      />
+      {battery.available && battery.low === null && battery.critical === null ? (
+        <Honest>the host publishes no low or critical line, so the ring never changes colour.</Honest>
+      ) : null}
       <Sampled at={sampled_at} />
     </>
   );
