@@ -16,6 +16,11 @@
  * module puts the relative back on the end of it. Composition here rather than
  * in the transport because the relative is a property of the ROW, not of the
  * answer - one listing has fifty of them.
+ *
+ * THE LANE SAYS WHICH LANE (FPLAN-0641). `copyThrough` answers clipboard,
+ * legacy or refused, and `copyReport` turns that into the sentence the face
+ * shows - so a copy out of a room says whether it landed, and shows the text
+ * to copy by hand when it cannot know.
  */
 
 /**
@@ -88,7 +93,52 @@ export const NO_FLOOR =
   "the server did not say where this root stands - a relative path alone would resolve somewhere else";
 
 /**
- * Put text on the clipboard, and answer whether it actually landed.
+ * Which lane took the text: the clipboard API (confirmed), execCommand
+ * (claimed, not confirmed), or neither (FPLAN-0641).
+ */
+export type CopyLane = "clipboard" | "legacy" | "refused";
+
+/** What the face says after a copy, and whether it shows the text to copy by hand. */
+export interface CopyReport {
+  note: string;
+  showText: boolean;
+}
+
+/**
+ * The truthful sentence for one copy attempt (FPLAN-0641).
+ *
+ * THREE ANSWERS, AND ONLY ONE OF THEM IS A CONFIRMED COPY. Over plain http on
+ * the tailnet `navigator.clipboard` is undefined, so the lane that runs on the
+ * S24 today is `execCommand` - and that one can say yes and land nothing. Only
+ * the modern lane's resolved promise is a confirmed copy; everything else shows
+ * the text in a selectable field, where Android's own long-press Copy is the
+ * certain route.
+ *
+ * Args:
+ *   lane: What `copyThrough` answered.
+ *   what: The thing copied, as the operator calls it ("the link", "18 characters").
+ *
+ * Returns:
+ *   The note, and whether the text must be shown for a manual copy.
+ */
+export function copyReport(lane: CopyLane, what: string): CopyReport {
+  if (lane === "clipboard") {
+    return { note: `copied ${what} - the clipboard confirmed it`, showText: false };
+  }
+  if (lane === "legacy") {
+    return {
+      note: `the browser says it copied ${what}, but over plain http it can say that and copy nothing - if paste comes up empty, long-press the text below and choose Copy`,
+      showText: true,
+    };
+  }
+  return {
+    note: `not copied - the browser refused both clipboard lanes. Long-press the text below and choose Copy`,
+    showText: true,
+  };
+}
+
+/**
+ * Put text on the clipboard, and answer WHICH lane took it.
  *
  * TWO LANES, AND THE SECOND ONE IS THE POINT. This face is served over plain
  * http on the tailnet, and `navigator.clipboard` is UNDEFINED in an insecure
@@ -106,40 +156,64 @@ export const NO_FLOOR =
  *
  * NOTHING IS ASSUMED TO HAVE WORKED. Both lanes report: the promise resolves or
  * rejects, `execCommand` answers a boolean, and a `false` from either is
- * returned as `false`. The caller shows a copied state only on `true` - a tick
- * that appears whether or not the text moved is worse than no tick, because it
- * is the operator's only way to know.
+ * returned as `"refused"`. The caller shows a copied state only on an answer
+ * that says so - a tick that appears whether or not the text moved is worse
+ * than no tick, because it is the operator's only way to know.
+ *
+ * THE LANE IS THE ANSWER, NOT A BOOLEAN (FPLAN-0641). `"clipboard"` is a
+ * resolved promise, a confirmed copy. `"legacy"` is `execCommand` saying yes,
+ * which over plain http it can do and land nothing - so `copyReport` words it
+ * as a claim and shows the text to copy by hand.
  *
  * Args:
  *   text: What to put on the clipboard. Empty is refused rather than copied -
  *     clearing the clipboard is not what any caller here means.
  *
  * Returns:
- *   True only when a lane confirmed the copy.
+ *   `"clipboard"` when `writeText` resolved, `"legacy"` when `execCommand`
+ *   said true, `"refused"` otherwise.
  */
-export async function copyText(text: string): Promise<boolean> {
-  if (!text) return false;
+export async function copyThrough(text: string): Promise<CopyLane> {
+  if (!text) return "refused";
 
   const modern = typeof navigator === "undefined" ? undefined : navigator.clipboard;
-  if (!modern || typeof modern.writeText !== "function") return legacyCopy(text);
+  if (!modern || typeof modern.writeText !== "function") return legacyCopy(text) ? "legacy" : "refused";
 
   try {
     await modern.writeText(text);
-    return true;
+    return "clipboard";
   } catch {
     /* Permission refused, or a document that is not focused. The gesture is
        probably spent by now and the textarea may well fail too - it is tried
        anyway, because a lane that might work beats a lane that cannot, and
        either way the answer below is the truth about what happened. */
-    return legacyCopy(text);
+    return legacyCopy(text) ? "legacy" : "refused";
   }
+}
+
+/**
+ * Put text on the clipboard, and answer whether a lane took it.
+ *
+ * `copyThrough` with the lane folded to a yes or no, so the callers that only
+ * draw a tick stay as they were. The call still runs synchronously up to the
+ * legacy lane, because `copyThrough` is CALLED before anything is awaited.
+ *
+ * Args:
+ *   text: What to put on the clipboard.
+ *
+ * Returns:
+ *   True when either lane said the copy landed.
+ */
+export async function copyText(text: string): Promise<boolean> {
+  return (await copyThrough(text)) !== "refused";
 }
 
 /**
  * The textarea lane: select text the page owns and let the browser copy it.
  *
  * `readonly` is not decoration - without it Android raises the soft keyboard
- * over the listing for the length of a copy. Off-screen but NOT `display:
+ * over the listing for the length of a copy, and `inputMode = "none"` says the
+ * same thing a second way, matching TerminalSheet's scratch field. Off-screen but NOT `display:
  * none`, because a box with no layout has nothing to select. `position: fixed`
  * so a long path cannot scroll the page while it is briefly in the document.
  *
@@ -154,6 +228,7 @@ function legacyCopy(text: string): boolean {
   const box = document.createElement("textarea");
   box.value = text;
   box.setAttribute("readonly", "");
+  box.inputMode = "none";
   box.style.position = "fixed";
   box.style.top = "0";
   box.style.left = "0";

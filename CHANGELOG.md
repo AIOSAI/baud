@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Added
+
+- **Phone: links in a room open on a tap**, and a links panel lists the room's URLs with open and copy; a copy says whether it landed and shows the text to copy by hand when it cannot know.
+
 ## [0.2.1] — 2026-09-14
 
 ### Added

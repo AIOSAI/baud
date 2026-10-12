@@ -3313,6 +3313,126 @@ body {
   margin-top: 8px;
 }
 
+/* ------------------------------------------------------- the takeout --
+   FPLAN-0641: the links panel, and the selected text when a copy cannot be
+   confirmed. An OVERLAY on the screen, never a row: the belt does not grow,
+   FitAddon has nothing to re-measure, and a live selection is not dropped by a
+   resize. z-index 4 is chosen, not arbitrary - above the view column and the
+   fullscreen toggle (both 3) and the corpse frame (2), because while it is open
+   it is the only thing on the screen meant to be touched. Its own close button
+   is the way back. */
+.baud-phone-term-takeout {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: color-mix(in srgb, var(--baud-bg) 94%, transparent);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}
+
+.baud-phone-term-takeout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--baud-gap);
+}
+
+.baud-phone-term-takeout-title {
+  margin: 0;
+  color: var(--baud-ink);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* What the lane said, or why the list is empty. Amber like the selrow note:
+   it is the operator's only way to know what a tap did. */
+.baud-phone-term-takeout-note {
+  margin: 0;
+  color: var(--baud-amber);
+  font-size: 0.66rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.baud-phone-term-takeout-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.baud-phone-term-takeout-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+/* The text to copy by hand. Selectable said out loud, because this field is
+   the one place Android's long-press Copy has to work. The whole URL, wrapped,
+   never cut: a link that is a third of itself is the bug this panel exists
+   for. */
+.baud-phone-term-takeout-field {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  padding: 6px 8px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* A selection can be long; it takes the panel's height and scrolls itself. */
+.baud-phone-term-takeout-text {
+  flex: 1;
+  min-height: 6rem;
+}
+
+.baud-phone-term-takeout-keys {
+  display: flex;
+  gap: 6px;
+}
+
+/* Open is an anchor and copy is a button; both wear this so they read as one
+   pair. Sized for a thumb, like the selrow's copy and clear. */
+.baud-phone-term-takeout-key {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.8rem;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.baud-phone-term-takeout-head .baud-phone-term-takeout-key {
+  flex: 0 0 auto;
+  color: var(--baud-ink-dim);
+}
+
 /* THE ARMED BAR - what the one slot becomes in typing mode (r8).
 
    It was door C's own permanent row above the belt (round 4). Patrick ruled

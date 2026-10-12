@@ -1466,6 +1466,37 @@ a nicety.
   worse than one that cannot scroll. The fix is that scroll now has its own
   clearly different pair (`▲`/`▼`) sitting to their left, and a gesture.
 
+**Links and copy out of a room** (FPLAN-0641, 2026-10-12). A login prints an
+OAuth URL into the room, and on the phone that URL was plain text: no tap opened
+it, and nothing lifted it off the screen. Two doors now read one detection,
+`app/src/phone/lib/roomLinks.ts`, so the panel can never list a link the tap
+cannot see, or the reverse.
+
+- **A tap on a URL opens it.** The sheet registers its own link provider on
+  xterm, and the URL opens in a new tab with no opener. A tap while select is
+  armed opens nothing, because selection forges mouse events and a drag over a
+  URL must not navigate. Only `http(s)` is ever a link.
+- **Why not the web-links addon the desktop loads.** The addon joins rows only
+  where xterm itself wrapped them. A URL can also arrive *hard*-wrapped, broken
+  into lines by a full-screen interface or by tmux repainting a pane, and then
+  the addon underlines one row and a tap opens a third of the URL. The join is
+  done in `roomLinks.ts` instead, where tests pin it. A hard wrap is read
+  narrowly: the URL must reach the right edge, and the next row must be nothing
+  but URL characters at the left edge or the line's own indent, so a sentence
+  under a URL never joins it.
+- **The links panel.** A chain chip in the view column, between select and the
+  arrows, scans the whole scrollback once and lists the eight most recent URLs.
+  Each row shows the whole URL in a read-only field, with **open** as a real
+  link and **copy** beside it. An empty list says how many rows it read. The
+  panel is an overlay on the screen, so the belt does not grow, nothing is
+  re-fitted, and a live selection is not dropped.
+- **A copy says which lane took it**, in one of three notes. A resolved
+  clipboard promise is a confirmed copy. An `execCommand` yes is reported as a
+  claim, because over plain http it can say yes and copy nothing. A refusal
+  says *not copied*. For the last two, the text is shown in a read-only field
+  that selects itself on focus, where Android's own long-press Copy is the
+  certain route.
+
 **Sending a photo — the path is the delivery.** The terminal sheet has a
 `photo` control: it opens `<input type="file" accept="image/*">`, which on
 Android offers the camera *and* the gallery with no native code and no

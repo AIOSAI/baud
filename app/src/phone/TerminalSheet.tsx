@@ -30,10 +30,10 @@
  * is indistinguishable from breakage (learning #389, now doctrine).
  */
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type FocusEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal as XTerm } from "@xterm/xterm";
+import { type ILink, Terminal as XTerm } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import { deliveryText } from "../deliver";
@@ -44,6 +44,8 @@ import type { BranchStatus } from "../types";
    where `App.tsx` reads `interfacePrefs` out of `InterfaceSettings`. One
    direction only: the panel knows nothing about this sheet. */
 import { SCROLL_MAX, SCROLL_MIN, SCROLL_NEUTRAL } from "./PhoneSettings";
+import { copyReport, copyThrough } from "./lib/copyPath";
+import { coversRow, findLinks, readRows, recentUrls } from "./lib/roomLinks";
 import { type PhoneMode, launchCommand, typeOnAttach } from "./lib/rooms";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
@@ -535,6 +537,35 @@ function closeSentence(event: CloseEvent): string | null {
 const DETACHED =
   "not sent: the room is detached. Reattach and try again - nothing was lost in the room.";
 
+/** How many rows either side of the hovered one the link provider reads, so a
+ *  URL wrapped over several rows is found whole from any of them (FPLAN-0641). */
+const LINK_REACH = 40;
+/** How many URLs the links panel lists, most recent first. */
+const PANEL_URLS = 8;
+
+/**
+ * Open a URL from the room in a new tab (FPLAN-0641).
+ *
+ * Always http(s): `findLinks` admits no other scheme, so nothing a room prints
+ * can reach `javascript:` or `file:` through here. `noopener,noreferrer` so the
+ * opened page gets no handle back to this face.
+ */
+function openRoomLink(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
+ * What the takeout panel is holding, or null when it is shut (FPLAN-0641).
+ *
+ * `text` is a selection the clipboard could not confirm, shown to copy by hand,
+ * with the note that says why. `links` is one scan of the scrollback: the URLs
+ * found and how many rows were read, so an empty list can say what it read.
+ */
+type Takeout =
+  | { kind: "text"; text: string; note: string }
+  | { kind: "links"; urls: string[]; rows: number }
+  | null;
+
 interface TerminalSheetProps {
   branch: BranchStatus;
   /** Which door the operator pressed. Attach is not a third mode - a launch IS
@@ -751,6 +782,10 @@ export default function TerminalSheet({
   /** What xterm says is selected, and what the copy attempt said back. */
   const [selText, setSelText] = useState("");
   const [copyNote, setCopyNote] = useState<string | null>(null);
+  /** The takeout panel over the screen, and each listed link's copy note,
+   *  keyed by URL (FPLAN-0641). */
+  const [takeout, setTakeout] = useState<Takeout>(null);
+  const [linkNotes, setLinkNotes] = useState<Record<string, string>>({});
   /* ROUND 1b. Patrick's verdict on round 1 was the outcome the four-way
    * framing did not list: the forged events DO drive xterm's coordinate math -
    * selection appears and tracks the finger - and then COLLAPSES around 12-14
@@ -1022,6 +1057,35 @@ export default function TerminalSheet({
     fit.fit();
     term.current = xterm;
     fitRef.current = fit;
+    // URLS OPEN ON A TAP (FPLAN-0641). A provider, not the WebLinksAddon: the
+    // addon joins only soft wraps, and a login URL often arrives hard-wrapped -
+    // see the header of `lib/roomLinks.ts`. The window walks up past soft wraps
+    // so a URL is read whole from whichever of its rows the finger is on.
+    const links = xterm.registerLinkProvider({
+      provideLinks(y, callback) {
+        const buffer = xterm.buffer.active;
+        const row = y - 1;
+        let from = Math.max(0, row - LINK_REACH);
+        while (from > 0 && buffer.getLine(from)?.isWrapped) from -= 1;
+        const found = findLinks(readRows(buffer, from, row + LINK_REACH + 1), xterm.cols, from).filter((link) =>
+          coversRow(link, row),
+        );
+        const out: ILink[] = found.map((link) => ({
+          range: {
+            start: { x: link.start.col + 1, y: link.start.row + 1 },
+            end: { x: link.end.col + 1, y: link.end.row + 1 },
+          },
+          text: link.url,
+          activate: () => {
+            // Selection forges mouse events, and a drag over a URL must not
+            // open it.
+            if (selectingRef.current) return;
+            openRoomLink(link.url);
+          },
+        }));
+        callback(out.length ? out : undefined);
+      },
+    });
     // A room opens with the keyboard DOWN. The helper textarea only exists
     // after open(), and the default has to be the refusing one - a room that
     // pops a keyboard the moment it appears is the behaviour this round is
@@ -1765,6 +1829,7 @@ export default function TerminalSheet({
       document.removeEventListener("visibilitychange", onVisible);
       observer.disconnect();
       typed.dispose();
+      links.dispose();
       // Close FIRST, then dispose: the close is the detach and it must go out
       // while the socket still exists.
       live.onclose = null;
@@ -2291,17 +2356,21 @@ export default function TerminalSheet({
 
   /* THE COPY LANE.
    *
-   * The copy half of the selection, and the whole reason it is written inline
-   * rather than in a helper: EVERY STEP RUNS SYNCHRONOUSLY INSIDE THE TAP.
-   * `navigator.clipboard` does not exist here - the host serves plain http on
-   * a tailnet IP, which is not a secure context - so the lane is the legacy
-   * `execCommand`, and that one is spent the instant the handler yields. One
-   * await, one promise, one setTimeout anywhere in this function and the user
-   * activation is gone and the copy silently does nothing.
+   * The copy half of the selection. EVERY STEP UP TO THE COPY RUNS
+   * SYNCHRONOUSLY INSIDE THE TAP. `navigator.clipboard` does not exist here -
+   * the host serves plain http on a tailnet IP, which is not a secure context -
+   * so the lane is the legacy `execCommand`, and that one is spent the instant
+   * the handler yields.
    *
-   * The scratch field is readOnly with inputMode none for the same reason the
-   * terminal's own textarea is: focusing a field to copy out of it must not
-   * summon a keyboard over the thing the operator just selected.
+   * THROUGH THE COPY DOOR NOW (FPLAN-0641), and that keeps the rule rather
+   * than breaking it. `copyThrough` reaches `execCommand` before its first
+   * await whenever the modern API is absent, so the copy still happens inside
+   * this tap; the `.then` only REPORTS. Its scratch field is readOnly with
+   * inputMode none, the same as the one that used to live here.
+   *
+   * The report is the truth about the lane. Only a resolved clipboard promise
+   * is a confirmed copy; `execCommand`'s yes is a claim, so the takeout panel
+   * opens with the selected text for Android's own long-press Copy.
    */
   function copySelection() {
     const text = term.current?.getSelection() ?? "";
@@ -2309,32 +2378,38 @@ export default function TerminalSheet({
       setCopyNote("nothing selected - drag across a line first");
       return;
     }
-    const scratch = document.createElement("textarea");
-    scratch.value = text;
-    scratch.readOnly = true;
-    scratch.inputMode = "none";
-    // Off-screen, but NOT hidden: display:none or visibility:hidden makes the
-    // field unselectable and the copy silently copies nothing.
-    scratch.style.position = "fixed";
-    scratch.style.top = "0";
-    scratch.style.left = "0";
-    scratch.style.opacity = "0";
-    scratch.style.pointerEvents = "none";
-    document.body.appendChild(scratch);
-    scratch.select();
-    scratch.setSelectionRange(0, text.length);
-    let copied = false;
-    try {
-      copied = document.execCommand("copy");
-    } catch {
-      copied = false;
-    }
-    scratch.remove();
-    setCopyNote(
-      copied
-        ? `execCommand said yes - ${text.length} chars. Paste into the box below to prove it.`
-        : "execCommand refused - the legacy lane is closed here, so copy needs another route",
-    );
+    void copyThrough(text).then((lane) => {
+      const report = copyReport(lane, `${text.length} characters`);
+      setCopyNote(report.note);
+      if (report.showText) setTakeout({ kind: "text", text, note: report.note });
+    });
+  }
+
+  /**
+   * THE LINKS DOOR (FPLAN-0641): one scan of the whole buffer on a tap, never a
+   * poll. The panel it opens is an overlay, so nothing resizes, nothing fits,
+   * and a live selection is not dropped.
+   */
+  function openLinks() {
+    const xterm = term.current;
+    if (!xterm) return;
+    const buffer = xterm.buffer.active;
+    const rows = readRows(buffer, 0, buffer.length);
+    setLinkNotes({});
+    setTakeout({ kind: "links", urls: recentUrls(findLinks(rows, xterm.cols), PANEL_URLS), rows: rows.length });
+  }
+
+  /** Copy one listed link, and say on its row what the lane said. */
+  function copyLink(url: string) {
+    void copyThrough(url).then((lane) => {
+      const { note } = copyReport(lane, "the link");
+      setLinkNotes((was) => ({ ...was, [url]: note }));
+    });
+  }
+
+  /** Select the whole field on focus, so a long-press offers Copy at once. */
+  function selectAll(event: FocusEvent<HTMLTextAreaElement>) {
+    event.currentTarget.select();
   }
 
   /** A key chip. Same promise as every other control, so the same audit.
@@ -2678,6 +2753,34 @@ export default function TerminalSheet({
               <path d="M9 4h6M9 20h6M12 4v16" />
             </svg>
           </button>
+          {/* THE LINKS DOOR (FPLAN-0641), after select and before the arrows:
+              it changes what you can do with the room, never a byte in it. A
+              thin wrapped URL is a hard target on a six-inch screen, so this
+              lists the room's URLs where a thumb can reach them. */}
+          <button
+            type="button"
+            className="baud-phone-term-viewbtn"
+            disabled={Boolean(refusal)}
+            aria-label="list the links in this room"
+            title={refusal ?? `the room's links - the last ${PANEL_URLS} URLs in the scrollback, each with open and copy`}
+            onClick={openLinks}
+          >
+            {/* A chain, same stroke idiom as the I-beam above. */}
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+          </button>
           {/* THE ARROWS, moved off the belt - see CHIPS_ARROWS for the ruling
               and the ordering.
 
@@ -2707,6 +2810,72 @@ export default function TerminalSheet({
             </HoldButton>
           ))}
         </div>
+        {/* THE TAKEOUT PANEL (FPLAN-0641): an overlay ON the screen at z-index
+            4, above the view column, so the belt does not grow, nothing fits,
+            and a selection is not dropped. Its fields are readOnly with
+            inputMode none - a field to copy out of must not raise a keyboard -
+            and select all on focus, so Android's long-press Copy is one step. */}
+        {takeout ? (
+          <div
+            className="baud-phone-term-takeout"
+            role="dialog"
+            aria-label={takeout.kind === "links" ? "links in this room" : "the selected text"}
+          >
+            <div className="baud-phone-term-takeout-head">
+              <p className="baud-phone-term-takeout-title">
+                {takeout.kind === "links" ? "links in this room" : "copy by hand"}
+              </p>
+              <button type="button" className="baud-phone-term-takeout-key" onClick={() => setTakeout(null)}>
+                close
+              </button>
+            </div>
+            {takeout.kind === "text" ? (
+              <>
+                <p className="baud-phone-term-takeout-note">{takeout.note}</p>
+                <textarea
+                  className="baud-phone-term-takeout-field baud-phone-term-takeout-text"
+                  readOnly
+                  inputMode="none"
+                  aria-label="the selected text"
+                  value={takeout.text}
+                  onFocus={selectAll}
+                />
+              </>
+            ) : takeout.urls.length === 0 ? (
+              <p className="baud-phone-term-takeout-note">
+                no links in this room - read {takeout.rows} rows of scrollback and found no http(s) URL.
+              </p>
+            ) : (
+              <ul className="baud-phone-term-takeout-list">
+                {takeout.urls.map((url) => (
+                  <li key={url} className="baud-phone-term-takeout-row">
+                    {/* The note goes ABOVE the field: it says "the text below". */}
+                    {linkNotes[url] ? <p className="baud-phone-term-takeout-note">{linkNotes[url]}</p> : null}
+                    <textarea
+                      className="baud-phone-term-takeout-field"
+                      readOnly
+                      inputMode="none"
+                      rows={2}
+                      aria-label="the link"
+                      value={url}
+                      onFocus={selectAll}
+                    />
+                    <div className="baud-phone-term-takeout-keys">
+                      {/* A real anchor: the navigation Android honours most
+                          reliably from an installed PWA. */}
+                      <a className="baud-phone-term-takeout-key" href={url} target="_blank" rel="noopener noreferrer">
+                        open
+                      </a>
+                      <button type="button" className="baud-phone-term-takeout-key" onClick={() => copyLink(url)}>
+                        copy
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* THE BELT: the key row and the compose bar, one strip, lifted above

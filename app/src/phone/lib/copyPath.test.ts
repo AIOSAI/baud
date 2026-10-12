@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { copyText, machinePath, underRoot } from "./copyPath";
+import { copyReport, copyText, machinePath, underRoot } from "./copyPath";
 
 describe("machinePath", () => {
   it("puts the relative on the end of the floor: /home/alice + app/src/main.ts", () => {
@@ -49,5 +49,27 @@ describe("underRoot", () => {
 describe("copyText", () => {
   it("refuses empty text without touching any clipboard", async () => {
     await expect(copyText("")).resolves.toBe(false);
+  });
+});
+
+describe("copyReport", () => {
+  it("claims a copy only when the clipboard API confirmed it, and hides the manual field", () => {
+    expect(copyReport("clipboard", "the link")).toEqual({
+      note: "copied the link - the clipboard confirmed it",
+      showText: false,
+    });
+  });
+
+  it("calls execCommand's yes unconfirmed and still shows the text to copy by hand", () => {
+    const report = copyReport("legacy", "the link");
+    expect(report.showText).toBe(true);
+    expect(report.note).toMatch(/^the browser says it copied the link, but .* can say that and copy nothing/);
+  });
+
+  it("says not copied on a refusal and shows the text to copy by hand", () => {
+    const report = copyReport("refused", "18 characters");
+    expect(report.showText).toBe(true);
+    expect(report.note).toMatch(/^not copied/);
+    expect(report.note).not.toMatch(/copied 18/);
   });
 });

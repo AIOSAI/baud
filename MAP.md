@@ -101,8 +101,9 @@ row.
 | `lock.ts` | The header lock chip's lane: `GET /v1/lock` every 5 s while the app is looked at, re-read at once and 1 s after a tap, forgotten when the app goes away - and which of four faces (unread, unlocked, locked, unknown) a reading means. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
+| `roomLinks.ts` | Every http(s) URL in a room's rows, joined across soft and hard wraps - the ONE detection behind the terminal's tap-to-open link provider and its links panel. |
 | `push.ts` | The push hook, inert until phase 7. |
-| `lock.test.ts` · `machine.test.ts` · `copyPath.test.ts` | vitest pins of what those modules promise - pure functions only, no DOM, no network. `npm test` runs them. |
+| `lock.test.ts` · `machine.test.ts` · `copyPath.test.ts` · `roomLinks.test.ts` | vitest pins of what those modules promise - pure functions only, no DOM, no network. `npm test` runs them. |
 
 ---
 
