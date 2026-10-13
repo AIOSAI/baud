@@ -12,6 +12,8 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-10-13
+
 ### Added
 
 - **Phone: QR pairing (DPLAN-0406).** A phone that opens the machine's pairing link (`/#pair=<code>`, a QR from the installer's last block or `drone @api host-api pair`) signs itself in. The face removes the code from the address bar and history before the first paint, redeems it once at `POST /v1/pair`, stores the returned token exactly as a pasted one, and proves it with whoami. A stored, working token wins, and the code is not spent. A refused code puts "This pairing code has expired or was already used", with the command for a fresh one, above the paste field, which stays as the fallback. Nothing answering keeps the door's unreachable line. New: `redeemPairing` in the HTTP transport and `phone/lib/pairing.ts` with its tests.
@@ -19,6 +21,9 @@ and every change that lands adds its line there in the same sitting.
 
 ### Changed
 
+- **`AIPASS_VERSION` 2.8.15.** The installer pins the AIPass release that carries the pairing door (`drone @api host-api pair`, `POST /v1/pair`) and the install's closing QR.
+- **`package.json` and `Cargo.toml` carry `license: MIT`**, matching the repo's LICENSE; npm and cargo metadata said nothing before.
+- **`install.sh`: the closing line after a failed `sudo tailscale up` no longer says Tailscale "was skipped".** It now reads "Tailscale is not connected here" and tells the user to install it only if it is missing, which fits both the declined and the failed path.
 - **The Android guide pairs instead of pasting.** Steps 5 and 6 are now "hold your phone up": scan the QR and tap the link. The paste path remains under "When the code has expired".
 - **SECURITY.md: a Pairing entry.** It covers the one-use, five-minute code, sha256 stored, the bearer minted at redeem, no receipt file for a paired token, the same `list-tokens`/`revoke-token`, and that whoever scans the screen within five minutes can pair.
 - **README: the phone signs in by scanning, not pasting.**
@@ -134,7 +139,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/AIOSAI/baud/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/AIOSAI/baud/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/AIOSAI/baud/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/AIOSAI/baud/compare/v0.2.0...v0.2.1

@@ -1,7 +1,8 @@
 {
   "name": "baud",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
+  "license": "MIT",
   "type": "module",
   "description": "BAUD - the AIPass desktop: read-only fleet monitor + the operator's terminal",
   "scripts": {

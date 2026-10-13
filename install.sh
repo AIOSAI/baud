@@ -322,9 +322,9 @@ main() {
 
     if [ -n "$TAILSCALE_DECLINED" ]; then
         say ""
-        say "Tailscale was skipped, so the face listens on this machine only. Your phone"
-        say "needs Tailscale on both sides: install it here, run 'sudo tailscale up', then"
-        say "follow $GUIDE_URL"
+        say "Tailscale is not connected here, so the face listens on this machine only. Your"
+        say "phone needs Tailscale on both sides: install it here if it is missing, run"
+        say "'sudo tailscale up', then follow $GUIDE_URL"
     fi
     say ""
     # aipass install exits 0 even when its phone face step fails, so ask the disk:

@@ -4,15 +4,15 @@ How BAUD is versioned, what a release carries, and the one human step.
 
 ## Versions and releases
 
-BAUD is versioned with semantic versioning. The current version is **0.3.1**,
+BAUD is versioned with semantic versioning. The current version is **0.3.2**,
 declared in three files that must always agree — change one, change all three
 (and `Cargo.lock` and `package-lock.json` record the same number, because CI
 builds `--locked`):
 
 ```
-app/package.json                  "version": "0.3.1"
-app/src-tauri/Cargo.toml          version = "0.3.1"
-app/src-tauri/tauri.conf.json     "version": "0.3.1"   <- what the built binary reports
+app/package.json                  "version": "0.3.2"
+app/src-tauri/Cargo.toml          version = "0.3.2"
+app/src-tauri/tauri.conf.json     "version": "0.3.2"   <- what the built binary reports
 ```
 
 While BAUD is pre-release the version stays on `0.x`, and the leading zero is
@@ -30,7 +30,7 @@ version range in a manifest — is the statement of which BAUD and which AIPass
 are known to work together (Patrick's ruling, 2026-08-12).
 
 **Cutting a release is one human step.** Tags are `v<version>`, so this one is
-`v0.3.1`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`
+`v0.3.2`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`
 does the rest: it runs the test suite, builds with `npm run tauri build` (the
 same command [Running it](desktop.md) calls the deploy), and publishes a GitHub
 release named after the tag with `baud-v<version>-linux-x86_64` and a
