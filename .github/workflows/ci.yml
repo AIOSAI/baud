@@ -44,8 +44,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -76,7 +76,7 @@ jobs:
       run:
         working-directory: app/src-tauri
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tauri's Ubuntu prerequisites live in one composite action shared with
       # release.yml, so the lane that tests a build and the lane that ships one
@@ -98,7 +98,7 @@ jobs:
       - name: Ensure clippy is present
         run: rustup component add clippy
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           # Cache paths are workspace-relative — `defaults.run.working-directory`
           # does not apply to action inputs.
