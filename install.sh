@@ -145,13 +145,15 @@ print_table() {
 
 APT_UPDATED=""
 
+# DEBIAN_FRONTEND keeps packages like tzdata from asking on the terminal; env
+# carries it through sudo, which drops the caller's environment.
 apt_install() {
     have apt-get || fail "$1 is missing and this is not an apt system; install $1 with your package manager, then run this script again"
     if [ -z "$APT_UPDATED" ]; then
-        as_root apt-get update
+        as_root env DEBIAN_FRONTEND=noninteractive apt-get update
         APT_UPDATED=1
     fi
-    as_root apt-get install -y "$@"
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
 
 # One apt row: its table state, then the package.
@@ -194,12 +196,16 @@ install_missing() {
         curl -fsSL "$CLAUDE_INSTALLER" | bash
         have claude || fail "Claude Code's installer finished but claude is not on PATH"
     fi
+    CLAUDE_SIGNIN_SKIPPED=""
     if ! claude_signed_in; then
         say "Claude Code needs you signed in. Anthropic's own sign-in runs now;"
         say "this script never sees your credentials."
-        ask "Sign in to Claude Code now?" || fail "Claude Code must be signed in; run 'claude auth login', then run this script again"
-        claude auth login </dev/tty >/dev/tty 2>&1 || fail "the Claude Code sign-in did not finish"
-        claude_signed_in || fail "Claude Code still reports signed out"
+        if ask "Sign in to Claude Code now?"; then
+            claude auth login </dev/tty >/dev/tty 2>&1 || fail "the Claude Code sign-in did not finish"
+            claude_signed_in || fail "Claude Code still reports signed out"
+        else
+            CLAUDE_SIGNIN_SKIPPED=1
+        fi
     fi
     TAILSCALE_DECLINED=""
     if [ "$STATE_tailscale" = missing ]; then
@@ -212,7 +218,10 @@ install_missing() {
     if [ -z "$TAILSCALE_DECLINED" ] && ! tailscale_running; then
         say "Tailscale prints a sign-in link: open it, sign in, and come back."
         if ask "Connect this machine to your tailnet now (sudo tailscale up)?"; then
-            as_root tailscale up </dev/tty >/dev/tty 2>&1 || fail "tailscale up did not finish"
+            if ! (as_root tailscale up </dev/tty >/dev/tty 2>&1); then
+                say "tailscale up did not finish; to connect this machine later, run: sudo tailscale up"
+                TAILSCALE_DECLINED=1
+            fi
         else
             TAILSCALE_DECLINED=1
         fi
@@ -248,6 +257,13 @@ print_undo() {
     fi
     say "  rm -rf \"$HOME_DIR\"           # the AIPass home"
     say "  rm -rf \"$HOME/.aipass/baud\"  # the phone face and baud-cli"
+    say "  sudo rm /usr/local/bin/aipass /usr/local/bin/drone  # the global command links"
+    say "  in ~/.bashrc, delete the '# AIPass — cross-project access' lines (export AIPASS_HOME=...)"
+    say "    and the block from '# >>> AIPass boot shim >>>' to '# <<< AIPass boot shim <<<' (also in ~/.zshrc, if you have one)"
+    say "  in ~/.claude/settings.json, remove the AIPass hooks, the AIPASS_HOME env entry, the permission rules and the includeGitInstructions value setup.sh added"
+    say "  rm \"$HOME/.claude/commands/memo.md\"  # the /memo command setup.sh added"
+    say "  rm -rf \"$HOME/.secrets/aipass\"  # the .env for API keys"
+    say "  rm \"$HOME/.aipass/trusted_projects.json\"  # the hook trust registry"
     say "Claude Code, Tailscale and apt packages stay; remove them with their own tools."
 }
 
@@ -310,7 +326,18 @@ main() {
         say "follow $GUIDE_URL"
     fi
     say ""
-    say "BAUD $BAUD_TAG is installed in $HOME_DIR."
+    # aipass install exits 0 even when its phone face step fails, so ask the disk:
+    # the face's marker is written last and swapped in whole (aipass baud unpack).
+    if [ -f "$HOME/.aipass/baud/phone/.baud-phone.json" ]; then
+        say "BAUD $BAUD_TAG is installed in $HOME_DIR."
+    else
+        say "AIPass is installed in $HOME_DIR; the BAUD phone face is not (see above)."
+        say "  Retry: aipass baud install --tag $BAUD_TAG"
+    fi
+    say "Phone guide: $GUIDE_URL"
+    if [ -n "$CLAUDE_SIGNIN_SKIPPED" ]; then
+        say "Claude Code is not signed in: run 'claude auth login' before running 'claude' in $HOME_DIR."
+    fi
     say "If a new terminal cannot find aipass or claude, add \$HOME/.local/bin to your PATH."
     print_undo
 }

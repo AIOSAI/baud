@@ -12,6 +12,21 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-10-13
+
+### Fixed
+
+- **`install.sh`: apt never prompts.** apt runs with `DEBIAN_FRONTEND=noninteractive`, carried through sudo, so tzdata no longer stops a terminal install to ask for a timezone.
+- **`install.sh`: a failed `tailscale up` no longer stops the install.** It prints one line saying to run `sudo tailscale up` later and continues as if Tailscale was skipped.
+- **`install.sh`: the closing line tells the truth about the phone face.** It checks the face on disk and, when it is absent, says AIPass is installed but the face is not, with the retry command.
+- **`install.sh`: the phone guide URL prints in every ending**, not only when Tailscale was skipped.
+- **`install.sh`: the undo list names what `setup.sh` wrote**: the `/usr/local/bin` links, the `~/.bashrc` lines, the `~/.claude/settings.json` hooks, env entry, permission rules and `includeGitInstructions` value, `~/.claude/commands/memo.md`, `~/.secrets/aipass` and `~/.aipass/trusted_projects.json`.
+- **`install.sh`: Claude Code sign-in is skippable.** Answering no continues the install, and the closing block says to run `claude auth login` before `claude`.
+
+### Changed
+
+- **`install.sh` is stamped to AIPass 2.8.14** (`AIPASS_VERSION`), up from 2.8.13.
+
 ## [0.3.0] — 2026-10-13
 
 The first release a stranger installs: one line, `install.sh`, stamped to this tag and to AIPass **2.8.13**, the first `aipass` whose `install` takes `--baud-tag` and ends on the phone step.
@@ -107,7 +122,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/AIOSAI/baud/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/AIOSAI/baud/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/AIOSAI/baud/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AIOSAI/baud/compare/v0.1.0...v0.2.0
