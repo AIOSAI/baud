@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-13
+
+The first release a stranger installs: one line, `install.sh`, stamped to this tag and to AIPass **2.8.13**, the first `aipass` whose `install` takes `--baud-tag` and ends on the phone step.
+
 ### Added
 
 - **Phone: links in a room open on a tap**, and a links panel lists the room's URLs with open and copy; a copy says whether it landed and shows the text to copy by hand when it cannot know.
@@ -103,7 +107,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/AIOSAI/baud/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/AIOSAI/baud/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AIOSAI/baud/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AIOSAI/baud/releases/tag/v0.1.0
