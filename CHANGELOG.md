@@ -4,7 +4,7 @@ All notable changes to BAUD will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and BAUD follows [Semantic Versioning](https://semver.org/). A release is the git
-tag `v<version>`. The README's "Versions and releases" section covers the scheme
+tag `v<version>`. `docs/releases.md` covers the scheme
 and how a release is cut. Everything since the last tag sits under Unreleased,
 and every change that lands adds its line there in the same sitting.
 
@@ -16,6 +16,8 @@ and every change that lands adds its line there in the same sitting.
 
 - **Phone: links in a room open on a tap**, and a links panel lists the room's URLs with open and copy; a copy says whether it landed and shows the text to copy by hand when it cannot know.
 - **Phone: a BAT card on the monitor wheel.** The battery's charge with a ring, a mark when plugged in, and warm or hot only against the low and critical lines the host publishes while discharging; its sheet shows state, time left and those lines.
+- **The front door: `install.sh`.** One line installs BAUD with AIPass on a Linux x86_64 machine. It checks what is there, installs what is missing with your yes, and ships with each release stamped to that release, sums checked.
+- **The README is the page a stranger reads.** The operator's documentation moved verbatim to `docs/` (architecture, desktop, headless, development, phone, releases, history); `docs/phone-setup-android.md` and `CONTRIBUTING.md` are new.
 
 ## [0.2.1] — 2026-09-14
 

@@ -1,7 +1,7 @@
 # BAUD — Map
 
 <!-- Breadcrumbs, not documentation: what exists and where to look. Depth lives
-     in README.md (the app's source of truth) and in the files themselves, which
+     in docs/ (the operator's documentation) and in the files themselves, which
      carry their reasoning in their own doc comments. If a line here disagrees
      with the tree, the tree is right and this file is stale — fix it. -->
 
@@ -256,11 +256,22 @@ headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
 | `src/baud/baud/.aipass/` | The branch prompt injected every turn. |
 | `src/baud/baud/apps/` | The `drone @baud` CLI shim. |
 | `src/baud/baud/FPLAN-*.md` | Open plans. Closed ones are listed in `CLOSED_PLANS.local.json`. |
-| `README.md` (root, 2400 lines) | **The app's source of truth.** Every behaviour change lands here in the same sitting. |
+| `README.md` (root) | **The stranger's page:** what BAUD is, what it needs, the one-line install. The operator's documentation now lives under `docs/`. |
+| `install.sh` (root) | The front door, unstamped in the repo; `release.yml` stamps and ships it. |
+| `AIPASS_VERSION` (root) | The pair's pin: the aipass version this release installs. |
+| `CONTRIBUTING.md` | How to contribute: fork, branch off `dev`, PR against `dev`, and the checks CI runs. |
 | `CHANGELOG.md` | Keep a Changelog shape: what each release changed, and the Unreleased lines waiting for the next. Every row that lands adds its line. |
 | `SECURITY.md` | The security model (your machine, your tailnet, per-device tokens, what a token reaches) and how to report. Dated; it moves after the scheduled security session. |
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/phone_input_AS_BUILT_2d744ac.md` | The phone's input system captured at one commit: viewport contract, the intent-reading typing lane, autocorrect, liveness, the one slot, the ended-room rule, known issues. Settings and line anchors, so the state can be rebuilt from the doc. |
+| `docs/architecture.md` | How BAUD reads the fleet, and the three rules everything else follows from. |
+| `docs/desktop.md` | The desktop window: running it, the window, cards, rooms, terminal, settings, camera, the command surface, the layout. |
+| `docs/headless.md` | `baud-cli`, the same answers without a window. |
+| `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
+| `docs/phone.md` | The phone face, screen by screen, row by row as it landed. |
+| `docs/releases.md` | Versions, what a release carries, and the one human step. |
+| `docs/history.md` | How it got here: the milestones and the rounds after them. |
+| `docs/phone-setup-android.md` | The stranger's step-by-step for an Android phone: Tailscale, token, sign in. |
 | `AGENTS.md` · `CLAUDE.md` | The startup protocol for agents working in this repo. |
 | `BAUD_REGISTRY.json` | Machine-managed. Do not hand-edit. |
 | `MAP.md` (root) | This file. |

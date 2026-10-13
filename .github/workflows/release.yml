@@ -18,6 +18,10 @@ name: Release
 # crate built with the gui feature off - the six headless verbs, no window, no
 # GTK linked - for the host API on a machine with no desktop (FPLAN-0589). Its
 # sha256 joins the same SHA256SUMS.txt.
+#
+# And each carries install.sh, the front door a stranger runs (FPLAN-0642),
+# stamped with this tag and the AIPass version in AIPASS_VERSION; its sha256
+# is the last line of the same SHA256SUMS.txt.
 on:
   push:
     tags: ["v*"]
@@ -139,6 +143,34 @@ jobs:
           tar -tzvf "$archive"
           sha256sum "$archive" | tee -a SHA256SUMS.txt
 
+      # The front door (FPLAN-0642). install.sh in the repo carries two placeholders
+      # and refuses to run unstamped; the release stamps its own tag and the AIPass
+      # version this tag ships with (AIPASS_VERSION at the root, bumped by the
+      # release playbook), so a script fetched from a release installs that pair
+      # and no other. The pin is checked against PyPI here: a version PyPI does
+      # not publish fails the release, not a stranger's install.
+      - name: Stamp the installer
+        run: |
+          aipass_version=$(tr -d ' \n' < AIPASS_VERSION)
+          case "$aipass_version" in
+            ''|*[!0-9.]*) echo "AIPASS_VERSION is not a bare version: '$aipass_version'"; exit 1 ;;
+          esac
+          curl -fsS -o /dev/null "https://pypi.org/pypi/aipass/${aipass_version}/json" \
+            || { echo "aipass ${aipass_version} is not published on PyPI"; exit 1; }
+          grep -qx 'BAUD_TAG="@BAUD_TAG@"' install.sh
+          grep -qx 'AIPASS_VERSION="@AIPASS_VERSION@"' install.sh
+          mkdir -p stage
+          sed -e "s/^BAUD_TAG=\"@BAUD_TAG@\"\$/BAUD_TAG=\"${GITHUB_REF_NAME}\"/" \
+              -e "s/^AIPASS_VERSION=\"@AIPASS_VERSION@\"\$/AIPASS_VERSION=\"${aipass_version}\"/" \
+              install.sh > stage/install.sh
+          if grep -q '@BAUD_TAG@\|@AIPASS_VERSION@' stage/install.sh; then
+            echo "a placeholder survived the stamp"; exit 1
+          fi
+          sh -n stage/install.sh
+          shellcheck -s sh stage/install.sh
+          grep -n '^BAUD_TAG=\|^AIPASS_VERSION=' stage/install.sh
+          (cd stage && sha256sum install.sh) | tee -a SHA256SUMS.txt
+
       # `gh` is preinstalled on the runner, so the publish step needs no
       # third-party action and no token beyond the one this workflow was given.
       - name: Publish the release
@@ -151,4 +183,5 @@ jobs:
             "baud-${GITHUB_REF_NAME}-linux-x86_64" \
             "baud-cli-${GITHUB_REF_NAME}-linux-x86_64" \
             "baud-phone-${GITHUB_REF_NAME}.tar.gz" \
+            stage/install.sh \
             SHA256SUMS.txt
