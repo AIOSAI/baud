@@ -12,6 +12,18 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Added
+
+- **Phone: QR pairing (DPLAN-0406).** A phone that opens the machine's pairing link (`/#pair=<code>`, a QR from the installer's last block or `drone @api host-api pair`) signs itself in. The face removes the code from the address bar and history before the first paint, redeems it once at `POST /v1/pair`, stores the returned token exactly as a pasted one, and proves it with whoami. A stored, working token wins, and the code is not spent. A refused code puts "This pairing code has expired or was already used", with the command for a fresh one, above the paste field, which stays as the fallback. Nothing answering keeps the door's unreachable line. New: `redeemPairing` in the HTTP transport and `phone/lib/pairing.ts` with its tests.
+- **`docs/uninstall.md`:** every file and line an install puts on the machine, and how to take each off.
+
+### Changed
+
+- **The Android guide pairs instead of pasting.** Steps 5 and 6 are now "hold your phone up": scan the QR and tap the link. The paste path remains under "When the code has expired".
+- **SECURITY.md: a Pairing entry.** It covers the one-use, five-minute code, sha256 stored, the bearer minted at redeem, no receipt file for a paired token, the same `list-tokens`/`revoke-token`, and that whoever scans the screen within five minutes can pair.
+- **README: the phone signs in by scanning, not pasting.**
+- **`install.sh`: the closing block ends in one undo pointer** to `docs/uninstall.md`, so the pairing QR that `aipass install` prints last stays on an 80x40 screen. A failed install still prints the whole list.
+
 ## [0.3.1] — 2026-10-13
 
 ### Fixed

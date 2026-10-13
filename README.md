@@ -16,7 +16,7 @@ curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | 
 
 ## How it works
 
-Your machine serves the phone face over your own [Tailscale](https://tailscale.com) network. You mint a token on the machine and paste it into the phone once. Nothing passes through our servers, because there are none: no account, no cloud, no telemetry.
+Your machine serves the phone face over your own [Tailscale](https://tailscale.com) network. You scan a QR the machine shows, once, and the phone signs itself in. Nothing passes through our servers, because there are none: no account, no cloud, no telemetry.
 
 ## What it needs
 
@@ -44,11 +44,11 @@ sha256sum -c --ignore-missing SHA256SUMS.txt
 sh install.sh
 ```
 
-The script prints what the machine has, installs what is missing with your yes, installs the `aipass` CLI from PyPI, and runs `aipass install`. That step clones AIPass and lands this release's phone face. The script never overwrites an existing `AIPass` folder, and at the end it prints how to undo everything.
+The script prints what the machine has, installs what is missing with your yes, installs the `aipass` CLI from PyPI, and runs `aipass install`. That step clones AIPass and lands this release's phone face. The script never overwrites an existing `AIPass` folder, and [docs/uninstall.md](docs/uninstall.md) says how to undo everything it did.
 
 ## First run on your phone
 
-The installer's last lines tell you how to get your token to the phone and where to sign in. The step-by-step guide for Android is [docs/phone-setup-android.md](docs/phone-setup-android.md).
+The installer ends with a QR code. Point your phone's camera at it, tap the link, and the phone signs itself in. The code works once, for five minutes; `drone @api host-api pair phone --scope operate` makes a fresh one. The step-by-step guide for Android is [docs/phone-setup-android.md](docs/phone-setup-android.md).
 
 ## Security
 

@@ -15,17 +15,46 @@ import ReactDOM from "react-dom/client";
 
 import PhoneApp from "./PhoneApp";
 import TokenDoor from "./TokenDoor";
-import { readToken, verifyToken, writeToken } from "../host/transport.http";
+import { type Arrival, PAIR_EXPIRED, addressWithoutFragment, arrive, isPairLink, pairCodeFrom } from "./lib/pairing";
+import { readToken, redeemPairing, verifyToken, writeToken } from "../host/transport.http";
 // Tokens first - the phone is coloured by the same custom properties as the
 // desktop, which is why it looks like BAUD without one line of new palette.
 import "../tokens/tokens.generated.css";
 import "../theme.css";
 import "./phone.css";
 
+/**
+ * THE PAIR LINK, read once, before the first paint (DPLAN-0406). The machine's
+ * QR opens `/#pair=<code>`; the code leaves the address bar and the history row
+ * here, before React mounts, so no screen, reload or back button shows it again.
+ */
+function takePairCode(): string | null {
+  const { hash, pathname, search } = window.location;
+  if (!isPairLink(hash)) return null;
+  window.history.replaceState(null, "", addressWithoutFragment(pathname, search));
+  return pairCodeFrom(hash);
+}
+
+/**
+ * The redeem, started at module load and never again. A code is ONE USE, and
+ * StrictMode runs every effect twice in development: a redeem inside an effect
+ * would spend the code on the first run and show "expired" on the second.
+ * One promise, made here, that the effect below only listens to.
+ */
+const PAIR_CODE = takePairCode();
+const PAIRING: Promise<Arrival> | null = PAIR_CODE
+  ? arrive(PAIR_CODE, { readToken, writeToken, verifyToken, redeemPairing })
+  : null;
+
 function Face() {
   // A token in storage means "connected" optimistically; the first poll
-  // proves it, and a 401 sends us straight back to the door.
-  const [connected, setConnected] = useState(() => readToken() !== null);
+  // proves it, and a 401 sends us straight back to the door. A pair link in
+  // flight decides first: until it answers, no poll may run on a token it is
+  // about to replace.
+  const [connected, setConnected] = useState(() => PAIRING === null && readToken() !== null);
+  const [pairing, setPairing] = useState(PAIRING !== null);
+  /** How a pair link ended when it did not open the face; the door says it. */
+  const [arrival, setArrival] = useState<Arrival | null>(null);
   const [label, setLabel] = useState("");
   // The token's scope decides whether verbs fire or explain themselves. It is
   // the SERVER's answer from /v1/whoami, never a guess from the client - and
@@ -64,7 +93,9 @@ function Face() {
    */
   useEffect(() => {
     const stored = readToken();
-    if (!stored) return;
+    // Not while the door is up: a pair link in flight owns the token store
+    // until it answers, and a signed-out face has nothing to ask about.
+    if (!stored || !connected) return;
     void verifyToken(stored)
       .then((who) => {
         setLabel(who.label ?? "");
@@ -83,9 +114,50 @@ function Face() {
       .finally(() => setScopeKnown(true));
   }, [connected]);
 
+  /**
+   * The pair link's answer. Opened means the face signs itself in exactly as a
+   * door that proved a paste does; anything else is carried to the door.
+   */
+  useEffect(() => {
+    if (!PAIRING) return;
+    let live = true;
+    void PAIRING.then((ended) => {
+      if (!live) return;
+      if (ended.kind === "open") {
+        setLabel(ended.who.label);
+        setScope(ended.who.scope);
+        setScopeKnown(true);
+        setConnected(true);
+      } else {
+        setArrival(ended);
+      }
+      setPairing(false);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  if (pairing) {
+    return (
+      <main className="baud-phone-door">
+        <h1 className="baud-phone-door-title">BAUD</h1>
+        <p className="baud-phone-door-line">pairing this phone…</p>
+      </main>
+    );
+  }
+
   if (!connected) {
     return (
       <TokenDoor
+        pairNotice={
+          arrival?.kind === "expired"
+            ? PAIR_EXPIRED
+            : arrival?.kind === "refused"
+              ? `the server refused the pairing — ${arrival.message}`
+              : null
+        }
+        arrivedUnreachable={arrival?.kind === "unreachable" ? arrival.message : null}
         onOpen={(who, granted) => {
           setLabel(who);
           setScope(granted);
@@ -105,6 +177,8 @@ function Face() {
       scopeKnown={scopeKnown}
       onSignOut={() => {
         writeToken(null);
+        // A sign-out is a fresh door: the pair link's old answer is not news.
+        setArrival(null);
         setConnected(false);
       }}
     />

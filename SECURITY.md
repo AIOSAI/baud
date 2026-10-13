@@ -24,6 +24,19 @@ today, what a token can reach, and how to report a problem.
   only you can read, by default `~/.secrets/aipass/host_api/<label>.token`, and
   the server keeps only a sha256 hash of it. The phone keeps the token in its
   browser's local storage until you sign out (gear, then sign out).
+- **Pairing puts a token on a phone without anyone moving it.**
+  `drone @api host-api pair <label> --scope operate` (and the installer's last
+  step) shows a QR of the face's address with a pairing code in the fragment.
+  The code is one use and lives five minutes. The server stores only its sha256.
+  When the phone's camera opens the link, the face takes the code out of the
+  address bar and history, then trades it at `POST /v1/pair` for a bearer token
+  minted at that moment. A paired token has **no receipt file**: the phone holds
+  the only copy and the server holds its hash. `list-tokens` shows it and
+  `revoke-token` revokes it like any other. A code that is unknown, expired or
+  already used gets one and the same refusal, and tries are rate-limited per
+  address. **Whoever scans or photographs the screen inside those five minutes
+  can pair**, so run it when you are ready to scan, and do not share a screenshot
+  of it. This is the path that keeps a token out of chats and email.
 - **There are two scopes.** A `read` token can see the fleet, the feed, files,
   git, the machine's vitals and watch rooms. An `operate` token can also act: it
   runs verbs, uploads photos and opens a real terminal on the machine as your

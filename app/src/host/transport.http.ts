@@ -766,6 +766,40 @@ export async function verifyToken(token: string): Promise<{ id: string; label: s
   }
 }
 
+/**
+ * Trade a pairing code for a bearer (DPLAN-0406; contract
+ * devpulse/docs.local/contract_pairing_door_2026-10-13.md).
+ *
+ * `POST /v1/pair` is the one route without a bearer, so this is a fetch of its
+ * own rather than a `call`: `call` refuses before the wire when no token is
+ * held, which is exactly the state a pairing phone is in. Its failures keep
+ * the door's two apart like every other fetch here: nothing answered is
+ * `unreachable`; an answer is the server's own words through `errorFrom`, a
+ * 401 for a code that is unknown, expired or used (one answer for all three),
+ * a 429 for too many tries.
+ */
+export async function redeemPairing(code: string): Promise<{ token: string; id: string; label: string; scope: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}/v1/pair`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ code }),
+    });
+  } catch (cause) {
+    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
+  }
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) throw errorFrom(body, response.status);
+  // A 200 with no token is a failure that looks like a success: the code is
+  // spent and nothing could be stored. Say so rather than open on nothing.
+  if (typeof body?.token !== "string" || !body.token) {
+    throw new HostError(502, "no_token", "the pairing answered but carried no token - pair again");
+  }
+  return body;
+}
+
 /** Hand a URL to the phone's browser - `window.open` is the whole binding. */
 export function openExternal(url: string): Promise<void> {
   window.open(url, "_blank", "noopener,noreferrer");

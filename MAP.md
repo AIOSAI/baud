@@ -104,6 +104,7 @@ row.
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
 | `roomLinks.ts` | Every http(s) URL in a room's rows, joined across soft and hard wraps - the ONE detection behind the terminal's tap-to-open link provider and its links panel. |
 | `push.ts` | The push hook, inert until phase 7. |
+| `pairing.ts` | The pair link, read and stripped from the address bar, and the one arrival decision (a stored token wins, the code is redeemed once, refused and unreachable kept apart), pure, with the fetches injected; plus `pairing.test.ts`. |
 | `lock.test.ts` · `machine.test.ts` · `battery.test.ts` · `copyPath.test.ts` · `roomLinks.test.ts` | vitest pins of what those modules promise - pure functions only, no DOM, no network. `npm test` runs them. |
 
 ---

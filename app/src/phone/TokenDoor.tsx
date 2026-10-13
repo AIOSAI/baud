@@ -17,6 +17,14 @@
  *
  * Collapsing those into "login failed" would send the operator to re-mint a
  * token that was never the problem.
+ *
+ * THE PAIR DOOR ARRIVES HERE TOO (DPLAN-0406). A phone that scanned the
+ * machine's QR is signed in by main.tsx before this door is drawn; it only
+ * lands here when the pairing did not work, and then it brings what happened:
+ * `pairNotice` (the server refused the code) sits above the paste field, and
+ * `arrivedUnreachable` opens the door already showing the unreachable line.
+ * The two stay apart for the same reason as above. The paste field stays in
+ * every case: it is the fallback, never removed.
  */
 
 import { useState } from "react";
@@ -26,13 +34,17 @@ import { HostError, verifyToken, writeToken } from "../host/transport.http";
 interface TokenDoorProps {
   /** A token proved good - the shell may open, with the scope the server granted. */
   onOpen: (label: string, scope: string) => void;
+  /** Why a pair link did not sign this phone in, when the server refused it. */
+  pairNotice?: string | null;
+  /** The unreachable line a pair link's arrival already met. */
+  arrivedUnreachable?: string | null;
 }
 
-export default function TokenDoor({ onOpen }: TokenDoorProps) {
+export default function TokenDoor({ onOpen, pairNotice = null, arrivedUnreachable = null }: TokenDoorProps) {
   const [token, setToken] = useState("");
   const [checking, setChecking] = useState(false);
   const [rejected, setRejected] = useState<string | null>(null);
-  const [unreachable, setUnreachable] = useState<string | null>(null);
+  const [unreachable, setUnreachable] = useState<string | null>(arrivedUnreachable);
 
   async function connect() {
     const raw = token.trim();
@@ -68,6 +80,11 @@ export default function TokenDoor({ onOpen }: TokenDoorProps) {
           and this door is shown before either is known. So it says what is true
           of both, and the scope chip in the header says which one arrived. */}
       <p className="baud-phone-door-line">the fleet, in your pocket</p>
+
+      {/* The server answered the pair link and said no: its kind of failure is
+          a refusal, so it wears the refusal's colour, above the field it
+          sends the operator to. */}
+      {pairNotice ? <p className="baud-phone-door-rejected">{pairNotice}</p> : null}
 
       <label className="baud-phone-door-label" htmlFor="baud-token">
         access token

@@ -1,6 +1,6 @@
 # Setting up BAUD on an Android phone
 
-Your phone reaches BAUD over your own Tailscale network, so the phone and the machine need to be on the same tailnet. This takes about five minutes. You need the installer's last lines from the machine, so keep that terminal open.
+Your phone reaches BAUD over your own Tailscale network, so the phone and the machine need to be on the same tailnet. This takes about five minutes. You need the installer's last block from the machine, so keep that terminal open.
 
 ## Steps
 
@@ -12,23 +12,28 @@ Your phone reaches BAUD over your own Tailscale network, so the phone and the ma
    <!-- screenshot: Android "Connection request" VPN dialog -->
 4. Check that Tailscale says **Connected** and that your machine is in its list of devices.
    <!-- screenshot: Tailscale on Android, Connected, the machine listed -->
-5. On the machine, the installer's last lines show the phone address (it starts with `http://100.`) and the command that mints your phone's token. Run that command there.
-   <!-- screenshot: the terminal's closing lines, address and token command, token value never shown -->
-6. Get the token from the receipt file the command names onto the phone, using the way the installer's last lines describe. Treat it like a password: never paste it into a chat or an email.
-   <!-- screenshot: none (the token is a secret) -->
-7. On the phone, open **Chrome** and type the address from step 5 exactly, including `http://` and the port.
-   <!-- screenshot: Chrome address bar with the tailnet address -->
-8. The BAUD sign-in page opens. Paste the token and tap **sign in**.
-   <!-- screenshot: BAUD sign-in page, token field, sign in button -->
-9. The wheel appears with your agents on it. You are in.
-   <!-- screenshot: the wheel after first sign-in -->
-10. In Chrome's ⋮ menu, tap **Add to Home screen**, so BAUD opens from an icon like an app.
-    <!-- screenshot: Chrome menu, Add to Home screen -->
+5. **Hold your phone up.** The installer's last block on the machine is a QR code under **Pair your phone**. Open the phone's camera and point it at the code. The code works once and expires after five minutes, so do this when you are ready to scan. To pair later, or to pair another phone, run `drone @api host-api pair phone --scope operate` on the machine for a fresh code.
+   <!-- screenshot: the terminal's last block, the QR under "Pair your phone" -->
+6. Tap the link the camera offers. If your camera offers none, use Google Lens or the QR scanner in Android's quick settings.
+   <!-- screenshot: the camera's link prompt over the QR -->
+7. BAUD opens in Chrome, says **pairing this phone…**, and signs itself in. Nothing is typed or pasted.
+   <!-- screenshot: the "pairing this phone…" screen -->
+8. The wheel appears with your agents on it. You are in.
+   <!-- screenshot: the wheel after pairing -->
+9. In Chrome's ⋮ menu, tap **Add to Home screen**, so BAUD opens from an icon like an app.
+   <!-- screenshot: Chrome menu, Add to Home screen -->
+
+## When the code has expired
+
+BAUD's sign-in page says **This pairing code has expired or was already used**. On the machine, run `drone @api host-api pair phone --scope operate` and scan the new code (step 5).
+
+If you cannot scan at all, the sign-in page still takes a pasted token. On the machine, `drone @api host-api issue-token phone --scope operate` writes one to a receipt file it names. Get it onto the phone without a chat or an email, paste it into **access token**, and tap **connect**.
+<!-- screenshot: BAUD sign-in page with the expired line above the token field -->
 
 ## When the page does not load
 
 - **Tailscale is off on one side.** The phone's Tailscale must say Connected. On the machine, `tailscale status` must list the phone. Turn on whichever side is off, then reload.
 - **The machine's API is not running.** The face is served by AIPass's host API on the machine. If the machine restarted, start the API again the way the installer's last lines describe, then reload.
-- **The address is wrong.** It must be the machine's tailnet address (`100.x.y.z`) with the port, starting with `http://`, not `https://`. Copy it from the installer's output or from `tailscale ip -4` on the machine.
-- **The sign-in page says the token is refused.** The token may have been revoked or mistyped. Mint a new one on the machine and paste it again.
+- **The address is wrong.** It must be the machine's tailnet address (`100.x.y.z`) with the port, starting with `http://`, not `https://`. The line under the QR shows it, as does `tailscale ip -4` on the machine.
+- **The sign-in page says the token is refused.** The token may have been revoked or mistyped. Pair again (step 5), or paste a new one.
 - **The phone was lost.** On the machine, `drone @api host-api list-tokens` shows each token, and `drone @api host-api revoke-token <id>` cuts the lost phone off at once.

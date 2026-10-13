@@ -30,6 +30,7 @@ CLAUDE_INSTALLER="https://claude.ai/install.sh"
 TAILSCALE_INSTALLER="https://tailscale.com/install.sh"
 UV_INSTALLER="https://astral.sh/uv/install.sh"
 GUIDE_URL="https://github.com/AIOSAI/baud/blob/main/docs/phone-setup-android.md"
+UNDO_URL="https://github.com/AIOSAI/baud/blob/main/docs/uninstall.md"
 
 # Everything lives in functions and main runs on the last line, so a download
 # cut off halfway runs nothing at all.
@@ -339,7 +340,11 @@ main() {
         say "Claude Code is not signed in: run 'claude auth login' before running 'claude' in $HOME_DIR."
     fi
     say "If a new terminal cannot find aipass or claude, add \$HOME/.local/bin to your PATH."
-    print_undo
+    # One pointer, not the list: aipass install's last block is the pairing QR,
+    # and on an 80x40 terminal the full undo list (16 rows wrapped) would scroll
+    # it off before the phone sees it. The failure path above still prints the
+    # whole list, because no QR is printed when the install stops.
+    say "To undo: $UNDO_URL (your home: $HOME_DIR)"
 }
 
 main "$@"
