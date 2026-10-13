@@ -19,6 +19,10 @@ and every change that lands adds its line there in the same sitting.
 - **The front door: `install.sh`.** One line installs BAUD with AIPass on a Linux x86_64 machine. It checks what is there, installs what is missing with your yes, and ships with each release stamped to that release, sums checked.
 - **The README is the page a stranger reads.** The operator's documentation moved verbatim to `docs/` (architecture, desktop, headless, development, phone, releases, history); `docs/phone-setup-android.md` and `CONTRIBUTING.md` are new.
 
+### Changed
+
+- **Public-day text.** `SECURITY.md` reports vulnerabilities through GitHub's private vulnerability reporting instead of a `[security]` issue, and no page calls the repository private any more (`docs/releases.md`: the version stays on `0.x` while BAUD is pre-release).
+
 ## [0.2.1] — 2026-09-14
 
 ### Added

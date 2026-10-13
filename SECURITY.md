@@ -1,6 +1,6 @@
 # Security
 
-BAUD is a private, pre-release project. This page covers how its security works
+BAUD is a pre-release project on `0.x`. This page covers how its security works
 today, what a token can reach, and how to report a problem.
 
 ## The model
@@ -46,10 +46,7 @@ backported.
 
 ## Reporting a vulnerability
 
-Open an issue on this repository with `[security]` in the title. The repository is private, so only its collaborators can see it.
-<!-- When the repository goes public, replace the line above with this one:
 Do not open a public issue. Report it privately through GitHub's private vulnerability reporting: https://github.com/AIOSAI/baud/security/advisories/new
--->
 
 Say what you did, what happened, and which BAUD build you are on. On the phone,
 that is the gear, then **about**, then the **bundle** and **tree** rows. Leave

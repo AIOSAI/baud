@@ -15,7 +15,7 @@ app/src-tauri/Cargo.toml          version = "0.2.1"
 app/src-tauri/tauri.conf.json     "version": "0.2.1"   <- what the built binary reports
 ```
 
-While the repo is private the version stays on `0.x`, and the leading zero is
+While BAUD is pre-release the version stays on `0.x`, and the leading zero is
 the honest part: the operator-facing surface can still move.
 
 | bump | when |
