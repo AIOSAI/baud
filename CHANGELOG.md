@@ -12,6 +12,12 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-10-13
+
+### Fixed
+
+- **The pairing QR could not be made from `install.sh`** (the owner's test 14, 2026-10-13). `drone` finds the core branches through `AIPASS_HOME`; setup.sh had just written it into `~/.bashrc`, but the script's own shell started before that and never had it, so `drone @api host-api pair phone` answered `Branch '@api' not found in registry` and the run ended on the retry hint instead of the QR. The script now exports `AIPASS_HOME` to the home it just installed before the pause. The retry lines start with that export, since the terminal that ran the one line is in the same position; a new terminal has it from `~/.bashrc`.
+
 ## [0.3.3] — 2026-10-13
 
 ### Changed
@@ -147,7 +153,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/AIOSAI/baud/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/AIOSAI/baud/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/AIOSAI/baud/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/AIOSAI/baud/compare/v0.3.0...v0.3.1

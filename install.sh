@@ -369,16 +369,22 @@ main() {
 
     # The code's five minutes start when it is made, so it waits for the phone.
     if tailscale_running; then
+        # drone finds the core branches through AIPASS_HOME. setup.sh wrote it
+        # into ~/.bashrc a minute ago, but this shell (and the terminal that ran
+        # the one line) started before that, so neither has it (the owner's test
+        # 14, 2026-10-13: "Branch '@api' not found in registry", no QR).
+        export AIPASS_HOME="$HOME_DIR"
         say ""
         say "Press Enter when your phone's camera is ready to scan (the code lasts five minutes)."
         if read -r _ </dev/tty; then
             if ! drone @api host-api pair phone --scope operate; then
                 say "The pairing code could not be made (its reason is above). Start the server and try again:"
+                say "  export AIPASS_HOME=\"$HOME_DIR\"   # this terminal only; a new one has it"
                 say "  drone @api host-api serve --detach"
                 say "  drone @api host-api pair phone --scope operate"
             fi
         else
-            say "Skipped. Later: drone @api host-api pair phone --scope operate"
+            say "Skipped. Later, in a new terminal: drone @api host-api pair phone --scope operate"
         fi
     fi
 }
