@@ -4,14 +4,16 @@
 #   curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- ~/Projects     (installs to ~/Projects/AIPass)
 #
-# What it does, in order, and nothing before you say yes:
+# What it does, in order, and nothing before you press Enter:
 #   1. Checks what this machine has and prints one table: ok / missing / too old.
-#   2. Installs each missing requirement, one at a time, with your yes.
+#   2. Lists what is missing and installs all of it after one Enter; re-running the
+#      script resumes, since the table skips what is present.
 #   3. Installs the aipass CLI from PyPI, at the version this release was built with.
 #   4. Runs `aipass install`, which clones AIPass into <parent>/AIPass (default
 #      $HOME/AIPass) and lands this release's phone face and baud-cli.
-#   5. Ends quietly: aipass prints how to get your token to the phone.
-#   6. Prints how to undo it.
+#   5. Prints the phone guide and how to undo it.
+#   6. When Tailscale is connected, waits for Enter when your phone's camera is
+#      ready, then shows the pairing QR.
 #
 # The careful path - check the script before running it:
 #   curl -fsSLO https://github.com/AIOSAI/baud/releases/latest/download/install.sh
@@ -41,18 +43,9 @@ fail() {
     exit 1
 }
 
-# Every question reads from the terminal, not stdin: stdin is this script when
+# Every pause reads from the terminal, not stdin: stdin is this script when
 # it is piped from curl.
 has_tty() { (: </dev/tty) 2>/dev/null; }
-
-ask() {
-    printf '%s [y/N] ' "$1" >/dev/tty
-    read -r answer </dev/tty || return 1
-    case "$answer" in
-        y | Y | yes | YES) return 0 ;;
-        *) return 1 ;;
-    esac
-}
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -142,7 +135,7 @@ print_table() {
     say ""
 }
 
-# --- phase 2: install what is missing, with a yes each ----------------------
+# --- phase 2: list what is missing, one Enter, then install all of it -------
 
 APT_UPDATED=""
 
@@ -160,11 +153,10 @@ apt_install() {
 # One apt row: its table state, then the package.
 apt_row() {
     [ "$1" = missing ] || return 0
-    ask "Install $2 with apt?" || fail "$2 is required; stopping here, and what was already installed stays"
     apt_install "$2"
 }
 
-# What no yes can fix stops before the first question.
+# What no install can fix stops before the one pause.
 stop_on_uninstallable() {
     if [ "$STATE_platform" != ok ]; then
         fail "BAUD runs on Linux x86_64 only for now; this machine is $(uname -s) $(uname -m)"
@@ -174,26 +166,63 @@ stop_on_uninstallable() {
     fi
 }
 
+# The list the one Enter answers: every missing row with its installer named,
+# then the sign-ins still due.
+print_plan() {
+    PLAN_MISSING=""
+    PLAN_CLAUDE=""
+    PLAN_TAILSCALE=""
+    for state in "$STATE_git" "$STATE_tmux" "$STATE_curl" "$STATE_sha256" "$STATE_python" "$STATE_pyinstaller" "$STATE_claude" "$STATE_tailscale"; do
+        [ "$state" = missing ] && PLAN_MISSING=1
+    done
+    have aipass || PLAN_MISSING=1
+    [ "$STATE_claude_auth" = ok ] || PLAN_CLAUDE=1
+    [ "$STATE_tailscale_up" = ok ] || PLAN_TAILSCALE=1
+    if [ -z "$PLAN_MISSING$PLAN_CLAUDE$PLAN_TAILSCALE" ]; then
+        say "Nothing to install. AIPass and the BAUD phone face will land in $HOME_DIR."
+        say "Press Enter to start, Ctrl-C to stop."
+        return 0
+    fi
+    say "BAUD $BAUD_TAG will install into $HOME_DIR."
+    say "This will install:"
+    [ "$STATE_git" = missing ] && say "  git (apt, with sudo)"
+    [ "$STATE_tmux" = missing ] && say "  tmux (apt, with sudo)"
+    [ "$STATE_curl" = missing ] && say "  curl (apt, with sudo)"
+    [ "$STATE_sha256" = missing ] && say "  coreutils (apt, with sudo)"
+    [ "$STATE_python" = missing ] && say "  python3 and python3-venv (apt, with sudo)"
+    [ "$STATE_pyinstaller" = missing ] && say "  uv (uv's installer, into ~/.local/bin)"
+    [ "$STATE_claude" = missing ] && say "  Claude Code (Anthropic's installer)"
+    [ "$STATE_tailscale" = missing ] && say "  Tailscale (Tailscale's installer, with sudo)"
+    have aipass || say "  the aipass CLI $AIPASS_VERSION (uv or pipx, from PyPI)"
+    say "  AIPass and the BAUD phone face into $HOME_DIR"
+    if [ -n "$PLAN_CLAUDE" ] && [ -n "$PLAN_TAILSCALE" ]; then
+        say "Then two sign-ins run: Claude Code (Anthropic's own sign-in) and Tailscale (it prints a link)."
+    elif [ -n "$PLAN_CLAUDE" ]; then
+        say "Then one sign-in runs: Claude Code (Anthropic's own sign-in)."
+    elif [ -n "$PLAN_TAILSCALE" ]; then
+        say "Then one sign-in runs: Tailscale (it prints a link)."
+    fi
+    say "Press Enter to start, Ctrl-C to stop. Nothing changes until Enter."
+}
+
 install_missing() {
     apt_row "$STATE_git" git
     apt_row "$STATE_tmux" tmux
     apt_row "$STATE_curl" curl
     if [ "$STATE_sha256" = missing ]; then
-        ask "Install coreutils (sha256sum) with apt?" || fail "sha256sum is required; stopping here, and what was already installed stays"
         apt_install coreutils
     fi
     if [ "$STATE_python" = missing ]; then
-        ask "Install python3 with apt?" || fail "python3 is required; stopping here, and what was already installed stays"
         apt_install python3 python3-venv
         python_ok || fail "apt's python3 is older than $PYTHON_FLOOR_MAJOR.$PYTHON_FLOOR_MINOR; install a newer python3, then run this script again"
     fi
     if [ "$STATE_pyinstaller" = missing ]; then
-        ask "Install uv (Astral's own installer, into ~/.local/bin, no sudo)?" || fail "pipx or uv is required to install the aipass CLI"
+        say "Installing uv (Astral's own installer, into ~/.local/bin, no sudo)"
         curl -LsSf "$UV_INSTALLER" | sh
         have uv || fail "uv's installer finished but uv is not on PATH"
     fi
     if [ "$STATE_claude" = missing ]; then
-        ask "Install Claude Code (Anthropic's own installer)?" || fail "Claude Code is required: the agents run in it"
+        say "Installing Claude Code (Anthropic's own installer)"
         curl -fsSL "$CLAUDE_INSTALLER" | bash
         have claude || fail "Claude Code's installer finished but claude is not on PATH"
     fi
@@ -201,30 +230,21 @@ install_missing() {
     if ! claude_signed_in; then
         say "Claude Code needs you signed in. Anthropic's own sign-in runs now;"
         say "this script never sees your credentials."
-        if ask "Sign in to Claude Code now?"; then
-            claude auth login </dev/tty >/dev/tty 2>&1 || fail "the Claude Code sign-in did not finish"
-            claude_signed_in || fail "Claude Code still reports signed out"
-        else
+        if ! claude auth login </dev/tty >/dev/tty 2>&1 || ! claude_signed_in; then
+            say "The Claude Code sign-in did not finish; going on without it."
             CLAUDE_SIGNIN_SKIPPED=1
         fi
     fi
-    TAILSCALE_DECLINED=""
+    TAILSCALE_NOT_UP=""
     if [ "$STATE_tailscale" = missing ]; then
-        if ask "Install Tailscale (its own installer, uses sudo)?"; then
-            curl -fsSL "$TAILSCALE_INSTALLER" | sh
-        else
-            TAILSCALE_DECLINED=1
-        fi
+        say "Installing Tailscale (its own installer, uses sudo)"
+        curl -fsSL "$TAILSCALE_INSTALLER" | sh
     fi
-    if [ -z "$TAILSCALE_DECLINED" ] && ! tailscale_running; then
+    if ! tailscale_running; then
         say "Tailscale prints a sign-in link: open it, sign in, and come back."
-        if ask "Connect this machine to your tailnet now (sudo tailscale up)?"; then
-            if ! (as_root tailscale up </dev/tty >/dev/tty 2>&1); then
-                say "tailscale up did not finish; to connect this machine later, run: sudo tailscale up"
-                TAILSCALE_DECLINED=1
-            fi
-        else
-            TAILSCALE_DECLINED=1
+        if ! (as_root tailscale up </dev/tty >/dev/tty 2>&1); then
+            say "tailscale up did not finish; to connect this machine later, run: sudo tailscale up"
+            TAILSCALE_NOT_UP=1
         fi
     fi
 }
@@ -292,15 +312,16 @@ main() {
     fi
 
     if ! has_tty; then
-        say "No terminal to ask on. This script asks before it installs anything; run it"
+        say "No terminal to pause on. This script pauses once before it installs anything; run it"
         say "from a terminal, or download it and run: sh install.sh $parent"
         exit 2
     fi
 
-    ask "Install BAUD $BAUD_TAG with AIPass into $HOME_DIR?" || {
+    print_plan
+    if ! read -r _ </dev/tty; then
         say "Nothing was changed."
         exit 0
-    }
+    fi
 
     install_missing
     INSTALLED_CLI=""
@@ -320,7 +341,7 @@ main() {
         exit 1
     fi
 
-    if [ -n "$TAILSCALE_DECLINED" ]; then
+    if [ -n "$TAILSCALE_NOT_UP" ]; then
         say ""
         say "Tailscale is not connected here, so the face listens on this machine only. Your"
         say "phone needs Tailscale on both sides: install it here if it is missing, run"
@@ -340,11 +361,26 @@ main() {
         say "Claude Code is not signed in: run 'claude auth login' before running 'claude' in $HOME_DIR."
     fi
     say "If a new terminal cannot find aipass or claude, add \$HOME/.local/bin to your PATH."
-    # One pointer, not the list: aipass install's last block is the pairing QR,
-    # and on an 80x40 terminal the full undo list (16 rows wrapped) would scroll
-    # it off before the phone sees it. The failure path above still prints the
-    # whole list, because no QR is printed when the install stops.
+    # One pointer, not the list: the pairing QR below is the last thing on the
+    # screen, and on an 80x40 terminal the full undo list (16 rows wrapped) would
+    # scroll it off before the phone sees it. The failure path above still prints
+    # the whole list, because no QR is printed when the install stops.
     say "To undo: $UNDO_URL (your home: $HOME_DIR)"
+
+    # The code's five minutes start when it is made, so it waits for the phone.
+    if tailscale_running; then
+        say ""
+        say "Press Enter when your phone's camera is ready to scan (the code lasts five minutes)."
+        if read -r _ </dev/tty; then
+            if ! drone @api host-api pair phone --scope operate; then
+                say "The pairing code could not be made (its reason is above). Start the server and try again:"
+                say "  drone @api host-api serve --detach"
+                say "  drone @api host-api pair phone --scope operate"
+            fi
+        else
+            say "Skipped. Later: drone @api host-api pair phone --scope operate"
+        fi
+    fi
 }
 
 main "$@"
