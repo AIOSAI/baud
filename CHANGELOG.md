@@ -12,6 +12,12 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-10-13
+
+### Changed
+
+- **When no QR prints, the last lines are the whole solution.** Three pasteable lines (the `AIPASS_HOME` export, `serve --detach`, `pair phone --scope operate`) and what to do with the QR they print, no "its reason is above": nobody reads an install's output, they read its end (the owner, test 14). The skipped path (no Enter) prints the same three lines for later.
+
 ## [0.3.4] — 2026-10-13
 
 ### Fixed
@@ -153,7 +159,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/AIOSAI/baud/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/AIOSAI/baud/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/AIOSAI/baud/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/AIOSAI/baud/compare/v0.3.1...v0.3.2

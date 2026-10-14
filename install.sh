@@ -377,14 +377,23 @@ main() {
         say ""
         say "Press Enter when your phone's camera is ready to scan (the code lasts five minutes)."
         if read -r _ </dev/tty; then
+            # The last print is the whole solution, pasteable, never a pointer to
+            # a reason above: nobody reads an install's output, they read its end
+            # (the owner, test 14, 2026-10-13).
             if ! drone @api host-api pair phone --scope operate; then
-                say "The pairing code could not be made (its reason is above). Start the server and try again:"
-                say "  export AIPASS_HOME=\"$HOME_DIR\"   # this terminal only; a new one has it"
+                say ""
+                say "No QR. Paste these three lines into this terminal, then hold your phone up to the QR they print:"
+                say "  export AIPASS_HOME=\"$HOME_DIR\""
                 say "  drone @api host-api serve --detach"
                 say "  drone @api host-api pair phone --scope operate"
+                say "(If the second line refuses because the server is already running, that is fine: the third prints the QR.)"
             fi
         else
-            say "Skipped. Later, in a new terminal: drone @api host-api pair phone --scope operate"
+            say ""
+            say "Skipped. To pair later, paste these three lines into a terminal, then hold your phone up to the QR they print:"
+            say "  export AIPASS_HOME=\"$HOME_DIR\""
+            say "  drone @api host-api serve --detach"
+            say "  drone @api host-api pair phone --scope operate"
         fi
     fi
 }
