@@ -12,7 +12,12 @@ Your phone reaches BAUD over your own Tailscale network, so the phone and the ma
    <!-- screenshot: Android "Connection request" VPN dialog -->
 4. Check that Tailscale says **Connected** and that your machine is in its list of devices.
    <!-- screenshot: Tailscale on Android, Connected, the machine listed -->
-5. **Hold your phone up.** The installer's last block on the machine is a QR code under **Pair your phone**. Open the phone's camera and point it at the code. The code works once and expires after five minutes, so do this when you are ready to scan. To pair later, or to pair another phone, run `drone @api host-api pair phone --scope operate` on the machine for a fresh code.
+5. **Hold your phone up.** The installer's last block on the machine is a QR code under **Pair your phone**. If the install ended without one, its **Server** line says *not answering*: the install could not start the server for you (a machine without systemd, such as a Docker container, is the usual case). Start it and mint the code yourself, in a new terminal or after `exec bash` in the same one so it sees the install's settings:
+   ```
+   drone @api host-api serve --detach
+   drone @api host-api pair phone --scope operate
+   ```
+   Open the phone's camera and point it at the code. The code works once and expires after five minutes, so do this when you are ready to scan. To pair later, or to pair another phone, run `drone @api host-api pair phone --scope operate` on the machine for a fresh code.
    <!-- screenshot: the terminal's last block, the QR under "Pair your phone" -->
 6. Tap the link the camera offers. If your camera offers none, use Google Lens or the QR scanner in Android's quick settings.
    <!-- screenshot: the camera's link prompt over the QR -->

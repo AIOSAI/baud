@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Changed
+
+- **Guide step 5 opens with the no-QR case.** The owner's own run of the public one line in a Docker container (test 13, 2026-10-13) ended with `Server: not answering` and no QR, because a machine without systemd cannot have the server started for it; the guide said "hold your phone up" and nothing said up to what. Step 5 now names that line, the reason, and the two commands that start the server and mint the code (in a new terminal, or after `exec bash`), before the camera.
+
 ## [0.3.2] — 2026-10-13
 
 ### Added
