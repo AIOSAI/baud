@@ -12,8 +12,11 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-10-13
+
 ### Changed
 
+- **`AIPASS_VERSION` 2.8.16.** The installer pins the AIPass release where `aipass install --non-interactive` never mints a pairing code and starts the host API itself on a machine without systemd, so this script's own pause and QR are the one pairing moment.
 - **Guide step 5 opens with the no-QR case.** The owner's own run of the public one line in a Docker container (test 13, 2026-10-13) ended with `Server: not answering` and no QR, because a machine without systemd cannot have the server started for it; the guide said "hold your phone up" and nothing said up to what. Step 5 now names that line, the reason, and the two commands that start the server and mint the code (in a new terminal, or after `exec bash`), before the camera.
 - **`install.sh` asks once.** After the table it lists everything it will install, each row naming its installer and whether it uses sudo, plus the sign-ins still due, and waits for one Enter; then every missing row installs and the Claude Code and Tailscale sign-ins run with no further question. The owner's run of the public one line (test 13, 2026-10-13) asked a yes for git, tmux, curl, uv, Claude Code, its sign-in, Tailscale and `tailscale up`, and an "n" on a required row failed the run. The owner's words: "list all we will be installing, press enter to start install". A sign-in that does not finish is noted and the install goes on; the closing lines name it, as before. Re-running the one line resumes, since the table skips what is present. The script now mints the pairing QR itself, last: after the undo pointer it waits for Enter when the phone's camera is ready, so the code's five minutes no longer run out while the person is still at the Tailscale sign-in. When the code cannot be made, it names the two commands that start the server and try again.
 
@@ -144,7 +147,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/AIOSAI/baud/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/AIOSAI/baud/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/AIOSAI/baud/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/AIOSAI/baud/compare/v0.2.1...v0.3.0
