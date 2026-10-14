@@ -69,6 +69,7 @@ Most of what runs is [AIPass](https://github.com/AIOSAI/AIPass): the agents' ide
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
 - [Architecture](docs/architecture.md): how BAUD reads the fleet, and its three rules.
 - [Development](docs/development.md): building, the palette, the host seam, and the checks.
+- [The install sandbox](docs/sandbox.md): the installer tested in minutes — a saved Docker image, the local script, the local checkout by `git clone`.
 - [Releases](docs/releases.md): versions, and what a release carries.
 - [History](docs/history.md): how it got here.
 - [MAP.md](MAP.md): where every file lives.

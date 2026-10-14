@@ -193,7 +193,13 @@ print_plan() {
     [ "$STATE_pyinstaller" = missing ] && say "  uv (uv's installer, into ~/.local/bin)"
     [ "$STATE_claude" = missing ] && say "  Claude Code (Anthropic's installer)"
     [ "$STATE_tailscale" = missing ] && say "  Tailscale (Tailscale's installer, with sudo)"
-    have aipass || say "  the aipass CLI $AIPASS_VERSION (uv or pipx, from PyPI)"
+    if ! have aipass; then
+        if [ -n "${AIPASS_SOURCE:-}" ]; then
+            say "  the aipass CLI from $AIPASS_SOURCE (uv or pipx; a clone of its committed HEAD — the sandbox)"
+        else
+            say "  the aipass CLI $AIPASS_VERSION (uv or pipx, from PyPI)"
+        fi
+    fi
     say "  AIPass and the BAUD phone face into $HOME_DIR"
     if [ -n "$PLAN_CLAUDE" ] && [ -n "$PLAN_TAILSCALE" ]; then
         say "Then two sign-ins run: Claude Code (Anthropic's own sign-in) and Tailscale (it prints a link)."
@@ -257,7 +263,21 @@ install_aipass_cli() {
         say "  this release was built with aipass $AIPASS_VERSION"
         return 0
     fi
-    if have pipx; then
+    if [ -n "${AIPASS_SOURCE:-}" ]; then
+        # The sandbox (docker/sandbox.sh, DPLAN-0408) points this at a local
+        # checkout. The CLI is built from a CLONE of it, never the directory
+        # itself, so only committed, tracked files cross: no .venv, .trinity,
+        # logs, secrets or uncommitted edits — the committed HEAD, as GitHub
+        # would serve it. git is a row of phase 2, so it is here by now.
+        src_clone="$(mktemp -d "${TMPDIR:-/tmp}/aipass-src.XXXXXX")/aipass"
+        say "Installing aipass from $AIPASS_SOURCE (a clone of its committed HEAD)"
+        git clone --quiet "$AIPASS_SOURCE" "$src_clone" || fail "could not clone $AIPASS_SOURCE; stopping here, and what was already installed stays"
+        if have pipx; then
+            pipx install "$src_clone" || fail "pipx could not install aipass from $AIPASS_SOURCE; stopping here, and what was already installed stays"
+        else
+            uv tool install "$src_clone" || fail "uv could not install aipass from $AIPASS_SOURCE; stopping here, and what was already installed stays"
+        fi
+    elif have pipx; then
         say "Installing aipass $AIPASS_VERSION with pipx"
         pipx install "aipass==$AIPASS_VERSION" || fail "pipx could not install aipass $AIPASS_VERSION; stopping here, and what was already installed stays"
     else
@@ -330,8 +350,12 @@ main() {
     if [ ! -d "$parent" ]; then
         mkdir -p "$parent" || fail "could not create $parent; stopping here, and what was already installed stays"
     fi
-    say "Running aipass install (this clones AIPass into $HOME_DIR)"
-    if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG"; then
+    # Under the sandbox, aipass install clones the local checkout instead of
+    # GitHub (--source; the path is the sandbox's own, no spaces, so one word).
+    src_opt=""
+    [ -n "${AIPASS_SOURCE:-}" ] && src_opt="--source $AIPASS_SOURCE"
+    say "Running aipass install (this clones AIPass into $HOME_DIR${AIPASS_SOURCE:+ from $AIPASS_SOURCE})"
+    if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG" $src_opt; then
         say ""
         say "aipass install stopped. Its own output above names the step."
         say "Already on disk:"
