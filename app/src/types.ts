@@ -313,6 +313,17 @@ export interface NotificationEvent {
   title: string;
   body: string;
   source: string;
+  /**
+   * A MAIL EVENT'S ADDRESS (DPLAN-0414 contract C-A). @ai_mail stamps both
+   * through `send_notification`'s `extra`, which merges them into the event
+   * at its top level: `mail_id` is the message's `id` in the recipient's
+   * `.ai_mail.local/inbox.json`, and `recipient` is that branch's name with no
+   * `@`. Optional, and absent on every wake, dispatch and older mail line -
+   * the phone's bell row is a door to the message only when both are here.
+   * The desktop's Rust struct does not carry them and does not need to.
+   */
+  mail_id?: string;
+  recipient?: string;
 }
 
 /**

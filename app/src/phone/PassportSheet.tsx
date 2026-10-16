@@ -89,6 +89,11 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
    * honest absence IS the render.
    */
   const [certificate, setCertificate] = useState<Record<string, unknown> | null>(null);
+  /** Which ids the operator tapped open to their full length (DPLAN-0414 A#14). */
+  const [fullId, setFullId] = useState<{ citizen: boolean; registry: boolean }>({
+    citizen: false,
+    registry: false,
+  });
   const alive = useRef(true);
 
   useEffect(() => {
@@ -190,8 +195,9 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
    * that a KNOWN DATA WART, and the wart was ours.
    *
    * A registry issues UUIDs; a document shows a serial. First segment upper
-   * case, the WHOLE id on the title attribute - shortened, never invented,
-   * nothing hidden from a long press.
+   * case, the WHOLE id on the title attribute and, since DPLAN-0414, one tap
+   * on the serial away - shortened, never invented, nothing hidden from a
+   * thumb.
    */
   const serialOf = (id: string | null): string | null =>
     id ? id.split("-")[0].toUpperCase() : null;
@@ -315,17 +321,45 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
             </div>
             <div className="baud-pass-field">
               <dt>Passport no.</dt>
+              {/* A TAP SHOWS THE WHOLE ID (DPLAN-0414 A#14). The serial is the
+                  first segment and the full UUID rode only the title, which a
+                  touch screen never shows - so "nothing hidden from a long
+                  press" was true on a desk and false here. The short serial is
+                  now a button that swaps to the full id and back. No id, no
+                  button: UNISSUED has nothing behind it. The title stays. */}
               <dd
                 className="baud-pass-serial"
                 title={citizenId ?? "no citizen id on this passport yet — @spawn stamps it"}
               >
-                {serialOf(citizenId) ?? "UNISSUED"}
+                {citizenId ? (
+                  <button
+                    type="button"
+                    className="baud-pass-serial-door"
+                    aria-label={fullId.citizen ? "show the short passport number" : "show the full citizen id"}
+                    onClick={() => setFullId((was) => ({ ...was, citizen: !was.citizen }))}
+                  >
+                    {fullId.citizen ? citizenId : serialOf(citizenId)}
+                  </button>
+                ) : (
+                  "UNISSUED"
+                )}
               </dd>
             </div>
             <div className="baud-pass-field">
               <dt>Branch reg no.</dt>
               <dd className="baud-pass-serial" title={registryId ?? "no registry id on this passport"}>
-                {serialOf(registryId) ?? "UNREGISTERED"}
+                {registryId ? (
+                  <button
+                    type="button"
+                    className="baud-pass-serial-door"
+                    aria-label={fullId.registry ? "show the short registry number" : "show the full registry id"}
+                    onClick={() => setFullId((was) => ({ ...was, registry: !was.registry }))}
+                  >
+                    {fullId.registry ? registryId : serialOf(registryId)}
+                  </button>
+                ) : (
+                  "UNREGISTERED"
+                )}
               </dd>
             </div>
           </dl>

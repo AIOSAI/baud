@@ -1150,9 +1150,15 @@ export default function FleetWheel({
           served as a confident count of zero. Both are said in the same quiet
           voice: an unshipped lane and an empty wheel are equally not-a-fault,
           and the one thing neither may do is look like an alarm. */}
+      {/* THE DETAIL IS ON THE FACE NOW (DPLAN-0414 A#14). It was "one
+          long-press away" in a title, and a touch screen never shows a title -
+          so "roster unavailable" stood alone with its reason unreachable. The
+          short word keeps its place and the reason sits under it, smaller,
+          in the same quiet voice. The title stays. */}
       {held === 0 ? (
         <p className="baud-wheel-empty" title={blocked?.detail}>
           {blocked?.line ?? wheel.empty}
+          {blocked?.detail ? <span className="baud-wheel-empty-why">{blocked.detail}</span> : null}
         </p>
       ) : null}
     </div>

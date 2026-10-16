@@ -38,6 +38,7 @@ import { notificationsFeed } from "../host";
 import { HostError } from "../host/transport.http";
 import type { NotificationEvent } from "../types";
 import { FEED_WINDOW, mergeEvents } from "./lib/feed";
+import { mailAddress } from "./lib/inbox";
 import { onPushedEvent } from "./lib/push";
 import { whileVisible } from "./lib/whileVisible";
 
@@ -52,9 +53,21 @@ interface FeedScreenProps {
   /** Clear: the newest timestamp currently ON SCREEN, handed up to be kept. */
   onClear: (upTo: string) => void;
   onClose: () => void;
+  /**
+   * Open the message a mail row announces (DPLAN-0414 A#2, contract C-A).
+   *
+   * The owner, on the bell: "rly annoying, I click a sent email, it completely
+   * cut off". The row's body is @ai_mail's preview - subject and the first 100
+   * characters - and it stays that size, because this feed is read whole on
+   * every poll and is the wrong store for whole letters. So the row becomes a
+   * DOOR instead: a mail event carrying `mail_id` and `recipient` opens that
+   * message, full text, in the inbox screen. A row without both keys (wake,
+   * dispatch, any mail line written before C-A) is the plain row it was.
+   */
+  onOpenMail: (recipient: string, mailId: string) => void;
 }
 
-export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose }: FeedScreenProps) {
+export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOpenMail }: FeedScreenProps) {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [gap, setGap] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,14 +151,38 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose }: Fe
       ) : null}
 
       <ol className="baud-phone-events">
-        {visible.map((event) => (
-          <li key={`${event.ts}/${event.title}`} className="baud-phone-event">
-            <span className={`baud-phone-event-kind baud-phone-kind-${kindClass(event.kind)}`}>{event.kind}</span>
-            <span className="baud-phone-event-title">{event.title}</span>
-            <span className="baud-phone-event-age">{relativeAge(event.ts).label}</span>
-            {event.body ? <p className="baud-phone-event-body">{event.body}</p> : null}
-          </li>
-        ))}
+        {visible.map((event) => {
+          const address = mailAddress(event);
+          if (!address) {
+            return (
+              <li key={`${event.ts}/${event.title}`} className="baud-phone-event">
+                <span className={`baud-phone-event-kind baud-phone-kind-${kindClass(event.kind)}`}>{event.kind}</span>
+                <span className="baud-phone-event-title">{event.title}</span>
+                <span className="baud-phone-event-age">{relativeAge(event.ts).label}</span>
+                {event.body ? <p className="baud-phone-event-body">{event.body}</p> : null}
+              </li>
+            );
+          }
+          /* THE SAME ROW, AS A BUTTON. The grid lives on the button so the row
+             looks exactly like its neighbours; the body is a `span` because a
+             `<p>` may not sit inside a button, and a grid item is a block
+             either way. The `›` says it opens. */
+          return (
+            <li key={`${event.ts}/${event.title}`}>
+              <button
+                type="button"
+                className="baud-phone-event baud-phone-event-door"
+                title={`open this message in ${address.recipient}'s inbox`}
+                onClick={() => onOpenMail(address.recipient, address.mailId)}
+              >
+                <span className={`baud-phone-event-kind baud-phone-kind-${kindClass(event.kind)}`}>{event.kind}</span>
+                <span className="baud-phone-event-title">{event.title}</span>
+                <span className="baud-phone-event-age">{relativeAge(event.ts).label} ›</span>
+                {event.body ? <span className="baud-phone-event-body">{event.body}</span> : null}
+              </button>
+            </li>
+          );
+        })}
       </ol>
     </section>
   );

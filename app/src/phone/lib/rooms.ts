@@ -143,6 +143,13 @@ export interface RoomDoor {
   mode: LaunchMode;
   label: string;
   title: string;
+  /**
+   * This door STOPS A WORKING AGENT before it opens (DPLAN-0414 A#12). The
+   * card shows `title` as a visible line and asks for a second tap
+   * (`intercept.ts`), because a touch screen never shows a title. Absent on
+   * every other door.
+   */
+  intercept?: true;
 }
 
 /**
@@ -181,6 +188,7 @@ export function roomDoors(branch: BranchStatus): RoomDoor[] {
       label: "▸ resume ⚡",
       title:
         "INTERCEPT: stop the working agent, then continue in its chat - the job ends, the conversation survives",
+      intercept: true,
     });
   } else if (canResume(branch) && !branch.dispatched) {
     doors.push({

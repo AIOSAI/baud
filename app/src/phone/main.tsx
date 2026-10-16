@@ -46,6 +46,19 @@ const PAIRING: Promise<Arrival> | null = PAIR_CODE
   ? arrive(PAIR_CODE, { readToken, writeToken, verifyToken, redeemPairing })
   : null;
 
+/**
+ * THE DEPLOY RECORD STAYS IN THE BUNDLE (FPLAN-0446; DPLAN-0414 A#1).
+ *
+ * The About screen's tree row is gone at the owner's word, and it was the only
+ * source that named `__BAUD_TREE__`. Vite's `define` substitutes where source
+ * names it, so with no reader the `baud-tree` string would vanish from the
+ * served bundle and the deploy check's grep would come back empty. One line
+ * here keeps it: a side effect (so tree-shaking cannot drop it) that no screen
+ * draws. In dev the define does not exist and the guard skips it.
+ */
+declare const __BAUD_TREE__: string | undefined;
+if (typeof __BAUD_TREE__ === "string") document.documentElement.dataset.baudTree = __BAUD_TREE__;
+
 function Face() {
   // A token in storage means "connected" optimistically; the first poll
   // proves it, and a 401 sends us straight back to the door. A pair link in

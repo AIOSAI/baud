@@ -1999,7 +1999,9 @@ body {
    "a strange warning??" - and he was right to ask. Amber is this app's
    dispatch colour and its alarm colour, and a lane that simply has not
    shipped yet is neither. The honesty stays in the words and in the
-   long-press detail; only the volume came down. */
+   detail line under them (`.baud-wheel-empty-why`, DPLAN-0414 - it used to
+   be a long-press title, which touch never shows); only the volume came
+   down. */
 
 /* Where a foreign agent lives, under its name on the cross-project wheels.
    Sized well under the name so the card still reads name-first - this is the
@@ -4416,5 +4418,240 @@ body {
   font-size: 0.66rem;
   line-height: 1.5;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------- DPLAN-0414 wave 1: the reads --
+   The plans and inbox screens wear the memory screen's clothes (`baud-mem-*`)
+   on the reader shell; these few rules are only what those two screens say
+   that the memory screen never had to: a head line with the count, a label
+   over each list, and a message read whole. */
+
+/* The count over a list - "25 active plans", "2 unread · 14 total". */
+.baud-list-head {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  color: var(--baud-ink-dim);
+}
+
+/* One labelled list on the plans screen: open, then recently closed. */
+.baud-list-zone {
+  margin-top: 14px;
+}
+
+.baud-list-zone .baud-mem-entries {
+  margin-top: 0;
+}
+
+/* An unread message: the card's edge says it before the word does. */
+.baud-inbox-unread {
+  border-color: var(--baud-green);
+}
+
+/* A message, read whole. The head is the reader's sticky bar's sibling, not a
+   second sticky bar - one thing pinned to the top of a phone is enough. */
+.baud-inbox-message-head {
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: 0;
+}
+
+.baud-inbox-message-subject {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--baud-ink);
+  overflow-wrap: anywhere;
+}
+
+.baud-inbox-message-meta {
+  margin: 4px 0 0;
+  font-size: 0.64rem;
+  color: var(--baud-ink-faint);
+}
+
+/* A bell row that opens its message: the same row, as a button. Everything the
+   row's own rule sets stays; only a button's own chrome comes off. */
+.baud-phone-event-door {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--baud-line);
+  border-radius: 0;
+  padding: 0 0 calc(var(--baud-gap) / 2);
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+/* ---------------------------------------------- markdown, drawn (A#23) --
+   A README in the reader. Sized to the reader's own text so a document and a
+   file feel like one face; headings step up a little, code keeps the mono
+   block the plain reader uses, and a table scrolls inside itself rather than
+   pushing the page sideways. */
+.baud-phone-md {
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
+  font-size: 0.74rem;
+  line-height: 1.55;
+  color: var(--baud-ink);
+  overflow-wrap: anywhere;
+}
+
+.baud-phone-md h1,
+.baud-phone-md h2,
+.baud-phone-md h3,
+.baud-phone-md h4 {
+  margin: 1.1em 0 0.4em;
+  line-height: 1.3;
+  color: var(--baud-green);
+}
+
+.baud-phone-md h1 {
+  font-size: 1.05rem;
+}
+
+.baud-phone-md h2 {
+  font-size: 0.92rem;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-phone-md h3,
+.baud-phone-md h4 {
+  font-size: 0.8rem;
+}
+
+.baud-phone-md p,
+.baud-phone-md ul,
+.baud-phone-md ol,
+.baud-phone-md blockquote {
+  margin: 0 0 0.8em;
+}
+
+.baud-phone-md ul,
+.baud-phone-md ol {
+  padding-left: 1.3em;
+}
+
+.baud-phone-md a {
+  color: var(--baud-blue);
+}
+
+.baud-phone-md code {
+  font-family: var(--baud-mono);
+  font-size: 0.68rem;
+  color: var(--baud-amber);
+}
+
+.baud-phone-md pre {
+  margin: 0 0 0.8em;
+  padding: 8px 10px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-phone-md pre code {
+  color: var(--baud-ink);
+}
+
+.baud-phone-md blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--baud-line-strong);
+  color: var(--baud-ink-dim);
+}
+
+.baud-phone-md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0 0 0.8em;
+  border-collapse: collapse;
+  font-size: 0.66rem;
+}
+
+.baud-phone-md th,
+.baud-phone-md td {
+  padding: 4px 6px;
+  border: 1px solid var(--baud-line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+
+.baud-phone-md hr {
+  border: 0;
+  border-top: 1px solid var(--baud-line);
+  margin: 1em 0;
+}
+
+/* ------------------------------ reasons said, not hovered (T4, A#11-14) --
+   Every rule below is the verb chips' answer voice (`baud-phone-said`) placed
+   where a title used to be the only carrier of a reason. Touch never shows a
+   title; these lines do. The titles stay for the desk. */
+
+/* Under a door row or the tiles on the agent card. */
+.baud-agent-why {
+  margin: 6px 0 0;
+  padding: 0 2px;
+}
+
+/* The ⚡ door, armed: one more tap fires it. Amber, the dispatch colour, on
+   the door and its line - attention, not failure. */
+.baud-agent-armed {
+  border-color: var(--baud-amber);
+  border-style: solid;
+  color: var(--baud-amber);
+}
+
+.baud-agent-why-armed {
+  color: var(--baud-amber);
+}
+
+/* The lock chip's answer hangs under the chip, outside the header's one slim
+   row, so nothing in that row moves when it appears. */
+.baud-phone-lockwrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.baud-phone-locksaid {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 3;
+  width: max-content;
+  max-width: min(70vw, 36ch);
+  padding: 6px 8px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  font-family: inherit;
+  text-align: left;
+}
+
+/* The roster's reason, under its short word in the empty rail. */
+.baud-wheel-empty-why {
+  display: block;
+  width: min(70vw, 36ch);
+  margin-top: 4px;
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: var(--baud-ink-faint);
+  text-align: center;
+  white-space: normal;
+}
+
+/* The passport serial as a button: the serial's own look, a thumb's target. */
+.baud-pass-serial-door {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
   overflow-wrap: anywhere;
 }

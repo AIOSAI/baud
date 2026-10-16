@@ -16,6 +16,21 @@ and every change that lands adds its line there in the same sitting.
 
 - **Phone: a Backup card on the apps wheel (DPLAN-0411).** `BKP` sits after git and files. Its sheet reads the seated project's store (when each lane last ran, with file counts, and the Drive sync setting, plus store sizes on request) and offers four presses: Snapshot now, Versioned now, Full backup and Sync to Drive. Each press runs through the host API's backup door and shows the command's own summary when it ends. Sync to Drive, and Full backup with Drive on, ask once before sending. The desktop refuses the three backup calls by name.
 - **Phone: the Backup card shows each run's progress and can stop it (DPLAN-0412).** While a lane runs, the sheet shows a bar, files done of total, bytes copied (of the planned bytes when known), time elapsed and the file in flight, for runs started from a terminal or the daemon too; under Full backup it names the sub-lane at work. A running press becomes Stop, which ends the run cleanly without a confirm; a read token is refused it by name. A stopped run reads "stopped" in the dim colour over its summary, not as a red failure, and a Drive run that cannot fit leads with its own sentence ("Drive has 1.4 GB free; this run needs 2.9 GB. Nothing uploaded.") instead of a generic "failed". The desktop refuses the new stop call by name.
+- **Phone: an inbox screen behind the MAIL tile (DPLAN-0414).** The agent card's MAIL tile opens the agent's messages as a list, newest first, with sender, subject, age and an unread mark under a "N unread · M total" head. A tap on a message shows its full text, wrapped, under its subject, sender and time.
+- **Phone: a plans screen behind the PLANS tile (DPLAN-0414).** The PLANS tile opens the agent's active plan count, its open plans and its recently closed plans, each with its id, subject and age, and says "no open plans" or "nothing closed lately" when a list is empty.
+- **Phone: a mail notification opens its message (DPLAN-0414).** A mail row in the feed that carries the message's id and recipient opens that message's full text; back returns to the feed. A message no longer in the inbox says so in one line. Older rows, wakes and dispatches stay as they were.
+
+### Changed
+
+- **Phone: the TODOS tile opens the memory screen on its todos tab (DPLAN-0414)** instead of the raw memory file. The memory door still opens on sessions.
+- **Phone: README and other `.md` files read as formatted documents (DPLAN-0414).** Headings, lists, code blocks, tables and links are drawn; links open in a new tab; raw HTML in a file shows as text. This adds the `marked` package (18.1.1, pinned).
+- **Phone: an empty file says "this file is empty"** instead of showing a blank screen.
+- **Phone: `▸ resume ⚡` asks for a second tap (DPLAN-0414).** The door shows its warning under the room doors; the first tap arms it, and a second tap within four seconds stops the working agent and resumes its chat. Any other tap cancels.
+- **Phone: reasons that lived only in hover text are shown on screen (DPLAN-0414).** The room doors under a read token, the header lock chip's answer, the GIT tile's `n/a`, a refused manager monitor and the cross-project roster's refusal each show their reason as a small line. A tap on a passport number shows the full id.
+
+### Removed
+
+- **Phone: the `tree` row in Settings › About (DPLAN-0414).** The version and bundle rows stay.
 
 ## [0.3.7] — 2026-10-15
 

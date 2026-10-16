@@ -65,6 +65,11 @@ interface ReaderProps {
    * is not the document it draws - and the raw text below is then the render,
    * exactly as it is for every other file on this face.
    *
+   * A SECOND CALLER since DPLAN-0414 (A#23): a `.md` ref is handed
+   * `renderMarkdown`, so a README reads as a document rather than as `#` and
+   * `**`. Same door, same rule - the reader still knows nothing about what it
+   * draws, and the caller decides which files get a renderer.
+   *
    * ABSENT ON EVERY OTHER OPEN, which is what keeps this addition free: with
    * no renderer there is no branch, and the `<pre>` is reached the same way it
    * always was.
@@ -175,10 +180,17 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
       {!error && text === null ? <p className="baud-phone-empty">reading…</p> : null}
       {truncated ? <p className="baud-phone-truncated">truncated by the server — this is the head of the file</p> : null}
 
+      {/* AN EMPTY FILE SAYS SO (DPLAN-0414 A#22). A zero-byte file used to
+          draw an empty `<pre>` under the head, which reads as a screen that
+          never loaded - the real case was @memory's zero-byte certificate.
+          Checked before any renderer: there is nothing for one to draw. */}
+      {text === "" ? (
+        <p className="baud-phone-empty">{target.kind === "diff" ? "this diff is empty" : "this file is empty"}</p>
+      ) : null}
       {/* The designed render first, the file itself if it declined. `?? null`
           rather than a ternary on `render`: a renderer that says no is the
           same case as no renderer at all, and both land on the raw text. */}
-      {text !== null ? (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>) : null}
+      {text ? (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>) : null}
     </section>
   );
 }

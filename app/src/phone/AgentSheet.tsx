@@ -21,13 +21,16 @@ import { gitChanges } from "../host";
 import type { BranchStatus } from "../types";
 import VerbChips from "./VerbChips";
 import { isAwake } from "./FleetWheel";
-import { type LaunchMode, helpCommand, roomDoors } from "./lib/rooms";
+import { INTERCEPT_WINDOW_MS, interceptTap } from "./lib/intercept";
+import { type LaunchMode, type RoomDoor, helpCommand, roomDoors } from "./lib/rooms";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
-/** The files behind the figures, by the names @api's fence takes. */
-const MAIL_FILE = ".ai_mail.local/inbox.json";
-const PLANS_FILE = "DASHBOARD.local.json";
-const TODOS_FILE = ".trinity/local.json";
+/**
+ * The one file this card still opens in the plain reader, by the name @api's
+ * fence takes. The three figures that used to open their raw files (inbox,
+ * dashboard, memory) open designed screens since DPLAN-0414, and those
+ * screens name their own files.
+ */
 const README_FILE = "README.md";
 
 /**
@@ -68,6 +71,20 @@ interface AgentSheetProps {
    * is a door drawn on a wall.
    */
   onRead: (ref: string, title: string, kind: "file") => void;
+  /**
+   * THE THREE FIGURES THAT USED TO OPEN RAW JSON (DPLAN-0414 A#2; owner 14:04,
+   * "we already do view with memories, already clean read"). Each opens a
+   * designed screen that reads the same file the memory screen's way:
+   *   MAIL  -> the inbox screen (the list, then a message's full text);
+   *   PLANS -> the plans screen (the dashboard's flow section);
+   *   TODOS -> the memory screen with its todos tab in front.
+   * Doors of their own rather than `onRead` kinds, for the GIT tile's reason:
+   * what they open is a screen, not a read. Since then `onRead` carries the
+   * README alone.
+   */
+  onInbox: () => void;
+  onPlans: () => void;
+  onTodos: () => void;
   /**
    * Open THIS branch's changes - the GIT tile's door (Patrick, 08-17).
    *
@@ -164,6 +181,9 @@ export default function AgentSheet({
   branch,
   scope,
   onRead,
+  onInbox,
+  onPlans,
+  onTodos,
   onGit,
   seatedProject,
   onFiles,
@@ -220,6 +240,32 @@ export default function AgentSheet({
     };
   }, [branch.name, branch.project]);
 
+  /**
+   * WHEN THE INTERCEPT DOOR WAS ARMED, or null (DPLAN-0414 A#12; owner 14:29,
+   * "resume ⚡" confirms on a second tap). `▸ resume ⚡` stops a working agent
+   * before it resumes its chat, and its warning was a title a touch screen never
+   * shows. The first tap arms it and says so on the door; a second tap inside
+   * the window fires it (`lib/intercept.ts`). The timer below takes the armed
+   * look away when the window closes, so the door never shows a state the next
+   * tap would not honour. Any other tap on the card disarms (the capture
+   * handler on the card).
+   */
+  const [armedAt, setArmedAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (armedAt === null) return;
+    const timer = window.setTimeout(() => setArmedAt(null), INTERCEPT_WINDOW_MS);
+    return () => window.clearTimeout(timer);
+  }, [armedAt]);
+  const pressDoor = (door: RoomDoor) => {
+    const now = Date.now();
+    if (interceptTap(Boolean(door.intercept), armedAt, now) === "arm") {
+      setArmedAt(now);
+      return;
+    }
+    setArmedAt(null);
+    onAttach(door.mode);
+  };
+
   /** Where this agent lives, when that is not here. */
   const away =
     branch.project && seatedProject && branch.project !== seatedProject ? branch.project : null;
@@ -272,17 +318,19 @@ export default function AgentSheet({
     {
       figure: String(branch.new_mail),
       label: "MAIL",
-      open: () => onRead(`${branch.name}/${MAIL_FILE}`, `${branch.name} · inbox`, "file"),
+      // The figure stays `new_mail`; the inbox screen's head carries the
+      // fuller "N unread · M total".
+      open: onInbox,
     },
     {
       figure: String(branch.active_plans),
       label: "PLANS",
-      open: () => onRead(`${branch.name}/${PLANS_FILE}`, `${branch.name} · dashboard`, "file"),
+      open: onPlans,
     },
     {
       figure: String(branch.todo_count),
       label: "TODOS",
-      open: () => onRead(`${branch.name}/${TODOS_FILE}`, `${branch.name} · memory`, "file"),
+      open: onTodos,
     },
     {
       figure:
@@ -306,6 +354,8 @@ export default function AgentSheet({
   ];
 
   const doors = roomDoors(branch);
+  /** The intercept door on offer, if any - it carries its own sentence. */
+  const intercept = doors.find((door) => door.intercept) ?? null;
 
   return (
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- backdrop dismissal; every control inside is a real button.
@@ -317,7 +367,18 @@ export default function AgentSheet({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="baud-agent-card">
+      <section
+        className="baud-agent-card"
+        // A tap anywhere on the card but the intercept door disarms it - the
+        // brief's "one tap on any other door disarms", caught once here rather
+        // than repeated on every button. Capture, so it runs before the door
+        // that was pressed.
+        onClickCapture={(event) => {
+          if (armedAt !== null && !(event.target as Element).closest?.("[data-intercept]")) {
+            setArmedAt(null);
+          }
+        }}
+      >
         {/* THE HEADER ROW - the name, and in the corner the two doors that
             stopped being doors (Patrick, 08-17: settings and `?` become small
             icons top-right, no full work buttons for them). They are the desk's
@@ -508,6 +569,13 @@ export default function AgentSheet({
             </button>
           ))}
         </div>
+        {/* THE `n/a` SAYS WHY, out loud (DPLAN-0414 A#14). The hint above is a
+            title, and a touch screen never shows one - so the reason, @api's
+            own sentence, also sits here in the verb chips' answer voice. The
+            title stays for the desk-style long press. */}
+        {changes.state === "unavailable" ? (
+          <p className="baud-phone-said baud-agent-why">GIT n/a — {changes.why}</p>
+        ) : null}
 
         <nav className="baud-agent-doors">
           {/* THE WORK DOORS - attach or detach, files, shell, watch, memory, and
@@ -521,7 +589,8 @@ export default function AgentSheet({
           {/* The room doors are the fleet's own judgment, ported in rooms.ts: a
               live room offers exactly ONE door, which is the structural half of
               the double-claude guard. Under a read token they are refused with
-              the reason, never hidden. */}
+              the reason, never hidden - and since DPLAN-0414 the reason is a
+              visible line under this row, not only a title. */}
           {/* DETACH LIVES HERE NOW, and only on the card whose room is below -
               anywhere else it would be a button with nothing to close. It
               REPLACES the attach doors rather than joining them, because "open
@@ -539,18 +608,22 @@ export default function AgentSheet({
               ‹ detach
             </button>
           ) : (
-            doors.map((door) => (
-              <button
-                key={door.label}
-                type="button"
-                className="baud-agent-door baud-agent-go"
-                disabled={Boolean(refusal)}
-                title={refusal ?? door.title}
-                onClick={() => onAttach(door.mode)}
-              >
-                {door.label}
-              </button>
-            ))
+            doors.map((door) => {
+              const armed = Boolean(door.intercept) && armedAt !== null;
+              return (
+                <button
+                  key={door.label}
+                  type="button"
+                  className={`baud-agent-door baud-agent-go ${armed ? "baud-agent-armed" : ""}`}
+                  data-intercept={door.intercept ? "" : undefined}
+                  disabled={Boolean(refusal)}
+                  title={refusal ?? door.title}
+                  onClick={() => pressDoor(door)}
+                >
+                  {armed ? "▸ tap again ⚡" : door.label}
+                </button>
+              );
+            })
           )}
           {/* Files came off the desktop-only list 08-15: it no longer opens a
               file manager ON the machine, it browses the branch through the
@@ -606,6 +679,23 @@ export default function AgentSheet({
             memory
           </button>
         </nav>
+        {/* WHY THE ROOM DOORS ARE QUIET, AND WHAT THE ⚡ DOES - said, not
+            hovered (DPLAN-0414 A#11, A#12). Both sentences already rode the
+            doors' titles, which a touch screen never shows: a dashed door
+            under a read token looked dead, and `▸ resume ⚡` stopped a running
+            job on one tap with its warning unseen. One line, in the verb
+            chips' answer voice; the titles stay. A refusal outranks the
+            intercept sentence - a door that cannot be pressed has nothing to
+            warn about. */}
+        {!isAttachedRoom && refusal ? (
+          <p className="baud-phone-said baud-agent-why">{refusal}</p>
+        ) : !isAttachedRoom && intercept ? (
+          <p className={`baud-phone-said baud-agent-why ${armedAt !== null ? "baud-agent-why-armed" : ""}`}>
+            {armedAt !== null
+              ? `armed — tap ${intercept.label} again within ${INTERCEPT_WINDOW_MS / 1000}s to stop the job and resume; any other tap cancels`
+              : `${intercept.label}: ${intercept.title}`}
+          </p>
+        ) : null}
 
         {/* THE MANAGER ZONE (compass #291). These two doors are the desk's
             global monitors and they spent a round living in the passport,
@@ -636,6 +726,17 @@ export default function AgentSheet({
                 </button>
               ))}
             </nav>
+            {/* A REFUSED MONITOR SAYS WHY ON THE FACE (DPLAN-0414 A#14). The
+                hint above is a title; a dashed door with no visible reason is
+                the dead tap this round removes. Only the refused ones get a
+                line - a live door's hint describes it and needs no echo. */}
+            {monitors
+              .filter((monitor) => !monitor.open)
+              .map((monitor) => (
+                <p key={monitor.id} className="baud-phone-said baud-agent-why">
+                  {monitor.label}: {monitor.hint}
+                </p>
+              ))}
           </section>
         ) : null}
 

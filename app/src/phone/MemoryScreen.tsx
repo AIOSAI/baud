@@ -36,7 +36,7 @@ const MEMORY_TABS = [
   { id: "observations", label: "observations", file: "observations", container: "observations" },
 ] as const;
 
-type MemoryTabId = (typeof MEMORY_TABS)[number]["id"];
+export type MemoryTabId = (typeof MEMORY_TABS)[number]["id"];
 
 /**
  * The text of an entry, whichever of its names this container uses.
@@ -102,13 +102,25 @@ interface MemoryScreenProps {
   /** Which project that branch lives in - browsing is free across projects.
    *  Empty means the seat, the pre-ruling meaning. */
   project: string;
+  /**
+   * The tab in front when the screen opens (DPLAN-0414 A#2). The card's TODOS
+   * tile asks for `todos`: it used to open the raw `.trinity` file, and the
+   * owner's ruling is that the designed read wins wherever one exists. Absent
+   * is the first tab, which is what the memory door has always opened on.
+   */
+  initialTab?: MemoryTabId;
   onClose: () => void;
 }
 
-export default function MemoryScreen({ branch, project, onClose }: MemoryScreenProps) {
+export default function MemoryScreen({
+  branch,
+  project,
+  initialTab = MEMORY_TABS[0].id,
+  onClose,
+}: MemoryScreenProps) {
   const [local, setLocal] = useState<Document>(EMPTY);
   const [observations, setObservations] = useState<Document>(EMPTY);
-  const [tab, setTab] = useState<MemoryTabId>("sessions");
+  const [tab, setTab] = useState<MemoryTabId>(initialTab);
   /** Which entries the operator has opened out of the clamp, by position. */
   const [opened, setOpened] = useState<Record<number, boolean>>({});
   const alive = useRef(true);

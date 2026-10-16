@@ -2134,3 +2134,49 @@ three events over a screen that shows none is the phone telling two stories abou
 one feed. And the button is **absent** rather than disabled when there is nothing
 to clear — this face's own rule, because a disabled button on touch has no hover,
 no title and no answer.
+
+### Designed reads, and reasons said out loud (DPLAN-0414 wave 1)
+
+The owner's full review of the phone face, 2026-10-16, ruled four themes; this
+wave built three of them.
+
+**Three tiles stopped opening raw JSON.** *"we already do view with memories,
+already clean read"* — the memory screen is the pattern: read the agent's own
+file through the named-file lane, parse it on the phone, draw a list. No new
+route, because @api is a gateway (compass #293). **MAIL** opens an inbox screen
+over `.ai_mail.local/inbox.json`: newest first, sender, subject, age, an unread
+mark, and a "N unread · M total" head; a tap opens the message's **full text**,
+wrapped, under its subject, sender and time (*"If clicked the full text should
+show."*). `reply_path`, `sent_id` and `auto_execute` are never drawn. **PLANS**
+opens a plans screen over `DASHBOARD.local.json`'s flow section: the active count,
+the open plans and the recently closed ones, each list stating its own absence. A
+plan row is not yet a door. **TODOS** opens the memory screen on its todos tab.
+
+**The bell row is a door to its message.** A mail notification's body is a
+100-character preview, and it stays one: the feed is read whole on every poll and
+is the wrong store for whole letters. Under contract C-A (devpulse's
+`docs.local/baud_review/CONTRACTS.md`) @ai_mail stamps `mail_id` and `recipient`
+into the event, and a row carrying both opens that message in the recipient's
+inbox screen; back lands on the feed. A message the inbox no longer holds says so
+in one line. Rows without the keys stay plain.
+
+**Markdown is drawn.** A `.md` file — the README behind the card's name first —
+goes through the Reader's `render` door to `marked` (18.1.1, pinned; about 14 KB
+gzipped). Raw HTML in the file is shown as text, only absolute `http(s):` and
+`mailto:` links are live and they open in a new tab, and images are drawn as
+links rather than fetched. An empty file says *this file is empty*.
+
+**Settings › About lost its tree row** (*"Just remove the dirty tree line."*).
+The version and bundle rows stay.
+
+**A title is not a reason on a phone.** Touch never shows `title`, so every
+reason that lived only there is now also a small visible line in the verb chips'
+answer voice; the titles stay for the desk. Under a read token the room doors say
+why they are quiet. The header lock chip prints what the machine answered, or its
+refusal, under itself. The GIT tile's `n/a` prints @api's sentence, a refused
+manager monitor prints its hint, and an empty cross-project wheel prints the
+roster's reason under its short word. A tap on a passport serial shows the full
+id. **`▸ resume ⚡` confirms on a second tap**: its INTERCEPT sentence shows under
+the doors, the first tap arms the door (amber, "tap again"), a second tap within
+four seconds stops the working agent and resumes its chat, and any other tap on
+the card disarms it.

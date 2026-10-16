@@ -115,8 +115,9 @@ export function useFleetPoll(project: string, onSignOut: () => void) {
     } catch (cause) {
       setRoster(null);
       // A 404 here is the ROUTE not existing yet, which is a schedule, not a
-      // fault - so it gets the calm word and keeps the whole reason one
-      // long-press away. Anything else is a real failure and says so in the
+      // fault - so it gets the calm word, with the whole reason as a smaller
+      // line under it on the wheel (DPLAN-0414 A#14: a long-press title never
+      // shows on touch). Anything else is a real failure and says so in the
       // host's own words.
       setRosterRefusal(
         cause instanceof HostError && cause.status === 404

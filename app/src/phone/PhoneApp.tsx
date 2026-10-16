@@ -75,10 +75,14 @@ import FilesScreen from "./FilesScreen";
 import RootsScreen from "./RootsScreen";
 import FleetWheel, { cardRef, openingCard } from "./FleetWheel";
 import GitApp from "./git/GitApp";
+import InboxScreen from "./InboxScreen";
+import { isMarkdownRef } from "./lib/markdown";
 import MachineSheet from "./MachineSheet";
-import MemoryScreen from "./MemoryScreen";
+import { renderMarkdown } from "./Markdown";
+import MemoryScreen, { type MemoryTabId } from "./MemoryScreen";
 import MonitorSheet from "./MonitorSheet";
 import PassportSheet from "./PassportSheet";
+import PlansScreen from "./PlansScreen";
 import PhoneSettings, { scrollPercent } from "./PhoneSettings";
 import Reader, { type ReadTarget } from "./Reader";
 import TerminalSheet from "./TerminalSheet";
@@ -176,7 +180,10 @@ interface OpenPane {
    * question it answers is "which door opened this" - the passport's records
    * door, floored at `artifacts` - and that fact exists only while the browse
    * that opened it exists. Absent on every other file, which is all of them
-   * but one: no flag, no designed render, the Reader prints the text.
+   * but one: no flag, no designed render, the Reader prints the text - or,
+   * since DPLAN-0414, draws it as markdown when the ref ends `.md`. That one
+   * is decided by the NAME at render time, not by this flag: any door may
+   * open a `.md` file, and every one of them should read as a document.
    *
    * NOT PART OF `paneKey`, deliberately. The key is the file's identity and
    * one file is one tab; a key that carried the render would stack a second
@@ -391,7 +398,20 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const [monitorCard, setMonitorCard] = useState<string | null>(null);
   /** Whose working memory is open - the card's `memory` door (compass #291).
    *  By NAME and PROJECT, the same address every read on this face takes. */
-  const [memoryOf, setMemoryOf] = useState<{ name: string; project: string } | null>(null);
+  const [memoryOf, setMemoryOf] = useState<{ name: string; project: string; tab?: MemoryTabId } | null>(
+    null,
+  );
+  /** Whose plans are open - the card's PLANS tile (DPLAN-0414 A#2). Same
+   *  address as `memoryOf`, for the same reason. */
+  const [plansOf, setPlansOf] = useState<{ name: string; project: string } | null>(null);
+  /**
+   * Whose inbox is open - the card's MAIL tile, or a bell row's message
+   * (DPLAN-0414 A#2, contract C-A). `messageId` is set only by the bell: it
+   * opens the screen straight onto that message.
+   */
+  const [inboxOf, setInboxOf] = useState<{ name: string; project: string; messageId?: string } | null>(
+    null,
+  );
   /**
    * EVERY OPEN PANE, not one. Patrick, first session with shells and watches:
    * "I have to detach the shell and attach again to get back to u... watch,
@@ -1091,12 +1111,19 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     project: pane.project,
                     root: pane.root,
                   }}
-                  /* THE ONE DESIGNED RENDER on this face, and it is opt-in per
-                     pane: no flag, no renderer, and the Reader takes the same
-                     `<pre>` path it has always taken. The renderer itself can
-                     still decline - a certificate that will not parse is read
-                     as the text it is. */
-                  render={pane.document === "certificate" ? renderCertificate : undefined}
+                  /* TWO DESIGNED RENDERS, both opt-in per pane. The certificate
+                     rides its flag; a `.md` file is drawn as markdown by its
+                     name (DPLAN-0414 A#23). Anything else gets no renderer, and
+                     the Reader takes the same `<pre>` path it has always taken.
+                     The certificate's renderer can still decline - one that
+                     will not parse is read as the text it is. */
+                  render={
+                    pane.document === "certificate"
+                      ? renderCertificate
+                      : isMarkdownRef(pane.ref ?? "")
+                        ? renderMarkdown
+                        : undefined
+                  }
                   onClose={() => closePane(key)}
                 />
               ) : pane.mode === "watch" ? (
@@ -1187,6 +1214,23 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             // address it names, and naming half an address is how a foreign
             // agent's file becomes a local agent's file.
             setReading({ ref, title, kind, project: expandedCard.project });
+          }}
+          /* THE THREE FIGURES THAT USED TO OPEN RAW JSON (DPLAN-0414 A#2).
+             Each opens its designed screen by name and the card's OWN
+             project, the memory door's address - and TODOS is the memory
+             door itself with the todos tab in front, so the two doors on this
+             card that read `.trinity` cannot draw it two ways. */
+          onInbox={() => {
+            setExpanded(null);
+            setInboxOf({ name: expandedCard.name, project: expandedCard.project });
+          }}
+          onPlans={() => {
+            setExpanded(null);
+            setPlansOf({ name: expandedCard.name, project: expandedCard.project });
+          }}
+          onTodos={() => {
+            setExpanded(null);
+            setMemoryOf({ name: expandedCard.name, project: expandedCard.project, tab: "todos" });
           }}
           /* THE GIT TILE, which used to be an `onRead` of kind `diff` - one
              raw whole-branch patch in the plain reader. Patrick's 08-17 ruling
@@ -1432,12 +1476,31 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           length, and the reader idiom is what this face uses for reading. */}
       {memoryOf ? (
         <MemoryScreen
+          /* KEYED ON THE TAB TOO: the tab in front is read once, at mount, so
+             the TODOS tile and the memory door asking for the same agent must
+             be two mounts rather than one holding the other's tab. */
+          key={`${memoryOf.project}/${memoryOf.name}/${memoryOf.tab ?? ""}`}
           branch={memoryOf.name}
           project={memoryOf.project}
+          initialTab={memoryOf.tab}
           onClose={() => setMemoryOf(null)}
         />
       ) : null}
-      {reading ? <Reader target={reading} onClose={() => setReading(null)} /> : null}
+      {/* PLANS - the card's PLANS tile, the memory screen's shape over the
+          dashboard's flow section (DPLAN-0414 A#2). */}
+      {plansOf ? (
+        <PlansScreen branch={plansOf.name} project={plansOf.project} onClose={() => setPlansOf(null)} />
+      ) : null}
+      {/* A `.md` file is drawn as markdown (DPLAN-0414 A#23) through the
+          Reader's own render door - the README behind the card's name is the
+          case that asked for it. Every other file reads as text. */}
+      {reading ? (
+        <Reader
+          target={reading}
+          render={isMarkdownRef(reading.ref) ? renderMarkdown : undefined}
+          onClose={() => setReading(null)}
+        />
+      ) : null}
       {/* THE GIT APP - a full-height screen over the stage, like every other
           read on this face, so the room underneath keeps its socket and its
           bytes while a diff is being read. It owns its own back stack; this
@@ -1494,6 +1557,31 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           clearedUpTo={clearedUpTo}
           onClear={clearFeed}
           onClose={closeFeed}
+          /* THE BELL ROW'S DOOR (DPLAN-0414 A#2, contract C-A). The event names
+             a recipient by branch and NO project, so the project is looked up
+             the way every card is resolved on this face: the seated census
+             first, then the cross-project roster. A recipient found in
+             neither is read under the seat, the meaning an unnamed project
+             has always had; a wrong guess there cannot show the wrong mail,
+             because the message is matched by its id and a miss says so. */
+          onOpenMail={(recipient, mailId) => {
+            const card = pool.find((each) => each.name === recipient);
+            setInboxOf({ name: recipient, project: card?.project ?? "", messageId: mailId });
+          }}
+        />
+      ) : null}
+      {/* THE INBOX renders AFTER the feed, because the bell is one of its two
+          doors: a message opened off a feed row sits on top of the feed, and
+          its `‹ back` lands there. Opened off the MAIL tile, nothing is under
+          it but the stage. Keyed on the whole address so a second message
+          arriving while one is open is a fresh mount. */}
+      {inboxOf ? (
+        <InboxScreen
+          key={`${inboxOf.project}/${inboxOf.name}/${inboxOf.messageId ?? ""}`}
+          branch={inboxOf.name}
+          project={inboxOf.project}
+          openId={inboxOf.messageId}
+          onClose={() => setInboxOf(null)}
         />
       ) : null}
 

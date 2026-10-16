@@ -219,35 +219,51 @@ export function LockChip({ scope }: { scope: Scope }) {
     }
   }
 
+  /* WHAT THE TAP HEARD, SAID ON THE FACE (DPLAN-0414 A#13 = B#11). Under a
+     read token the tap used to do nothing visible, and under operate the
+     host's answer showed only as the chip's colour change - both sentences
+     lived in the title, which a touch screen never shows. So `said` (the
+     machine's answer, or the refusal) drops under the chip in the verb chips'
+     answer voice, the way their result line prints. It hangs off the chip
+     rather than sitting in the header row, because that row was tuned to one
+     slim line and a sentence in it would move every control beside it. A tap
+     on the line puts it away; the next press replaces it. The title stays. */
   return (
-    <button
-      type="button"
-      className={`baud-phone-lock ${refusal ? "baud-phone-verb-refused" : ""} ${
-        face === "unread" ? "" : `baud-phone-lock-${face}`
-      }`}
-      title={title}
-      onClick={() => void press()}
-    >
-      {busy ? (
-        "…"
-      ) : (
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="3" y="11" width="18" height="11" rx="2" />
-          {/* OPEN: the shackle's right leg lifts clear of the body. Every other
-              face - locked, unknown, unread - is the closed shackle. */}
-          {face === "unlocked" ? <path d="M7 11V7a5 5 0 0 1 9.9-1" /> : <path d="M7 11V7a5 5 0 0 1 10 0v4" />}
-        </svg>
-      )}
-    </button>
+    <span className="baud-phone-lockwrap">
+      <button
+        type="button"
+        className={`baud-phone-lock ${refusal ? "baud-phone-verb-refused" : ""} ${
+          face === "unread" ? "" : `baud-phone-lock-${face}`
+        }`}
+        title={title}
+        onClick={() => void press()}
+      >
+        {busy ? (
+          "…"
+        ) : (
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            {/* OPEN: the shackle's right leg lifts clear of the body. Every other
+                face - locked, unknown, unread - is the closed shackle. */}
+            {face === "unlocked" ? <path d="M7 11V7a5 5 0 0 1 9.9-1" /> : <path d="M7 11V7a5 5 0 0 1 10 0v4" />}
+          </svg>
+        )}
+      </button>
+      {said ? (
+        <button type="button" className="baud-phone-said baud-phone-locksaid" onClick={() => setSaid(null)}>
+          {said}
+        </button>
+      ) : null}
+    </span>
   );
 }
