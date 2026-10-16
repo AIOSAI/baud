@@ -444,6 +444,13 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/backup/status",
     query: (args) => ({ sizes: args.sizes ? 1 : undefined }),
   },
+  // DPLAN-0412. Operate scope, like run, and the same body: `lane` is the verb
+  // that was pressed, never the sub-lane a progress line names.
+  backup_cancel: {
+    path: "/v1/backup/cancel",
+    method: "POST",
+    body: (args) => ({ project: args.project, lane: args.lane }),
+  },
 
   /* ---------------------------------------------------------- settings -- */
   /* The desktop's two gears, reached over /v1. Reads ride the read scope,

@@ -1,15 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import type { BackupStatus } from "../../types";
+import type { BackupProgress, BackupRunning, BackupStatus } from "../../types";
 import {
   BACKUP_BUTTONS,
+  CURRENT_TAIL,
   JOB_FORGOTTEN,
+  NOTHING_UPLOADED,
   STATUS_LANES,
+  backupBytes,
+  barFraction,
+  buttonName,
+  buttonPhase,
+  buttonWord,
   confirmLine,
+  currentTail,
   driveLine,
+  elapsedText,
   laneLine,
   leavesMachine,
+  outcomeView,
+  progressHead,
+  progressLine,
   runningJobs,
+  runningVerbs,
+  verbLabel,
 } from "./backupView";
 
 const NOW = Date.parse("2026-10-16T09:00:00+00:00");
@@ -30,6 +44,32 @@ function status(over: Partial<BackupStatus> = {}): BackupStatus {
     },
     drive: { tracked_files: 12 },
     running: [],
+    ...over,
+  };
+}
+
+/** The upload the owner pressed at 06:37 on 2026-10-16, as the contract pins it. */
+function progress(over: Partial<BackupProgress> = {}): BackupProgress {
+  return {
+    done: 1204,
+    total: 15414,
+    failed: 0,
+    bytes_done: 325058560,
+    bytes_total: 3113851289,
+    current: "projects/.archive/marketstand/inventory/x/photos/03.jpg",
+    updated_at: "2026-10-16T13:52:30+00:00",
+    ...over,
+  };
+}
+
+function entry(over: Partial<BackupRunning> = {}): BackupRunning {
+  return {
+    job: "b7f3c2",
+    verb: "drive_sync",
+    lane: "drive_sync",
+    pid: 175450,
+    started_at: "2026-10-16T08:57:50+00:00",
+    progress: progress(),
     ...over,
   };
 }
@@ -110,29 +150,272 @@ describe("confirmLine", () => {
 });
 
 describe("runningJobs", () => {
-  it("adopts the jobs status lists as running, by lane", () => {
+  it("adopts the jobs status lists as running, keyed on the pressed verb", () => {
     const answer = status({
       running: [
-        { job: "b7f3c2", lane: "snapshot", started_at: "2026-10-16T08:59:00+00:00" },
-        { job: "c1d2e3", lane: "versioned", started_at: "2026-10-16T08:58:00+00:00" },
+        entry({ job: "b7f3c2", verb: "snapshot", lane: "snapshot" }),
+        entry({ job: "c1d2e3", verb: "all", lane: "versioned" }),
       ],
     });
-    expect(runningJobs(answer)).toEqual({ snapshot: "b7f3c2", versioned: "c1d2e3" });
+    expect(runningJobs(answer)).toEqual({ snapshot: "b7f3c2", all: "c1d2e3" });
   });
 
-  it("keeps the first job when a lane is listed twice", () => {
+  it("keeps the first job when a verb is listed twice", () => {
     const answer = status({
-      running: [
-        { job: "first", lane: "all", started_at: "2026-10-16T08:59:00+00:00" },
-        { job: "second", lane: "all", started_at: "2026-10-16T08:59:30+00:00" },
-      ],
+      running: [entry({ job: "first", verb: "all", lane: "snapshot" }), entry({ job: "second", verb: "all" })],
     });
     expect(runningJobs(answer)).toEqual({ all: "first" });
+  });
+
+  it("skips a run this server did not start: there is no job to read", () => {
+    expect(runningJobs(status({ running: [entry({ job: null })] }))).toEqual({});
+  });
+
+  it("takes a later entry's job when the first one for the verb has none", () => {
+    const answer = status({ running: [entry({ job: null }), entry({ job: "late" })] });
+    expect(runningJobs(answer)).toEqual({ drive_sync: "late" });
   });
 
   it("is empty for no status, or a status with nothing running", () => {
     expect(runningJobs(null)).toEqual({});
     expect(runningJobs(status())).toEqual({});
+  });
+});
+
+describe("runningVerbs", () => {
+  it("lists each verb once, in the order status lists them, never the sub-lane", () => {
+    const answer = status({
+      running: [
+        entry({ verb: "all", lane: "versioned" }),
+        entry({ verb: "drive_sync" }),
+        entry({ verb: "all", lane: "drive_sync" }),
+      ],
+    });
+    expect(runningVerbs(answer)).toEqual(["all", "drive_sync"]);
+  });
+
+  it("lists a terminal's run too: its press reads Stop all the same", () => {
+    expect(runningVerbs(status({ running: [entry({ job: null })] }))).toEqual(["drive_sync"]);
+  });
+
+  it("is empty for no status", () => {
+    expect(runningVerbs(null)).toEqual([]);
+  });
+});
+
+describe("the Stop/running mapping", () => {
+  it("is Stop while status lists the verb, held job or not", () => {
+    expect(buttonPhase("drive_sync", ["drive_sync"], true, false)).toBe("stop");
+    expect(buttonPhase("drive_sync", ["drive_sync"], false, false)).toBe("stop");
+  });
+
+  it("is stopping while a stop is in flight, listed or not", () => {
+    expect(buttonPhase("drive_sync", ["drive_sync"], true, true)).toBe("stopping");
+    expect(buttonPhase("all", [], false, true)).toBe("stopping");
+  });
+
+  it("is watched for a held job status does not list yet", () => {
+    expect(buttonPhase("all", ["drive_sync"], true, false)).toBe("watched");
+  });
+
+  it("is idle when nothing holds the verb, whatever else runs", () => {
+    expect(buttonPhase("snapshot", ["drive_sync", "all"], false, false)).toBe("idle");
+  });
+
+  it("puts the words on each phase", () => {
+    expect(buttonWord("Sync to Drive", "stop")).toBe("Stop");
+    expect(buttonWord("Sync to Drive", "stopping")).toBe("Stopping…");
+    expect(buttonWord("Full backup", "watched")).toBe("Full backup · running…");
+    expect(buttonWord("Snapshot now", "idle")).toBe("Snapshot now");
+  });
+
+  it("names which run a Stop ends, for a screen reader", () => {
+    expect(buttonName("Sync to Drive", "stop")).toBe("stop Sync to Drive");
+    expect(buttonName("Sync to Drive", "stopping")).toBe("stop Sync to Drive");
+    expect(buttonName("Full backup", "watched")).toBe("Full backup");
+    expect(buttonName("Snapshot now", "idle")).toBe("Snapshot now");
+  });
+
+  it("labels a verb as its press, and an unknown one by its own name", () => {
+    expect(verbLabel("all")).toBe("Full backup");
+    expect(verbLabel("drive_sync")).toBe("Sync to Drive");
+    expect(verbLabel("nightly" as never)).toBe("nightly");
+  });
+});
+
+describe("backupBytes", () => {
+  it("counts in 1024s with @backup's own unit words", () => {
+    expect(backupBytes(325058560)).toBe("310 MB");
+    expect(backupBytes(3113851289)).toBe("2.9 GB");
+  });
+
+  it("steps through B and KB below a megabyte", () => {
+    expect(backupBytes(0)).toBe("0 B");
+    expect(backupBytes(1023)).toBe("1023 B");
+    expect(backupBytes(1024)).toBe("1 KB");
+    expect(backupBytes(1024 ** 2 - 1)).toBe("1024 KB");
+    expect(backupBytes(1024 ** 2)).toBe("1 MB");
+    expect(backupBytes(1024 ** 3)).toBe("1.0 GB");
+  });
+});
+
+describe("elapsedText", () => {
+  it("says seconds, then minutes and seconds, then hours and minutes", () => {
+    expect(elapsedText("2026-10-16T08:59:15+00:00", NOW)).toBe("45s");
+    expect(elapsedText("2026-10-16T08:59:00+00:00", NOW)).toBe("1m 0s");
+    expect(elapsedText("2026-10-16T08:57:50+00:00", NOW)).toBe("2m 10s");
+    expect(elapsedText("2026-10-16T07:54:59+00:00", NOW)).toBe("1h 5m");
+  });
+
+  it("is 59s just before the minute and 59m just before the hour", () => {
+    expect(elapsedText("2026-10-16T08:59:01+00:00", NOW)).toBe("59s");
+    expect(elapsedText("2026-10-16T08:00:01+00:00", NOW)).toBe("59m 59s");
+    expect(elapsedText("2026-10-16T08:00:00+00:00", NOW)).toBe("1h 0m");
+  });
+
+  it("reads a clock behind the server's as 0s, never negative", () => {
+    expect(elapsedText("2026-10-16T09:00:05+00:00", NOW)).toBe("0s");
+  });
+
+  it("is null for an instant that does not parse", () => {
+    expect(elapsedText("not a date", NOW)).toBe(null);
+  });
+});
+
+describe("barFraction", () => {
+  it("is done over total", () => {
+    expect(barFraction(progress({ done: 300, total: 1200 }))).toBe(0.25);
+  });
+
+  it("is null while scanning, so the bar is the indeterminate one", () => {
+    expect(barFraction(null)).toBe(null);
+  });
+
+  it("reads empty for a total of zero rather than dividing by it", () => {
+    expect(barFraction(progress({ done: 0, total: 0 }))).toBe(0);
+  });
+
+  it("never runs past full or below empty", () => {
+    expect(barFraction(progress({ done: 20, total: 10 }))).toBe(1);
+    expect(barFraction(progress({ done: -1, total: 10 }))).toBe(0);
+  });
+});
+
+describe("progressLine", () => {
+  it("says files, bytes of the planned bytes, and the time since the start", () => {
+    expect(progressLine(entry(), NOW)).toBe("1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s");
+  });
+
+  it("drops the of-part when the lane does not know its planned bytes", () => {
+    expect(progressLine(entry({ progress: progress({ bytes_total: null }) }), NOW)).toBe(
+      "1,204 / 15,414 files · 310 MB · 2m 10s",
+    );
+  });
+
+  it("says scanning before the lane has a total", () => {
+    expect(progressLine(entry({ progress: null }), NOW)).toBe("scanning…");
+  });
+
+  it("drops the elapsed piece when the start does not parse", () => {
+    expect(progressLine(entry({ started_at: "" }), NOW)).toBe("1,204 / 15,414 files · 310 MB of 2.9 GB");
+  });
+});
+
+describe("progressHead", () => {
+  it("names the press for a single lane", () => {
+    expect(progressHead(entry())).toBe("Sync to Drive");
+  });
+
+  it("names Full backup's sub-lane with its counts", () => {
+    expect(progressHead(entry({ verb: "all", lane: "versioned", progress: progress({ done: 300, total: 15491 }) }))).toBe(
+      "Full backup · versioned · 300 / 15,491",
+    );
+  });
+
+  it("marks thousands on both of the sub-lane's counts", () => {
+    expect(progressHead(entry({ verb: "all", lane: "drive_sync" }))).toBe("Full backup · drive_sync · 1,204 / 15,414");
+  });
+
+  it("names the sub-lane alone while it scans", () => {
+    expect(progressHead(entry({ verb: "all", lane: "snapshot", progress: null }))).toBe("Full backup · snapshot");
+  });
+});
+
+describe("currentTail", () => {
+  it("keeps a path that fits as it came", () => {
+    expect(currentTail("src/app.ts")).toBe("src/app.ts");
+    const fits = "a".repeat(CURRENT_TAIL);
+    expect(currentTail(fits)).toBe(fits);
+  });
+
+  it("keeps a long path's end, cut at a folder boundary", () => {
+    expect(currentTail("projects/.archive/marketstand/inventory/x/photos/03.jpg")).toBe(
+      "…/.archive/marketstand/inventory/x/photos/03.jpg",
+    );
+  });
+
+  it("drops a name the cut would show half", () => {
+    expect(currentTail("abcdefghij/klm/no.txt", 13)).toBe("…/klm/no.txt");
+  });
+
+  it("cuts mid-name only when no folder boundary falls in the tail", () => {
+    expect(currentTail(`dir/${"b".repeat(60)}`, 10)).toBe(`…${"b".repeat(9)}`);
+  });
+
+  it("is null before the first file, and for an empty name", () => {
+    expect(currentTail(null)).toBe(null);
+    expect(currentTail("")).toBe(null);
+  });
+});
+
+describe("outcomeView", () => {
+  const HEADROOM = "Drive has 1.4 GB free; this run needs 2.9 GB. Nothing uploaded.";
+
+  it("leads a headroom refusal with its own sentence, verbatim", () => {
+    expect(outcomeView("Sync to Drive", "failed", `Scanning store\n${HEADROOM}\n`)).toEqual({
+      tone: "failed",
+      head: `Sync to Drive · ${HEADROOM}`,
+      body: "Scanning store",
+    });
+  });
+
+  it("leaves no block when the sentence is the whole summary", () => {
+    expect(outcomeView("Full backup", "failed", HEADROOM)).toEqual({
+      tone: "failed",
+      head: `Full backup · ${HEADROOM}`,
+      body: "",
+    });
+  });
+
+  it("keeps today's rendering for any other failure", () => {
+    const text = "upload failed: 403 storageQuotaExceeded";
+    expect(outcomeView("Sync to Drive", "failed", text)).toEqual({ tone: "failed", head: "Sync to Drive · failed", body: text });
+  });
+
+  it("looks only at the last line, not a Nothing uploaded. said earlier", () => {
+    const text = `${HEADROOM}\nretrying with the tracker\nupload failed`;
+    expect(outcomeView("Sync to Drive", "failed", text).head).toBe("Sync to Drive · failed");
+  });
+
+  it("never promotes the sentence on a run that did not fail", () => {
+    expect(outcomeView("Sync to Drive", "done", HEADROOM).head).toBe("Sync to Drive · done");
+  });
+
+  it("shows stopped as its own word with the summary verbatim", () => {
+    const text = "stopped by request: 1,204 of 15,414 files, 310 MB";
+    expect(outcomeView("Sync to Drive", "stopped", text)).toEqual({ tone: "stopped", head: "Sync to Drive · stopped", body: text });
+  });
+
+  it("keeps the forgotten job's sentence under its own word", () => {
+    expect(outcomeView("Snapshot now", "forgotten", JOB_FORGOTTEN)).toEqual({
+      tone: "forgotten",
+      head: "Snapshot now · forgotten",
+      body: JOB_FORGOTTEN,
+    });
+  });
+
+  it("matches the contract's sentence ending", () => {
+    expect(NOTHING_UPLOADED).toBe("Nothing uploaded.");
   });
 });
 

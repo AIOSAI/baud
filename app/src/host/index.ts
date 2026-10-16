@@ -22,6 +22,7 @@
 import type {
   AgentSettings,
   AgentSettingsPatch,
+  BackupCancel,
   BackupJob,
   BackupLane,
   BackupStatus,
@@ -356,6 +357,14 @@ export const backupJob = (id: string) => call<BackupJob>("backup_job", { id });
 /** The project's store, read from disk. `sizes` walks the store: seconds, on demand. */
 export const backupStatus = (project: string, sizes = false) =>
   call<BackupStatus>("backup_status", { project, sizes });
+
+/**
+ * Stop a run (DPLAN-0412). `lane` is the verb that was pressed: `all` stops the
+ * whole cycle. Answers with @backup's own line; nothing running is 404
+ * not_running, which means the run ended between two reads.
+ */
+export const backupCancel = (project: string, lane: BackupLane) =>
+  call<BackupCancel>("backup_cancel", { project, lane });
 
 /* ------------------------------------------------------------ terminal -- */
 /* PHONE-ONLY (FPLAN-0414 seam 3, as amended). Not a lesser terminal and not a

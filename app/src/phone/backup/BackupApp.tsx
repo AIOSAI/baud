@@ -9,13 +9,19 @@
  * This screen composes no sentence about a run of its own: the server's words,
  * the command's summary and @backup's dates are shown as they came.
  *
+ * Round 2 (DPLAN-0412), the owner at 06:50: "ive no way to stop it. once it
+ * starts. some info would be nice, like a status bar with progress too." A
+ * running press becomes Stop, and every lane in flight shows a bar, read from
+ * @backup's own running files through status - so a run started from a
+ * terminal or by the daemon shows, and stops, the same as one pressed here.
+ *
  * A folder like git/, though it is one screen tonight: an app grows floors, and
  * the second one should not have to move the first.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { backupJob, backupRun, backupStatus } from "../../host";
+import { backupCancel, backupJob, backupRun, backupStatus } from "../../host";
 import { HostError } from "../../host/transport.http";
 import type { BackupJob, BackupLane, BackupStatus } from "../../types";
 import { bytesText } from "../lib/machine";
@@ -25,11 +31,20 @@ import {
   BACKUP_BUTTONS,
   JOB_FORGOTTEN,
   STATUS_LANES,
+  barFraction,
+  buttonName,
+  buttonPhase,
+  buttonWord,
   confirmLine,
+  currentTail,
   driveLine,
   laneLine,
   leavesMachine,
+  outcomeView,
+  progressHead,
+  progressLine,
   runningJobs,
+  runningVerbs,
 } from "./backupView";
 
 /** The contract's cadence for watching a run. */
@@ -62,30 +77,38 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
   /** The status read's failure, verbatim - a 503 is the server's sentence. */
   const [statusSaid, setStatusSaid] = useState<string | null>(null);
   const [sizing, setSizing] = useState(false);
-  /** lane -> the job id being watched. A lane in here is not re-pressable. */
+  /** verb -> the job id whose outcome is read once status stops listing the
+   *  verb. A verb in here is not re-pressable. */
   const [jobs, setJobs] = useState<Partial<Record<BackupLane, string>>>({});
   const [outcomes, setOutcomes] = useState<Partial<Record<BackupLane, Outcome>>>({});
   /** What the server said to a press: a refusal, an "already running". */
   const [said, setSaid] = useState<string | null>(null);
   const [pending, setPending] = useState<BackupLane | null>(null);
-  /** One tick at a time: a job read slower than the cadence must not stack. */
+  /** Verbs whose stop has been sent and not yet answered. */
+  const [stopping, setStopping] = useState<Partial<Record<BackupLane, true>>>({});
+  /** One tick at a time: a read slower than the cadence must not stack. */
   const ticking = useRef(false);
+  /** The jobs map as the tick sees it: the watch outlives renders, the map does not. */
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
 
   const readStatus = useCallback(
-    async (sizes = false) => {
-      if (!project) return;
+    async (sizes = false): Promise<BackupStatus | null> => {
+      if (!project) return null;
       try {
         const answer = await backupStatus(project, sizes);
         // A plain re-read keeps sizes already walked: the cheap answer has no
         // `store` key, and dropping the numbers would un-answer a question.
         setStatus((before) => (sizes || !before?.store ? answer : { ...answer, store: before.store }));
         setStatusSaid(null);
-        // A sheet opened mid-run adopts the run: its button shows running and
-        // its job is watched like one pressed here.
+        // A sheet opened mid-run adopts the run: its button reads Stop and its
+        // job, when this server started it, is read for the outcome at the end.
         const adopted = runningJobs(answer);
         setJobs((current) => ({ ...adopted, ...current }));
+        return answer;
       } catch (error) {
         setStatusSaid(sentence(error));
+        return null;
       }
     },
     [project],
@@ -95,37 +118,47 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     void readStatus();
   }, [readStatus]);
 
-  const watching = Object.entries(jobs)
-    .map(([lane, id]) => `${lane}:${id}`)
-    .sort()
-    .join(",");
+  /** Something is in flight: a job the phone holds, or a lane status lists. */
+  const busy = Object.keys(jobs).length > 0 || (status?.running?.length ?? 0) > 0;
+  /** The verbs status lists as running: their presses read Stop. */
+  const listed = runningVerbs(status);
+  /** One clock per render for every elapsed time; each status read renders. */
+  const now = Date.now();
 
   /**
-   * THE WATCH. Every 2 s while any lane runs, and only while this screen is
-   * looked at - nothing polls a pocket. A job is a fact held by the server
-   * whether or not anyone asks, so a paused watch loses nothing: the next
-   * visible tick reads where it got to.
+   * THE WATCH. Every 2 s while anything runs, and only while this screen is
+   * looked at - nothing polls a pocket. Each tick reads STATUS, the one call
+   * that carries every lane's progress, including runs this phone did not
+   * start. A job is read only for a verb status no longer lists: that read is
+   * the outcome, or (job still running) a lane that has not written its
+   * running file yet, or `all` between two sub-lanes. Both answers are facts
+   * held by the server whether or not anyone asks, so a paused watch loses
+   * nothing: the next visible tick reads where it got to.
    */
   useEffect(() => {
-    if (!watching) return;
+    if (!busy) return;
     const tick = async () => {
       if (ticking.current) return;
       ticking.current = true;
       let ended = false;
       try {
-        for (const [lane, id] of Object.entries(jobs) as [BackupLane, string][]) {
+        // A failed status read leaves its sentence on the sheet and lists
+        // nothing, so every held job is read directly this tick instead.
+        const listedNow = runningVerbs(await readStatus());
+        for (const [verb, id] of Object.entries(jobsRef.current) as [BackupLane, string][]) {
+          if (listedNow.includes(verb)) continue;
           try {
             const job = await backupJob(id);
             if (job.state === "running") continue;
             ended = true;
-            setOutcomes((all) => ({ ...all, [lane]: { state: job.state, text: job.summary || job.error || "" } }));
-            setJobs(({ [lane]: _done, ...rest }) => rest);
+            setOutcomes((all) => ({ ...all, [verb]: { state: job.state, text: job.summary || job.error || "" } }));
+            setJobs(({ [verb]: _done, ...rest }) => rest);
           } catch (error) {
             if (error instanceof HostError && error.status === 404) {
               // Restarted server: the run is a fact in the store, not here.
               ended = true;
-              setOutcomes((all) => ({ ...all, [lane]: { state: "forgotten", text: JOB_FORGOTTEN } }));
-              setJobs(({ [lane]: _done, ...rest }) => rest);
+              setOutcomes((all) => ({ ...all, [verb]: { state: "forgotten", text: JOB_FORGOTTEN } }));
+              setJobs(({ [verb]: _done, ...rest }) => rest);
             } else {
               setSaid(sentence(error));
             }
@@ -134,13 +167,11 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
       } finally {
         ticking.current = false;
       }
+      // The lane's `last` moved when it ended: one more read shows it.
       if (ended) void readStatus();
     };
     return whileVisible(() => void tick(), POLL_MS);
-    // `watching` is the jobs map as a value; the map itself is a new object
-    // every render and would restart the watch on each one.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watching, readStatus]);
+  }, [busy, readStatus]);
 
   async function fire(lane: BackupLane) {
     setSaid(null);
@@ -154,11 +185,37 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     }
   }
 
+  /**
+   * STOP. No confirm: stopping is the safe direction. The answer is @backup's
+   * own line ("stopped drive_sync (pid 175450)"); the job closes as stopped by
+   * itself and the watch reads it. A 404 not_running means the run ended
+   * between two reads, so status is read again to show how things stand.
+   */
+  async function stop(verb: BackupLane) {
+    setSaid(null);
+    setStopping((current) => ({ ...current, [verb]: true }));
+    try {
+      const answer = await backupCancel(project, verb);
+      setSaid(answer.message);
+    } catch (error) {
+      setSaid(sentence(error));
+      if (error instanceof HostError && error.status === 404) void readStatus();
+    } finally {
+      setStopping(({ [verb]: _sent, ...rest }) => rest);
+    }
+  }
+
   function press(lane: BackupLane) {
-    if (jobs[lane]) return;
+    const phase = buttonPhase(lane, listed, Boolean(jobs[lane]), Boolean(stopping[lane]));
+    if (phase === "watched" || phase === "stopping") return;
+    // A read token is refused the Stop by name, exactly as it is the run.
     const refusal = !project ? "no project is seated yet" : scopeRefusal(scope);
     if (refusal) {
       setSaid(`refused: ${refusal}`);
+      return;
+    }
+    if (phase === "stop") {
+      void stop(lane);
       return;
     }
     if (leavesMachine(lane, status ? status.drive_sync : null)) {
@@ -222,25 +279,51 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
         {statusSaid ? <p className="baud-backup-said">{statusSaid}</p> : null}
       </div>
 
-      {/* THE FOUR CLICK OPTIONS, the owner's words. A running lane shows it and
-          does not fire twice; the other three stay live, because @backup's own
-          locks decide what overlapping lanes mean, not this screen. */}
+      {/* THE FOUR CLICK OPTIONS, the owner's words. A lane status lists as
+          running reads Stop; one the phone holds a job for but status does not
+          list yet shows running and does not fire twice. The other presses stay
+          live, because @backup decides what overlapping lanes mean, not this
+          screen. */}
       <div className="baud-backup-buttons">
         {BACKUP_BUTTONS.map(({ lane, label }) => {
-          const running = Boolean(jobs[lane]);
+          const phase = buttonPhase(lane, listed, Boolean(jobs[lane]), Boolean(stopping[lane]));
+          const tone =
+            phase === "stop" ? "baud-backup-button-stop" : phase === "idle" ? "" : "baud-backup-button-running";
           return (
             <button
               key={lane}
               type="button"
-              className={`baud-backup-button ${running ? "baud-backup-button-running" : ""}`}
-              aria-disabled={running}
+              className={`baud-backup-button ${tone}`}
+              aria-disabled={phase === "watched" || phase === "stopping"}
+              aria-label={buttonName(label, phase)}
               onClick={() => press(lane)}
             >
-              {running ? `${label} · running…` : label}
+              {buttonWord(label, phase)}
             </button>
           );
         })}
       </div>
+
+      {/* WHAT IS RUNNING, one block per entry in status's list: the press (and
+          under Full backup the sub-lane at work), the bar, the counts, and the
+          file in flight. A null progress is a lane still scanning: the bar is
+          the platform's indeterminate one and the line says so. */}
+      {(status?.running ?? []).map((entry) => {
+        const fraction = barFraction(entry.progress);
+        const tail = currentTail(entry.progress?.current ?? null);
+        return (
+          <div key={`${entry.verb}:${entry.lane}:${entry.pid}`} className="baud-backup-progress">
+            <p className="baud-backup-progress-head">{progressHead(entry)}</p>
+            {fraction === null ? (
+              <progress className="baud-backup-bar" />
+            ) : (
+              <progress className="baud-backup-bar" value={fraction} max={1} />
+            )}
+            <p className="baud-backup-progress-line">{progressLine(entry, now)}</p>
+            {tail ? <p className="baud-backup-current">{tail}</p> : null}
+          </div>
+        );
+      })}
 
       {said ? <p className="baud-backup-said">{said}</p> : null}
 
@@ -259,15 +342,15 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
         </div>
       ) : null}
 
-      {/* HOW EACH RUN ENDED: the command's own last lines, verbatim. */}
+      {/* HOW EACH RUN ENDED: the command's own last lines, verbatim. A run
+          that refused before uploading anything leads with its own sentence. */}
       {BACKUP_BUTTONS.filter(({ lane }) => outcomes[lane]).map(({ lane, label }) => {
         const outcome = outcomes[lane] as Outcome;
+        const view = outcomeView(label, outcome.state, outcome.text);
         return (
           <div key={lane} className="baud-backup-outcome">
-            <p className={`baud-backup-outcome-head baud-backup-${outcome.state}`}>
-              {label} · {outcome.state}
-            </p>
-            {outcome.text ? <pre className="baud-backup-summary">{outcome.text}</pre> : null}
+            <p className={`baud-backup-outcome-head baud-backup-${view.tone}`}>{view.head}</p>
+            {view.body ? <pre className="baud-backup-summary">{view.body}</pre> : null}
           </div>
         );
       })}

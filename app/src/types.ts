@@ -652,11 +652,39 @@ export interface BackupLaneStatus {
   files: number | null;
 }
 
-/** A job in flight on this server, as `status` lists it. */
+/**
+ * A lane's progress, as the lane itself writes it at most once a second
+ * (DPLAN-0412). Null on the entry while the lane is still scanning.
+ */
+export interface BackupProgress {
+  /** File counts. */
+  done: number;
+  total: number;
+  failed: number;
+  /** What has been copied or uploaded so far. */
+  bytes_done: number;
+  /** The planned bytes, or null when the lane does not know them. */
+  bytes_total: number | null;
+  /** The file in flight, as the lane names it; null before the first file. */
+  current: string | null;
+  updated_at: string;
+}
+
+/**
+ * One lane in flight, from @backup's running files (DPLAN-0412), so it lists
+ * runs started from a terminal or by the daemon as well as the phone's own.
+ *
+ * `verb` is what was invoked and is what a press matches on; `lane` is the work
+ * being done right now, which under `all` is each sub-lane in turn.
+ */
 export interface BackupRunning {
-  job: string;
+  /** @api's job id when this server started the run, null otherwise. */
+  job: string | null;
+  verb: BackupLane;
   lane: BackupLane;
+  pid: number;
   started_at: string;
+  progress: BackupProgress | null;
 }
 
 /** `GET /v1/backup/status`: @backup's `status --json`, plus @api's `running`. */
@@ -688,8 +716,10 @@ export interface BackupJob {
   job: string;
   project: string;
   lane: BackupLane;
-  /** done is exit 0; failed is non-zero, a timeout, or a routing error mid-run. */
-  state: "running" | "done" | "failed";
+  /** done is exit 0; stopped is exit 130, the lane ending on a stop request
+   *  (DPLAN-0412); failed is any other non-zero exit, a timeout, or a routing
+   *  error mid-run. */
+  state: "running" | "done" | "stopped" | "failed";
   started_at: string;
   /** The job read only, once the run ends. */
   finished_at?: string | null;
@@ -697,4 +727,12 @@ export interface BackupJob {
   /** The command's last lines, verbatim, at most ~600 chars. */
   summary?: string | null;
   error?: string | null;
+}
+
+/** `POST /v1/backup/cancel` (200, DPLAN-0412). `message` is @backup's own line. */
+export interface BackupCancel {
+  project: string;
+  lane: BackupLane;
+  stopped: boolean;
+  message: string;
 }

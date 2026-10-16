@@ -15,6 +15,7 @@ and every change that lands adds its line there in the same sitting.
 ### Added
 
 - **Phone: a Backup card on the apps wheel (DPLAN-0411).** `BKP` sits after git and files. Its sheet reads the seated project's store (when each lane last ran, with file counts, and the Drive sync setting, plus store sizes on request) and offers four presses: Snapshot now, Versioned now, Full backup and Sync to Drive. Each press runs through the host API's backup door and shows the command's own summary when it ends. Sync to Drive, and Full backup with Drive on, ask once before sending. The desktop refuses the three backup calls by name.
+- **Phone: the Backup card shows each run's progress and can stop it (DPLAN-0412).** While a lane runs, the sheet shows a bar, files done of total, bytes copied (of the planned bytes when known), time elapsed and the file in flight, for runs started from a terminal or the daemon too; under Full backup it names the sub-lane at work. A running press becomes Stop, which ends the run cleanly without a confirm; a read token is refused it by name. A stopped run reads "stopped" in the dim colour over its summary, not as a red failure, and a Drive run that cannot fit leads with its own sentence ("Drive has 1.4 GB free; this run needs 2.9 GB. Nothing uploaded.") instead of a generic "failed". The desktop refuses the new stop call by name.
 
 ## [0.3.7] — 2026-10-15
 

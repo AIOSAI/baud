@@ -67,10 +67,12 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
     "the desktop is the screen whose lock it would be reading - the lock chip is the phone's answer to 'did I lock it'",
   /* DPLAN-0411. The backup door is @api's, built for a device away from the
      machine. The desktop sits beside `drone @backup` in its own terminal, so
-     there is no Rust command behind these names this round. */
+     there is no Rust command behind these names this round. Round 2's stop
+     (DPLAN-0412) is the same door, so it is refused the same way. */
   backup_run: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
   backup_job: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
   backup_status: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
+  backup_cancel: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
 };
 
 /** A typed host call. The only `invoke` in the application. */
