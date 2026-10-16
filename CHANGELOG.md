@@ -10,11 +10,15 @@ and every change that lands adds its line there in the same sitting.
 
 ---
 
-## [Unreleased]
+## [0.3.6] — 2026-10-15
 
 ### Added
 
 - **The install sandbox** (`docker/sandbox.sh`, DPLAN-0408). The owner, after three releases in fifty minutes for two text fixes: "i cant wait over an hour every change. we need to pull local for our testing." One host command builds a `baud-sandbox` image once (a stranger's Ubuntu: sudo, curl, a user, Tailscale installed, `tailscaled` started by the entrypoint; nothing the installer itself installs) and starts a fresh container from it with the AIPass checkout mounted read-only at `/src/aipass` and a stamped copy of the local `install.sh` at `/src/baud/install.sh`. Inside, the one line is `curl -fsSL file:///src/baud/install.sh | sh`. `install.sh` gained a local mode: with `AIPASS_SOURCE` set it builds the aipass CLI from a clone of that checkout and passes `--source` to `aipass install`, so only committed, tracked files ever cross (the owner: "only match the repo files, no pulling any wrong files over"). `--keep-logins` keeps the Tailscale and Claude Code sign-ins between runs; the default is the stranger's fresh run. `docs/sandbox.md` has the loop.
+
+### Changed
+
+- **`AIPASS_VERSION` 2.8.17.** The installer pins the AIPass release that carries `aipass install --source`, the sandbox's door, and the backed-up, receipted writes to the personal Claude settings file (`~/.claude/.backup/settings/`). There `aipass doctor --fix` asks before it writes; the installer's own preflight writes once, with a receipt, so the one Enter stays one Enter.
 
 ## [0.3.5] — 2026-10-13
 
