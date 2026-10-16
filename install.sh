@@ -351,11 +351,11 @@ main() {
         mkdir -p "$parent" || fail "could not create $parent; stopping here, and what was already installed stays"
     fi
     # Under the sandbox, aipass install clones the local checkout instead of
-    # GitHub (--source; the path is the sandbox's own, no spaces, so one word).
-    src_opt=""
-    [ -n "${AIPASS_SOURCE:-}" ] && src_opt="--source $AIPASS_SOURCE"
+    # GitHub (--source). The two ${AIPASS_SOURCE:+...} expansions add the flag and
+    # its value only when set, each as its own word, so a path with a space holds
+    # and shellcheck's SC2086 (which failed the v0.3.6 release stamp) has nothing to say.
     say "Running aipass install (this clones AIPass into $HOME_DIR${AIPASS_SOURCE:+ from $AIPASS_SOURCE})"
-    if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG" $src_opt; then
+    if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG" ${AIPASS_SOURCE:+--source} ${AIPASS_SOURCE:+"$AIPASS_SOURCE"}; then
         say ""
         say "aipass install stopped. Its own output above names the step."
         say "Already on disk:"

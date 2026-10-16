@@ -10,6 +10,12 @@ and every change that lands adds its line there in the same sitting.
 
 ---
 
+## [0.3.7] — 2026-10-15
+
+### Fixed
+
+- **The release stamp passes shellcheck again.** v0.3.6's release run failed at "Stamp the installer": `install.sh` passed the sandbox's `--source PATH` as one unquoted `$src_opt` word and shellcheck's SC2086 refused it, so no v0.3.6 assets were published (the tag stands, pointing at the unreleased commit). The flag and its value now ride as two `${AIPASS_SOURCE:+...}` expansions, each its own word, so a path with a space holds too. Same contents as 0.3.6 otherwise.
+
 ## [0.3.6] — 2026-10-15
 
 ### Added
