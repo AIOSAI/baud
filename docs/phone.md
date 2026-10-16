@@ -2180,3 +2180,58 @@ id. **`▸ resume ⚡` confirms on a second tap**: its INTERCEPT sentence shows 
 the doors, the first tap arms the door (amber, "tap again"), a second tap within
 four seconds stops the working agent and resumes its chat, and any other tap on
 the card disarms it.
+
+### What is running, and rooms that end (DPLAN-0414 wave 3)
+
+**The PROC sheet lists the top twenty.** *"list top 20. Its just a quick ref to
+see if anything is high usage. Say I hear laptop fan going crazy and no agents
+running. I'll be like what is running."* The headline is every process the host
+counted, sleeping ones included, so it says "processes", never "running". Under
+it, @skills' `machine_processes()` through @api's `GET /v1/machine/processes`
+(contract C-B): the twenty busiest by cpu, each with cpu %, memory % and resident
+MB, and a cpu/mem toggle that re-orders the same twenty on the phone. **Read
+once** when the sheet opens and again on a tap on the sampled line, never on the
+monitor row's two-second cadence and never while the sheet is shut: the skill
+sleeps about half a second to sample cpu honestly, and the line says
+"sampling…" while it does. A refusal shows the server's sentence, as the vitals
+refusal does. A process that came back with no name shows its pid. The desktop
+refuses `machine_processes` by name.
+
+**A closed socket says which kind of close it was** (`lib/socketClose.ts`, shared
+by the room and the watch):
+
+- **4000 "room ended"** (contract C-C): the tmux session ended under the socket,
+  from the desk or a shell that exited. Final. The room's overlay reads "ended —
+  this room is gone; open it again from the card to start fresh", with no
+  reattach button and no ladder, because `new-session -A` would build a fresh
+  empty room under the old name. An agent room's ended mark is written, so the
+  startup agent does not recreate it. A watch reads "the watch ended" and does
+  not re-arm; its rewatch button stays.
+- **1008 / 1011 after accept**: the host refused (an unknown branch or project,
+  no tmux). Final too. The overlay says "refused", the host's sentence stays in
+  the error line, and a hand on the button tries once more.
+- **anything else**: a detach, a pocket, a dropped link. The ladder runs as
+  before (0, 1, 3, 6, 12, 30 s while visible).
+
+The ladder's count resets, and the launch or help line is typed, on the room's
+**first data frame**, not on `onopen`: @api accepts before it refuses, so an open
+socket alone proves nothing. A token refused at the handshake keeps the
+`onerror` sentence instead of being overwritten by an empty close.
+
+**`end room` is remembered.** The verb's success writes `intent.ts`'s ended mark
+(the desk's own store), the startup agent's guard reads it, and the card's
+attach doors clear it - the one door that revives an ended room, as on the desk.
+When the startup agent does not open because the token is read-only or the
+agent has no card in the seated project, the resting stage says so in one line:
+"startup agent X not opened — reason". The header ring follows the agent room
+(the seat pane), not whichever tab is in front.
+
+**The watch dies like a room.** A dropped watch dims its last frame under the
+room's own overlay and climbs the room's ladder; a watch holds no state, so a
+reconnect costs one fresh observer. The button reads "rewatch mission control"
+for the target-less monitor and "rewatch <name>" otherwise, and it shows only
+after a close - never while the first connect is still going.
+
+**The bell door reads `project` when the event carries it** (C-A as amended):
+that project's inbox is read directly. An event without it finds the recipient
+the old way, the seated census first, then the roster.

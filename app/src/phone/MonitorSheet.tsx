@@ -28,7 +28,16 @@ import "@xterm/xterm/css/xterm.css";
 import { openRoomSocket } from "../host";
 import { HostError } from "../host/transport.http";
 import type { BranchStatus } from "../types";
-import { LINES_PER_NOTCH, MAX_FONT, MIN_FONT, PAN_ACCELERATION } from "./TerminalSheet";
+import {
+  HANDSHAKE_POLL_MS,
+  LINES_PER_NOTCH,
+  MAX_FONT,
+  MIN_FONT,
+  PAN_ACCELERATION,
+  RECONNECT_MS,
+  RECONNECT_TRIES,
+} from "./TerminalSheet";
+import { type CloseKind, closeIsFinal, closeKind, deadFace, errorAfterClose, watchLabel } from "./lib/socketClose";
 
 /** The watch opens at the terminal sheet's OLD default - a monitor is read at
  *  a glance, not worked in, so it keeps the legible 10 rather than following
@@ -37,7 +46,9 @@ import { LINES_PER_NOTCH, MAX_FONT, MIN_FONT, PAN_ACCELERATION } from "./Termina
 const FONT_SIZE = 10;
 
 /** The room lane's close-code contract, unchanged: 1008 is fixable and the
- *  caller's, 1011 is the host's. Anything else is a plain disconnect. */
+ *  caller's, 1011 is the host's. Anything else is a plain disconnect - and
+ *  4000 (C-C, the watched process ended first) is said by the overlay, "the
+ *  watch ended", not by the error line. */
 function closeSentence(event: CloseEvent): string | null {
   if (event.code === 1008) return event.reason || "the watch refused this request";
   if (event.code === 1011) return event.reason || "the host could not open the watch";
@@ -60,8 +71,36 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
   const mount = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
-  /** Bumped by the rewatch button - the effect's re-run door. */
+  /** Bumped by the rewatch button and the reconnect ladder - the effect's
+   *  re-run door. */
   const [attempt, setAttempt] = useState(0);
+  /**
+   * THE ROOM'S DEAD-SOCKET LANE, brought over (DPLAN-0414 B#9, B#10). A dropped
+   * watch used to keep its last frame at full brightness with only a small
+   * button above it, and that button showed during every first connect too.
+   * Now a watch says it is dead the way the room does - the dimmed frame and a
+   * sentence, from `deadFace` - and climbs the room's own ladder back. A watch
+   * holds no state, so a reconnect costs nothing but a fresh observer.
+   *
+   * `opened`: has this sheet ever been watching. `closed`: how the last socket
+   * closed, null until one has - the overlay and its rewatch button show only
+   * after a close, never while still connecting. "ended" (4000) and
+   * "refused" (1008/1011) are final, as in the room: no ladder.
+   */
+  const [opened, setOpened] = useState(false);
+  const [closed, setClosed] = useState<CloseKind | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
+  /** Consecutive tries with no frame - the rung. A ref, as in the room: the
+   *  ladder reads it, and reading it must not re-run the socket effect. */
+  const retries = useRef(0);
+  /** The socket in flight, for the ladder's "a handshake is not a reason to
+   *  start a second one" check. */
+  const socketRef = useRef<WebSocket | null>(null);
+  /** A hand on the button: the ladder starts again from its first rung. */
+  const rewatchNow = () => {
+    retries.current = 0;
+    setAttempt((n) => n + 1);
+  };
   /** Fullscreen and zoom - TerminalSheet's view controls, ported (Patrick,
    *  2026-08-24: "on watch there is no zoom or full screen"). Only the VIEW
    *  half comes over: the byte-writing chips stay off a watch by ruling -
@@ -348,6 +387,11 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     }
     // Bytes, not Blobs - decoding here would break UTF-8 split across chunks.
     socket.binaryType = "arraybuffer";
+    socketRef.current = socket;
+    /** Per socket, as in the room: did it reach open (B#4), and has it carried
+     *  a frame - the proof the watch is there, and what resets the rung. */
+    let reachedOpen = false;
+    let heard = false;
 
     /** The one control verb on the wire, same as every lane on this socket. */
     const sendResize = () => {
@@ -360,20 +404,31 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     resizeRef.current = sendResize;
 
     socket.onopen = () => {
+      reachedOpen = true;
       setLive(true);
+      setOpened(true);
+      setClosed(null);
       setError(null);
       // First frame is the size - the monitor draws at 80x24 until told.
       sendResize();
     };
     socket.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) xterm.write(new Uint8Array(event.data));
+      if (!(event.data instanceof ArrayBuffer)) return;
+      xterm.write(new Uint8Array(event.data));
+      if (!heard) {
+        heard = true;
+        retries.current = 0;
+      }
     };
     socket.onerror = () => {
       setError("the watch refused this connection - the token was rejected, or the host is unreachable");
     };
     socket.onclose = (event) => {
+      socketRef.current = null;
       setLive(false);
-      setError(closeSentence(event));
+      setClosed(closeKind(event.code));
+      const said = closeSentence(event);
+      setError((previous) => errorAfterClose(previous, said, reachedOpen));
     };
 
     const observer = new ResizeObserver(() => {
@@ -399,6 +454,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       termRef.current = null;
       fitRef.current = null;
       resizeRef.current = null;
+      socketRef.current = null;
       // Close FIRST, then dispose - the close is what ends the observer
       // process on the host, and it must go out while the socket exists.
       socket.onclose = null;
@@ -407,19 +463,87 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     };
   }, [watching, attempt]);
 
+  /**
+   * THE ROOM'S RECONNECT LADDER, for a watch (B#10): the same rungs, the same
+   * stop after six, the same "a handshake in flight is not a try", the same
+   * nothing-in-a-pocket. It arms only after a CLOSE, so the first connect is
+   * the socket effect's alone, and never after a final one.
+   */
+  useEffect(() => {
+    if (live || closed === null || closeIsFinal(closed)) {
+      setReconnecting(false);
+      return;
+    }
+    let timer = 0;
+    const armIn = (wait: number) => {
+      window.clearTimeout(timer);
+      setReconnecting(true);
+      timer = window.setTimeout(() => {
+        const open = socketRef.current;
+        if (open && open.readyState === WebSocket.CONNECTING) {
+          armIn(HANDSHAKE_POLL_MS);
+          return;
+        }
+        if (open && open.readyState === WebSocket.OPEN) {
+          setReconnecting(false);
+          return;
+        }
+        retries.current += 1;
+        setAttempt((n) => n + 1);
+      }, wait);
+    };
+    const arm = () => {
+      window.clearTimeout(timer);
+      if (document.visibilityState !== "visible" || retries.current >= RECONNECT_TRIES) {
+        setReconnecting(false);
+        return;
+      }
+      armIn(RECONNECT_MS[Math.min(retries.current, RECONNECT_MS.length - 1)]);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        window.clearTimeout(timer);
+        setReconnecting(false);
+        return;
+      }
+      retries.current = 0;
+      arm();
+    };
+    arm();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [live, closed, attempt]);
+
+  const dead = live ? null : deadFace({ lane: "watch", label: watchLabel(watching.name), closed, opened, reconnecting });
+
   return (
     <section className={`baud-phone-term ${full ? "baud-phone-term-full" : ""}`}>
       {error ? <p className="baud-phone-error">{error}</p> : null}
-      {!live ? (
-        <button type="button" className="baud-phone-term-reattach" onClick={() => setAttempt((n) => n + 1)}>
-          watch {watching.name}
-        </button>
-      ) : null}
       {/* xterm opens into the inner host div; the buttons overlay the screen's
           corner. The screen is position:relative (phone.css), so the absolute
           classes the terminal sheet already owns land the same way here. */}
       <div ref={host} className="baud-phone-term-screen">
         <div ref={mount} className="baud-phone-term-host" />
+        {/* THE ROOM'S DEAD OVERLAY, on the watch (B#9, B#10): the last frame
+            dimmed under it, the sentence, and the rewatch button - "rewatch
+            mission control" for the target-less monitor, "rewatch <name>"
+            otherwise. Shown only after a close (`deadFace` returns nothing
+            before one), so a watch still connecting never wears it. */}
+        {dead ? (
+          <div className="baud-phone-term-dead">
+            <p className="baud-phone-term-dead-word">{dead.word}</p>
+            <p className="baud-phone-term-dead-why">{dead.why}</p>
+            {dead.retry ? (
+              <button type="button" className="baud-phone-term-reattach" onClick={rewatchNow}>
+                {dead.retry}
+              </button>
+            ) : null}
+            {dead.ladder ? <p className="baud-phone-term-dead-why">{dead.ladder}</p> : null}
+          </div>
+        ) : null}
         {/* Fullscreen: only a class on the section - the watch, its xterm and
             its socket are the same objects before and after, which is the
             entire requirement (TerminalSheet's toggle, verbatim). */}

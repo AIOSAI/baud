@@ -78,8 +78,8 @@ took 330 lines out of the file above.
 | `FeedScreen.tsx` | The feed, full height. |
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
-| `MonitorSheet.tsx` | Logs. |
-| `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. |
+| `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder (DPLAN-0414 B#9, B#10). |
+| `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap (DPLAN-0414 T3). |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
 
@@ -104,6 +104,8 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
+| `processes.ts` | The PROC sheet's list: the cpu/mem order of the same twenty rows, a row's name (or its pid), and the sampled line - pure, plus `processes.test.ts`. |
+| `socketClose.ts` | What a closed room or watch socket means - 4000 ended, 1008/1011 refused, anything else dropped - which of those stop the reconnect ladder, and the dead overlay's words for both sheets. Pure, plus `socketClose.test.ts`. |
 | `battery.ts` | The BAT card's face and the battery sheet's time-left words - pure, so its test stands up neither react nor the host transport. `machine.ts` calls it from the one derivation. |
 | `lock.ts` | The header lock chip's lane: `GET /v1/lock` every 5 s while the app is looked at, re-read at once and 1 s after a tap, forgotten when the app goes away - and which of four faces (unread, unlocked, locked, unknown) a reading means. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
@@ -122,17 +124,17 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
                                                          →  fetch   (phone, via the vite alias)
 ```
 
-- `src/host/index.ts` — **47 exported verbs**. Optional arguments use the
+- `src/host/index.ts` — **48 exported verbs**. Optional arguments use the
   *omitted-key* pattern: a key that is empty is left off the payload entirely,
   so the desktop's `invoke` object stays byte-identical.
-- `src/host/transport.http.ts` — a **36-row route table** over **29 distinct
+- `src/host/transport.http.ts` — a **37-row route table** over **30 distinct
   `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
   that renames the wire's fields to the seam's. Also `HostError`, the token
   store, the room socket and the image upload.
 - **Two refusal tables, and they are the map of what each face cannot do:**
   - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
     phone does not.
-  - `NOT_ON_THIS_FACE` in `transport.ts` (13 rows) — verbs the phone has and the
+  - `NOT_ON_THIS_FACE` in `transport.ts` (14 rows) — verbs the phone has and the
     desktop does not.
   - A verb with no route is refused **by name with a reason**, never bound to
     the nearest plausible path.

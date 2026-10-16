@@ -63,8 +63,12 @@ interface FeedScreenProps {
    * DOOR instead: a mail event carrying `mail_id` and `recipient` opens that
    * message, full text, in the inbox screen. A row without both keys (wake,
    * dispatch, any mail line written before C-A) is the plain row it was.
+   *
+   * `project` rides when the event carries it (C-A as amended): the inbox is
+   * then read under that project directly. Undefined on older lines, and the
+   * caller falls back to finding the recipient's card.
    */
-  onOpenMail: (recipient: string, mailId: string) => void;
+  onOpenMail: (recipient: string, mailId: string, project?: string) => void;
 }
 
 export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOpenMail }: FeedScreenProps) {
@@ -173,7 +177,7 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
                 type="button"
                 className="baud-phone-event baud-phone-event-door"
                 title={`open this message in ${address.recipient}'s inbox`}
-                onClick={() => onOpenMail(address.recipient, address.mailId)}
+                onClick={() => onOpenMail(address.recipient, address.mailId, address.project)}
               >
                 <span className={`baud-phone-event-kind baud-phone-kind-${kindClass(event.kind)}`}>{event.kind}</span>
                 <span className="baud-phone-event-title">{event.title}</span>

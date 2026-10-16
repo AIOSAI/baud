@@ -41,6 +41,7 @@ import type {
   GitLog,
   GitRemote,
   LockState,
+  MachineProcesses,
   MachineVitals,
   MemoryConfig,
   NotificationEvent,
@@ -74,6 +75,16 @@ export const agentRoster = () => call<BranchStatus[]>("agent_roster");
  *  the http transport from adding one. The server's own 1 s cache is what
  *  keeps any number of phones at one read. */
 export const machineVitals = () => call<MachineVitals>("machine_vitals");
+
+/** The top processes by cpu, for the PROC card's sheet (DPLAN-0414 C-B).
+ *  `limit` is the route's ONE parameter and is sent only when given - the
+ *  omitted-key pattern, so a bare call asks the bare path and the server's own
+ *  default answers. Read once per sheet open and on a tap, never polled: the
+ *  skill sleeps ~0.5 s per sample to measure cpu honestly. */
+export const machineProcesses = (limit?: number) =>
+  limit === undefined
+    ? call<MachineProcesses>("machine_processes")
+    : call<MachineProcesses>("machine_processes", { limit });
 
 /** Whether the machine's screen is locked - the header lock chip's read
  *  (FPLAN-0585). READ scope, because a lock's position is observation; locking

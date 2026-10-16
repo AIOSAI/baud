@@ -324,6 +324,13 @@ export interface NotificationEvent {
    */
   mail_id?: string;
   recipient?: string;
+  /**
+   * The recipient's PROJECT, as the project registry names it (C-A as amended
+   * 2026-10-16 14:58). When present the phone reads that project's inbox
+   * directly; when absent (any line written before the amendment) it falls
+   * back to finding the recipient in the seated census, then the roster.
+   */
+  project?: string;
 }
 
 /**
@@ -612,6 +619,35 @@ export interface MachineVitals {
     low: number | null;
     critical: number | null;
   };
+}
+
+/**
+ * The process list (DPLAN-0414 contract C-B): @skills' `machine_processes()`,
+ * relayed verbatim by @api on `GET /v1/machine/processes?limit=N`. Not a Rust
+ * struct - the desktop sits on the machine and has no command behind the name.
+ *
+ * `total` is EVERY pid the skill saw, sleeping ones included - the same figure
+ * as `processes.count` on the vitals, which is why the sheet calls it
+ * "processes" and never "running". `processes` is the top `limit` by
+ * `cpu_pct`, ties by `mem_pct`; `cpu_pct` is a real sample taken over
+ * `window_ms`, normalised to the whole machine. `name` is the process name
+ * only - never arguments - and may be empty, in which case the sheet shows the
+ * pid. `user` is null when the host was denied it.
+ */
+export interface MachineProcesses {
+  sampled_at: string;
+  window_ms: number;
+  total: number;
+  sort: "cpu";
+  processes: {
+    pid: number;
+    name: string;
+    cpu_pct: number;
+    mem_pct: number;
+    mem_mb: number;
+    user: string | null;
+    state: string;
+  }[];
 }
 
 /**

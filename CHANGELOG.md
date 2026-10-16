@@ -19,6 +19,9 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: an inbox screen behind the MAIL tile (DPLAN-0414).** The agent card's MAIL tile opens the agent's messages as a list, newest first, with sender, subject, age and an unread mark under a "N unread · M total" head. A tap on a message shows its full text, wrapped, under its subject, sender and time.
 - **Phone: a plans screen behind the PLANS tile (DPLAN-0414).** The PLANS tile opens the agent's active plan count, its open plans and its recently closed plans, each with its id, subject and age, and says "no open plans" or "nothing closed lately" when a list is empty.
 - **Phone: a mail notification opens its message (DPLAN-0414).** A mail row in the feed that carries the message's id and recipient opens that message's full text; back returns to the feed. A message no longer in the inbox says so in one line. Older rows, wakes and dispatches stay as they were.
+- **Phone: the processes sheet lists what is running by cost (DPLAN-0414).** The PROC card's sheet shows the twenty busiest processes with cpu %, memory % and memory MB, read once when the sheet opens and again on a tap on its sampled line, never polled. A cpu/mem toggle re-orders the same twenty. While the host samples (about half a second) the line says "sampling…"; a refusal shows the same sentence the vitals refusal shows; a process with no name shows its pid. The desktop refuses the new call by name.
+- **Phone: a dropped watch is marked dead and comes back by itself (DPLAN-0414).** A watch whose socket drops dims its last frame under the room's overlay and reconnects on the room's ladder. Its button reads "rewatch mission control" or "rewatch <name>" and shows only after a close, never while the watch is still connecting.
+- **Phone: a startup agent that does not open says why (DPLAN-0414).** The resting stage shows "startup agent X not opened — <reason>" when the token is read-only or the agent has no card in the seated project.
 
 ### Changed
 
@@ -26,11 +29,21 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: README and other `.md` files read as formatted documents (DPLAN-0414).** Headings, lists, code blocks, tables and links are drawn; links open in a new tab; raw HTML in a file shows as text. This adds the `marked` package (18.1.1, pinned).
 - **Phone: an empty file says "this file is empty"** instead of showing a blank screen.
 - **Phone: `▸ resume ⚡` asks for a second tap (DPLAN-0414).** The door shows its warning under the room doors; the first tap arms it, and a second tap within four seconds stops the working agent and resumes its chat. Any other tap cancels.
+- **Phone: the processes count reads "processes" (DPLAN-0414).** It counts every process, sleeping ones too, so the sheet no longer calls it "running", and the "deferred row" line is gone.
+- **Phone: a mail notification that names its project opens that project's inbox (DPLAN-0414).** Notifications without a project still find the recipient through the seated project, then the roster.
 - **Phone: reasons that lived only in hover text are shown on screen (DPLAN-0414).** The room doors under a read token, the header lock chip's answer, the GIT tile's `n/a`, a refused manager monitor and the cross-project roster's refusal each show their reason as a small line. A tap on a passport number shows the full id.
 
 ### Removed
 
 - **Phone: the `tree` row in Settings › About (DPLAN-0414).** The version and bundle rows stay.
+
+### Fixed
+
+- **Phone: a room that ended says "ended" and stays ended (DPLAN-0414).** When the host closes a room with "room ended" (from the desk, or a shell that exited), the overlay reads "ended — this room is gone; open it again from the card to start fresh" and the phone does not reattach into a fresh empty room under the same name. A watch that ends says "the watch ended" and does not re-arm.
+- **Phone: a room the host refuses stops retrying (DPLAN-0414).** An unknown branch or project, or a host without tmux, shows "refused" with the host's sentence instead of looping as "detached, still running". The launch line is typed on the room's first frame, so a refused try no longer uses it up.
+- **Phone: a rejected token at room open keeps its sentence (DPLAN-0414)** instead of being replaced by "the room did not answer".
+- **Phone: `end room` is remembered (DPLAN-0414).** A room ended from the phone, or one that ended under its socket, is not reopened by the startup agent on reload; opening it from its card clears the mark.
+- **Phone: the attached ring follows the agent room (DPLAN-0414)**, not whichever tab is in front.
 
 ## [0.3.7] — 2026-10-15
 

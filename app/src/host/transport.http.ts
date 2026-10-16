@@ -201,6 +201,19 @@ const ROUTES: Record<string, Route> = {
     // sentence as error.message, which `errorFrom` already hands through.
     path: "/v1/machine",
   },
+  machine_processes: {
+    // THE PROCESS LIST (DPLAN-0414 contract C-B), the vitals' sibling and the
+    // same discipline: @skills samples, @api relays the dict verbatim, the PROC
+    // sheet draws it. Read scope. `limit` is the ONE parameter, and it rides
+    // only when the caller named one - `queryString` drops undefined, so a bare
+    // call is the bare path and the server's own default (20) answers. Any
+    // other key is a 400 machine_parameters_refused; a limit it will not take
+    // is a 400 machine_limit_refused; the skill switched off is a 503
+    // machine_refused, and a door that broke is a 503 machine_door_failed. All
+    // four arrive through `errorFrom` as the server's own sentence.
+    path: "/v1/machine/processes",
+    query: (args) => ({ limit: args.limit as number | undefined }),
+  },
   lock_state: {
     // THE LOCK'S POSITION (FPLAN-0585 row 3), beside the machine read and the
     // same shape: @skills reads it, @api relays the dict verbatim, the header

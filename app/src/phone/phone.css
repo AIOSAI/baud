@@ -4655,3 +4655,84 @@ body {
   text-align: left;
   overflow-wrap: anywhere;
 }
+
+/* ---------------------------------------------- DPLAN-0414 wave 3 --
+   The PROC sheet's top-20 list (T3), and the startup agent's one line in the
+   resting state (A#16). The room's and the watch's dead overlay need nothing
+   new: the watch reuses `.baud-phone-term-dead` inside its own
+   `.baud-phone-term-screen`, which is the room's layout already. */
+
+/* The cpu/mem toggle: two small chips, the pressed one in the ring's green. */
+.baud-machine-sort {
+  display: flex;
+  gap: 6px;
+}
+
+.baud-machine-sort-chip {
+  padding: 3px 10px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.68rem;
+}
+
+.baud-machine-sort-chip-on {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+/* One row per process: the name takes what is left, the three numbers sit in
+   right-aligned tabular columns so a glance down a column compares. */
+.baud-machine-procs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.baud-machine-proc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.2em 4.2em 4.8em;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--baud-line);
+  color: var(--baud-ink);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.baud-machine-proc span:not(.baud-machine-proc-name) {
+  text-align: right;
+}
+
+.baud-machine-proc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baud-machine-proc-head {
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+}
+
+/* The sampled line is the re-read: the meta line's own look, as a button. */
+.baud-machine-sampled {
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+}
+
+.baud-machine-sampled:disabled {
+  color: var(--baud-amber);
+}
+
+/* Why the startup agent did not open - quiet, under the hint. */
+.baud-phone-resting-startup {
+  color: var(--baud-amber);
+  font-size: 0.65rem;
+  max-width: 36ch;
+}

@@ -111,12 +111,20 @@ export function findMessage(inbox: Inbox, id: string): InboxMessage | null {
  * non-empty: an older line, a wake or a dispatch carries neither and stays the
  * plain row it always was. `recipient` is a branch name without `@`; a stray
  * `@` is dropped rather than sent to the fence as part of a name.
+ *
+ * `project` (C-A as amended 2026-10-16) is the recipient's project as the
+ * registry names it. It is carried only when it is a non-empty string, and it
+ * is NOT required: a row without it is still a door, and the caller finds the
+ * project the way it did before the amendment.
  */
-export function mailAddress(event: { mail_id?: unknown; recipient?: unknown }): {
+export function mailAddress(event: { mail_id?: unknown; recipient?: unknown; project?: unknown }): {
   recipient: string;
   mailId: string;
+  project?: string;
 } | null {
   const mailId = text(event.mail_id);
   const recipient = text(event.recipient)?.replace(/^@/, "") ?? null;
-  return mailId && recipient ? { recipient, mailId } : null;
+  if (!mailId || !recipient) return null;
+  const project = text(event.project);
+  return project ? { recipient, mailId, project } : { recipient, mailId };
 }

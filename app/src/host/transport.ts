@@ -61,6 +61,11 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
      served by @api, and only the phone asks for it. */
   machine_vitals:
     "the desktop sits on the machine it would be reading - the monitor layer is the phone's glance from across the room",
+  /* DPLAN-0414 C-B. The process list behind the PROC card is the same glance
+     from across the room - the desk has a system monitor a click away - so it
+     is refused the same way, by name, like the git reads. */
+  machine_processes:
+    "the desktop sits on the machine it would be reading - the process list is the phone's glance from across the room",
   /* FPLAN-0585. The header lock chip reads whether the laptop is locked, which
      is a question only a device AWAY from the laptop needs to ask. */
   lock_state:

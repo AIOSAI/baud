@@ -87,7 +87,7 @@ import PhoneSettings, { scrollPercent } from "./PhoneSettings";
 import Reader, { type ReadTarget } from "./Reader";
 import TerminalSheet from "./TerminalSheet";
 import { LockChip } from "./VerbChips";
-import { roomEnded } from "../intent";
+import { clearRoomEnded, markRoomEnded, roomEnded } from "../intent";
 // THE FOUR POLLING LANES, and the three constants the render still names.
 // They left this file in FPLAN-0445 without changing a line of what they do -
 // see the header of pollers.ts for why the ORDER of the hook calls below is
@@ -431,6 +431,15 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    * SHOT itself is not here - see the module note on `startupSpent`.
    */
   const seatedRef = useRef(false);
+  /**
+   * WHY THE STARTUP AGENT DID NOT OPEN, when it did not (DPLAN-0414 A#16).
+   * The two refusals below used to go to the console only, so a phone that
+   * was set to open devpulse on load simply opened nothing and said nothing.
+   * One line in the resting state now: "startup agent X not opened — reason".
+   * Null when it opened, when none is set, or when its room was ended by hand
+   * (the operator's own choice is not news to the operator).
+   */
+  const [startupNote, setStartupNote] = useState<string | null>(null);
   /** Which branch's claude-settings panel is open. Null means none. */
   const [settingsAgent, setSettingsAgent] = useState<string | null>(null);
   /** The header gear - BAUD's own settings for the machine's seat. */
@@ -663,25 +672,27 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     const refusal = scopeRefusal(scope);
     if (refusal) {
       console.info(`startup agent '${startupAgent}' stays closed - ${refusal}`);
+      setStartupNote(`startup agent ${startupAgent} not opened — ${refusal}`);
       return;
     }
     const branch = snapshot.branches.find((item) => item.name === startupAgent);
     if (!branch) {
-      // The desk's own sentence and its own judgment: an agent that has no card
-      // in the seated project is not a fault worth a banner over.
+      // Not a banner - an agent with no card in the seated project is not a
+      // fault - but not silence either (A#16): one quiet line where the room
+      // would have been.
       console.warn(`startup agent '${startupAgent}' has no card here - opening nothing`);
+      setStartupNote(`startup agent ${startupAgent} not opened — it has no card in ${snapshot.project || "this project"}`);
       return;
     }
     /* THE ENDED-ROOM RULING (intent.ts, Patrick 2026-08-12): a room the operator
-       ended stays dead until they open its card themselves. Read here, and it is
-       worth saying plainly that TODAY IT IS ALWAYS FALSE ON THIS FACE - the mark
-       lives in localStorage per origin, and nothing on the phone writes it: the
-       `end room` verb kills the session and records nothing. This is the guard
-       standing ready, not a doctrine already kept. It costs one import, and it
-       means the day the phone's kill door learns to mark its rooms, the startup
-       seat cannot resurrect one - which is the exact bug the desk already paid
-       for once. The gap itself is reported, not patched here. */
-    if (roomEnded(snapshot.project, branch.name)) {
+       ended stays dead until they open its card themselves. The phone WRITES
+       the mark now (DPLAN-0414 A#17 = B#7), in two places: `end room` on the
+       agent card (`onEnded` below), and a room that ended under its socket -
+       the host's 4000 close (TerminalSheet, contract C-C). Its card's attach
+       doors clear it (`onAttach` below), the desk's one door that revives an
+       ended room. All three address the room by the CARD's project and name,
+       which is what this guard reads - a seated card's project is the seat. */
+    if (roomEnded(branch.project, branch.name)) {
       console.info(
         `startup agent '${branch.name}' stays closed - you ended its room; open its card to bring it back`,
       );
@@ -900,7 +911,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
      passport now survives a project switch, which the closing version did not.
      It closes on one gesture: the operator's. */
 
-  const activePane = open.find((pane) => paneKey(pane) === active) ?? null;
   return (
     <div className={`baud-phone ${typing ? "baud-phone-typing" : ""}`}>
       <header className="baud-phone-head">
@@ -1003,7 +1013,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         seatedProject={snapshot?.project ?? ""}
         gitCounts={gitCounts}
         centered={current ? cardRef(current) : null}
-        attached={activePane?.name ?? null}
+        /* THE RING FOLLOWS THE AGENT ROOM, not whichever tab is in front
+           (DPLAN-0414 A#15). A shell, a watch or a file in front is not an
+           attachment to any card; the seat pane is, wherever it sits. */
+        attached={open.find(isSeat)?.name ?? null}
         appBadges={appBadges}
         appFaces={appFaces}
         onLayer={setWheelLayer}
@@ -1199,6 +1212,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             <p className="baud-phone-resting-hint">
               open one from a card — rooms, shells, watches and files stack here as tabs
             </p>
+            {startupNote ? <p className="baud-phone-resting-startup">{startupNote}</p> : null}
           </div>
         ) : null}
       </section>
@@ -1300,6 +1314,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           }}
           onAttach={(mode) => {
             setExpanded(null);
+            // The operator opening this card's room is the ONE door that
+            // revives an ended room (intent.ts; the desk does the same).
+            clearRoomEnded(expandedCard.project, expandedCard.name);
             focusPane({ name: expandedCard.name, mode, project: expandedCard.project, card: expandedCard });
           }}
           /* Built by paneKey itself rather than spelled out here - a key
@@ -1327,6 +1344,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              machine's sentence inline - closing the sheet would delete the only
              confirmation the operator gets that the room actually ended. */
           onEnded={() => {
+            // RECORDED NOW (DPLAN-0414 A#17 = B#7): the startup agent's guard
+            // reads this mark, so a reload does not recreate the room the
+            // operator just ended. Only after the machine confirmed the kill -
+            // the chip calls this on success alone.
+            markRoomEnded(expandedCard.project, expandedCard.name);
             closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
           }}
           onClose={() => setExpanded(null)}
@@ -1557,16 +1579,18 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           clearedUpTo={clearedUpTo}
           onClear={clearFeed}
           onClose={closeFeed}
-          /* THE BELL ROW'S DOOR (DPLAN-0414 A#2, contract C-A). The event names
-             a recipient by branch and NO project, so the project is looked up
-             the way every card is resolved on this face: the seated census
-             first, then the cross-project roster. A recipient found in
-             neither is read under the seat, the meaning an unnamed project
-             has always had; a wrong guess there cannot show the wrong mail,
-             because the message is matched by its id and a miss says so. */
-          onOpenMail={(recipient, mailId) => {
-            const card = pool.find((each) => each.name === recipient);
-            setInboxOf({ name: recipient, project: card?.project ?? "", messageId: mailId });
+          /* THE BELL ROW'S DOOR (DPLAN-0414 A#2, contract C-A). An event that
+             carries `project` (C-A as amended) names the recipient's project
+             outright, and that inbox is read directly - no guess. One without
+             it (any line written before the amendment) falls back to how every
+             card is resolved on this face: the seated census first, then the
+             cross-project roster. A recipient found in neither is read under
+             the seat, the meaning an unnamed project has always had; a wrong
+             guess there cannot show the wrong mail, because the message is
+             matched by its id and a miss says so. */
+          onOpenMail={(recipient, mailId, project) => {
+            const where = project ?? pool.find((each) => each.name === recipient)?.project ?? "";
+            setInboxOf({ name: recipient, project: where, messageId: mailId });
           }}
         />
       ) : null}

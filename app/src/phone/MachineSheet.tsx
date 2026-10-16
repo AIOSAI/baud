@@ -7,7 +7,10 @@
  * skill's own window and the load averages, memory and swap, the CPU package
  * temperature against its sensor's own high and critical lines, the fan against
  * its range, network throughput, and the process count. The card faces draw
- * from the same read, so a card and its sheet cannot disagree.
+ * from the same read, so a card and its sheet cannot disagree. The ONE read
+ * that is not the vitals is the PROC sheet's top-20 list (DPLAN-0414 T3),
+ * `GET /v1/machine/processes`, read once per open and on a tap - see
+ * `useProcessList` below.
  *
  * WHERE THE MEANING LIVES: in the skill, never on this face. Which sensor is the
  * CPU, which rows are nonsense, what an absence is called and the sentence that
@@ -25,11 +28,22 @@
  * binary reads none of it and has no command behind the name.
  */
 
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
-import type { MachineSection, MachineVitals } from "../types";
+import { machineProcesses } from "../host";
+import { HostError } from "../host/transport.http";
+import type { MachineProcesses, MachineSection, MachineVitals } from "../types";
 import { PREDATES_BATTERY, timeLeftText } from "./lib/battery";
 import { type MachineRead, bytesText, rateText } from "./lib/machine";
+import {
+  PROCESS_LIMIT,
+  type ProcessSort,
+  memText,
+  pctText,
+  processName,
+  sampledLine,
+  sortProcesses,
+} from "./lib/processes";
 
 /** The sheet's title per card. An unknown key titles itself rather than blanking. */
 const TITLES: Record<string, string> = {
@@ -51,6 +65,10 @@ export default function MachineSheet({
   read: MachineRead;
   onClose: () => void;
 }) {
+  // Read ONCE when the PROC sheet opens, and on a tap - never on the vitals'
+  // cadence and never while the sheet is shut, because this component is only
+  // mounted while it is open (DPLAN-0414 T3).
+  const procs = useProcessList(card === "mon-proc");
   return (
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
@@ -59,12 +77,12 @@ export default function MachineSheet({
         </button>
         <span className="baud-phone-reader-title">monitor · {TITLES[card] ?? card}</span>
       </header>
-      <div className="baud-machine">{sheetBody(card, read)}</div>
+      <div className="baud-machine">{sheetBody(card, read, procs)}</div>
     </section>
   );
 }
 
-function sheetBody(card: string, { reading, refusal }: MachineRead): ReactNode {
+function sheetBody(card: string, { reading, refusal }: MachineRead, procs: ProcessList): ReactNode {
   // The owner said no, or the host could not be reached. Every card says the
   // same thing, because it is the same fact: no reading, and whose word that is.
   if (refusal) {
@@ -90,7 +108,7 @@ function sheetBody(card: string, { reading, refusal }: MachineRead): ReactNode {
     case "mon-net":
       return <NetworkBody reading={reading} />;
     case "mon-proc":
-      return <ProcessBody reading={reading} />;
+      return <ProcessBody reading={reading} procs={procs} />;
     case "mon-bat":
       return <BatteryBody reading={reading} />;
     default:
@@ -279,16 +297,125 @@ function NetworkBody({ reading: { network, sampled_at } }: { reading: MachineVit
   );
 }
 
-function ProcessBody({ reading: { processes, sampled_at } }: { reading: MachineVitals }) {
+/* ---------------------------------------------------- the process list -- */
+
+/** One visit's process read: the latest list, the latest refusal, and whether
+ *  a sample is in flight. `again` is the tap on the sampled line. */
+interface ProcessList {
+  read: MachineProcesses | null;
+  refusal: { code: string; message: string } | null;
+  sampling: boolean;
+  again: () => void;
+}
+
+/**
+ * THE TOP-20 READ (DPLAN-0414 T3, contract C-B). NOT POLLED, and that is the
+ * ruling, not an economy: the owner's case is "laptop fan going crazy ... what
+ * is running", a glance, and the skill sleeps about half a second per sample
+ * to measure cpu honestly. So one read when the PROC sheet opens, one per tap
+ * on the sampled line, and nothing on the monitor row's two-second cadence.
+ * The sheet unmounts when it shuts, and this goes with it.
+ *
+ * A refusal is held exactly as the vitals lane holds one (`lib/machine.ts`):
+ * the HostError's code and the server's own sentence, verbatim.
+ */
+function useProcessList(active: boolean): ProcessList {
+  const [read, setRead] = useState<MachineProcesses | null>(null);
+  const [refusal, setRefusal] = useState<ProcessList["refusal"]>(null);
+  // Born sampling when the sheet is the PROC one: the read goes out in the
+  // effect, after the first paint, and that paint must already say so.
+  const [sampling, setSampling] = useState(active);
+  const [asked, setAsked] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    let live = true;
+    setSampling(true);
+    machineProcesses(PROCESS_LIMIT)
+      .then(
+        (answer) => {
+          if (!live) return;
+          setRead(answer);
+          setRefusal(null);
+        },
+        (cause: unknown) => {
+          if (!live) return;
+          setRefusal({
+            code: cause instanceof HostError ? cause.code : "error",
+            message: cause instanceof Error ? cause.message : String(cause),
+          });
+        },
+      )
+      .finally(() => {
+        if (live) setSampling(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [active, asked]);
+
+  return { read, refusal, sampling, again: () => setAsked((n) => n + 1) };
+}
+
+/**
+ * THE PROC CARD'S SHEET (DPLAN-0414 B#1). The headline is EVERY pid the host
+ * counted, sleeping ones included - so it says "processes", never "running"
+ * (the host sends no running count). Below it, the twenty busiest by cpu as the
+ * host sampled them, and a toggle that re-orders the same twenty by memory on
+ * the phone. The line under the list says when the sample was taken and reads
+ * again on a tap; while a sample is in flight it says "sampling…".
+ */
+function ProcessBody({ reading: { processes }, procs }: { reading: MachineVitals; procs: ProcessList }) {
+  const [by, setBy] = useState<ProcessSort>("cpu");
+  const rows = procs.read ? sortProcesses(procs.read.processes, by) : [];
   return (
     <>
-      <Headline value={processes.count === null ? "—" : String(processes.count)} note="running" />
+      <Headline value={processes.count === null ? "—" : String(processes.count)} note="processes" />
       <Section section={processes} rows={[["count", processes.count === null ? "—" : String(processes.count)]]} />
-      {/* NOT an absence - the count above is real. The LIST is a later row with
-          its own route and cache (names and counts only, never arguments), so
-          this line says what is not wired rather than leaving it to be guessed. */}
-      <Honest>what is running, by what it costs, is a deferred row with its own route — not wired yet.</Honest>
-      <Sampled at={sampled_at} />
+      {procs.refusal ? (
+        // The same sentence the vitals refusal shows: the owner's own words.
+        <Honest absent>{procs.refusal.message}</Honest>
+      ) : rows.length > 0 ? (
+        <>
+          <div className="baud-machine-sort" role="group" aria-label="order the list by">
+            {(["cpu", "mem"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`baud-machine-sort-chip ${by === key ? "baud-machine-sort-chip-on" : ""}`}
+                aria-pressed={by === key}
+                onClick={() => setBy(key)}
+              >
+                {key}
+              </button>
+            ))}
+          </div>
+          <ol className="baud-machine-procs">
+            <li className="baud-machine-proc baud-machine-proc-head" aria-hidden="true">
+              <span>name</span>
+              <span>cpu</span>
+              <span>mem</span>
+              <span>MB</span>
+            </li>
+            {rows.map((row) => (
+              <li key={row.pid} className="baud-machine-proc">
+                <span className="baud-machine-proc-name">{processName(row)}</span>
+                <span>{pctText(row.cpu_pct)}</span>
+                <span>{pctText(row.mem_pct)}</span>
+                <span>{memText(row.mem_mb)}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : null}
+      <button
+        type="button"
+        className="baud-machine-meta baud-machine-sampled"
+        disabled={procs.sampling}
+        onClick={procs.again}
+      >
+        {sampledLine(procs.read, procs.sampling, clockTime)}
+      </button>
     </>
   );
 }
@@ -387,11 +514,16 @@ function Honest({ absent = false, children }: { absent?: boolean; children: Reac
   return <p className={`baud-machine-honest ${absent ? "baud-machine-honest-absent" : ""}`}>{children}</p>;
 }
 
-function Sampled({ at, over = null }: { at: string; over?: number | null }) {
+/** A sample's time of day, or the host's own string when it does not parse. */
+function clockTime(at: string): string {
   const when = new Date(at);
+  return Number.isNaN(when.getTime()) ? at : when.toLocaleTimeString();
+}
+
+function Sampled({ at, over = null }: { at: string; over?: number | null }) {
   return (
     <p className="baud-machine-meta">
-      sampled {Number.isNaN(when.getTime()) ? at : when.toLocaleTimeString()}
+      sampled {clockTime(at)}
       {over === null ? "" : ` over ${over.toFixed(1)} s`} · @skills via @api
     </p>
   );

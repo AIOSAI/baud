@@ -182,4 +182,33 @@ describe("mailAddress", () => {
   it("is not a door when a key is not a string", () => {
     expect(mailAddress({ mail_id: 7, recipient: "devpulse" })).toBe(null);
   });
+
+  it("carries the recipient's project when the event names one", () => {
+    expect(mailAddress({ mail_id: "01c2c5e2", recipient: "baud", project: "baud" })).toEqual({
+      recipient: "baud",
+      mailId: "01c2c5e2",
+      project: "baud",
+    });
+  });
+
+  it("is still a door without a project, and carries no project key", () => {
+    const address = mailAddress({ mail_id: "01c2c5e2", recipient: "devpulse" });
+    expect(address).not.toBe(null);
+    expect(Object.keys(address ?? {})).toEqual(["recipient", "mailId"]);
+  });
+
+  it("drops an empty or non-string project rather than reading the seat as ''", () => {
+    expect(Object.keys(mailAddress({ mail_id: "01c2c5e2", recipient: "devpulse", project: "" }) ?? {})).toEqual([
+      "recipient",
+      "mailId",
+    ]);
+    expect(Object.keys(mailAddress({ mail_id: "01c2c5e2", recipient: "devpulse", project: 3 }) ?? {})).toEqual([
+      "recipient",
+      "mailId",
+    ]);
+  });
+
+  it("is not a door with only a project and no mail_id", () => {
+    expect(mailAddress({ recipient: "devpulse", project: "aipass" })).toBe(null);
+  });
 });

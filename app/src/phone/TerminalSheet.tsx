@@ -39,6 +39,7 @@ import "@xterm/xterm/css/xterm.css";
 import { deliveryText } from "../deliver";
 import { openRoomSocket, uploadImage } from "../host";
 import { HostError } from "../host/transport.http";
+import { markRoomEnded } from "../intent";
 import type { BranchStatus } from "../types";
 /* The knob's bounds live with the panel that sets them - the desk's own shape,
    where `App.tsx` reads `interfacePrefs` out of `InterfaceSettings`. One
@@ -47,6 +48,14 @@ import { SCROLL_MAX, SCROLL_MIN, SCROLL_NEUTRAL } from "./PhoneSettings";
 import { copyReport, copyThrough } from "./lib/copyPath";
 import { coversRow, findLinks, readRows, recentUrls } from "./lib/roomLinks";
 import { type PhoneMode, launchCommand, typeOnAttach } from "./lib/rooms";
+import {
+  type CloseKind,
+  closeIsFinal,
+  closeKind,
+  deadFace,
+  errorAfterClose,
+  roomStatusAfterClose,
+} from "./lib/socketClose";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /**
@@ -491,16 +500,18 @@ const PONG_DEAD_MS = 30_000;
  * minutes on the night this was written; this ladder makes that shape
  * impossible without ever making the first recovery slow.
  */
-const RECONNECT_MS = [0, 1_000, 3_000, 6_000, 12_000, 30_000];
+export const RECONNECT_MS = [0, 1_000, 3_000, 6_000, 12_000, 30_000];
 
 /** How many tries in a row before the phone stops and SAYS it stopped. A room
  *  that is gone is not reachable by repetition, and the door never closes: the
- *  overlay's button is always live, and looking away and back resets the count. */
-const RECONNECT_TRIES = RECONNECT_MS.length;
+ *  overlay's button is always live, and looking away and back resets the count.
+ *  Exported, with the ladder above and the poll below, for MonitorSheet: a
+ *  dropped watch climbs the SAME ladder (DPLAN-0414 B#10). */
+export const RECONNECT_TRIES = RECONNECT_MS.length;
 
 /** A handshake already in flight is not a reason to start a second one - so the
  *  lane looks again after this instead of counting a try. */
-const HANDSHAKE_POLL_MS = 1_000;
+export const HANDSHAKE_POLL_MS = 1_000;
 
 /** Exported for MonitorSheet's zoom - one range for both faces, same reason
  *  as LINES_PER_NOTCH above. */
@@ -522,7 +533,8 @@ function closeSentence(event: CloseEvent): string | null {
   if (event.code === 1008) return event.reason || "the room refused this request";
   if (event.code === 1011) return event.reason || "the host could not open the room";
   // 1000/1001/1005/1006: a detach, a backgrounded phone, a dropped link. The
-  // room is fine and saying "error" about it would be a lie.
+  // room is fine and saying "error" about it would be a lie. 4000 "room
+  // ended" (C-C) is not an error either - the overlay says it, in full.
   return null;
 }
 
@@ -672,9 +684,11 @@ export default function TerminalSheet({
   /** Bump to open a fresh socket onto the same room. */
   const [attempt, setAttempt] = useState(0);
   /**
-   * Consecutive attempts that never reached `onopen`. A REF, not state: the
-   * reconnect lane reads it to pick its rung and the attach effect resets it
-   * on a successful open, and neither of those is a reason to re-render - but
+   * Consecutive attempts that never got a frame of the room. A REF, not state:
+   * the reconnect lane reads it to pick its rung and the attach effect resets
+   * it on the first DATA frame - not on `onopen`, because @api accepts a socket
+   * before it refuses one (DPLAN-0414 B#5), so an open alone proves nothing
+   * about the room. Neither of those is a reason to re-render - but
    * putting it in the attach effect's dependencies WOULD be a reason to
    * reattach, which is the exact churn this counter exists to bound.
    */
@@ -694,6 +708,13 @@ export default function TerminalSheet({
    */
   const [opened, setOpened] = useState(false);
   /**
+   * HOW THE LAST SOCKET CLOSED, until the next one opens (DPLAN-0414 B#5, C-C).
+   * Null before any close. "ended" (4000) and "refused" (1008/1011) are FINAL:
+   * the ladder below stands down on them, and the overlay says which instead
+   * of "detached, still running". The decisions are `lib/socketClose.ts`'s.
+   */
+  const [closed, setClosed] = useState<CloseKind | null>(null);
+  /**
    * A retry the OPERATOR asked for: the ladder starts again from its first
    * rung, because a thumb on the button is new information about whether the
    * room is worth trying. Every hand-driven reattach goes through here, so the
@@ -708,6 +729,11 @@ export default function TerminalSheet({
    * lands in a room that already has whatever the first attach started; typing
    * the command again would be the double-claude hazard arriving through the
    * back door, after all the work spent closing the front one.
+   *
+   * SET ON THE FIRST DATA FRAME, not on `onopen` (DPLAN-0414 B#5). A socket the
+   * host accepts and then refuses (1008/1011) opens first; marking the line
+   * typed there typed it into a socket about to close, and the attach that
+   * later worked never typed it at all.
    */
   const launched = useRef(false);
   /** A delivery that outlived its socket, waiting for the next open. */
@@ -1249,6 +1275,12 @@ export default function TerminalSheet({
     /** Set when the watchdog is the one closing, so the close can say why. */
     let silenced = false;
     let watchdog = 0;
+    /** Did THIS socket reach `onopen`? A handshake refusal never does, and its
+     *  close must not wipe the sentence `onerror` wrote (B#4). */
+    let reachedOpen = false;
+    /** Has THIS socket carried a frame of the room yet? The first one is the
+     *  proof the room is there (B#5) - see `firstFrame`. */
+    let heard = false;
 
     /** The probe, and later the keepalive. Text frame: @api's split is text =
      *  control, binary = keystrokes, so this can never be typed into the room. */
@@ -1286,31 +1318,16 @@ export default function TerminalSheet({
       if (on) watchdog = window.setInterval(tick, LIVENESS_TICK_MS);
     };
 
-    live.onopen = () => {
-      setLive(true);
-      setOpened(true);
-      // This socket reached open, so the ladder starts from the bottom again.
+    /**
+     * THE FIRST FRAME OF THE ROOM, once per socket (DPLAN-0414 B#5). Reaching
+     * `onopen` is not this: @api accepts first and refuses after, with a 1008
+     * or 1011 and a sentence, so an open socket may carry nothing but its own
+     * close. Room output is the proof the room is there - tmux repaints on
+     * attach, so it comes at once - and only then does the ladder start from
+     * the bottom again and the sheet's one line get typed.
+     */
+    const firstFrame = () => {
       retries.current = 0;
-      setStatus(`attached · ${roomLabel}`);
-      setError(null);
-      // FIRST FRAME IS THE SIZE. @api opens the PTY at 80x24 until told
-      // otherwise, so anything written before this lands in the wrong geometry.
-      //
-      // The phone is a REAL client and sizes like one (Amendment 1 withdrew the
-      // never-resize-from-the-phone line). The room is opened `window-size
-      // smallest` (`pty.rs`), so this resize SETTLES the geometry instead of
-      // starting a fight: under tmux's `latest` default the desk took the
-      // window back on its next repaint and left the phone rendering a window
-      // it could not fit - the stacking status bar and the scattered echo
-      // Patrick reported. The desk gets its size back when this client leaves.
-      sendResize();
-      // THE PROBE, second frame and once per socket. If this host answers, the
-      // watchdog stops guessing from silence and starts measuring round trips;
-      // if it does not, this is the only ping it will ever be sent and the
-      // fallback carries the room. Either way nothing here waits on the answer.
-      ping();
-      lastRx = Date.now();
-      if (document.visibilityState === "visible") watch(true);
       // The command line, typed only where it can land at a prompt. Sent WITH
       // its newline - the operator pressed a launch door and running it is the
       // point, exactly as `Terminal.tsx` does after `ptyCreate`. ONCE per
@@ -1346,6 +1363,35 @@ export default function TerminalSheet({
         launched.current = true;
         write(`${opener}\n`);
       }
+    };
+
+    live.onopen = () => {
+      reachedOpen = true;
+      setLive(true);
+      setOpened(true);
+      // A fresh open has not closed yet. The ladder's rung resets on the
+      // first DATA frame instead - see `firstFrame`.
+      setClosed(null);
+      setStatus(`attached · ${roomLabel}`);
+      setError(null);
+      // FIRST FRAME IS THE SIZE. @api opens the PTY at 80x24 until told
+      // otherwise, so anything written before this lands in the wrong geometry.
+      //
+      // The phone is a REAL client and sizes like one (Amendment 1 withdrew the
+      // never-resize-from-the-phone line). The room is opened `window-size
+      // smallest` (`pty.rs`), so this resize SETTLES the geometry instead of
+      // starting a fight: under tmux's `latest` default the desk took the
+      // window back on its next repaint and left the phone rendering a window
+      // it could not fit - the stacking status bar and the scattered echo
+      // Patrick reported. The desk gets its size back when this client leaves.
+      sendResize();
+      // THE PROBE, second frame and once per socket. If this host answers, the
+      // watchdog stops guessing from silence and starts measuring round trips;
+      // if it does not, this is the only ping it will ever be sent and the
+      // fallback carries the room. Either way nothing here waits on the answer.
+      ping();
+      lastRx = Date.now();
+      if (document.visibilityState === "visible") watch(true);
       // A delivery that was stranded by a dead socket goes NOW, on the first
       // open that can carry it. This is the picker case: choosing a photo
       // backgrounds the app, the socket dies while the operator is in the
@@ -1366,6 +1412,10 @@ export default function TerminalSheet({
       // socket is not room output and is not painted as if it were.
       if (event.data instanceof ArrayBuffer) {
         xterm.write(new Uint8Array(event.data));
+        if (!heard) {
+          heard = true;
+          firstFrame();
+        }
         return;
       }
       // Text is CONTROL - @api's own split, read from the other side of the
@@ -1400,22 +1450,36 @@ export default function TerminalSheet({
       socket.current = null;
       watch(false);
       setLive(false);
+      // WHAT THIS CLOSE IS (`lib/socketClose.ts`). "ended" and "refused" are
+      // final: `closed` stands the ladder down and the overlay says which.
+      const kind = closeKind(event.code);
+      setClosed(kind);
       setStatus(
-        silenced
-          ? // NAMED, because this one is the phone's own doing and an operator
-            // owed the truth about a dead room is owed it about the kill too.
-            pongLane
-            ? "the room stopped answering - let go of the socket"
-            : "no bytes from the room for 90s - let go of the socket"
-          : "detached - the room and whatever runs in it are still there",
+        roomStatusAfterClose(
+          kind,
+          silenced
+            ? // NAMED, because this one is the phone's own doing and an operator
+              // owed the truth about a dead room is owed it about the kill too.
+              pongLane
+              ? "the room stopped answering - let go of the socket"
+              : "no bytes from the room for 90s - let go of the socket"
+            : null,
+        ),
       );
+      // THE ROOM ENDED UNDER THE SOCKET (C-C, T5 item 3): write the same mark
+      // the phone's own `end room` writes (PhoneApp `onEnded`), so a startup
+      // agent does not recreate it on the next load. AGENT rooms only: a
+      // shell is the `baud-shell-` room next door, and marking it under the
+      // branch's name would bury the agent's room for an exit it never had.
+      if (kind === "ended" && mode !== "shell") markRoomEnded(attachedTo.project, attachedTo.name);
       // A stranded delivery is not lost and must not look lost: the file IS on
       // disk, and its path is one reattach away from being typed.
       const waiting = pending.current;
-      setError(
+      const said = closeSentence(event);
+      setError((previous) =>
         waiting
           ? `the photo is saved at ${waiting.path} but the room detached before it could be typed - reattach to deliver it`
-          : closeSentence(event),
+          : errorAfterClose(previous, said, reachedOpen),
       );
     };
 
@@ -1879,8 +1943,13 @@ export default function TerminalSheet({
   useEffect(() => {
     // Attached, or never going to be - either way there is nothing to retry.
     // A read token gets no socket at all (the refusal is the answer), and
-    // retrying an auth refusal would be asking the same question louder.
-    if (live || refusal) {
+    // retrying an auth refusal would be asking the same question louder. The
+    // same goes for a room the host refused after accepting it (1008/1011),
+    // and for one that ENDED (4000): `new-session -A` would build a fresh
+    // empty room under the old name and this ladder would call it a reattach
+    // (DPLAN-0414 B#5, B#6). The overlay's button stays a hand's door where
+    // there is one; nothing here re-arms by itself.
+    if (live || refusal || closeIsFinal(closed)) {
       setReconnecting(false);
       return;
     }
@@ -1938,7 +2007,7 @@ export default function TerminalSheet({
     };
     // `attempt` is here so each attempt re-arms the next rung; the counter it
     // reads is a ref precisely so this effect is the only thing that reattaches.
-  }, [live, refusal, attempt]);
+  }, [live, refusal, attempt, closed]);
 
   /**
    * THE PROXY'S EVENTS ARE ATTACHED NATIVELY, and that is this round's fix
@@ -2592,6 +2661,10 @@ export default function TerminalSheet({
     }
   }
 
+  /** The dead overlay, or null - a read token has its own line and no socket,
+   *  and a live room is not dead. See the overlay below. */
+  const dead = refusal || live ? null : deadFace({ lane: "room", label: roomLabel, closed, opened, reconnecting });
+
   return (
     <section className={`baud-phone-term ${full ? "baud-phone-term-full" : ""}`}>
       {/* THE HEADER ROW IS GONE. It cost a permanent row to say three things:
@@ -2637,27 +2710,25 @@ export default function TerminalSheet({
             The stale frame stays legible underneath, dimmed. It is the last
             true thing the room said and is often still worth reading - what it
             must never again do is pass for now. */}
-        {!refusal && !live && (opened || !reconnecting) ? (
+        {/* THE WORDS ARE `deadFace`'s (lib/socketClose.ts), so the room and
+            the watch cannot drift apart on them. Five situations, five
+            sentences: still getting in (nothing shown), never got in,
+            detached with the room still running, REFUSED by the host (B#5),
+            and ENDED - the room is gone, and the way back is its card, not a
+            button here (C-C). A retry armed and a phone that has stopped
+            trying by itself are said differently too: a UI that shows the
+            same thing for both is lying to the operator waiting on a
+            reconnection that is never coming. */}
+        {dead ? (
           <div className="baud-phone-term-dead">
-            <p className="baud-phone-term-dead-word">{opened ? "detached" : "not attached"}</p>
-            <p className="baud-phone-term-dead-why">
-              {opened
-                ? `${roomLabel} is still running. This is the last frame the phone was sent, not the room now.`
-                : `the phone has not got into ${roomLabel}.`}
-            </p>
-            <button type="button" className="baud-phone-term-reattach" onClick={reattachNow}>
-              {reconnecting ? "reattaching…" : `reattach to ${roomLabel}`}
-            </button>
-            {/* Two different situations, said in two different sentences: a
-                retry is armed, or the phone has stopped trying by itself. A
-                UI that shows the same thing for both is telling one of them a
-                lie, and the one it lies to is the operator waiting on a
-                reconnection that is never coming. */}
-            <p className="baud-phone-term-dead-why">
-              {reconnecting
-                ? "trying again by itself while this screen is open"
-                : "not trying any more - the room did not answer. Tap to try again."}
-            </p>
+            <p className="baud-phone-term-dead-word">{dead.word}</p>
+            <p className="baud-phone-term-dead-why">{dead.why}</p>
+            {dead.retry ? (
+              <button type="button" className="baud-phone-term-reattach" onClick={reattachNow}>
+                {dead.retry}
+              </button>
+            ) : null}
+            {dead.ladder ? <p className="baud-phone-term-dead-why">{dead.ladder}</p> : null}
           </div>
         ) : null}
         {/* ON the screen, not above it: a corner affordance costs no row, and
