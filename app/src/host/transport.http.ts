@@ -423,6 +423,28 @@ const ROUTES: Record<string, Route> = {
     body: () => ({}),
   },
 
+  /* ------------------------------------------------------------ backup -- */
+  /* DPLAN-0411; shapes in devpulse/docs.local/backup_door_contract.md. Run is
+     OPERATE scope, job and status are read. `call` already puts a non-empty
+     `project` on the query string, which is exactly where status wants it;
+     run carries it in the body as the contract names it. */
+
+  backup_run: {
+    path: "/v1/backup/run",
+    method: "POST",
+    body: (args) => ({ project: args.project, lane: args.lane }),
+  },
+  backup_job: {
+    path: "/v1/backup/job",
+    query: (args) => ({ id: args.id as string }),
+  },
+  // sizes=1 or nothing at all: an absent key is the cheap read, and `queryString`
+  // drops undefined, so the walk is only ever asked for by name.
+  backup_status: {
+    path: "/v1/backup/status",
+    query: (args) => ({ sizes: args.sizes ? 1 : undefined }),
+  },
+
   /* ---------------------------------------------------------- settings -- */
   /* The desktop's two gears, reached over /v1. Reads ride the read scope,
      writes are operate. The patch shapes cross the wire UNTOUCHED because

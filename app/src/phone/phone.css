@@ -4208,3 +4208,131 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ------------------------------------------------------- the backup app -- */
+/* DPLAN-0411. The git app's frame and the apps layer's accent: the third card
+   on that layer reads as one of the family, not as a new kind of screen. */
+
+.baud-backup {
+  --baud-backup-accent: var(--baud-apps);
+}
+
+.baud-backup-accent {
+  color: var(--baud-backup-accent);
+  font-weight: 600;
+}
+
+/* WHAT THE STORE HOLDS - facts read from disk, in the quiet card the git
+   app's rows use, so a status line never looks like a button. */
+.baud-backup-status {
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  padding: 10px 13px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+}
+
+.baud-backup-line {
+  color: var(--baud-ink);
+  font-size: 0.74rem;
+  line-height: 1.7;
+}
+
+/* The sizes ask: a chip, because the walk takes seconds and is asked for by
+   name rather than run on every open. */
+.baud-backup-chip {
+  margin-top: 6px;
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.68rem;
+  padding: 4px 9px;
+}
+
+/* ---- the four click options ---- */
+
+.baud-backup-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-backup-button {
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  /* 44px: a press that starts a run is a deliberate one. */
+  min-height: 44px;
+  padding: 10px 12px;
+}
+
+.baud-backup-button:active {
+  background: var(--baud-bg-card-live);
+}
+
+/* Running: the accent outline and the dim word, so a lane in flight reads as
+   busy rather than broken, and is visibly not a second press waiting. */
+.baud-backup-button-running {
+  border-color: var(--baud-backup-accent);
+  color: var(--baud-ink-dim);
+}
+
+/* What the server said to a press or a read, verbatim. */
+.baud-backup-said {
+  margin: 8px calc(var(--baud-pad) / 1.5) 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.baud-backup-status .baud-backup-said {
+  margin: 4px 0 0;
+}
+
+.baud-backup .baud-phone-confirm {
+  margin: 8px calc(var(--baud-pad) / 1.5) 0;
+}
+
+/* ---- how a run ended ---- */
+
+.baud-backup-outcome {
+  margin: 12px calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-backup-outcome-head {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.baud-backup-done {
+  color: var(--baud-green);
+}
+
+.baud-backup-failed {
+  color: var(--baud-red);
+}
+
+.baud-backup-forgotten {
+  color: var(--baud-ink-dim);
+}
+
+/* The command's own last lines, as it printed them: the git app's raw block. */
+.baud-backup-summary {
+  margin-top: 6px;
+  padding: 10px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink-dim);
+  font-family: var(--baud-mono);
+  font-size: 0.66rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

@@ -68,6 +68,7 @@ import AgentSettings from "../desktop/AgentSettings";
 // a second chance for the two faces to disagree about what the file says.
 import { interfacePrefs } from "../desktop/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
+import BackupApp from "./backup/BackupApp";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
 import FilesScreen from "./FilesScreen";
@@ -785,6 +786,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   /** Is the git app open. A boolean, not a screen name: the app owns its own
    *  stack of screens, so this face only knows whether it is showing. */
   const [gitOpen, setGitOpen] = useState(false);
+  /** Is the backup app open (DPLAN-0411). A boolean for the same reason as
+   *  `gitOpen`: the app is one screen for the seated project. */
+  const [backupOpen, setBackupOpen] = useState(false);
   /**
    * WHOSE CHANGES ARE OPEN - the agent card's GIT tile (Patrick, 08-17).
    *
@@ -991,6 +995,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         onOpenApp={(key) => {
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
+          if (key === "backup") setBackupOpen(true);
           // The monitor layer's cards all open the one machine sheet, which
           // reads the key to know WHICH reading to draw.
           // Prefix-matched rather than listed: the wheel owns that card list,
@@ -1449,6 +1454,13 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           changed={repoCounts[seat] ?? null}
           onClose={() => setGitOpen(false)}
         />
+      ) : null}
+      {/* THE BACKUP APP (DPLAN-0411) - the same full-height screen over the
+          stage, for the seated project. Keyed on the seat: its watch and its
+          summaries belong to one project, and a seat change underneath must
+          not show one project's runs under another's name. */}
+      {backupOpen ? (
+        <BackupApp key={seat} project={seat} scope={scope} onClose={() => setBackupOpen(false)} />
       ) : null}
       {/* THE SAME APP, AT BRANCH GRAIN - the card's GIT tile. It opens straight
           into the changes list and carries no `changed` or `projectLabel`,

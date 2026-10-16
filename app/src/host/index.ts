@@ -22,6 +22,9 @@
 import type {
   AgentSettings,
   AgentSettingsPatch,
+  BackupJob,
+  BackupLane,
+  BackupStatus,
   BaudSettings,
   BranchStatus,
   DirEntryInfo,
@@ -336,6 +339,23 @@ export const verbKill = (branch: string, project: string) =>
 
 /** Lock the machine's screen, through @skills' own lock skill. */
 export const verbLock = () => call<VerbResult>("verb_lock");
+
+/* -------------------------------------------------------------- backup -- */
+/* PHONE-ONLY (DPLAN-0411). @backup's verbs through @api's door; the shapes are
+   pinned in devpulse/docs.local/backup_door_contract.md. The project is
+   REQUIRED and travels verbatim, like every verb: the server resolves it, the
+   face never composes a path. */
+
+/** Start a lane. Answers at once with the job, state running (202). */
+export const backupRun = (project: string, lane: BackupLane) =>
+  call<BackupJob>("backup_run", { project, lane });
+
+/** One job's state. A server restart forgets it: 404 job_unknown. */
+export const backupJob = (id: string) => call<BackupJob>("backup_job", { id });
+
+/** The project's store, read from disk. `sizes` walks the store: seconds, on demand. */
+export const backupStatus = (project: string, sizes = false) =>
+  call<BackupStatus>("backup_status", { project, sizes });
 
 /* ------------------------------------------------------------ terminal -- */
 /* PHONE-ONLY (FPLAN-0414 seam 3, as amended). Not a lesser terminal and not a

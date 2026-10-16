@@ -65,6 +65,12 @@ const NOT_ON_THIS_FACE: Record<string, string> = {
      is a question only a device AWAY from the laptop needs to ask. */
   lock_state:
     "the desktop is the screen whose lock it would be reading - the lock chip is the phone's answer to 'did I lock it'",
+  /* DPLAN-0411. The backup door is @api's, built for a device away from the
+     machine. The desktop sits beside `drone @backup` in its own terminal, so
+     there is no Rust command behind these names this round. */
+  backup_run: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
+  backup_job: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
+  backup_status: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
 };
 
 /** A typed host call. The only `invoke` in the application. */

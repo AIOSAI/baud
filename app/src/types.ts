@@ -637,3 +637,64 @@ export interface MemoryConfigPatch {
     auto_compact_cap?: number;
   }[];
 }
+
+/* ------------------------------------------------------------ backup -- */
+/* THE BACKUP DOOR (DPLAN-0411). Not a Rust mirror: these are @backup's and
+   @api's shapes, phone-only, pinned in devpulse/docs.local/backup_door_contract.md.
+   Field for field with that file; change it there first. */
+
+/** The four lanes on the wire, exactly the drone verbs' names. */
+export type BackupLane = "snapshot" | "versioned" | "all" | "drive_sync";
+
+/** One lane's last run. Both null when the lane never ran. */
+export interface BackupLaneStatus {
+  last: string | null;
+  files: number | null;
+}
+
+/** A job in flight on this server, as `status` lists it. */
+export interface BackupRunning {
+  job: string;
+  lane: BackupLane;
+  started_at: string;
+}
+
+/** `GET /v1/backup/status`: @backup's `status --json`, plus @api's `running`. */
+export interface BackupStatus {
+  project: string;
+  root: string;
+  /** False for a root with no `.backup/` store: every `last` null, `runs` 0. */
+  registered: boolean;
+  mode: string;
+  /** The project's Drive setting: `all` runs the Drive step only when on. */
+  drive_sync: boolean;
+  runs: number;
+  lanes: {
+    snapshot: BackupLaneStatus;
+    versioned: BackupLaneStatus;
+    drive_sync: BackupLaneStatus;
+  };
+  /** Present only when asked with sizes=1: the walk takes seconds. */
+  store?: {
+    snapshots_bytes: number;
+    versioned_bytes: number;
+  };
+  drive: { tracked_files: number };
+  running: BackupRunning[];
+}
+
+/** `POST /v1/backup/run` (202, state running) and `GET /v1/backup/job`. */
+export interface BackupJob {
+  job: string;
+  project: string;
+  lane: BackupLane;
+  /** done is exit 0; failed is non-zero, a timeout, or a routing error mid-run. */
+  state: "running" | "done" | "failed";
+  started_at: string;
+  /** The job read only, once the run ends. */
+  finished_at?: string | null;
+  exit?: number | null;
+  /** The command's last lines, verbatim, at most ~600 chars. */
+  summary?: string | null;
+  error?: string | null;
+}

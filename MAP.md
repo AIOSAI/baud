@@ -88,6 +88,11 @@ took 330 lines out of the file above.
 `GitCommitScreen.tsx`, `GitDiffScreen.tsx`, with `GitFileRow.tsx` as the shared
 row.
 
+**The backup app — `src/phone/backup/`** (DPLAN-0411): `BackupApp.tsx`, one
+screen of status lines and four lane presses for the seated project, and
+`backupView.ts` with its test, which holds the sheet's words and its
+ask-before-sending rule, pure.
+
 **Logic modules — `src/phone/lib/`, no JSX** — the pieces screens share:
 
 | File | One line |
@@ -116,17 +121,17 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
                                                          →  fetch   (phone, via the vite alias)
 ```
 
-- `src/host/index.ts` — **41 exported verbs**. Optional arguments use the
+- `src/host/index.ts` — **46 exported verbs**. Optional arguments use the
   *omitted-key* pattern: a key that is empty is left off the payload entirely,
   so the desktop's `invoke` object stays byte-identical.
-- `src/host/transport.http.ts` — a **30-row route table** over **23 distinct
+- `src/host/transport.http.ts` — a **35-row route table** over **28 distinct
   `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
   that renames the wire's fields to the seam's. Also `HostError`, the token
   store, the room socket and the image upload.
 - **Two refusal tables, and they are the map of what each face cannot do:**
   - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
     phone does not.
-  - `NOT_ON_THIS_FACE` in `transport.ts` (7 rows) — verbs the phone has and the
+  - `NOT_ON_THIS_FACE` in `transport.ts` (12 rows) — verbs the phone has and the
     desktop does not.
   - A verb with no route is refused **by name with a reason**, never bound to
     the nearest plausible path.

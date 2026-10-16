@@ -1268,6 +1268,50 @@ that the day it is revisited nobody has to reconstruct what was known when. The
 reversal is small and nothing here forecloses it: a name deny-list in the
 server's read module, and an operate gate on the home arm alone.
 
+### The backup app — the store, and four presses that add to it
+
+*DPLAN-0411, 2026-10-16.* The owner: *"in the apps wheel in baud id like backup
+in there, i open the card and i see my click options, i can backup from baud."*
+
+**The third card on the apps layer**, `BKP`, after `git` and `files`. A project's
+backup store belongs to nobody in it, which is why it sits on the apps layer. The
+card carries no badge. Tapping it opens `phone/backup/BackupApp.tsx` over the
+stage, for the **seated project** (the header chip's name, the same value the git
+app gets); `‹ wheel` closes it.
+
+**What the store holds**, read on open from `GET /v1/backup/status`: one line per
+lane, *Snapshot · 2h ago · 15,414 files*, *Versioned · 18d ago · 4 files*,
+*Drive · never*, using the face's own age words, plus the project's Drive sync
+setting, on or off. **sizes** re-reads with `sizes=1` and adds the two store
+sizes. It is a chip rather than part of every open, because walking a large store
+takes seconds. These lines come from @backup reading its own store on disk, so
+they survive a server restart that forgets every job.
+
+**Four click options, the owner's words:** **Snapshot now**, **Versioned now**,
+**Full backup** and **Sync to Drive**, which are the lanes `snapshot`, `versioned`,
+`all` and `drive_sync`. Each press is `POST /v1/backup/run` and answers at once
+with a job. The sheet then reads `GET /v1/backup/job` every 2 s, while the screen
+is looked at, until the job is `done` or `failed`. It then shows the command's own
+last lines verbatim and re-reads the status. A running lane shows `· running…` and
+does not fire again; the other three stay live, since @backup's own locks decide
+what overlapping lanes mean. A sheet opened mid-run adopts the run from status's
+`running` list.
+
+**The two presses that can send files off the machine ask once:** Sync to Drive
+always, and Full backup when the Drive setting is on (or not yet known). The
+confirm is the kill verb's dialog shape and the face's manners only: the server
+is not told a human confirmed, because it would not honour that. A read token
+sees the status and is refused every press by name. The server's sentences (a
+400 "already running", any 503) are shown as they came. A 404 for a job the
+server forgot (it restarted) sends the reader to the status lines, which now hold
+the run's outcome.
+
+**The desktop does not have it.** `transport.ts` refuses `backup_run`,
+`backup_job` and `backup_status` by name, because the desktop sits beside
+`drone @backup` in its own terminal. Every wire shape is pinned in one place,
+`src/aipass/devpulse/docs.local/backup_door_contract.md` in the AIPass tree.
+`types.ts` mirrors it field for field.
+
 ### The monitor row — the machine, live on the face
 
 The wheel's last layer is the machine (FPLAN-0561; every clause ruled in

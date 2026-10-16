@@ -287,6 +287,17 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
         name: "files",
         kind: "door",
       },
+      /* BACKUP (DPLAN-0411). The owner, 2026-10-16: "in the apps wheel in
+         baud id like backup in there, i open the card and i see my click
+         options, i can backup from baud." A project's store is addressed to
+         nobody either, so it sits beside git and files. BKP, not BACKUP: six
+         letters are wider than FILES, the widest mark this square holds. */
+      {
+        key: "backup",
+        mark: "BKP",
+        name: "backup",
+        kind: "door",
+      },
     ],
   },
   /**
