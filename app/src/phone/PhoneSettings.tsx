@@ -109,12 +109,20 @@ const SECTIONS: readonly Section[] = [
   {
     id: "interface",
     label: "interface",
-    summary: "startup agent, poll cadence, bell, hook sounds — shared with the desktop",
+    /* THREE OF THE FIVE ROWS DO NOTHING HERE, and the door says so (DPLAN-0414
+       A#9). The phone polls at its own fixed `POLL_MS` (lib/pollers.ts), keeps
+       `FEED_KEEP` events (lib/feed.ts) and has no chime: "poll every", "bell
+       keeps" and "bell chime" save to the shared file and change only the
+       desktop. Not wired here - that was not ruled. */
+    summary:
+      "startup agent, hook sounds — shared with the desktop · poll every, bell keeps, bell chime apply to the desktop only",
   },
   {
     id: "memory",
     label: "memory",
-    summary: "fleet rollover defaults, entry caps, per-agent overrides — @memory's config",
+    // No "entry caps" here: this face has no caps lane, and the panel inside
+    // says where they are set (DPLAN-0414 A#7, the wave 4 note).
+    summary: "fleet rollover defaults, per-agent overrides — @memory's config · character caps are set at the desktop",
   },
   {
     id: "connection",
@@ -516,7 +524,11 @@ export default function PhoneSettings({
               title, which is what every other section here gets. */}
           {screen === "memory" ? (
             <div className="baud-settings-leaf">
-              <MemorySettings />
+              {/* `capsAtDesktop`: this face has no character-caps lane (its
+                  route serves the rollover dials only), so the panel's caps
+                  section says where they are set instead of heading an empty
+                  list (DPLAN-0414 A#7). The desk never passes it. */}
+              <MemorySettings capsAtDesktop />
             </div>
           ) : null}
 

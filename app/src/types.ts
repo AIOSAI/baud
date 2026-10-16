@@ -490,9 +490,13 @@ export interface BranchOverride {
  * file, which BAUD renders and edits but does not own (m13).
  */
 export interface MemoryConfig {
-  path: string;
-  /** False = the caps are documentation, not enforcement. Say so, never imply teeth. */
-  enforced: boolean;
+  /** The config file's path. Null when the face that read it touched no file
+   *  (the phone reads a route), so there is no path row to draw. */
+  path: string | null;
+  /** False = the caps are documentation, not enforcement. Say so, never imply teeth.
+   *  Null = UNKNOWN: the phone's route says nothing about the hook, so the
+   *  panel says nothing either (DPLAN-0414 A#6). The desktop always knows. */
+  enforced: boolean | null;
   entry_limits: EntryLimit[];
   rollover: RolloverDial[];
   per_branch: BranchOverride[];

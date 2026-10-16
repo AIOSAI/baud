@@ -2214,6 +2214,18 @@ body {
   letter-spacing: 1px;
 }
 
+/* THE MAIL TILE'S FIGURE IS WORDS (DPLAN-0414 A#3): "3 new · 1 opened" where
+   the other tiles hold one number. It takes a wider share of the row and a
+   smaller face, and may wrap at its spaces rather than spill into GIT. */
+.baud-agent-stat-words {
+  flex: 2;
+}
+
+.baud-agent-stat-words b {
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
 .baud-agent-doors {
   display: flex;
   gap: 8px;

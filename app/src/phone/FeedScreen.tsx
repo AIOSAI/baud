@@ -18,8 +18,10 @@
  *
  * CLEAR IS THE OPERATOR'S, AND IT IS DISPLAY ONLY (Patrick, 08-17: "notification
  * has no clear button"). The desktop bell's model exactly: a cleared-up-to
- * timestamp, held by the face and keyed per PROJECT, and everything at or older
- * than it stops rendering. The feed file is never touched - BAUD is a reader and
+ * timestamp, held by the face, and everything at or older than it stops
+ * rendering. ONE KEY FOR THE WHOLE MACHINE, not one per project as the desktop
+ * bell keys it (DPLAN-0414 A#4): this feed takes no project, so a clear here
+ * clears it whichever project is seated (lib/feedMarks.ts). The feed file is never touched - BAUD is a reader and
  * the feed's only writer is ai_mail, so there is no host call here to make. The
  * cursor lives one level up in PhoneApp beside the unread marker, because the
  * BADGE has to obey it too: a badge counting three events over a screen that

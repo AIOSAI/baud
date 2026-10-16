@@ -254,15 +254,14 @@ export default function MemoryScreen({
         </p>
 
         {/* WHICH LIMITS DECIDED WHAT IS ON THIS SCREEN, and where they are set.
-            It is TEXT, not a door: per-agent limits are read-only everywhere in
-            BAUD today (@memory writes them on a push), and the editable ones are
-            fleet-wide, one tap away under the gear. A row that looked tappable
-            would promise a control this card does not have - so it names the
-            address in words and stops there until the memory-settings arc gives
-            this agent dials of its own. */}
+            It is TEXT, not a door: it names two addresses in words. The fleet
+            defaults live under settings → memory; this agent's OWN limits are
+            the card's gear, which writes them through `/v1/memory-config/set`
+            (desktop/AgentSettings.tsx). The line used to say per-agent
+            overrides were still to come, while that gear already wrote them
+            (DPLAN-0414 A#10). */}
         <p className="baud-mem-foot">
-          limits: fleet defaults — settings → memory · per-agent overrides come with the
-          memory-settings arc
+          limits: fleet defaults — settings → memory · per-agent limits: this card's gear
         </p>
       </div>
     </section>

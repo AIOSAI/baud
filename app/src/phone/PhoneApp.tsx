@@ -88,19 +88,13 @@ import Reader, { type ReadTarget } from "./Reader";
 import TerminalSheet from "./TerminalSheet";
 import { LockChip } from "./VerbChips";
 import { clearRoomEnded, markRoomEnded, roomEnded } from "../intent";
-// THE FOUR POLLING LANES, and the three constants the render still names.
-// They left this file in FPLAN-0445 without changing a line of what they do -
-// see the header of pollers.ts for why the ORDER of the hook calls below is
-// part of the contract and not a matter of taste.
-import {
-  CLEARED_KEY,
-  POLL_MS,
-  READ_KEY,
-  useFeedBadge,
-  useFleetPoll,
-  useGitSweep,
-  useRepoCount,
-} from "./lib/pollers";
+// THE FOUR POLLING LANES, and the constant the render still names. They left
+// this file in FPLAN-0445 without changing a line of what they do - see the
+// header of pollers.ts for why the ORDER of the hook calls below is part of
+// the contract and not a matter of taste. The feed's two marker keys left
+// pollers.ts for `feedMarks` in DPLAN-0414 A#4: one machine-wide key each.
+import { writeMark } from "./lib/feedMarks";
+import { POLL_MS, useFeedBadge, useFleetPoll, useGitSweep, useRepoCount } from "./lib/pollers";
 import { machineFaces, useMachineVitals } from "./lib/machine";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
@@ -727,9 +721,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const clearFeed = useCallback(
     (upTo: string) => {
       setClearedUpTo(upTo);
-      window.localStorage.setItem(CLEARED_KEY(project), upTo);
+      // ONE KEY ON EVERY PROJECT (DPLAN-0414 A#4): the feed is machine-wide,
+      // so a clear here clears it wherever the phone is seated.
+      writeMark(window.localStorage, "cleared", upTo);
     },
-    [project],
+    [setClearedUpTo],
   );
 
   /** Closing the feed IS the read. */
@@ -739,11 +735,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       const newest = seen.length > 0 ? seen[seen.length - 1].ts : "";
       if (newest) {
         setReadUpTo(newest);
-        window.localStorage.setItem(READ_KEY(project), newest);
+        writeMark(window.localStorage, "read", newest);
       }
       return seen;
     });
-  }, [project]);
+  }, [setEvents, setReadUpTo]);
 
   const branches = snapshot?.branches ?? [];
   const live = snapshot?.live_agent_sessions ?? [];

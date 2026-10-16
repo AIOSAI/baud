@@ -700,12 +700,18 @@ function refusalGuard(body: any): unknown {
 /**
  * @api's fleet envelope -> this seam's `MemoryConfig`.
  *
- * Two fields are left deliberately empty rather than filled with a plausible
+ * Three fields are left deliberately empty rather than filled with a plausible
  * value, because nothing on this route reports them: `entry_limits` (the
- * character caps have no host route at all - the desktop gear owns that lane)
- * and `enforced`, which is a claim about the enforcement hook that this
- * envelope makes no statement about. `path` names the ROUTE the numbers came
- * from, which is true, rather than a file path this face never touched.
+ * character caps have no host route at all - the desktop gear owns that lane),
+ * `enforced`, which is a claim about the enforcement hook that this envelope
+ * makes no statement about, and `path`, because this face read a route and
+ * touched no file.
+ *
+ * NULL, NOT FALSE AND NOT THE ROUTE (DPLAN-0414 A#6). This used to say
+ * `enforced: false` and `path: "/v1/memory-config"`, and the shared panel drew
+ * both faithfully: an amber "enforcement is OFF in this file" on every phone,
+ * under a header that was a URL. Null is the honest "unknown", and the panel
+ * draws nothing for it.
  */
 function fleetMemoryConfig(body: any): unknown {
   const defaults = (body?.defaults ?? {}) as Record<string, { count?: number; auto_compact_cap?: number | null }>;
@@ -726,8 +732,8 @@ function fleetMemoryConfig(body: any): unknown {
     })),
   }));
   return {
-    path: "/v1/memory-config",
-    enforced: false,
+    path: null,
+    enforced: null,
     entry_limits: [],
     rollover,
     per_branch,

@@ -102,6 +102,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
+| `feedMarks.ts` | The bell's read and cleared markers: one machine-wide key each (the feed takes no project), and the one-time lift of the seated project's old per-project mark. Pure over an injected store, plus `feedMarks.test.ts`. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
 | `processes.ts` | The PROC sheet's list: the cpu/mem order of the same twenty rows, a row's name (or its pid), and the sampled line - pure, plus `processes.test.ts`. |
@@ -110,6 +111,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `lock.ts` | The header lock chip's lane: `GET /v1/lock` every 5 s while the app is looked at, re-read at once and 1 s after a tap, forgotten when the app goes away - and which of four faces (unread, unlocked, locked, unknown) a reading means. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
 | `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
+| `mailFigure.ts` | The agent card's MAIL tile, "N new · M opened", so the tiles add up to the rail's badge. Pure, plus `mailFigure.test.ts`. |
 | `roomLinks.ts` | Every http(s) URL in a room's rows, joined across soft and hard wraps - the ONE detection behind the terminal's tap-to-open link provider and its links panel. |
 | `push.ts` | The push hook, inert until phase 7. |
 | `pairing.ts` | The pair link, read and stripped from the address bar, and the one arrival decision (a stored token wins, the code is redeemed once, refused and unreachable kept apart), pure, with the fetches injected; plus `pairing.test.ts`. |
@@ -228,7 +230,8 @@ Load order is fixed and both `main.tsx` files state it: tokens → theme → pho
 ## Shared floor — `src/*.ts`, read by both faces
 
 `types.ts` (the shapes) · `age.ts` (relative time) · `intent.ts` (what the
-operator meant) · `deliver.ts` (sending into a room) · `deliver.test.ts` (its quoting rule, pinned) · `host/` · `tokens/` ·
+operator meant) · `deliver.ts` (sending into a room) · `deliver.test.ts` (its quoting rule, pinned) ·
+`memoryCopy.ts` (the memory panel's words that depend on what the face could read: caps line, enforcement warning, push count) · `memoryCopy.test.ts` · `host/` · `tokens/` ·
 `vite-env.d.ts` (vite's own type shim, boilerplate).
 A file at `src/` root is one both faces use; anything face-specific lives in
 `desktop/` or `phone/`. The rule holds with no exceptions as of 2026-08-18 —

@@ -26,6 +26,7 @@ import { HostError, writeToken } from "../../host/transport.http";
 import type { BranchStatus, FleetSnapshot, NotificationEvent } from "../../types";
 import { cardRef } from "../FleetWheel";
 import { FEED_WINDOW, mergeEvents } from "./feed";
+import { readMark } from "./feedMarks";
 import { whileVisible } from "./whileVisible";
 
 /** The desktop's own middle cadence. A phone on cellular does not want 2s. */
@@ -55,16 +56,9 @@ export const GIT_SWEEP_MS = 5_000;
  */
 export const REPO_SWEEP_MS = 120_000;
 
-/** How far the operator has read the feed. Per PROJECT, exactly as the desktop
- *  bell keys it: another project's feed is another history, and its unread
- *  count is not this one's news. */
-export const READ_KEY = (project: string) => `baud-phone-feed-read:${project}`;
-
-/** How far the operator has CLEARED the feed. Per PROJECT on the same reasoning
- *  as the read marker above, and the desktop bell's own key shape: clearing
- *  @baud's notifications must never blank @api's. Display only - a localStorage
- *  timestamp, never a write to the feed the file's only author (ai_mail) owns. */
-export const CLEARED_KEY = (project: string) => `baud-phone-feed-cleared:${project}`;
+/* THE READ AND CLEARED MARKERS' KEYS LEFT THIS FILE for `./feedMarks`
+   (DPLAN-0414 A#4). They were keyed per project, after the desktop bell; the
+   feed they mark is machine-wide, so each is now one key on every project. */
 
 /**
  * THE FLEET READ, and the roster that rides its tick.
@@ -286,20 +280,24 @@ export function useFeedBadge(project: string) {
    * cursor changes on every answer and nothing renders from it, so putting it
    * in state would re-render the whole app for a string nobody draws.
    *
-   * IT IS KEYED TO THE SEAT by being cleared beside the events below. The feed
-   * is read per project - `project` rides the generic lift in `call` - so a
-   * cursor carried across a seat change would ask the new project's feed to
-   * continue from the old one's position and answer with a window that is
-   * either empty or wrong.
+   * THE FEED IS MACHINE-WIDE (DPLAN-0414 A#4). `/v1/feed` takes no project
+   * and `notificationsFeed` passes none, so every seat reads the same feed
+   * and the same cursor would serve them all. The cursor is still dropped
+   * beside the events on a seat change (below): that costs one full window
+   * read and keeps the list and its markers re-read together, and nothing
+   * about the feed needs it. The markers are what used to differ per project
+   * and no longer do.
    */
   const feedCursor = useRef<string | null>(null);
 
-  /* The seat's own marker, re-read when the seat changes - and the events with
-     it, because a stale list against a fresh marker would badge the wrong
-     project's news for one poll. */
+  /* The markers, re-read when the seat changes - and the events with them.
+     The markers are MACHINE-WIDE now, one key each (`./feedMarks`), so a seat
+     change reads the same values back. The seat is passed for one reason: the
+     first read on a phone that has no machine-wide mark yet lifts the seated
+     project's old per-project mark into it, once. */
   useEffect(() => {
-    setReadUpTo(window.localStorage.getItem(READ_KEY(project)) ?? "");
-    setClearedUpTo(window.localStorage.getItem(CLEARED_KEY(project)) ?? "");
+    setReadUpTo(readMark(window.localStorage, "read", project));
+    setClearedUpTo(readMark(window.localStorage, "cleared", project));
     setEvents([]);
     feedCursor.current = null;
   }, [project]);

@@ -22,6 +22,7 @@ import type { BranchStatus } from "../types";
 import VerbChips from "./VerbChips";
 import { isAwake } from "./FleetWheel";
 import { INTERCEPT_WINDOW_MS, interceptTap } from "./lib/intercept";
+import { mailFigure } from "./lib/mailFigure";
 import { type LaunchMode, type RoomDoor, helpCommand, roomDoors } from "./lib/rooms";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
@@ -314,12 +315,21 @@ export default function AgentSheet({
   const state = branch.dispatched ? "dispatched" : branch.interactive ? "interactive" : "idle";
   const kind = branch.manager ? "manager" : branch.is_citizen ? "citizen" : "branch";
 
-  const stats: ReadonlyArray<{ figure: string; label: string; hint?: string; open?: () => void }> = [
+  const stats: ReadonlyArray<{
+    figure: string;
+    label: string;
+    hint?: string;
+    /** The figure is words, not one number - drawn smaller so it fits a tile. */
+    words?: boolean;
+    open?: () => void;
+  }> = [
     {
-      figure: String(branch.new_mail),
+      // "N new · M opened" (DPLAN-0414 A#3): the rail's badge counts opened
+      // mail too, and a tile showing new alone never added up to it. The inbox
+      // screen's head still carries the fuller "N unread · M total".
+      figure: mailFigure(branch.new_mail, branch.opened_mail),
       label: "MAIL",
-      // The figure stays `new_mail`; the inbox screen's head carries the
-      // fuller "N unread · M total".
+      words: true,
       open: onInbox,
     },
     {
@@ -555,7 +565,7 @@ export default function AgentSheet({
             <button
               key={stat.label}
               type="button"
-              className="baud-agent-stat"
+              className={stat.words ? "baud-agent-stat baud-agent-stat-words" : "baud-agent-stat"}
               // The FIGURES are honest either way - four of them came with the
               // roster card. The fifth is fetched, so it is the only one that
               // can fail, and when it does the reason travels with it: `n/a` on

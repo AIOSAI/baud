@@ -5,6 +5,7 @@ import {
   memoryConfigSetDefault,
   memoryConfigWrite,
 } from "../host";
+import { CAPS_AT_DESKTOP, capsLine, enforcementWarns, pushScope } from "../memoryCopy";
 
 import type { MemoryConfig, MemoryConfigPatch } from "../types";
 
@@ -48,7 +49,17 @@ function capHint(file: string, container: string, field: string): string {
 
 type Numbers = Record<string, number>;
 
-export default function MemorySettings() {
+interface MemorySettingsProps {
+  /**
+   * The face mounting this panel has NO character-caps lane (DPLAN-0414 A#7).
+   * The phone passes it: its route serves the rollover dials only, so an empty
+   * caps list there means "set elsewhere", not "none set". The desktop never
+   * passes it, and an empty list on the desktop keeps the desktop's sentence.
+   */
+  capsAtDesktop?: boolean;
+}
+
+export default function MemorySettings({ capsAtDesktop = false }: MemorySettingsProps = {}) {
   const [config, setConfig] = useState<MemoryConfig | null>(null);
   const [caps, setCaps] = useState<Numbers>({});
   const [counts, setCounts] = useState<Numbers>({});
@@ -197,7 +208,9 @@ export default function MemorySettings() {
     <section className="baud-memory" aria-label="memory dials">
       <header className="baud-memory-head">
         <span className="baud-memory-title">memory · @memory's config</span>
-        {config ? (
+        {/* No path, no row (DPLAN-0414 A#6): the phone read a route, not a
+            file, and a URL under this header read as the file it came from. */}
+        {config?.path ? (
           <span className="baud-memory-path" title={config.path}>
             {config.path}
           </span>
@@ -212,13 +225,24 @@ export default function MemorySettings() {
 
       {config ? (
         <>
-          <p className="baud-memory-note">
-            entry caps · read live by the enforcement hook, so a save binds on the next
-            memory write
-            {config.enforced ? null : (
-              <strong className="baud-memory-warn"> · enforcement is OFF in this file</strong>
-            )}
-          </p>
+          {/* THE CAPS HEADING ON A FACE WITH NO CAPS LANE (DPLAN-0414 A#7).
+              The phone's list is always empty - its route serves no caps and
+              the write is refused - so the hook sentence used to stand over
+              nothing. There it reads the one true thing and nothing else. The
+              desktop never passes the flag and keeps its sentence. The warning
+              shows only on an enforcement flag somebody READ as false (A#6):
+              the phone's is unknown, and an unknown is not an alarm. */}
+          {capsLine(config.entry_limits.length, capsAtDesktop) === "desktop" ? (
+            <p className="baud-memory-note">{CAPS_AT_DESKTOP}</p>
+          ) : (
+            <p className="baud-memory-note">
+              entry caps · read live by the enforcement hook, so a save binds on the next
+              memory write
+              {enforcementWarns(config.enforced) ? (
+                <strong className="baud-memory-warn"> · enforcement is OFF in this file</strong>
+              ) : null}
+            </p>
+          )}
 
           {config.entry_limits.map((limit) => (
             <label className="baud-settings-row" key={limit.key}>
@@ -309,9 +333,12 @@ export default function MemorySettings() {
             </p>
             {confirmPush ? (
               <div className="baud-memory-push-row">
+                {/* The count is the overrides' when there are any; "every
+                    branch" when there are none (DPLAN-0414 A#8) - it used to
+                    fall back to a literal 17, a guess at this fleet's size. */}
                 <span className="baud-memory-warn">
-                  this resets ALL {config.per_branch.length || "17"} branches to the defaults —
-                  there is no undo
+                  this resets {pushScope(config.per_branch.length)} to the defaults — there is
+                  no undo
                 </span>
                 <button
                   type="button"

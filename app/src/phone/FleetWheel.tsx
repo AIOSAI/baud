@@ -539,11 +539,16 @@ export default function FleetWheel({
     () => (citizens ? (census ?? []).filter(citizens.hold) : []),
     [census, citizens],
   );
-  /** What replaces the cards when the lane itself is missing. */
+  /** What replaces the cards when the lane itself is missing.
+   *
+   *  NO REFUSAL YET MEANS NO ANSWER YET (DPLAN-0414 A#25). Every failed roster
+   *  read records a refusal (lib/pollers.ts), so a null roster with a null
+   *  refusal is only ever the cold load before the first answer - and it used
+   *  to say "lane pending", a schedule, over a read that was simply still out.
+   *  It says "reading…" with no reason line; "lane pending" and "roster
+   *  unavailable" still come from the refusal itself, unchanged. */
   const blocked =
-    census === null
-      ? (rosterRefusal ?? { line: "lane pending", detail: "the cross-project roster is unavailable" })
-      : null;
+    census === null ? (rosterRefusal ?? { line: "reading…", detail: "" }) : null;
   /** How many cards the rail is actually holding, whichever kind they are -
    *  what the empty line, the ghost card and the paint effect all key on. */
   const held = apps ? apps.length : shown.length;
@@ -1156,7 +1161,7 @@ export default function FleetWheel({
           short word keeps its place and the reason sits under it, smaller,
           in the same quiet voice. The title stays. */}
       {held === 0 ? (
-        <p className="baud-wheel-empty" title={blocked?.detail}>
+        <p className="baud-wheel-empty" title={blocked?.detail || undefined}>
           {blocked?.line ?? wheel.empty}
           {blocked?.detail ? <span className="baud-wheel-empty-why">{blocked.detail}</span> : null}
         </p>

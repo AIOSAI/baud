@@ -31,6 +31,9 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: `▸ resume ⚡` asks for a second tap (DPLAN-0414).** The door shows its warning under the room doors; the first tap arms it, and a second tap within four seconds stops the working agent and resumes its chat. Any other tap cancels.
 - **Phone: the processes count reads "processes" (DPLAN-0414).** It counts every process, sleeping ones too, so the sheet no longer calls it "running", and the "deferred row" line is gone.
 - **Phone: a mail notification that names its project opens that project's inbox (DPLAN-0414).** Notifications without a project still find the recipient through the seated project, then the roster.
+- **Phone: the agent card's MAIL tile reads "N new · M opened" (DPLAN-0414)**, so the tiles add up to the rail's badge.
+- **Phone: the interface door says "poll every", "bell keeps" and "bell chime" apply to the desktop only (DPLAN-0414).**
+- **Phone: the memory screen points per-agent limits at the card's gear (DPLAN-0414)** instead of saying they are still to come.
 - **Phone: reasons that lived only in hover text are shown on screen (DPLAN-0414).** The room doors under a read token, the header lock chip's answer, the GIT tile's `n/a`, a refused manager monitor and the cross-project roster's refusal each show their reason as a small line. A tap on a passport number shows the full id.
 
 ### Removed
@@ -44,6 +47,11 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: a rejected token at room open keeps its sentence (DPLAN-0414)** instead of being replaced by "the room did not answer".
 - **Phone: `end room` is remembered (DPLAN-0414).** A room ended from the phone, or one that ended under its socket, is not reopened by the startup agent on reload; opening it from its card clears the mark.
 - **Phone: the attached ring follows the agent room (DPLAN-0414)**, not whichever tab is in front.
+- **Phone: Settings › memory no longer warns "enforcement is OFF" or shows a route as the file path (DPLAN-0414).** The phone cannot see the enforcement hook or the file, so it shows neither; the desktop is unchanged.
+- **Phone: Settings › memory's caps section reads "character caps are set at the desktop" (DPLAN-0414)** instead of a heading with nothing under it.
+- **The memory push confirm says "every branch" when no branch has an override (DPLAN-0414)**, on both faces, instead of a guessed "ALL 17 branches"; with overrides it still names their count.
+- **Phone: the bell's read and clear marks hold across projects (DPLAN-0414).** The feed is machine-wide, so the marks are one key each: switching project no longer brings read events back as unread, and a clear clears them everywhere. The seated project's old marks carry over once.
+- **Phone: the live and dispatched wheels say "reading…" while the roster loads (DPLAN-0414)** instead of "lane pending".
 
 ## [0.3.7] — 2026-10-15
 

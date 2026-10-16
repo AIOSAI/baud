@@ -2235,3 +2235,50 @@ after a close - never while the first connect is still going.
 **The bell door reads `project` when the event carries it** (C-A as amended):
 that project's inbox is read directly. An event without it finds the recipient
 the old way, the seated census first, then the roster.
+
+### Settings that tell the truth, and one bell (DPLAN-0414 wave 4)
+
+**Settings › memory says only what the phone can know.** The panel is the
+desk's own (`desktop/MemorySettings.tsx`); the phone's difference travels as
+data, and the words for it live in `src/memoryCopy.ts`, pure and tested. The
+phone's `/v1/memory-config` reports neither the config file's path nor the
+enforcement hook's state, so the transport hands up `path: null` and
+`enforced: null`. The panel draws no path row for a null path and no "enforcement
+is OFF" warning for an unknown flag; the warning shows only on a `false` somebody
+read. The phone has no character-caps lane (the route serves the rollover dials
+only and the caps write is refused), so it passes `capsAtDesktop` and the caps
+section reads "character caps are set at the desktop" and nothing else. The
+desktop never passes the flag: its caps sentence stands, even over an empty list.
+The push confirm names the count of branch overrides when there are any and
+says "this resets every branch to the defaults" when there are none; it used to
+fall back to a literal 17, on both faces.
+
+**Three interface rows are the desktop's.** The phone polls at its own fixed
+`POLL_MS`, keeps `FEED_KEEP` events and has no chime, so "poll every", "bell
+keeps" and "bell chime" change only the desktop. The interface door on
+settings home says so: "poll every, bell keeps, bell chime apply to the desktop
+only". They are not wired on the phone.
+
+**Per-agent limits are the card's gear.** The memory screen's foot reads
+"limits: fleet defaults — settings → memory · per-agent limits: this card's
+gear": the gear already writes an agent's own limits through
+`/v1/memory-config/set`.
+
+**One bell for the machine** (`lib/feedMarks.ts`). `/v1/feed` takes no project,
+so there is one feed, and the read and cleared markers are now one key each:
+`baud-phone-feed-read` and `baud-phone-feed-cleared`, whichever project is
+seated. A project switch no longer brings read events back as unread, and a
+clear clears the feed everywhere. The first read on a phone with no
+machine-wide mark lifts the seated project's old per-project mark
+(`baud-phone-feed-read:<project>`) into the new key, once; after that the new
+key always wins. The old keys are left in place and never read again. The
+desktop bell keeps its own per-project keys.
+
+**The live and dispatched wheels say "reading…" on a cold load.** Every failed
+roster read records a refusal, so a missing roster with no refusal is only the
+first read still out. "lane pending" (the route is not live) and "roster
+unavailable" (with its reason) come from the refusal, as before.
+
+**The MAIL tile reads "N new · M opened"**, always both halves, so the tiles
+add up to the rail's badge, which counts opened mail as waiting. The figure is
+words, so the tile takes a wider share of the row in a smaller face.
