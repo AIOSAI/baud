@@ -83,6 +83,7 @@ took 330 lines out of the file above.
 | `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap (DPLAN-0414 T3). |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
+| `NewProjectSheet.tsx` | What the switcher's `+ new project` row opens: a name, a template chip, one `create`, and the host's sentence verbatim on a refusal. |
 
 **The git app — `src/phone/git/`** — a sub-app with its own screens:
 `GitApp.tsx` (the door) → `GitChangesScreen.tsx`, `GitCommitsScreen.tsx`,
@@ -100,6 +101,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | File | One line |
 |---|---|
 | `verbs.ts` | What each scope may do, and the sentence when it may not. |
+| `newProject.ts` | The new-project sheet's rules: the name rule (the host's, mirrored), its hint, the two templates, the phone-side refusal, and the manager's card built from the host's answer. Pure, plus `newProject.test.ts`, which also drives `verb_new_project` through the transport with `fetch` stubbed. |
 | `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `gitWords.ts` | The git app's small rules and words: where a changed row's tap goes (an untracked file is read, an untracked directory answers under its row), a commit message without its subject line, the merge's no-files line, the no-agent line by whether the fleet answered, and the no-remote read of contract C-D. Pure, plus `gitWords.test.ts`. |
@@ -134,14 +136,14 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
 - `src/host/index.ts` — **48 exported verbs**. Optional arguments use the
   *omitted-key* pattern: a key that is empty is left off the payload entirely,
   so the desktop's `invoke` object stays byte-identical.
-- `src/host/transport.http.ts` — a **37-row route table** over **30 distinct
+- `src/host/transport.http.ts` — a **38-row route table** over **31 distinct
   `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
   that renames the wire's fields to the seam's. Also `HostError`, the token
   store, the room socket and the image upload.
 - **Two refusal tables, and they are the map of what each face cannot do:**
   - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
     phone does not.
-  - `NOT_ON_THIS_FACE` in `transport.ts` (14 rows) — verbs the phone has and the
+  - `NOT_ON_THIS_FACE` in `transport.ts` (15 rows) — verbs the phone has and the
     desktop does not.
   - A verb with no route is refused **by name with a reason**, never bound to
     the nearest plausible path.

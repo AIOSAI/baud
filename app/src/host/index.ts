@@ -44,6 +44,7 @@ import type {
   MachineProcesses,
   MachineVitals,
   MemoryConfig,
+  NewProjectResult,
   NotificationEvent,
   ProjectListing,
   RootEntry,
@@ -351,6 +352,10 @@ export const verbKill = (branch: string, project: string) =>
 
 /** Lock the machine's screen, through @skills' own lock skill. */
 export const verbLock = () => call<VerbResult>("verb_lock");
+
+/** Make a project with its manager agent. PHONE-ONLY: the desktop has a terminal for `aipass new`. */
+export const verbNewProject = (name: string, template: string) =>
+  call<NewProjectResult>("verb_new_project", { name, template });
 
 /* -------------------------------------------------------------- backup -- */
 /* PHONE-ONLY (DPLAN-0411). @backup's verbs through @api's door; the shapes are

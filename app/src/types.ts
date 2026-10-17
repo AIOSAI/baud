@@ -373,6 +373,17 @@ export interface VerbResult {
   detail: string | null;
 }
 
+/** The host's answer to a new project: where it landed and its manager's branch. */
+export interface NewProjectResult {
+  ok: boolean;
+  name: string;
+  target: string;
+  template: string;
+  agent: string;
+  agent_home: string;
+  detail: string;
+}
+
 /**
  * One room's screen as the binary read it. Mirrors `CaptureOutcome` in lib.rs.
  *

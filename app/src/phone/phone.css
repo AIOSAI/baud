@@ -294,6 +294,79 @@ body {
   padding: 10px 12px;
 }
 
+.baud-phone-project-new {
+  border-top: 1px solid var(--baud-line);
+  border-radius: 0;
+  color: var(--baud-ink-dim);
+}
+
+/* The new-project sheet rides the agent sheet's scrim and card. */
+.baud-newproject {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.baud-newproject-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.baud-newproject-title {
+  color: var(--baud-ink);
+  font-size: 0.85rem;
+}
+
+.baud-newproject-close {
+  background: none;
+  border: none;
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 1.1rem;
+  padding: 4px 8px;
+}
+
+.baud-newproject-hint {
+  color: var(--baud-ink-faint);
+  font-size: 0.68rem;
+}
+
+.baud-newproject-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.baud-newproject-chip {
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 8px 14px;
+}
+
+.baud-newproject-chip-on {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+.baud-newproject-create {
+  background: var(--baud-bg-card-live);
+  border: 1px solid var(--baud-green);
+  border-radius: var(--baud-radius);
+  color: var(--baud-green);
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 11px 12px;
+}
+
+.baud-newproject-create:disabled {
+  border-color: var(--baud-line-strong);
+  color: var(--baud-ink-dim);
+}
+
 .baud-phone-signout {
   background: none;
   border: 1px solid var(--baud-line-strong);

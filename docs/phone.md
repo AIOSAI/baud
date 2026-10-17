@@ -2422,3 +2422,29 @@ trail are not kept.
 
 **Closing a tab fronts the one before it.** The focus history decides, not the
 row's order. With no history left, the rightmost tab is fronted.
+
+### A new project from the switcher
+
+The last row of the header's project menu reads **+ new project**. Under a read
+token the row is there and a tap answers under it with the verb chips' own
+reason (*refused: this token is read-scoped — verbs need an operate token*).
+Under operate it closes the menu and opens `NewProjectSheet.tsx` on the agent
+sheet's scrim:
+
+- a name field, with the rule under it: *letters, digits, _ and -, starting with
+  a letter*. `lib/newProject.ts` holds the same rule as the host (up to 64
+  characters), so an obvious typo is refused on the phone before any request;
+  the host's rule still decides;
+- the template chips **empty** (selected) and **python**;
+- one **create** button. While the request is out it reads *creating…* and the
+  sheet's controls are disabled.
+
+`create` posts `{name, template}` to `POST /v1/verbs/new-project`
+(`verb_new_project`). A refusal (bad name, bad template, a project that already
+exists, a failed scaffold) shows the host's sentence verbatim and the sheet stays
+open. On success the sheet closes, the phone seats itself in the new project, and
+the manager's room opens the way its card's room door would: the card is built
+from the host's answer (`agent`, `agent_home`, the new project's name), and a
+newborn card with no room and no history offers **fresh**, so the birth
+conversation starts on the phone. The desktop refuses `verb_new_project` by name;
+it runs `aipass new` in its own terminal.

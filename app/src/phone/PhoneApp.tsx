@@ -49,7 +49,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { baudSettingsRead, listProjects } from "../host";
-import type { BaudSettings, BranchStatus, ProjectListing } from "../types";
+import type { BaudSettings, BranchStatus, NewProjectResult, ProjectListing } from "../types";
 // The two gears are the DESKTOP'S OWN panels, mounted as-is: their host calls
 // go through this build's http transport, and their `baud-settings-*` styling
 // lives in theme.css, which this face already imports. Two settings screens
@@ -81,6 +81,7 @@ import MachineSheet from "./MachineSheet";
 import { renderMarkdown } from "./Markdown";
 import MemoryScreen, { type MemoryTabId } from "./MemoryScreen";
 import MonitorSheet from "./MonitorSheet";
+import NewProjectSheet from "./NewProjectSheet";
 import PassportSheet from "./PassportSheet";
 import PlansScreen from "./PlansScreen";
 import PhoneSettings, { scrollPercent } from "./PhoneSettings";
@@ -96,6 +97,7 @@ import { clearRoomEnded, markRoomEnded, roomEnded } from "../intent";
 import { writeMark } from "./lib/feedMarks";
 import { POLL_MS, useFeedBadge, useFleetPoll, useGitSweep, useRepoCount } from "./lib/pollers";
 import { machineFaces, useMachineVitals } from "./lib/machine";
+import { bornCard } from "./lib/newProject";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
 // THE BACK RULE (DPLAN-0414 wave 6; the owner, 16:29: "back just goes back to
@@ -317,10 +319,21 @@ function paneLabel(pane: OpenPane, seatName: string): string {
  * this component never sees or sends a path - but picking a row sets CLIENT
  * state rather than switching a server seat.
  */
-function ProjectPick({ current, onPick }: { current: string; onPick: (name: string) => void }) {
+function ProjectPick({
+  current,
+  onPick,
+  scope,
+  onNew,
+}: {
+  current: string;
+  onPick: (name: string) => void;
+  scope: Scope;
+  onNew: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<ProjectListing[] | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
 
   async function toggle() {
     if (open) {
@@ -330,6 +343,7 @@ function ProjectPick({ current, onPick }: { current: string; onPick: (name: stri
     setOpen(true);
     setRows(null);
     setFailure(null);
+    setRefused(null);
     try {
       setRows(await listProjects());
     } catch (cause) {
@@ -376,6 +390,25 @@ function ProjectPick({ current, onPick }: { current: string; onPick: (name: stri
                 {entry.anchor ? <span className="baud-phone-project-tag">anchor</span> : null}
               </button>
             ))}
+            <button
+              type="button"
+              role="menuitem"
+              className={`baud-phone-project-item baud-phone-project-new ${
+                scopeRefusal(scope) ? "baud-phone-verb-refused" : ""
+              }`}
+              onClick={() => {
+                const refusal = scopeRefusal(scope);
+                if (refusal) {
+                  setRefused(`refused: ${refusal}`);
+                  return;
+                }
+                setOpen(false);
+                onNew();
+              }}
+            >
+              + new project
+            </button>
+            {refused ? <div className="baud-phone-project-fail">{refused}</div> : null}
           </div>
         </>
       ) : null}
@@ -1111,6 +1144,18 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     walkBack();
   }, [walkBack]);
   const closeBackup = useCallback(() => setBackupOpen(false), []);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const closeNewProject = useCallback(() => setNewProjectOpen(false), []);
+  const onProjectBorn = useCallback(
+    (result: NewProjectResult) => {
+      setNewProjectOpen(false);
+      pickProject(result.name);
+      const card = bornCard(result);
+      clearRoomEnded(card.project, card.name);
+      focusPane({ name: card.name, mode: roomDoors(card)[0].mode, project: card.project, card });
+    },
+    [pickProject, focusPane],
+  );
   useSystemBack(expanded !== null ? closeCard : null);
   useSystemBack(passportOf !== null ? closePassport : null);
   useSystemBack(settingsAgent !== null ? closeAgentSettings : null);
@@ -1155,7 +1200,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         {/* The name shown is the SNAPSHOT's own project - what is actually on
             the wheel - not the stored choice, so a refused or misspelled seat
             can never dress itself as the thing it failed to become. */}
-        <ProjectPick current={snapshot?.project ?? (project || "—")} onPick={pickProject} />
+        <ProjectPick
+          current={snapshot?.project ?? (project || "—")}
+          onPick={pickProject}
+          scope={scope}
+          onNew={() => setNewProjectOpen(true)}
+        />
         {/* The desktop header's own shell button, same glyph: an empty
             terminal at the SELECTED project's root. Its own tmux room
             (`baud-shell-<project>`), so it survives a screen lock exactly the
@@ -1849,6 +1899,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       {backupOpen ? (
         <BackupApp key={seat} project={seat} scope={scope} onClose={closeBackup} />
       ) : null}
+      {newProjectOpen ? <NewProjectSheet onClose={closeNewProject} onCreated={onProjectBorn} /> : null}
       {/* THE SAME APP, AT BRANCH GRAIN - the card's GIT tile. It opens straight
           into the changes list and carries no `changed` or `projectLabel`,
           because both of those belong to the sheet screen this grain never

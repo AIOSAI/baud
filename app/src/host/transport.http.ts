@@ -449,6 +449,12 @@ const ROUTES: Record<string, Route> = {
     body: () => ({}),
   },
 
+  verb_new_project: {
+    path: "/v1/verbs/new-project",
+    method: "POST",
+    body: (args) => ({ name: args.name, template: args.template }),
+  },
+
   /* ------------------------------------------------------------ backup -- */
   /* DPLAN-0411; shapes in devpulse/docs.local/backup_door_contract.md. Run is
      OPERATE scope, job and status are read. `call` already puts a non-empty
