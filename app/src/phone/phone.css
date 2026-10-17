@@ -1024,6 +1024,12 @@ body {
   padding-top: 4px;
 }
 
+.baud-phone-confirm-note {
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
+  padding-top: 4px;
+}
+
 .baud-phone-confirm-row {
   display: flex;
   gap: 8px;
@@ -4234,6 +4240,13 @@ body {
 .baud-backup-accent {
   color: var(--baud-backup-accent);
   font-weight: 600;
+}
+
+.baud-backup-root {
+  margin: 6px calc(var(--baud-pad) / 1.5) 0;
+  color: var(--baud-ink-dim);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
 }
 
 /* WHAT THE STORE HOLDS - facts read from disk, in the quiet card the git

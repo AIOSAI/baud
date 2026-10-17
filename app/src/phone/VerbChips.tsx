@@ -21,6 +21,14 @@ import type { BranchStatus, VerbResult } from "../types";
 import { lockFace, lockLine, useLockState } from "./lib/lock";
 import { LOCK_VERB, PHONE_VERBS, type PhoneVerb, type Scope, screenIsAwake, scopeRefusal } from "./lib/verbs";
 
+// The phone is served over plain http on a tailnet address, which is not a secure context.
+function hasSecureContext(): boolean {
+  return typeof window !== "undefined" && window.isSecureContext === true;
+}
+
+const TAP_CONFIRMS = "on this connection your tap is the confirmation — no fingerprint is asked";
+const VERIFIED = "verified by this device";
+
 /**
  * Ask the platform to verify the person, where the platform offers it.
  *
@@ -31,8 +39,8 @@ import { LOCK_VERB, PHONE_VERBS, type PhoneVerb, type Scope, screenIsAwake, scop
  * honest about what actually happened.
  */
 async function verifyPerson(): Promise<"platform" | "tap"> {
+  if (!hasSecureContext()) return "tap";
   const available =
-    typeof window !== "undefined" &&
     typeof window.PublicKeyCredential !== "undefined" &&
     (await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.().catch(() => false));
 
@@ -79,19 +87,20 @@ export default function VerbChips({ branch, scope, onEnded }: VerbChipsProps) {
   const [said, setSaid] = useState<string | null>(null);
   const refusal = scopeRefusal(scope);
 
-  async function fire(verb: PhoneVerb) {
+  async function fire(verb: PhoneVerb, verified = false) {
     setBusy(verb.id);
     setSaid(null);
+    const tell = (line: string) => setSaid(verified ? `${VERIFIED} · ${line}` : line);
     try {
       const result: VerbResult = await verb.run(branch);
       // The chip reports what the MACHINE said, never that the request left.
-      setSaid(result.ok ? (result.detail ?? `${verb.label} done`) : (result.detail ?? `${verb.label} refused`));
+      tell(result.ok ? (result.detail ?? `${verb.label} done`) : (result.detail ?? `${verb.label} refused`));
       // ON THE MACHINE'S ANSWER, never on the request leaving - same rule the
       // sentence above follows. A kill that was refused leaves the room alive,
       // and closing its pane would be this face inventing an outcome.
       if (result.ok && verb.id === "kill") onEnded?.();
     } catch (cause) {
-      setSaid(cause instanceof HostError ? cause.message : String(cause));
+      tell(cause instanceof HostError ? cause.message : String(cause));
     } finally {
       setBusy(null);
       setPending(null);
@@ -118,8 +127,7 @@ export default function VerbChips({ branch, scope, onEnded }: VerbChipsProps) {
     const how = await verifyPerson();
     // Named out loud: an operator should know whether their fingerprint was
     // actually asked for, or whether a tap was all that stood there.
-    setSaid(how === "platform" ? "verified by this device" : null);
-    await fire(verb);
+    await fire(verb, how === "platform");
   }
 
   return (
@@ -153,6 +161,7 @@ export default function VerbChips({ branch, scope, onEnded }: VerbChipsProps) {
         <div className="baud-phone-confirm" role="dialog" aria-label={`confirm ${pending.label}`}>
           <p className="baud-phone-confirm-line">{pending.title(branch)}</p>
           <p className="baud-phone-confirm-warn">this cannot be undone — the scrollback goes with it</p>
+          {hasSecureContext() ? null : <p className="baud-phone-confirm-note">{TAP_CONFIRMS}</p>}
           <div className="baud-phone-confirm-row">
             <button type="button" className="baud-phone-confirm-no" onClick={() => setPending(null)}>
               cancel

@@ -6,8 +6,10 @@ import {
   CURRENT_TAIL,
   JOB_FORGOTTEN,
   NOTHING_UPLOADED,
+  NO_PROJECT,
   STATUS_LANES,
   backupBytes,
+  backupHead,
   barFraction,
   buttonName,
   buttonPhase,
@@ -23,6 +25,7 @@ import {
   progressLine,
   runningJobs,
   runningVerbs,
+  unregisteredLine,
   verbLabel,
 } from "./backupView";
 
@@ -318,6 +321,68 @@ describe("progressLine", () => {
 
   it("drops the elapsed piece when the start does not parse", () => {
     expect(progressLine(entry({ started_at: "" }), NOW)).toBe("1,204 / 15,414 files · 310 MB of 2.9 GB");
+  });
+
+  it("ends with the failed count when files have failed", () => {
+    expect(progressLine(entry({ progress: progress({ failed: 1203 }) }), NOW)).toBe(
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s · 1,203 failed",
+    );
+  });
+
+  it("says one failed file", () => {
+    expect(progressLine(entry({ progress: progress({ failed: 1 }) }), NOW)).toBe(
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s · 1 failed",
+    );
+  });
+
+  it("keeps the failed count when the start does not parse", () => {
+    expect(progressLine(entry({ started_at: "", progress: progress({ failed: 3 }) }), NOW)).toBe(
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 3 failed",
+    );
+  });
+
+  it("says nothing of failures at zero or below", () => {
+    expect(progressLine(entry({ progress: progress({ failed: -1 }) }), NOW)).toBe(
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s",
+    );
+  });
+});
+
+describe("backupHead", () => {
+  it("shows the seat's name and the answer's root", () => {
+    expect(backupHead("baud", status())).toEqual({ name: "baud", path: "/home/alice/AIPass/projects/baud" });
+  });
+
+  it("shows the name alone before any answer", () => {
+    expect(backupHead("baud", null)).toEqual({ name: "baud", path: null });
+  });
+
+  it("never shows another seat's root under this seat's name", () => {
+    expect(backupHead("AIPass", status())).toEqual({ name: "AIPass", path: null });
+  });
+
+  it("matches the seat exactly, as the server echoes it", () => {
+    expect(backupHead("Baud", status())).toEqual({ name: "Baud", path: null });
+  });
+
+  it("shows no path for an empty root", () => {
+    expect(backupHead("baud", status({ root: "" }))).toEqual({ name: "baud", path: null });
+  });
+
+  it("says no project, with no path, when nothing is seated", () => {
+    expect(backupHead("", status({ project: "" }))).toEqual({ name: "no project", path: null });
+  });
+});
+
+describe("the no-project and unregistered lines", () => {
+  it("says no project is seated", () => {
+    expect(NO_PROJECT).toBe("no project is seated yet");
+  });
+
+  it("names the store as missing and the command that makes one", () => {
+    expect(unregisteredLine("/home/alice/AIPass/projects/baud")).toBe(
+      "this project has no backup store yet — register it with drone @backup register /home/alice/AIPass/projects/baud",
+    );
   });
 });
 

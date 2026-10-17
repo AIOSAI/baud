@@ -233,6 +233,16 @@ dialog that asks the platform to verify the person where it offers it. The
 server is never told that a human confirmed, because a claim like that from a
 client is worth nothing.
 
+**The fingerprint is a later door** (*DPLAN-0414 wave 7*; the owner, 2026-10-16:
+*"I think fingerprint was much later"*). WebAuthn exists only in a secure
+context, and the phone is served over plain http on a tailnet address, so it
+never prompts. The call stays, for the day the face has a secure context, but it
+is gated on `window.isSecureContext`: when that is false nothing is attempted,
+and the dialog says *on this connection your tap is the confirmation — no
+fingerprint is asked*. The result line starts *verified by this device ·* only
+after a real WebAuthn success; before, that claim was set and then cleared by
+the result line straight away, and could not be reached on the phone anyway.
+
 **Both halves are built; end to end is not proven yet.** The chips, the payloads,
 the scope refusal and the confirm flow were proven with real clicks against a
 stand-in that asks the *real* `/v1/whoami` for the scope — and `kill` was
@@ -1335,6 +1345,30 @@ sees the status and is refused every press by name. The server's sentences (a
 400 "already running", any 503) are shown as they came. A 404 for a job the
 server forgot (it restarted) sends the reader to the status lines, which now hold
 the run's outcome.
+
+**Which project, and what it holds** (*DPLAN-0414 wave 7, 2026-10-16*; the
+owner: *"It should indicate the project it's sitting on in the backup tab, the
+path should be visible, if I change the project it should also change."*).
+
+- **The head names the seat and shows its root.** The title is the seated
+  project's name, and once a status answer has landed, the line under it is the
+  answer's `root`. @api echoes the asked `project` verbatim, so `backupHead`
+  shows a root only from an answer whose `project` is this seat. The sheet is
+  keyed on the seat as well, so a header project switch starts again from the
+  name alone and the old seat's path is never shown under the new name.
+- **No project seated** says *no project is seated yet* in the status block,
+  instead of *reading the store…* with nothing to read.
+- **A root with no `.backup/` store** (`registered: false`) leads the status
+  block with *this project has no backup store yet — register it with drone
+  @backup register <root>*. The lane lines still read *never*, and the presses
+  stay live because @backup decides what a press on an unregistered root does.
+- **A run started elsewhere shows up.** While no run is in flight, the sheet
+  reads status every 10 s, through `whileVisible`, so a closed sheet or a
+  pocketed phone reads nothing. That read replaces the old one-off read on
+  open, because `whileVisible` ticks at once. Once status lists a run, the 2 s
+  watch takes over as before. One tick runs at a time across both.
+- **Failed files show while the run goes.** The progress line ends with
+  *· N failed* when the lane's `progress.failed` is above zero.
 
 **The desktop does not have it.** `transport.ts` refuses `backup_run`,
 `backup_job`, `backup_status` and `backup_cancel` by name, because the desktop

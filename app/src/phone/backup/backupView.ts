@@ -71,6 +71,23 @@ export function confirmLine(lane: BackupLane, project: string): string {
     : `Run a full backup of ${project}, including its Drive sync?`;
 }
 
+export const NO_PROJECT = "no project is seated yet";
+
+export interface BackupHead {
+  name: string;
+  path: string | null;
+}
+
+/** @api echoes the asked project verbatim, so a mismatch is an answer for another seat. */
+export function backupHead(project: string, status: Pick<BackupStatus, "project" | "root"> | null): BackupHead {
+  if (!project) return { name: "no project", path: null };
+  return { name: project, path: status?.project === project && status.root ? status.root : null };
+}
+
+export function unregisteredLine(root: string): string {
+  return `this project has no backup store yet — register it with drone @backup register ${root}`;
+}
+
 /** What the sheet says when a job id was forgotten by a restarted server. */
 export const JOB_FORGOTTEN =
   "the server restarted and forgot this run - its outcome is in the status lines above now";
@@ -233,6 +250,7 @@ export function progressLine(entry: Pick<BackupRunning, "started_at" | "progress
   const parts = [`${count(progress.done)} / ${count(progress.total)} files`, bytes];
   const elapsed = elapsedText(entry.started_at, now);
   if (elapsed) parts.push(elapsed);
+  if (progress.failed > 0) parts.push(`${count(progress.failed)} failed`);
   return parts.join(" · ");
 }
 

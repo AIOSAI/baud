@@ -30,7 +30,9 @@ import { whileVisible } from "../lib/whileVisible";
 import {
   BACKUP_BUTTONS,
   JOB_FORGOTTEN,
+  NO_PROJECT,
   STATUS_LANES,
+  backupHead,
   barFraction,
   buttonName,
   buttonPhase,
@@ -45,10 +47,12 @@ import {
   progressLine,
   runningJobs,
   runningVerbs,
+  unregisteredLine,
 } from "./backupView";
 
 /** The contract's cadence for watching a run. */
 const POLL_MS = 2000;
+const IDLE_MS = 10_000;
 
 interface BackupAppProps {
   /** The seated project: the header chip's name, the same value GitApp gets. */
@@ -94,7 +98,10 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
 
   const readStatus = useCallback(
     async (sizes = false): Promise<BackupStatus | null> => {
-      if (!project) return null;
+      if (!project) {
+        setStatusSaid(NO_PROJECT);
+        return null;
+      }
       try {
         const answer = await backupStatus(project, sizes);
         // A plain re-read keeps sizes already walked: the cheap answer has no
@@ -114,12 +121,21 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     [project],
   );
 
-  useEffect(() => {
-    void readStatus();
-  }, [readStatus]);
-
   /** Something is in flight: a job the phone holds, or a lane status lists. */
   const busy = Object.keys(jobs).length > 0 || (status?.running?.length ?? 0) > 0;
+
+  // whileVisible ticks at once, so this is also the read on open.
+  useEffect(() => {
+    if (busy) return;
+    return whileVisible(() => {
+      if (ticking.current) return;
+      ticking.current = true;
+      void readStatus().finally(() => {
+        ticking.current = false;
+      });
+    }, IDLE_MS);
+  }, [busy, readStatus]);
+
   /** The verbs status lists as running: their presses read Stop. */
   const listed = runningVerbs(status);
   /** One clock per render for every elapsed time; each status read renders. */
@@ -209,7 +225,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     const phase = buttonPhase(lane, listed, Boolean(jobs[lane]), Boolean(stopping[lane]));
     if (phase === "watched" || phase === "stopping") return;
     // A read token is refused the Stop by name, exactly as it is the run.
-    const refusal = !project ? "no project is seated yet" : scopeRefusal(scope);
+    const refusal = !project ? NO_PROJECT : scopeRefusal(scope);
     if (refusal) {
       setSaid(`refused: ${refusal}`);
       return;
@@ -241,6 +257,8 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     setSizing(false);
   }
 
+  const head = backupHead(project, status);
+
   return (
     <section className="baud-phone-reader baud-backup">
       <header className="baud-phone-reader-head">
@@ -248,15 +266,19 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
           ‹ wheel
         </button>
         <span className="baud-phone-reader-title">
-          {project || "no project"} · <b className="baud-backup-accent">BACKUP</b>
+          {head.name} · <b className="baud-backup-accent">BACKUP</b>
         </span>
       </header>
+      {head.path ? <p className="baud-backup-root">{head.path}</p> : null}
 
       {/* WHAT THE STORE HOLDS, read from disk by @backup - so it survives a
           server restart that forgets every job. */}
       <div className="baud-backup-status">
         {status ? (
           <>
+            {status.registered === false ? (
+              <p className="baud-backup-line">{unregisteredLine(status.root)}</p>
+            ) : null}
             {STATUS_LANES.map(({ key, label }) => (
               <p key={key} className="baud-backup-line">
                 {laneLine(label, status.lanes?.[key])}

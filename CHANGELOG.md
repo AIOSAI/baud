@@ -24,6 +24,7 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: a startup agent that does not open says why (DPLAN-0414).** The resting stage shows "startup agent X not opened — <reason>" when the token is read-only or the agent has no card in the seated project.
 - **Phone: the phone's own Back goes back one screen (DPLAN-0414).** Android Back and the edge swipe do what the screen's `‹` does, one level at a time, folders, the inbox, the git app and settings sections included. On the wheel with nothing open, Back is the browser's as before.
 - **Phone: open tabs come back after a reload or an app restart (DPLAN-0414).** The tab row, the tab in front and the order tabs were used in are kept on the phone. A room tab reattaches without typing anything, a file tab re-reads, and a tab whose agent is gone is dropped.
+- **Phone: the Backup card names its project and shows its path (DPLAN-0414).** The head shows the seated project's name and, once the store answers, its root path. Switching project in the header switches both, and the old project's path is never shown under the new name.
 
 ### Changed
 
@@ -46,6 +47,9 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: every back button names where it goes (DPLAN-0414):** `‹ wheel`, `‹ card`, `‹ roster`, `‹ folder`, `‹ passport`, `‹ feed`, `‹ inbox`, `‹ settings`. The settings home's `‹ close` reads `‹ wheel`.
 - **Phone: one close glyph, `×`, across the face (DPLAN-0414).** The passport and every settings panel use the tab's `×`. In BAUD settings, the interface section's `×` and click-away close settings, like the home's; Escape and `‹ settings` still go back one level. The desktop keeps `✕`.
 - **Phone: closing a tab brings back the tab you were on before (DPLAN-0414)**, not the rightmost one.
+- **Phone: the Backup card picks up runs started elsewhere (DPLAN-0414).** While nothing runs, the sheet re-reads the store every 10 s while it is open and on screen, so a run from a terminal or the daemon shows its bar and its Stop.
+- **Phone: a running backup's progress line counts failed files (DPLAN-0414)**, ending "· N failed" when any have failed.
+- **Phone: the end-room dialog says the tap is the confirmation (DPLAN-0414).** Over plain http no fingerprint is asked, and the answer line says "verified by this device" only after a real fingerprint or face check.
 
 ### Removed
 
@@ -68,6 +72,8 @@ and every change that lands adds its line there in the same sitting.
 - **The memory push confirm says "every branch" when no branch has an override (DPLAN-0414)**, on both faces, instead of a guessed "ALL 17 branches"; with overrides it still names their count.
 - **Phone: the bell's read and clear marks hold across projects (DPLAN-0414).** The feed is machine-wide, so the marks are one key each: switching project no longer brings read events back as unread, and a clear clears them everywhere. The seated project's old marks carry over once.
 - **Phone: the live and dispatched wheels say "reading…" while the roster loads (DPLAN-0414)** instead of "lane pending".
+- **Phone: the Backup card with no project seated says "no project is seated yet" (DPLAN-0414)** instead of "reading the store…" forever.
+- **Phone: the Backup card says when a project has no backup store (DPLAN-0414):** "this project has no backup store yet — register it with drone @backup register <root>", instead of three lanes that look as if they never ran.
 
 ## [0.3.7] — 2026-10-15
 
