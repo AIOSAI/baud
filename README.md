@@ -62,7 +62,16 @@ Most of what runs is [AIPass](https://github.com/AIOSAI/AIPass): the agents' ide
 
 ## Docs
 
-- [The phone face](docs/phone.md): the wheel, rooms, files, git and the monitor row, and why each works the way it does.
+- [The phone face](docs/phone.md): the index for the phone face, and why each screen works the way it does.
+  - [The wheel](docs/phone/wheel.md): the fleet rail, the header, the verbs and the `GIT` tile.
+  - [The card](docs/phone/card.md): the expanded agent card and the passport.
+  - [The room](docs/phone/room.md): the terminal sheet.
+  - [Room input](docs/phone/room-input.md): typing and the keyboard.
+  - [Room delivery](docs/phone/room-delivery.md): links, photos, and a room that drops.
+  - [Files and git](docs/phone/files-git.md): the FILES app and the git app.
+  - [Backup](docs/phone/backup.md): the backup app.
+  - [Monitor](docs/phone/monitor.md): the monitor row and what is running.
+  - [Settings and navigation](docs/phone/settings-nav.md): the feed, settings, Back and tabs.
 - [The desktop window](docs/desktop.md): BAUD's Tauri app for the machine itself.
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
 - [Architecture](docs/architecture.md): how BAUD reads the fleet, and its three rules.

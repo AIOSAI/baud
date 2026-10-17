@@ -286,7 +286,16 @@ headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
 | `docs/desktop.md` | The desktop window: running it, the window, cards, rooms, terminal, settings, camera, the command surface, the layout. |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
-| `docs/phone.md` | The phone face, screen by screen, row by row as it landed. |
+| `docs/phone.md` | The phone face's index: what the phone is, the transport and its refusal table, the token rule, project-named reads, serving, the checks, the visibility gate, and the table of the pages below. |
+| `docs/phone/wheel.md` | The fleet rail, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet. |
+| `docs/phone/card.md` | The expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate. |
+| `docs/phone/room.md` | The terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost. |
+| `docs/phone/room-input.md` | Typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule. |
+| `docs/phone/room-delivery.md` | Links and copy out of a room, sending a photo, dropped writes, a dead room and its reconnect ladder. |
+| `docs/phone/files-git.md` | The git app and the FILES app. |
+| `docs/phone/backup.md` | The backup app. |
+| `docs/phone/monitor.md` | The monitor row, the cpu page, what is running, rooms and watches that end. |
+| `docs/phone/settings-nav.md` | The bell and the feed, the gear, the startup seat, designed reads, settings, Back and tabs. |
 | `docs/releases.md` | Versions, what a release carries, and the one human step. |
 | `docs/history.md` | How it got here: the milestones and the rounds after them. |
 | `docs/phone-setup-android.md` | The stranger's step-by-step for an Android phone: Tailscale, token, sign in. |
