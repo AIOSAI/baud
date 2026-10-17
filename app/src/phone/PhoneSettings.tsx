@@ -12,6 +12,7 @@ import { apiOrigin } from "../host/transport.http";
 import InterfaceSettings from "../desktop/InterfaceSettings";
 import MemorySettings from "../desktop/MemorySettings";
 import type { BaudSettings } from "../types";
+import { useSystemBack } from "./lib/systemBack";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /**
@@ -347,6 +348,11 @@ export default function PhoneSettings({
     return () => document.removeEventListener("keydown", key);
   }, [onClose, screen]);
 
+  /* AND SO DOES THE PHONE'S OWN BACK (DPLAN-0414 wave 6, item 2): a section
+     to home, home to the wheel - the `‹` chip's two steps, through the one
+     registry the face reads on the system Back. */
+  useSystemBack(screen === null ? onClose : () => setScreen(null));
+
   useEffect(() => {
     if (!saved) return;
     const timer = window.setTimeout(() => setSaved(false), 1800);
@@ -411,10 +417,10 @@ export default function PhoneSettings({
             <button
               type="button"
               className="baud-phone-back"
-              title={onHome ? "close settings" : "back to settings"}
+              title={onHome ? "back to the wheel" : "back to settings"}
               onClick={() => (onHome ? onClose() : setScreen(null))}
             >
-              ‹ {onHome ? "close" : "settings"}
+              ‹ {onHome ? "wheel" : "settings"}
             </button>
             <span className="baud-settings-title">
               {onHome ? "BAUD · settings" : `settings · ${section?.label ?? ""}`}
@@ -425,7 +431,7 @@ export default function PhoneSettings({
               title="close - nothing is written until save"
               onClick={onClose}
             >
-              ✕
+              ×
             </button>
           </header>
 
@@ -614,13 +620,23 @@ export default function PhoneSettings({
           before this round: one implementation of startup agent, poll cadence,
           bell and hook sounds, seated behind its own row instead of a loose
           door. It covers this panel rather than replacing it: its scrim is
-          fixed at the same z-index and later in the DOM, so it paints on top
-          and its own ✕ or click-away lands back on settings home. */}
+          fixed at the same z-index and later in the DOM, so it paints on top.
+
+          ONE CLOSE GLYPH, ONE MEANING (DPLAN-0414 wave 6, item 8, devpulse's
+          ruling on the survey's pick-one): the close glyph closes the WHOLE
+          panel, everywhere. So this section's own `×` and its click-away close
+          settings outright, exactly as the home's do - they used to land back
+          on settings home - and Escape, like `‹ settings`, goes back one
+          level. The panel is the desk's; the phone's two differences (the
+          glyph and where the close goes) are handed to it as props, and the
+          desk's own path is untouched. */}
       {screen === "interface" ? (
         <InterfaceSettings
           agents={agents}
           settings={settings}
           onSaved={onDocument}
+          closeGlyph="×"
+          onDismiss={onClose}
           onClose={() => setScreen(null)}
         />
       ) : null}

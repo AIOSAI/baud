@@ -129,7 +129,7 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
     <section className="baud-phone-feed">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ wheel
         </button>
         <span className="baud-phone-reader-title">feed</span>
         {visible.length > 0 ? (

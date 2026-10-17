@@ -63,10 +63,17 @@ function message(err: unknown): string {
 interface AgentSettingsProps {
   /** Branch name - the backend resolves it inside the seated fleet itself. */
   agent: string;
+  /**
+   * The close button's glyph. Absent is the desk's `✕`. The phone hands in
+   * `×`, its one close glyph across the face (DPLAN-0414 wave 6, item 10) -
+   * carried as data so this panel stays one component on both faces and the
+   * desk renders exactly as it did.
+   */
+  closeGlyph?: string;
   onClose: () => void;
 }
 
-export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
+export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: AgentSettingsProps) {
   // What the file says right now; null until the read lands (or if it failed).
   const [base, setBase] = useState<Settings | null>(null);
   // null is "the key is absent" on every dial - a position, not a placeholder.
@@ -277,7 +284,7 @@ export default function AgentSettings({ agent, onClose }: AgentSettingsProps) {
             title="close - nothing is written until save"
             onClick={onClose}
           >
-            ✕
+            {closeGlyph}
           </button>
         </header>
 

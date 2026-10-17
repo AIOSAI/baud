@@ -98,6 +98,12 @@ import { POLL_MS, useFeedBadge, useFleetPoll, useGitSweep, useRepoCount } from "
 import { machineFaces, useMachineVitals } from "./lib/machine";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
+// THE BACK RULE (DPLAN-0414 wave 6; the owner, 16:29: "back just goes back to
+// where it came from"). The trail and the tab store are pure and pinned by
+// their own tests; this file only acts on what they return.
+import { type Browse, type Stop, backWord, leave, stepBack } from "./lib/trail";
+import { closeTab, focusOn, loadTabs, mergeTabs, restoreTabs, saveTabs } from "./lib/tabStore";
+import { useHistoryGuard, useSystemBack } from "./lib/systemBack";
 
 /** Where the phone keeps its seat. The server holds no seat for this face -
  *  the chosen project rides every read as a parameter instead, so two phones
@@ -138,28 +144,6 @@ const RELOAD_ACK_MS = 200;
  * the pane lifecycle changes by HANDS from there on.
  */
 let startupSpent = false;
-
-/**
- * One files browse: whose tree, which project, the floor, which kind of root -
- * and, when it is the browse a file was opened from, the level it stood on.
- *
- * NAMED SINCE DPLAN-0414 C#9 because it now lives in two places: the open
- * browse, and every file pane opened out of one (`OpenPane.from`), which is how
- * the browse survives the file's tab.
- */
-interface Browse {
-  name: string;
-  project: string;
-  /** The floor: "" for the files door, `artifacts` for the passport's records
-   *  door (compass #291). */
-  start: string;
-  /** Which KIND of word `name` is, when the browse came off the roots roster
-   *  (FPLAN-0443). Absent for every door that names a citizen, which is every
-   *  door that existed before it. */
-  root?: string;
-  /** The level the browse opens at, under `start` (C#9). Absent is the floor. */
-  at?: string;
-}
 
 /** One open pane in the stage: an agent room, an empty shell, a watch, or a
  *  file view. Files joined the row on Patrick's call (08-16: "when i select a
@@ -213,17 +197,33 @@ interface OpenPane {
    *
    * THE OWNER'S RULING, reversing 08-16's: "it's annoying when a tab drops, I
    * have to start again." So the browse is not thrown away when a file opens -
-   * it rides the file's pane, and the Reader's `‹ back` on that pane re-opens
-   * it at the same level. ON THE PANE rather than in one shell-wide slot,
-   * because every file tab came from its own folder: a second file opened from
-   * the same browse carries its own copy, and two tabs from two folders each go
-   * back to theirs.
+   * it rides the file's pane, and the Reader's `‹ folder` on that pane
+   * re-opens it at the same level. ON THE PANE rather than in one shell-wide
+   * slot, because every file tab came from its own folder: a second file opened
+   * from the same browse carries its own copy, and two tabs from two folders
+   * each go back to theirs.
    *
    * Absent on a file pane any other door opened, whose `‹ back` closes the tab
    * as it always has. NOT PART OF `paneKey`, for `document`'s reason: the key
    * is the file's identity, and where it was opened from is not.
    */
   from?: Browse;
+  /**
+   * WITH `from`: the trail the browse stood on when the file was tapped
+   * (DPLAN-0414 wave 6, item 5). The file tab lands on the stage, so the live
+   * trail is cleared then; this is how `‹ folder` puts it back, and so how the
+   * browse's own floor `‹` still reaches the roster, the passport or the card
+   * the browse came from. `from` and this travel together and are only ever
+   * set together, which is the whole of "the trail and `from` agree".
+   */
+  fromTrail?: Stop[];
+  /**
+   * READ BACK FROM STORAGE after a reload (wave 6, item 3), not opened by a
+   * door this session. A restored room is a REATTACH: TerminalSheet types no
+   * launch line into it, whatever its card says. Never stored itself
+   * (`tabStore.saveTabs` drops it); every pane `loadTabs` reads carries it.
+   */
+  restored?: boolean;
   /**
    * SHELL PANES ONLY, and set at the moment of the tap: one command line to
    * type into this shell when it opens. The card's `?` sends the branch's help
@@ -450,6 +450,33 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   /** Which pane is showing, by paneKey. The rest stay live underneath. */
   const [active, setActive] = useState<string | null>(null);
   /**
+   * THE ORDER TABS WERE FRONTED IN, oldest first (wave 6, item 4). Closing the
+   * front tab fronts the one before it (`tabStore.closeTab`) instead of the
+   * rightmost - the tab you were on, which is where "back to where it came
+   * from" puts you.
+   */
+  const [focus, setFocus] = useState<string[]>([]);
+  /**
+   * THE TABS THE LAST SESSION LEFT, read once at load (wave 6, item 3) and
+   * held here until the first fleet read can vouch for them - see the restore
+   * effect below. Null when storage held none.
+   */
+  const [stored] = useState(() => loadTabs(window.localStorage, paneKey));
+  /**
+   * Has the stored row been folded in (or was there none)? Until it has, the
+   * row is not WRITTEN either: an empty row saved in the first second would
+   * erase the tabs it is about to restore. The startup agent waits on it too,
+   * so a restored seat outranks the startup preference the way a hand does.
+   */
+  const [tabsSettled, setTabsSettled] = useState(() => stored === null);
+  /**
+   * THE TRAIL - the screens left through a door, newest last (wave 6, item 1;
+   * `lib/trail.ts`). A door pushes the screen it leaves; every `‹` pops one
+   * and reopens it. Empty means the screen in front was opened from the
+   * resting face, and its `‹` says `wheel`.
+   */
+  const [trail, setTrail] = useState<Stop[]>([]);
+  /**
    * Has a seat already been taken by HANDS? The desk's own `seatedRef`
    * (App.tsx:144) and held for its reason: it is only ever read at the one
    * moment the startup shot is spent, so it never has to survive anything. The
@@ -535,10 +562,18 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    *
    * A FULL reload, not a re-poll, because that is the gesture being replaced:
    * `location.reload()` has exactly the semantics of the browser refresh he
-   * already uses, and it is lossless here because nothing this face knows is
-   * only in this face - the seat is in localStorage, every room lives in tmux
-   * on the host, and the fleet is one poll away. That is why he refreshes
-   * freely today, and why this needs no confirm.
+   * already uses, and needs no confirm because almost nothing this face knows
+   * is only in this face - the seat is in localStorage, every room lives in
+   * tmux on the host, and the fleet is one poll away.
+   *
+   * "ALMOST", AND THIS COMMENT USED TO SAY "LOSSLESS". It was not: the tab row
+   * lived only in React state, so this very button dropped every tab (the back
+   * survey, DPLAN-0414; the owner: "its annoying when a tab drops i have to
+   * start again"). Since wave 6 the tabs, the front tab and the focus history
+   * are in localStorage too (`lib/tabStore.ts`) and come back on load. What a
+   * reload still drops: whatever screen was open over the stage and the trail
+   * under it - the face comes back on the wheel, tabs in place - and a room
+   * tab whose agent has left the census.
    *
    * The flag exists for the 200ms of acknowledgement BEFORE the reload kicks.
    * A tap that does nothing visible on a slow reconnect reads as a dead
@@ -614,6 +649,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    *  shells and watches - which is what lets him chat with one agent while
    *  watching others. Nineteen agent chips was the failure mode this rules
    *  out; the wheel is the agent switcher, not the tab row. */
+  /** Front a tab: it is in front, and it is the newest in the focus history. */
+  const front = useCallback((key: string) => {
+    setActive(key);
+    setFocus((held) => focusOn(held, key));
+  }, []);
+
   const focusPane = useCallback((pane: OpenPane) => {
     // A seat taken is a seat taken, whoever took it - and an operator who has
     // already picked one outranks the startup preference (App.tsx:382, the same
@@ -634,22 +675,62 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       }
       return [...current, pane];
     });
-    setActive(key);
-  }, []);
+    front(key);
+  }, [front]);
 
   /** Close one pane. Rooms and shells survive on the host (the close is a
-   *  detach); a watch's observer dies with it, which is a watch's contract. */
+   *  detach); a watch's observer dies with it, which is a watch's contract.
+   *
+   *  THE TAB IN FRONT AFTERWARDS is the one fronted before it (wave 6, item
+   *  4), not the rightmost: `closeTab` walks the focus history, and only with
+   *  no history left falls back to the old rightmost rule. */
   const closePane = useCallback(
     (key: string) => {
+      const next = closeTab(open.map(paneKey), focus, active, key);
       setOpen((current) => current.filter((held) => paneKey(held) !== key));
-      setActive((now) => {
-        if (now !== key) return now;
-        const rest = open.filter((held) => paneKey(held) !== key);
-        return rest.length ? paneKey(rest[rest.length - 1]) : null;
-      });
+      setActive(next.active);
+      setFocus(next.focus);
     },
-    [open],
+    [open, focus, active],
   );
+
+  /**
+   * THE STORED TABS COME BACK (wave 6, item 3) - once, as soon as the census
+   * can vouch for them: the first fleet read, and the roster's answer or its
+   * refusal. `restoreTabs` takes each agent's card fresh from that census and
+   * drops a tab whose agent has gone, one console line each; `mergeTabs`
+   * folds the rest in under anything the operator's hands opened meanwhile.
+   *
+   * DECLARED BEFORE THE STARTUP EFFECT, and that order is part of the
+   * contract: a restored agent seat marks `seatedRef`, so the startup agent
+   * stands down for it exactly as it does for a seat a hand took. The startup
+   * effect also waits on `tabsSettled`, so the two can never race.
+   */
+  useEffect(() => {
+    if (tabsSettled || stored === null) return;
+    if (!snapshot || (roster === null && rosterRefusal === null)) return;
+    const census = {
+      seat: snapshot.project,
+      // A read that failed is not a project with no agents: judge nothing on it.
+      seated: snapshot.error ? null : snapshot.branches,
+      roster,
+    };
+    const restored = restoreTabs(stored, census, paneKey);
+    for (const line of restored.dropped) console.info(line);
+    const merged = mergeTabs(restored, { open, active, focus }, paneKey, isSeat);
+    if (merged.open.some(isSeat)) seatedRef.current = true;
+    setOpen(merged.open);
+    setActive(merged.active);
+    setFocus(merged.focus);
+    setTabsSettled(true);
+  }, [tabsSettled, stored, snapshot, roster, rosterRefusal, open, active, focus]);
+
+  /* THE ROW IS WRITTEN ON EVERY CHANGE TO IT, once the stored one is folded
+     in. One small JSON value beside the seat; nothing polls for it. */
+  useEffect(() => {
+    if (!tabsSettled) return;
+    saveTabs(window.localStorage, { open, active, focus });
+  }, [tabsSettled, open, active, focus]);
 
   /**
    * THE STARTUP AGENT, on the phone (DPLAN-0302). The desk's own effect
@@ -678,10 +759,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    * the one that was nearly missed: the fleet read ALWAYS lands before whoami
    * here, so without it this effect would have refused itself on every single
    * load while looking perfectly reasonable in review (main.tsx carries the
-   * measurement).
+   * measurement). A FOURTH WAIT since wave 6, `tabsSettled`: the stored tabs
+   * are folded in first, so a restored seat counts as a seat taken.
    */
   useEffect(() => {
-    if (!snapshot || !baudSettings || !scopeKnown || startupSpent) return;
+    if (!snapshot || !baudSettings || !scopeKnown || !tabsSettled || startupSpent) return;
     startupSpent = true;
     const startupAgent = interfacePrefs(baudSettings).startupAgent;
     if (!startupAgent || seatedRef.current) return;
@@ -736,7 +818,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       project: branch.project,
       card: branch,
     });
-  }, [snapshot, baudSettings, scope, scopeKnown, focusPane]);
+  }, [snapshot, baudSettings, scope, scopeKnown, tabsSettled, focusPane]);
 
   const { events, setEvents, readUpTo, setReadUpTo, clearedUpTo, setClearedUpTo } =
     useFeedBadge(project);
@@ -759,7 +841,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     [setClearedUpTo],
   );
 
-  /** Closing the feed IS the read. */
+  /** Closing the feed IS the read - the one back on this face with a side
+   *  effect, kept by ruling (DPLAN-0414 wave 6, item 9). Its destination, the
+   *  wheel, already meets the back rule: the bell is on the header. */
   const closeFeed = useCallback(() => {
     setFeedOpen(false);
     setEvents((seen) => {
@@ -930,6 +1014,121 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     ];
   }, [expandedCard, branches, snapshot, focusPane]);
 
+  /* ------------------------------------------------ the way back (wave 6) -- */
+
+  /**
+   * LEAVE A SCREEN THROUGH A DOOR: the trail remembers it (`lib/trail.ts`).
+   * The door still closes what it was pressed on - every screen here is a
+   * full-height overlay, and one left open underneath would only be covered -
+   * but it is no longer DISCARDED: `‹` on the screen the door opened reopens
+   * it.
+   */
+  const leaveFor = useCallback((stop: Stop) => setTrail((held) => leave(held, stop)), []);
+
+  /**
+   * ONE STEP BACK: pop the newest stop and reopen what it names. Every `‹`
+   * that leaves a screen calls this after closing that screen; so does the
+   * system Back, through the same handler. An empty trail reopens nothing:
+   * the wheel.
+   *
+   * A CARD reopens by ref and is resolved against the live poll like any
+   * other; one that has left the fleet meanwhile resolves to nothing, and the
+   * operator is on the wheel - the same answer the rail would give. A
+   * PASSPORT reopens with its held copy, its own fallback.
+   */
+  const walkBack = useCallback(() => {
+    const { to, rest } = stepBack(trail);
+    setTrail(rest);
+    if (to === null) return;
+    if (to.kind === "card") setExpanded(to.ref);
+    else if (to.kind === "roots") setRootsOpen(true);
+    else setPassportOf({ ref: to.ref, held: to.held });
+  }, [trail]);
+
+  /** What every `‹` on a door's screen says: where `walkBack` will land. */
+  const backTo = backWord(trail);
+
+  /**
+   * NOTHING OPEN OVER THE STAGE, NO TRAIL. The doors and backs above keep
+   * this true on their own; this is the net under them. A trail left standing
+   * on the resting face would send the NEXT screen's `‹` somewhere the
+   * operator has long since left.
+   */
+  const overlayOpen =
+    expanded !== null ||
+    passportOf !== null ||
+    settingsAgent !== null ||
+    interfaceOpen ||
+    browsing !== null ||
+    rootsOpen ||
+    monitorCard !== null ||
+    memoryOf !== null ||
+    plansOf !== null ||
+    reading !== null ||
+    gitOpen ||
+    backupOpen ||
+    gitOf !== null ||
+    feedOpen ||
+    inboxOf !== null;
+  useEffect(() => {
+    if (!overlayOpen && trail.length > 0) setTrail([]);
+  }, [overlayOpen, trail.length]);
+
+  /**
+   * THE SYSTEM BACK (wave 6, item 2; `lib/systemBack.ts`). One guard entry in
+   * history while anything is open; the phone's Back runs the newest screen's
+   * handler - which is the same function that screen's `‹` (or, for the card,
+   * its tap outside) calls. The screens with levels of their own - files,
+   * inbox, git, settings - register inside themselves, so Back climbs one
+   * level the way their chip does. At rest nothing is registered and Back is
+   * the browser's.
+   */
+  useHistoryGuard();
+  const closeCard = useCallback(() => setExpanded(null), []);
+  const closePassport = useCallback(() => {
+    setPassportOf(null);
+    walkBack();
+  }, [walkBack]);
+  const closeAgentSettings = useCallback(() => {
+    setSettingsAgent(null);
+    walkBack();
+  }, [walkBack]);
+  const closeRoots = useCallback(() => {
+    setRootsOpen(false);
+    walkBack();
+  }, [walkBack]);
+  const closeMachine = useCallback(() => setMonitorCard(null), []);
+  const closeMemory = useCallback(() => {
+    setMemoryOf(null);
+    walkBack();
+  }, [walkBack]);
+  const closePlans = useCallback(() => {
+    setPlansOf(null);
+    walkBack();
+  }, [walkBack]);
+  const closeReading = useCallback(() => {
+    setReading(null);
+    walkBack();
+  }, [walkBack]);
+  const closeBackup = useCallback(() => setBackupOpen(false), []);
+  useSystemBack(expanded !== null ? closeCard : null);
+  useSystemBack(passportOf !== null ? closePassport : null);
+  useSystemBack(settingsAgent !== null ? closeAgentSettings : null);
+  useSystemBack(rootsOpen ? closeRoots : null);
+  useSystemBack(monitorCard !== null ? closeMachine : null);
+  useSystemBack(memoryOf !== null ? closeMemory : null);
+  useSystemBack(plansOf !== null ? closePlans : null);
+  useSystemBack(reading !== null ? closeReading : null);
+  useSystemBack(backupOpen ? closeBackup : null);
+  useSystemBack(feedOpen ? closeFeed : null);
+
+  /** A card door to a screen: close the card, and leave it on the trail. */
+  const leaveCard = () => {
+    if (!expandedCard) return;
+    setExpanded(null);
+    leaveFor({ kind: "card", ref: cardRef(expandedCard) });
+  };
+
   /* THE SELF-CLOSING EFFECT IS GONE, and its reason with it. It existed
      because a ref alone could point at nothing: the document vanished on the
      poll that dropped the card and would REAPPEAR on a later poll that brought
@@ -1082,7 +1281,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           between an attached room and the resting state. Fleet view and room
           view stopped being two layouts. */}
       {/* THE TAB ROW - the stage's own switcher, shown only when something is
-          open. Every chip is a live pane; the ✕ is the one close affordance
+          open. Every chip is a live pane; the × is the one close affordance
           that works for all three kinds (and the only one the project-root
           shell has, since it owns no card). */}
       {open.length > 0 ? (
@@ -1097,7 +1296,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                 <button
                   type="button"
                   className="baud-phone-panetab-name"
-                  onClick={() => setActive(key)}
+                  onClick={() => front(key)}
                 >
                   {paneLabel(pane, snapshot?.project ?? "project")}
                 </button>
@@ -1142,11 +1341,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               {pane.mode === "file" ? (
                 /* The SAME Reader that overlays for card reads, re-seated as
                    tab content - phone.css unpins its fixed/fullscreen shape
-                   inside a pane. Its `‹ back` and the tab's ✕ agree - close -
-                   UNLESS A BROWSE OPENED IT (DPLAN-0414 C#9): then `‹ back`
+                   inside a pane. Its `‹ back` and the tab's × agree - close -
+                   UNLESS A BROWSE OPENED IT (DPLAN-0414 C#9): then `‹ folder`
                    re-opens that browse at the level the file was tapped on,
-                   and the tab stays in the row, where the 08-16 ruling put it.
-                   The ✕ still closes. */
+                   with the trail it stood on (wave 6), and the tab stays in
+                   the row, where the 08-16 ruling put it. The × still
+                   closes. */
                 <Reader
                   target={{
                     ref: pane.ref ?? "",
@@ -1168,10 +1368,13 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                         ? renderMarkdown
                         : undefined
                   }
+                  backLabel={pane.from ? "folder" : "back"}
                   onClose={() => {
                     const from = pane.from;
-                    if (from) setBrowsing(from);
-                    else closePane(key);
+                    if (from) {
+                      setBrowsing(from);
+                      setTrail(pane.fromTrail ?? []);
+                    } else closePane(key);
                   }}
                 />
               ) : pane.mode === "watch" ? (
@@ -1229,6 +1432,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                      rooms open side by side can never scroll at two speeds,
                      and a save reaches all of them on the same render. */
                   scrollPercent={scrollPercent(baudSettings)}
+                  /* A TAB READ BACK AFTER A RELOAD IS A REATTACH, never a door
+                     press (wave 6, item 3): it types no launch line, whatever
+                     its card says. */
+                  restored={pane.restored === true}
                   onComposeFocus={setTyping}
                 />
               )}
@@ -1253,12 +1460,19 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       </section>
 
       {expandedCard ? (
+        /* EVERY DOOR TO A SCREEN LEAVES THE CARD ON THE TRAIL (wave 6, item
+           1): README, inbox, plans, todos, memory, files, claude-settings and
+           passport go through `leaveCard`, so their `‹ card` reopens it. The
+           doors to a PANE - attach, resume, fresh, shell, `?`, watch, the
+           monitors - still just close it: their destination is the stage, and
+           the operator went there on purpose. The GIT tile had this before
+           anything else did, through its own `gitOf.ref`, and keeps it. */
         <AgentSheet
           branch={expandedCard}
           seatedProject={snapshot?.project ?? ""}
           scope={scope}
           onRead={(ref, title, kind) => {
-            setExpanded(null);
+            leaveCard();
             // The card's OWN project, not the seat - the read is fenced on the
             // address it names, and naming half an address is how a foreign
             // agent's file becomes a local agent's file.
@@ -1270,15 +1484,15 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              door itself with the todos tab in front, so the two doors on this
              card that read `.trinity` cannot draw it two ways. */
           onInbox={() => {
-            setExpanded(null);
+            leaveCard();
             setInboxOf({ name: expandedCard.name, project: expandedCard.project });
           }}
           onPlans={() => {
-            setExpanded(null);
+            leaveCard();
             setPlansOf({ name: expandedCard.name, project: expandedCard.project });
           }}
           onTodos={() => {
-            setExpanded(null);
+            leaveCard();
             setMemoryOf({ name: expandedCard.name, project: expandedCard.project, tab: "todos" });
           }}
           /* THE GIT TILE, which used to be an `onRead` of kind `diff` - one
@@ -1297,7 +1511,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             });
           }}
           onFiles={() => {
-            setExpanded(null);
+            leaveCard();
             setBrowsing({ name: expandedCard.name, project: expandedCard.project, start: "" });
           }}
           onShell={() => {
@@ -1332,19 +1546,19 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             focusPane({ name: expandedCard.name, mode: "watch", project: expandedCard.project, card: expandedCard });
           }}
           onSettings={() => {
-            setExpanded(null);
+            leaveCard();
             setSettingsAgent(expandedCard.name);
           }}
           /* THE MEMORY DOOR (compass #291). By name and project, the same
              address the passport read takes - the screen behind it reads the
              two `.trinity` files that used to be pages of the passport. */
           onMemory={() => {
-            setExpanded(null);
+            leaveCard();
             setMemoryOf({ name: expandedCard.name, project: expandedCard.project });
           }}
           monitors={managerMonitors}
           onPassport={() => {
-            setExpanded(null);
+            leaveCard();
             setPassportOf({ ref: cardRef(expandedCard), held: expandedCard });
           }}
           onAttach={(mode) => {
@@ -1374,8 +1588,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              inventing an outcome the verb never had.
 
              The sheet deliberately STAYS OPEN. Every other handler here leads
-             with `setExpanded(null)` because a door press means "take me
-             somewhere"; this is a chip reporting back, and the chip renders the
+             with `setExpanded(null)` (or `leaveCard`, which does it) because a
+             door press means "take me somewhere"; this is a chip reporting back, and the chip renders the
              machine's sentence inline - closing the sheet would delete the only
              confirmation the operator gets that the room actually ended. */
           onEnded={() => {
@@ -1386,7 +1600,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             markRoomEnded(expandedCard.project, expandedCard.name);
             closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
           }}
-          onClose={() => setExpanded(null)}
+          onClose={closeCard}
         />
       ) : null}
 
@@ -1404,6 +1618,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
              that appears not to work. */
           onArtifacts={() => {
             setPassportOf(null);
+            // LEFT, NOT DISCARDED (wave 6): the artifacts browse's floor
+            // `‹ passport` reopens this document from the trail.
+            leaveFor({ kind: "passport", ref: cardRef(passportCard), held: passportCard });
             setBrowsing({
               name: passportCard.name,
               project: passportCard.project,
@@ -1413,16 +1630,24 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               start: ARTIFACTS_DIR,
             });
           }}
-          onClose={() => setPassportOf(null)}
+          /* `×` AND THE SCRIM LAND ON THE CARD when the card opened it (wave
+             6, item 7): closing the document is one step back, and the trail
+             says where that is. */
+          onClose={closePassport}
         />
       ) : null}
 
-      {/* THE TWO GEARS - the desktop's own components, unmodified. Their scrim
-          and panel styling ride theme.css; every read and write goes through
-          the same /v1 settings routes the desktop's semantics were ported to,
-          so a dial saved here and a dial saved at the desk land in one file. */}
+      {/* THE TWO GEARS - the desktop's own components. Their scrim and panel
+          styling ride theme.css; every read and write goes through the same
+          /v1 settings routes the desktop's semantics were ported to, so a dial
+          saved here and a dial saved at the desk land in one file.
+
+          ONE DIFFERENCE, CARRIED AS DATA (wave 6, item 10): the phone's one
+          close glyph is the tab's `×`, so the agent panel is handed it; the
+          desk keeps its `✕`. Its `×`, scrim and Escape all close the panel and
+          land on the card it was opened from (the trail). */}
       {settingsAgent ? (
-        <AgentSettings agent={settingsAgent} onClose={() => setSettingsAgent(null)} />
+        <AgentSettings agent={settingsAgent} closeGlyph="×" onClose={closeAgentSettings} />
       ) : null}
       {interfaceOpen ? (
         <PhoneSettings
@@ -1459,9 +1684,16 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           THE BROWSE SURVIVES THE FILE (the owner, DPLAN-0414 C#9: "it's
           annoying when a tab drops, I have to start again"). The browser still
           closes, but the browse - root, floor, project and the level the file
-          was tapped on - rides the file's pane as `from`, and `‹ back` on that
-          tab re-opens it right there: the folder it came from, at the same
-          level. A second file from the same folder carries its own copy. */}
+          was tapped on - rides the file's pane as `from`, and `‹ folder` on
+          that tab re-opens it right there: the folder it came from, at the
+          same level. A second file from the same folder carries its own copy.
+
+          AND THE TRAIL UNDER IT (wave 6, item 5). The file lands on the
+          stage, so the live trail is cleared; the pane keeps it as
+          `fromTrail`, and `‹ folder` puts both back together - so the
+          browse's floor `‹` still reaches the roster, passport or card it came
+          from. A re-tapped open file fronts its tab unchanged and keeps the
+          `from` and trail of its FIRST open: one file is one tab. */}
       {browsing ? (
         <FilesScreen
           /* KEYED ON THE WHOLE BROWSE, floor included: the start directory is
@@ -1474,9 +1706,16 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           root={browsing.root}
           start={browsing.start}
           at={browsing.at}
+          /* THE FLOOR'S `‹` NAMES ITS ORIGIN (wave 6, items 6 and 10): the
+             roster when a roots pick opened it, the passport for the artifacts
+             door, the card for the card's files door - each because that door
+             left it on the trail. */
+          backLabel={backTo}
           onOpenFile={(ref, _title, at) => {
             const from = browsing;
+            const under = trail;
             setBrowsing(null);
+            setTrail([]);
             focusPane({
               name: from.name,
               mode: "file",
@@ -1492,21 +1731,30 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                  opens, including that same certificate reached the long way
                  round, carries no flag and reads as text. */
               document: isCertificateOpen(from.name, from.start, ref) ? "certificate" : undefined,
-              // The browse, at the level the file was tapped on (C#9).
+              // The browse, at the level the file was tapped on (C#9), and
+              // the trail it stood on (wave 6) - set together, always.
               from: { ...from, at },
+              fromTrail: under,
             });
           }}
-          onClose={() => setBrowsing(null)}
+          onClose={() => {
+            setBrowsing(null);
+            walkBack();
+          }}
         />
       ) : null}
-      {/* THE FILES APP - the roster first, the browser behind it. Rendered
-          BEFORE the browser above for the same reason the browser renders
-          before the reader: each screen sits on top of the one it came from,
-          and `‹ back` lands where you were. */}
+      {/* THE FILES APP - the roster first, the browser behind it. The two are
+          never open together: a pick closes the roster and LEAVES IT ON THE
+          TRAIL (wave 6, item 6; C#8), and the browse's floor `‹ roster`
+          reopens it. (This comment used to say the roster renders before the
+          browser; it renders after, and with one open at a time the order no
+          longer decides anything.) The roster's own `‹ wheel` is the trail's
+          empty end: the apps wheel is where it opens from. */}
       {rootsOpen ? (
         <RootsScreen
           onPick={(root) => {
             setRootsOpen(false);
+            leaveFor({ kind: "roots" });
             setBrowsing({
               /* THE FIRST PATH COMPONENT. A branch and a project name
                  themselves; `home` and `aipass` name nothing, and the fence
@@ -1526,7 +1774,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               root: root.kind,
             });
           }}
-          onClose={() => setRootsOpen(false)}
+          onClose={closeRoots}
         />
       ) : null}
 
@@ -1535,7 +1783,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           MonitorSheet above is already taken by the read-only WATCH pane over an
           agent's room - two different things one word away from each other. */}
       {monitorCard ? (
-        <MachineSheet card={monitorCard} read={machine} onClose={() => setMonitorCard(null)} />
+        <MachineSheet card={monitorCard} read={machine} onClose={closeMachine} />
       ) : null}
       {/* WORKING MEMORY - a screen, not an overlay on the card: it is read, at
           length, and the reader idiom is what this face uses for reading. */}
@@ -1548,13 +1796,19 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           branch={memoryOf.name}
           project={memoryOf.project}
           initialTab={memoryOf.tab}
-          onClose={() => setMemoryOf(null)}
+          backLabel={backTo}
+          onClose={closeMemory}
         />
       ) : null}
       {/* PLANS - the card's PLANS tile, the memory screen's shape over the
           dashboard's flow section (DPLAN-0414 A#2). */}
       {plansOf ? (
-        <PlansScreen branch={plansOf.name} project={plansOf.project} onClose={() => setPlansOf(null)} />
+        <PlansScreen
+          branch={plansOf.name}
+          project={plansOf.project}
+          backLabel={backTo}
+          onClose={closePlans}
+        />
       ) : null}
       {/* A `.md` file is drawn as markdown (DPLAN-0414 A#23) through the
           Reader's own render door - the README behind the card's name is the
@@ -1563,7 +1817,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         <Reader
           target={reading}
           render={isMarkdownRef(reading.ref) ? renderMarkdown : undefined}
-          onClose={() => setReading(null)}
+          backLabel={backTo}
+          onClose={closeReading}
         />
       ) : null}
       {/* THE GIT APP - a full-height screen over the stage, like every other
@@ -1592,7 +1847,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           summaries belong to one project, and a seat change underneath must
           not show one project's runs under another's name. */}
       {backupOpen ? (
-        <BackupApp key={seat} project={seat} scope={scope} onClose={() => setBackupOpen(false)} />
+        <BackupApp key={seat} project={seat} scope={scope} onClose={closeBackup} />
       ) : null}
       {/* THE SAME APP, AT BRANCH GRAIN - the card's GIT tile. It opens straight
           into the changes list and carries no `changed` or `projectLabel`,
@@ -1642,17 +1897,25 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
       {/* THE INBOX renders AFTER the feed, because the bell is one of its two
-          doors: a message opened off a feed row sits on top of the feed, and
-          its `‹ back` lands there. Opened off the MAIL tile, nothing is under
-          it but the stage. Keyed on the whole address so a second message
-          arriving while one is open is a fresh mount. */}
+          doors: a message opened off a feed row sits on top of the feed, which
+          stays mounted under it, and its `‹ feed` lands there - the one parent
+          on this face that is kept open rather than put on the trail, so the
+          feed keeps its scroll. Opened off the MAIL tile, the card is on the
+          trail and the list's `‹ card` reopens it (wave 6). Keyed on the whole
+          address so a second message arriving while one is open is a fresh
+          mount. */}
       {inboxOf ? (
         <InboxScreen
           key={`${inboxOf.project}/${inboxOf.name}/${inboxOf.messageId ?? ""}`}
           branch={inboxOf.name}
           project={inboxOf.project}
           openId={inboxOf.messageId}
-          onClose={() => setInboxOf(null)}
+          closeLabel={inboxOf.messageId !== undefined ? "feed" : backTo}
+          onClose={() => {
+            const offTheBell = inboxOf.messageId !== undefined;
+            setInboxOf(null);
+            if (!offTheBell) walkBack();
+          }}
         />
       ) : null}
 

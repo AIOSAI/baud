@@ -73,7 +73,7 @@ export default function MachineSheet({
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ wheel
         </button>
         <span className="baud-phone-reader-title">monitor · {TITLES[card] ?? card}</span>
       </header>

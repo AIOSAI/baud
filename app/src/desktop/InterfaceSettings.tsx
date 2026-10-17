@@ -108,6 +108,19 @@ interface InterfaceControlsProps {
 }
 
 interface InterfaceSettingsProps extends InterfaceControlsProps {
+  /**
+   * The close button's glyph. Absent is `✕`. The phone hands in `×`, its one
+   * close glyph across the face (DPLAN-0414 wave 6, item 10).
+   */
+  closeGlyph?: string;
+  /**
+   * What the close button and the click-away do, when that is not what Escape
+   * does. Absent: all three call `onClose`, as they always have. The phone
+   * mounts this panel as a SECTION of its settings and hands in the whole
+   * panel's close here (wave 6, item 8: the close glyph closes the whole
+   * panel), while Escape - `onClose` - goes back one level to settings home.
+   */
+  onDismiss?: () => void;
   onClose: () => void;
 }
 
@@ -381,8 +394,11 @@ export default function InterfaceSettings({
   agents,
   settings,
   onSaved,
+  closeGlyph = "✕",
+  onDismiss,
   onClose,
 }: InterfaceSettingsProps) {
+  const dismiss = onDismiss ?? onClose;
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -392,7 +408,7 @@ export default function InterfaceSettings({
   }, [onClose]);
 
   return (
-    <div className="baud-settings-scrim" onPointerDown={onClose}>
+    <div className="baud-settings-scrim" onPointerDown={dismiss}>
       <div
         className="baud-settings-panel baud-interface-panel"
         role="dialog"
@@ -405,9 +421,9 @@ export default function InterfaceSettings({
             type="button"
             className="baud-settings-close"
             title="close - nothing is written until save"
-            onClick={onClose}
+            onClick={dismiss}
           >
-            ✕
+            {closeGlyph}
           </button>
         </header>
 

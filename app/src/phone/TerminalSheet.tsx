@@ -611,6 +611,17 @@ interface TerminalSheetProps {
    */
   scrollPercent?: number;
   /**
+   * THIS PANE CAME BACK FROM STORAGE after a reload (DPLAN-0414 wave 6), not
+   * from a door pressed this session - so it TYPES NOTHING: no launch line, no
+   * `?` line. A restored tab is a reattach to the room tmux kept. The card it
+   * holds is the census's word as of the reload, and the one judgment this
+   * sheet would make on it - "no live claude, so type `claude`" - is the
+   * judgment a door press is owed and a reload is not: an operator who left a
+   * room at a shell prompt gets the prompt back, not a new conversation.
+   * Absent is false, every door's meaning.
+   */
+  restored?: boolean;
+  /**
    * NO `onClose`. The sheet used to own its own way out, in the header row that
    * this round deleted - detach is a door on the agent's card now, because that
    * is the one place it can be shown only for the room actually on screen. A
@@ -633,6 +644,7 @@ export default function TerminalSheet({
   command = null,
   scope,
   scrollPercent = SCROLL_NEUTRAL,
+  restored = false,
   onComposeFocus,
 }: TerminalSheetProps) {
   /**
@@ -734,8 +746,11 @@ export default function TerminalSheet({
    * host accepts and then refuses (1008/1011) opens first; marking the line
    * typed there typed it into a socket about to close, and the attach that
    * later worked never typed it at all.
+   *
+   * STARTS SPENT ON A RESTORED PANE (wave 6): a reload is not a door press,
+   * so there is no line to type at all - see `restored`.
    */
-  const launched = useRef(false);
+  const launched = useRef(restored);
   /** A delivery that outlived its socket, waiting for the next open. */
   /** `path` is every path of the stranded delivery, space-joined - one photo
    *  or a picked set, it is what the status and the error lines read out. */

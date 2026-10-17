@@ -75,10 +75,18 @@ interface ReaderProps {
    * always was.
    */
   render?: (content: string) => ReactNode | null;
+  /**
+   * The word after `‹`: where back lands (DPLAN-0414 wave 6, item 10 - every
+   * `‹` names its destination). The caller knows and this reader does not:
+   * `card` for the card's README, `folder` for a file tab opened from a
+   * browse. Absent is `back`, for the callers whose back is a level of their
+   * own (the git app's file view returns to its changes list).
+   */
+  backLabel?: string;
   onClose: () => void;
 }
 
-export default function Reader({ target, render, onClose }: ReaderProps) {
+export default function Reader({ target, render, backLabel = "back", onClose }: ReaderProps) {
   const [text, setText] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +174,7 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ {backLabel}
         </button>
         <span className="baud-phone-reader-title">{target.title}</span>
 {/* A DIFF HAS NO PATH TO GIVE. It is a branch's patch, not a file, so

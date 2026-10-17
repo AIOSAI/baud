@@ -47,6 +47,7 @@ import type { GitRemote } from "../../types";
 import { isMarkdownRef } from "../lib/markdown";
 import { NO_REMOTE, noAgentLine, noRemote } from "../lib/gitWords";
 import { splitPath } from "../lib/gitStatus";
+import { useSystemBack } from "../lib/systemBack";
 import { renderMarkdown } from "../Markdown";
 import Reader from "../Reader";
 import GitChangesScreen from "./GitChangesScreen";
@@ -239,6 +240,10 @@ export default function GitApp({
    * app: that is `back` from the floor, and this chip is not another way out.
    */
   const home = useCallback(() => setStack((held) => held.slice(0, 1)), []);
+
+  /* THE PHONE'S OWN BACK IS `back` TOO (DPLAN-0414 wave 6, item 2) - the
+     chip, Escape and the system Back are one function, one level each. */
+  useSystemBack(back);
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {

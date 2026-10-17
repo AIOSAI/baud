@@ -27,6 +27,11 @@ import "./phone.css";
  * THE PAIR LINK, read once, before the first paint (DPLAN-0406). The machine's
  * QR opens `/#pair=<code>`; the code leaves the address bar and the history row
  * here, before React mounts, so no screen, reload or back button shows it again.
+ *
+ * STILL THE ONLY `replaceState`, and still true since the face learned the
+ * phone's own Back (DPLAN-0414 wave 6, `lib/systemBack.ts`): the one guard entry
+ * that lib pushes carries no URL, so it inherits the cleaned address this line
+ * leaves, and a Back through it lands here - never on the `#pair=` link.
  */
 function takePairCode(): string | null {
   const { hash, pathname, search } = window.location;

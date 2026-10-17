@@ -2298,9 +2298,9 @@ field. The button lights "copied" only for a confirmed clipboard copy.
 08-16 tab ruling: "it's annoying when a tab drops, I have to start again." A tapped
 file still opens as a tab and the browser still closes, but the browse (root,
 project, floor and the level the file was tapped on) rides the file's pane as
-`from`. `‹ back` on that tab re-opens the browse at that level; the tab stays in
-the row, so a second file from the same folder stacks a second tab, and each tab
-goes back to its own folder. The tab's ✕ closes it. A file opened from a card,
+`from`. `‹ folder` (wave 6's word for it) on that tab re-opens the browse at
+that level; the tab stays in the row, so a second file from the same folder stacks
+a second tab, and each tab goes back to its own folder. The tab's × closes it. A file opened from a card,
 the memory screen or the feed has no `from`, and its `‹ back` closes the tab as
 before. `FilesScreen` takes `at` (the level to open on, never above the floor)
 and reports the level with every file it opens.
@@ -2339,3 +2339,52 @@ the repository through".
 `remote: null`, the sheet shows "no remote configured — no links" where the links
 go. A refusal (an unreadable repository, or the old answer for no remote until
 @api lands C-D) still shows its sentence there, now with its ref.
+
+### Back goes back to where it came from (DPLAN-0414 wave 6)
+
+**The rule.** The owner, 16:29: "Yes i agree back just goes back to where it came
+from." `‹` and the phone's own Back return to exactly the screen, folder or card
+you came from, one level at a time. Only the close glyph closes outright, and
+opening anything never discards what it was opened from.
+
+**The trail.** `lib/trail.ts` holds the screens left through a door, newest last.
+Every card door that opens a screen (README, inbox, plans, todos, memory, files,
+claude-settings, passport) leaves the card on it, so that screen's `‹ card`
+reopens the card. A roots pick leaves the roster (`‹ roster`), and the passport's
+records door leaves the passport (`‹ passport`). The doors to a pane (attach,
+resume, fresh, shell, `?`, watch, the monitors) still close the card, because the
+operator is going to the stage. The git tile's `‹ card` was the model and is
+unchanged.
+
+**Files.** A file opened from a browse is a tab, and its pane keeps the browse
+(`from`) and the trail under it (`fromTrail`). `‹ folder` puts both back, so the
+browse's floor `‹` still reaches the roster, passport or card it came from.
+
+**Labels and the close glyph.** Every `‹` names where it lands: `‹ wheel`,
+`‹ card`, `‹ roster`, `‹ folder`, `‹ passport`, `‹ feed`, `‹ inbox`,
+`‹ settings`. The roster, machine sheet and feed say `‹ wheel`, and so does the
+settings home (it said `‹ close`). The face has one close glyph, the tab's `×`.
+The passport and settings now use it, and the desktop's two shared panels take it
+as a prop, so the desk keeps `✕`. The close glyph closes the whole panel
+everywhere: the interface section's `×` and click-away close settings (they used
+to land on settings home), while Escape and `‹ settings` go back one level. The
+passport's `×` and the agent settings' `×` close the panel and land on the card
+that opened them. The feed's back is still the read.
+
+**Android Back.** `lib/systemBack.ts`: each open screen registers the handler its
+`‹` calls (the files browse, inbox, git app and settings register inside
+themselves, so Back climbs their own levels). While anything is open, history holds
+one guard entry; Back runs the newest screen's handler and puts the entry back if
+something is still open. A close by tap takes the entry off again. On the wheel
+with nothing open there is no entry and Back is the browser's; the PWA may leave.
+
+**Tabs survive a reload.** `lib/tabStore.ts` keeps the tab row, the front tab and
+the focus history in localStorage (`baud-phone-tabs`, beside the seat). On load
+they wait for the first fleet read and the roster's answer. Each agent's card is
+then taken fresh from the census, and a tab whose agent has gone is dropped with one
+console line. A restored room is a reattach and types no launch line. A restored
+file re-reads. A reload still lands on the wheel: the screen that was open and the
+trail are not kept.
+
+**Closing a tab fronts the one before it.** The focus history decides, not the
+row's order. With no history left, the rightmost tab is fronted.

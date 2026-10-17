@@ -260,8 +260,11 @@ export default function PassportSheet({ branch, onArtifacts, onClose }: Passport
         <header className="baud-pass-title">
           <p className="baud-pass-issuer">AIPASS</p>
           <p className="baud-pass-type">AGENT PASSPORT</p>
+          {/* `×`, THE FACE'S ONE CLOSE GLYPH (DPLAN-0414 wave 6, item 10) - the
+              tab's. Closing the document lands where it was opened from: the
+              card, when the card's door opened it (item 7). */}
           <button type="button" className="baud-pass-close" title="close the passport" onClick={onClose}>
-            ✕
+            ×
           </button>
         </header>
 

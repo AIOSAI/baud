@@ -44,6 +44,7 @@ import { HostError } from "../host/transport.http";
 import type { DirEntryInfo } from "../types";
 import { NO_FLOOR, copyShown, copyThrough, machinePath } from "./lib/copyPath";
 import { chipOf, type GitChip } from "./lib/gitStatus";
+import { useSystemBack } from "./lib/systemBack";
 import { CopyByHand } from "./Reader";
 
 /** What a gone row answers when it is tapped. */
@@ -88,6 +89,13 @@ interface FilesScreenProps {
    * tapped on, so the caller can bring the browse back to it (C#9).
    */
   onOpenFile: (ref: string, title: string, at: string) => void;
+  /**
+   * The word after `‹` at the FLOOR, where back leaves the browse
+   * (DPLAN-0414 wave 6, items 6 and 10): `roster`, `passport` or `card`, from
+   * the trail that opened it. Below the floor the chip says `up` whatever
+   * this is - that is a level of the browse's own. Absent is `back`.
+   */
+  backLabel?: string;
   onClose: () => void;
 }
 
@@ -116,6 +124,7 @@ export default function FilesScreen({
   start = "",
   at,
   onOpenFile,
+  backLabel = "back",
   onClose,
 }: FilesScreenProps) {
   /** Where we are, relative to the branch root. "" is the root itself. Opens
@@ -297,6 +306,11 @@ export default function FilesScreen({
    *  and never up into the branch root it did not come from. */
   const home = () => setDir(start);
 
+  /* THE PHONE'S OWN BACK IS THIS CHIP (wave 6, item 2): up one folder, and
+     out through the floor - registered here because the folder is this
+     screen's to know. */
+  useSystemBack(up);
+
   /**
    * HAND A ROW'S PATH TO THE OPERATOR, or say why not.
    *
@@ -351,7 +365,7 @@ export default function FilesScreen({
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={up}>
-          ‹ {dir === start ? "back" : "up"}
+          ‹ {dir === start ? backLabel : "up"}
         </button>
         {below >= 2 ? (
           <button type="button" className="baud-phone-home" onClick={home}>

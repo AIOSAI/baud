@@ -109,6 +109,9 @@ interface MemoryScreenProps {
    * is the first tab, which is what the memory door has always opened on.
    */
   initialTab?: MemoryTabId;
+  /** The word after `‹`: where back lands - `card`, from the trail
+   *  (DPLAN-0414 wave 6). Absent is `back`. */
+  backLabel?: string;
   onClose: () => void;
 }
 
@@ -116,6 +119,7 @@ export default function MemoryScreen({
   branch,
   project,
   initialTab = MEMORY_TABS[0].id,
+  backLabel = "back",
   onClose,
 }: MemoryScreenProps) {
   const [local, setLocal] = useState<Document>(EMPTY);
@@ -178,7 +182,7 @@ export default function MemoryScreen({
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ {backLabel}
         </button>
         <span className="baud-phone-reader-title">{branch} · working memory</span>
       </header>

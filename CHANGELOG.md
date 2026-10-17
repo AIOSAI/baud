@@ -22,6 +22,8 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: the processes sheet lists what is running by cost (DPLAN-0414).** The PROC card's sheet shows the twenty busiest processes with cpu %, memory % and memory MB, read once when the sheet opens and again on a tap on its sampled line, never polled. A cpu/mem toggle re-orders the same twenty. While the host samples (about half a second) the line says "sampling…"; a refusal shows the same sentence the vitals refusal shows; a process with no name shows its pid. The desktop refuses the new call by name.
 - **Phone: a dropped watch is marked dead and comes back by itself (DPLAN-0414).** A watch whose socket drops dims its last frame under the room's overlay and reconnects on the room's ladder. Its button reads "rewatch mission control" or "rewatch <name>" and shows only after a close, never while the watch is still connecting.
 - **Phone: a startup agent that does not open says why (DPLAN-0414).** The resting stage shows "startup agent X not opened — <reason>" when the token is read-only or the agent has no card in the seated project.
+- **Phone: the phone's own Back goes back one screen (DPLAN-0414).** Android Back and the edge swipe do what the screen's `‹` does, one level at a time, folders, the inbox, the git app and settings sections included. On the wheel with nothing open, Back is the browser's as before.
+- **Phone: open tabs come back after a reload or an app restart (DPLAN-0414).** The tab row, the tab in front and the order tabs were used in are kept on the phone. A room tab reattaches without typing anything, a file tab re-reads, and a tab whose agent is gone is dropped.
 
 ### Changed
 
@@ -38,6 +40,12 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: `copy` and `copy path` say "copied" only when the clipboard confirms it (DPLAN-0414).** Over plain http, where the browser may copy nothing, the screen says so and shows the path to long-press and copy.
 - **Phone: going back from a file opened in a folder returns to that folder (DPLAN-0414).** The file stays open as a tab; files opened from anywhere else close on back as before.
 - **Phone: an untracked file in the agent card's GIT list opens in the reader (DPLAN-0414)**, and a new directory says "new directory — nothing to diff; browse it from the files door" under its row instead of opening a refusal.
+- **Phone: back from a screen opened on the agent card returns to the card (DPLAN-0414).** README, inbox, plans, todos, memory, files, agent settings and passport all go back to the card they were opened from. Room, shell and watch doors still close the card.
+- **Phone: a files browse goes back to where it was opened (DPLAN-0414).** From the top folder, back returns to the files roster, the passport or the agent card. Picking a place on the roster no longer discards the roster, and a file tab's back to its folder brings that path back too.
+- **Phone: the passport's close returns to the agent card (DPLAN-0414)** when the card opened it.
+- **Phone: every back button names where it goes (DPLAN-0414):** `‹ wheel`, `‹ card`, `‹ roster`, `‹ folder`, `‹ passport`, `‹ feed`, `‹ inbox`, `‹ settings`. The settings home's `‹ close` reads `‹ wheel`.
+- **Phone: one close glyph, `×`, across the face (DPLAN-0414).** The passport and every settings panel use the tab's `×`. In BAUD settings, the interface section's `×` and click-away close settings, like the home's; Escape and `‹ settings` still go back one level. The desktop keeps `✕`.
+- **Phone: closing a tab brings back the tab you were on before (DPLAN-0414)**, not the rightmost one.
 
 ### Removed
 

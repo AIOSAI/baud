@@ -89,7 +89,7 @@ export default function RootsScreen({ onPick, onClose }: RootsScreenProps) {
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ wheel
         </button>
         <span className="baud-phone-reader-title">files · where to look</span>
       </header>

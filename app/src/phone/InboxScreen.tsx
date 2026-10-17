@@ -14,12 +14,12 @@
  * place, a long message pushes every row under it off the bottom and leaves
  * the reader halfway down a list with no head saying which message this is.
  * As its own screen it gets the reader shell's own sticky head (subject, from,
- * time) and the whole height, and `‹ back` returns to the list exactly where
+ * time) and the whole height, and `‹ inbox` returns to the list exactly where
  * it was. It is the same component and the same read: no second fetch.
  *
  * TWO WAYS IN. The MAIL tile opens the list. A bell row (contract C-A: a mail
  * event carries `mail_id` and `recipient`) opens straight onto that message,
- * and there `‹ back` closes the whole screen - the operator came from the
+ * and there `‹ feed` closes the whole screen - the operator came from the
  * feed, and the feed is where back should land. A message the inbox no longer
  * holds (archived, trimmed) says so in one line rather than showing nothing.
  *
@@ -35,6 +35,7 @@ import { useEffect, useRef, useState } from "react";
 import { relativeAge } from "../age";
 import { readFileText } from "../host";
 import { INBOX_EMPTY, type Inbox, MESSAGE_GONE, findMessage, inboxHead, readInbox } from "./lib/inbox";
+import { useSystemBack } from "./lib/systemBack";
 
 /** The file behind the tile, by the name @api's fence takes. */
 const MAIL_FILE = ".ai_mail.local/inbox.json";
@@ -49,6 +50,12 @@ interface InboxScreenProps {
    * list, which is what the tile does.
    */
   openId?: string;
+  /**
+   * The word after `‹` when back CLOSES the screen (DPLAN-0414 wave 6, item
+   * 10): `feed` off the bell, `card` off the MAIL tile. A message opened from
+   * the list says `inbox`, its own level. Absent is `back`.
+   */
+  closeLabel?: string;
   onClose: () => void;
 }
 
@@ -56,7 +63,7 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function InboxScreen({ branch, project, openId, onClose }: InboxScreenProps) {
+export default function InboxScreen({ branch, project, openId, closeLabel = "back", onClose }: InboxScreenProps) {
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** The message on screen, by id - or null for the list. */
@@ -97,6 +104,12 @@ export default function InboxScreen({ branch, project, openId, onClose }: InboxS
     if (opened !== null && !openId) setOpened(null);
     else onClose();
   };
+  /** Where `back` lands, in one word: the list, or wherever the screen closes to. */
+  const backLabel = opened !== null && !openId ? "inbox" : closeLabel;
+
+  /* THE PHONE'S OWN BACK IS THIS CHIP (wave 6, item 2), message to list
+     included - the level is this screen's to know. */
+  useSystemBack(back);
 
   const shown = opened !== null && inbox ? findMessage(inbox, opened) : null;
 
@@ -104,7 +117,7 @@ export default function InboxScreen({ branch, project, openId, onClose }: InboxS
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={back}>
-          ‹ back
+          ‹ {backLabel}
         </button>
         <span className="baud-phone-reader-title">
           {opened !== null && shown ? shown.subject : `${branch} · inbox`}

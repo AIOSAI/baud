@@ -32,6 +32,9 @@ interface PlansScreenProps {
   branch: string;
   /** Which project that branch lives in. Empty means the seat. */
   project: string;
+  /** The word after `‹`: where back lands - `card`, from the trail
+   *  (DPLAN-0414 wave 6). Absent is `back`. */
+  backLabel?: string;
   onClose: () => void;
 }
 
@@ -39,7 +42,7 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function PlansScreen({ branch, project, onClose }: PlansScreenProps) {
+export default function PlansScreen({ branch, project, backLabel = "back", onClose }: PlansScreenProps) {
   const [plans, setPlans] = useState<Plans | null>(null);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
@@ -76,7 +79,7 @@ export default function PlansScreen({ branch, project, onClose }: PlansScreenPro
     <section className="baud-phone-reader">
       <header className="baud-phone-reader-head">
         <button type="button" className="baud-phone-back" onClick={onClose}>
-          ‹ back
+          ‹ {backLabel}
         </button>
         <span className="baud-phone-reader-title">{branch} · plans</span>
       </header>
