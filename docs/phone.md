@@ -2444,7 +2444,9 @@ sheet's scrim:
 exists, a failed scaffold) shows the host's sentence verbatim and the sheet stays
 open. On success the sheet closes, the phone seats itself in the new project, and
 the manager's room opens the way its card's room door would: the card is built
-from the host's answer (`agent`, `agent_home`, the new project's name), and a
+from the host's answer (`agent`, `agent_home`, and `project`), and a
 newborn card with no room and no history offers **fresh**, so the birth
-conversation starts on the phone. The desktop refuses `verb_new_project` by name;
+conversation starts on the phone. The seat and the room use `project`, the
+census name (the registry's, so `phone-probe` is seated as `PHONE-PROBE`), never
+the typed `name`: the census matches project names exactly. The desktop refuses `verb_new_project` by name;
 it runs `aipass new` in its own terminal.

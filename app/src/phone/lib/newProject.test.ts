@@ -9,6 +9,7 @@ import {
   NAME_HINT,
   TEMPLATES,
   bornCard,
+  bornSeat,
   nameRefusal,
   validName,
 } from "./newProject";
@@ -52,6 +53,7 @@ describe("the name rule", () => {
 const BORN: NewProjectResult = {
   ok: true,
   name: "phone-probe",
+  project: "PHONE-PROBE",
   target: "/srv/aipass/projects/phone-probe",
   template: "empty",
   agent: "phone_probe",
@@ -63,10 +65,14 @@ describe("the manager's card, from the answer", () => {
   it("names the agent in the new project, at its home", () => {
     expect(bornCard(BORN)).toMatchObject({
       name: "phone_probe",
-      project: "phone-probe",
+      project: "PHONE-PROBE",
       path: BORN.agent_home,
       manager: true,
     });
+  });
+
+  it("reseats on the census name, not the typed one", () => {
+    expect(bornSeat(BORN)).toBe("PHONE-PROBE");
   });
 
   it("offers the door a newborn card offers: fresh", () => {

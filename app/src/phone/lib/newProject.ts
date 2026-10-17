@@ -19,12 +19,17 @@ export function nameRefusal(name: string): string | null {
   return `'${name}' is not a project name: ${NAME_HINT}, up to 64 characters`;
 }
 
+// The census keys a project by its registry name, which is not the typed name.
+export function bornSeat(result: NewProjectResult): string {
+  return result.project;
+}
+
 /** The manager's card as the host just made it: no room, no history, nothing dispatched. */
 export function bornCard(result: NewProjectResult): BranchStatus {
   return {
     name: result.agent,
     path: result.agent_home,
-    project: result.name,
+    project: bornSeat(result),
     is_citizen: true,
     manager: true,
     citizen_class: "manager",

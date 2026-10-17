@@ -377,6 +377,7 @@ export interface VerbResult {
 export interface NewProjectResult {
   ok: boolean;
   name: string;
+  project: string;
   target: string;
   template: string;
   agent: string;

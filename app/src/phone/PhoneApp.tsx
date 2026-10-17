@@ -97,7 +97,7 @@ import { clearRoomEnded, markRoomEnded, roomEnded } from "../intent";
 import { writeMark } from "./lib/feedMarks";
 import { POLL_MS, useFeedBadge, useFleetPoll, useGitSweep, useRepoCount } from "./lib/pollers";
 import { machineFaces, useMachineVitals } from "./lib/machine";
-import { bornCard } from "./lib/newProject";
+import { bornCard, bornSeat } from "./lib/newProject";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
 // THE BACK RULE (DPLAN-0414 wave 6; the owner, 16:29: "back just goes back to
@@ -1149,7 +1149,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const onProjectBorn = useCallback(
     (result: NewProjectResult) => {
       setNewProjectOpen(false);
-      pickProject(result.name);
+      pickProject(bornSeat(result));
       const card = bornCard(result);
       clearRoomEnded(card.project, card.name);
       focusPane({ name: card.name, mode: roomDoors(card)[0].mode, project: card.project, card });
