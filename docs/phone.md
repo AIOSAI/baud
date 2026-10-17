@@ -224,3 +224,4 @@ Each screen of the face has its own page under `docs/phone/`.
 | [backup](phone/backup.md) | the backup app: the store, the four presses, stop and progress |
 | [monitor](phone/monitor.md) | the monitor row, the cpu page, what is running, rooms and watches that end |
 | [settings and navigation](phone/settings-nav.md) | the bell and the feed, the gear, the startup seat, designed reads, settings, Back and tabs |
+| [files](phone/files.md) | every file of the face, placed: screens and sheets, the git and backup apps, the `lib/` logic |

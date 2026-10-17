@@ -11,7 +11,8 @@ pointer now, and nothing else.
   That is the app's source of truth. Every rule in here that was still true is in
   there, said better and kept current.
 - **Where a given piece of code lives** → [`../MAP.md`](../MAP.md). One screen of
-  tables: entry points, both faces, the seam, the Rust files, the build lanes.
+  tables: entry points, the seam, the build lanes, and a link to the page that
+  places each face's files and the Rust files.
 
 Running it, in short — `npm install`, then `npm run tauri dev` for the desktop and
 `npm run dev:phone` for the wheel. The long version, including the Linux system
