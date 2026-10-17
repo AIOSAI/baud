@@ -1,0 +1,91 @@
+name: Security Scan
+
+# BAUD's security lane, in the shape of AIPass's: CodeQL over the code, and an
+# advisory audit of each lockfile. Every action is pinned to a commit sha with
+# its version as a trailing comment (Scorecard: Pinned-Dependencies); the
+# github-actions entry in dependabot.yml keeps the pins fresh.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    - cron: "0 6 * * 1"
+
+# A newer push to the same ref cancels the stale in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  codeql:
+    name: codeql (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both scanned without a build: codeql-action v4.38.3 lists rust among
+        # its built-in languages (src/languages/builtin.json), and neither needs
+        # the Tauri system libraries in build-mode none.
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: rust
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  cargo-audit:
+    name: cargo-audit (app/src-tauri/Cargo.lock)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: app/src-tauri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The runner image ships stable Rust, as in ci.yml. The cargo-audit binary
+      # is cached by its pinned version so the weekly run does not rebuild it.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: ${{ runner.os }}-cargo-audit-0.22.2
+      - name: Install cargo-audit
+        run: command -v cargo-audit || cargo install cargo-audit --locked --version 0.22.2
+      - run: cargo audit --file Cargo.lock
+
+  npm-audit:
+    name: npm-audit (app)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npm audit --audit-level=high

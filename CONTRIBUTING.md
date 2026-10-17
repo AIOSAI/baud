@@ -20,6 +20,8 @@ BAUD is MIT licensed, matching [LICENSE](LICENSE). By contributing, you agree th
 
 BAUD is Rust (a Tauri 2 app in `app/src-tauri/`) and TypeScript (React, in `app/`). CI runs these checks, and a PR should pass them locally first.
 
+Setup: install [pre-commit](https://pre-commit.com) (`pip install pre-commit`) and run `pre-commit install` once, so the gitleaks secret scan runs on every commit.
+
 In `app/`, on Node 22:
 
 - `npm ci`
