@@ -23,7 +23,7 @@ Everything below is under `app/` unless it says otherwise.
 | `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
 | `src/host/transport.ts` | The desktop's answer: `invoke` into Rust. |
 | `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
-| `src/host/errorRef.ts` | The envelope's `ref` on the end of a refusal's message, "… (ref a1b2c3d4e5f6)", so every refusal on the phone has something to grep (DPLAN-0414 C#1). Pure, plus `errorRef.test.ts`, which also drives the transport's refusal path with `fetch` stubbed. |
+| `src/host/errorRef.ts` | The envelope's `ref` on the end of a refusal's message, "… (ref a1b2c3d4e5f6)", so every refusal on the phone has something to grep. Pure, plus `errorRef.test.ts`, which also drives the transport's refusal path with `fetch` stubbed. |
 | `vite.config.phone.ts` | **The whole port**, one alias: `./transport` → `transport.http.ts`. |
 | `src/types.ts` | The shapes both faces read — hand-mirrored from Rust. See *The type seam*. |
 
@@ -79,8 +79,8 @@ took 330 lines out of the file above.
 | `FeedScreen.tsx` | The feed, full height. |
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
-| `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder (DPLAN-0414 B#9, B#10). |
-| `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap (DPLAN-0414 T3). |
+| `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder. |
+| `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap. |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
 | `NewProjectSheet.tsx` | What the switcher's `+ new project` row opens: a name, a template chip, one `create`, and the host's sentence verbatim on a refusal. |
@@ -90,9 +90,9 @@ took 330 lines out of the file above.
 `GitCommitScreen.tsx`, `GitDiffScreen.tsx`, with `GitFileRow.tsx` as the shared
 row.
 
-**The backup app — `src/phone/backup/`** (DPLAN-0411): `BackupApp.tsx`, one
+**The backup app — `src/phone/backup/`**: `BackupApp.tsx`, one
 screen of status lines and four lane presses for the seated project (a running
-press becomes Stop, with a progress block per lane in flight, DPLAN-0412), and
+press becomes Stop, with a progress block per lane in flight), and
 `backupView.ts` with its test, which holds the sheet's words, its
 ask-before-sending rule and its Stop/progress/outcome rules, pure.
 
@@ -107,9 +107,9 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `gitWords.ts` | The git app's small rules and words: where a changed row's tap goes (an untracked file is read, an untracked directory answers under its row), a commit message without its subject line, the merge's no-files line, the no-agent line by whether the fleet answered, and the no-remote read of contract C-D. Pure, plus `gitWords.test.ts`. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `feedMarks.ts` | The bell's read and cleared markers: one machine-wide key each (the feed takes no project), and the one-time lift of the seated project's old per-project mark. Pure over an injected store, plus `feedMarks.test.ts`. |
-| `trail.ts` | The back rule's trail (DPLAN-0414 wave 6): the screens left through a door, newest last - the card, the files roster, the passport - one step back, and the word each `‹` shows for where it lands. Also the `Browse` type the trail and a file pane's `from` share. Pure, plus `trail.test.ts`. |
-| `tabStore.ts` | The tab row kept across a reload (wave 6): the panes, the front tab and the focus history in localStorage beside the seat, read back and checked against the first census (a tab whose agent left is dropped with one console line), folded under anything opened meanwhile; and which tab a close fronts (the one before it, not the rightmost). Pure over an injected store, plus `tabStore.test.ts`. |
-| `systemBack.ts` | The phone's own Back (wave 6): open screens register the handler their `‹` calls, and one guard entry in history runs the newest on Android Back; at rest there is no entry and Back is the browser's. The registry and the guard are pure, plus `systemBack.test.ts`; two thin hooks wire them. |
+| `trail.ts` | The back rule's trail: the screens left through a door, newest last - the card, the files roster, the passport - one step back, and the word each `‹` shows for where it lands. Also the `Browse` type the trail and a file pane's `from` share. Pure, plus `trail.test.ts`. |
+| `tabStore.ts` | The tab row kept across a reload: the panes, the front tab and the focus history in localStorage beside the seat, read back and checked against the first census (a tab whose agent left is dropped with one console line), folded under anything opened meanwhile; and which tab a close fronts (the one before it, not the rightmost). Pure over an injected store, plus `tabStore.test.ts`. |
+| `systemBack.ts` | The phone's own Back: open screens register the handler their `‹` calls, and one guard entry in history runs the newest on Android Back; at rest there is no entry and Back is the browser's. The registry and the guard are pure, plus `systemBack.test.ts`; two thin hooks wire them. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
 | `processes.ts` | The PROC sheet's list: the cpu/mem order of the same twenty rows, a row's name (or its pid), and the sampled line - pure, plus `processes.test.ts`. |
@@ -198,7 +198,7 @@ the file — the name did not change, only its address.
 screenshot portal, every `#[tauri::command]` wrapper and `run()`. With it off,
 `memory`, `notifications`, `pty`, `reads`, `screenshot` and `settings` drop out, and
 what is left — `cli`, `fleet`, `projects`, `rooms`, `sessions` — is the reader
-`baud-cli` is built from (FPLAN-0589).
+`baud-cli` is built from.
 
 Also: `Cargo.toml` (MSRV 1.77.2; the `gui` feature and the two binaries), `tauri.conf.json` (window, CSP, bundle off by
 design — no installers, deliberately), `capabilities/` (what the webview is
@@ -263,8 +263,8 @@ A file at `src/` root is one both faces use; anything face-specific lives in
 `cargo test --locked` · `cargo clippy --locked --all-targets -- -D warnings` ·
 both builds. CI runs the same in `.github/workflows/ci.yml` — type-check,
 frontend tests, desktop build, phone build, cargo test, clippy; `build:phone` and
-`npm test` joined on 2026-09-13 (DPLAN-0343). The `rust` job also builds `baud-cli`
-headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
+`npm test` run in it too. The `rust` job also builds `baud-cli`
+headless and checks its `ldd`; after touching the `gui` gate, run
 `cargo test` and clippy with `--no-default-features` too. `release.yml` cuts releases.
 
 ## Identity, memory, plans — the AIPass side of the repo
@@ -307,10 +307,10 @@ headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
 
 ---
 
-## The mess list — one entry left, 2026-08-18
+## The mess list — one entry left
 
 Patrick's cadence was *map first, moves second*, and the moves are done. Items 1
-to 5 landed in FPLAN-0444 and items 6 and 7 in FPLAN-0445, both on 2026-08-18:
+to 7 are the tree above:
 `app/README.md` reduced to a pointer, `src/components/` renamed to `src/desktop/`,
 `App.tsx` and `main.tsx` moved in with it, `phone/` folded onto three shelves,
 `tests/` made to say where the tests actually are, PhoneApp's four pollers lifted

@@ -196,7 +196,7 @@ text a thumb can highlight and never use.
 
 ### The phone re-states its size every time it is looked at
 
-*FPLAN-0446.* The phone is a real tmux client and sizes like one: it states its
+The phone is a real tmux client and sizes like one: it states its
 size when the socket opens, whenever its own box changes and the
 `ResizeObserver` fires, and **on every return to the foreground**. The last is
 needed because every way a pty moves from the host side leaves the phone's box

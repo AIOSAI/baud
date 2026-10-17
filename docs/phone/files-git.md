@@ -10,7 +10,7 @@ Every other door on this face is addressed to somebody — a card, a room, a
 passport, a memory — and **the repository they all live in belongs to nobody**,
 so it has nowhere to hang on a rail made of citizens. The wheel has a fourth
 layer for surfaces that belong to the project rather than to anyone in it:
-`current project`, `live`, `dispatched`, **`apps`** (DPLAN-0303).
+`current project`, `live`, `dispatched`, **`apps`**.
 
 The layer is one row in the array, one pip, one flash — but it has a second
 **card shape**, because *a surface* and *a citizen* must be one glance apart:
@@ -100,7 +100,7 @@ rather than a poll.
 
 ### The FILES app — the fence learns more than one kind of word
 
-The apps layer's `FILES` card (FPLAN-0443) sits beside `GIT`, second entry in
+The apps layer's `FILES` card sits beside `GIT`, second entry in
 the same array, and opens a file explorer over home, the projects and the AIPass
 root as well as the agents. `FilesScreen` is a phone file manager — one level at
 a time, an up chip, a Reader on the other side of a tap, status chips riding the
@@ -212,7 +212,7 @@ every unchanged row.
 
 ### Git rides the row it belongs to
 
-*DPLAN-0303.* The files screen paints status onto the listing it already has:
+The files screen paints status onto the listing it already has:
 **a changed file is painted, never moved, never grouped, never lifted out into a
 second screen.** The one row this adds is a file git says is *gone* — absence you
 can see, in the place the file sat. A directory row wears a dot when

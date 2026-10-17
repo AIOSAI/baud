@@ -6,8 +6,7 @@ This page covers the monitor row: the machine's live vitals on the wheel, the cp
 
 ### The monitor row — the machine, live on the face
 
-The wheel's last layer is the machine (FPLAN-0561; every clause ruled in
-DPLAN-0341). Seven cards — CPU, MEM, TEMP, FAN, NET, PROC, BAT — each carrying its
+The wheel's last layer is the machine. Seven cards — CPU, MEM, TEMP, FAN, NET, PROC, BAT — each carrying its
 live headline, because the glance is the point: a fan running hard behind a
 locked screen across the room is the case the row answers. BAT, last, reads the
 battery section of `/v1/machine`, tones only against the low and critical lines
@@ -41,7 +40,7 @@ starts, has no CPU or network window yet and renders the same way. A 503
 (`psutil_missing`, `switched_off`) turns every face to a dash and the sheet
 prints the owner's message.
 
-**The cpu page shows the cores** (FPLAN-0586). One bar per online CPU in the
+**The cpu page shows the cores.** One bar per online CPU in the
 skill's `cores` list — never one per configured count, which can differ — then
 one line of what the machine has (*4 threads on 2 cores · 1.1 GHz, up to 3.3*),
 then the three load averages with a caption saying what they mean against the

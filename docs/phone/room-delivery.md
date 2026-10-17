@@ -6,7 +6,7 @@ This page covers what leaves and enters a room besides keystrokes: links and cop
 
 ### Links and copy out of a room
 
-**Links and copy out of a room** (FPLAN-0641). A login prints an OAuth URL into
+**Links and copy out of a room.** A login prints an OAuth URL into
 the room. Two doors read one detection, `app/src/phone/lib/roomLinks.ts`, so the
 panel can never list a link the tap cannot see, or the reverse.
 
@@ -99,7 +99,7 @@ success.
 
 ### A dead room says so, and comes back by itself
 
-*FPLAN-0446.* A detached room goes on painting its last frame, because that is
+A detached room goes on painting its last frame, because that is
 the only thing a terminal emulator can do once the bytes stop — and that frame is
 **indistinguishable from a quiet room**. The picture is what lies, so the
 correction sits **on the picture**: a scrim over the grid, the word `detached`,

@@ -135,7 +135,7 @@ the audit.
 every pull request, `npm test` after the type check and before the builds, so a
 change that breaks only the phone entry fails. The `rust` job also builds
 `baud-cli` with the `gui` feature off and fails if `ldd` shows it linking a GUI
-library (FPLAN-0589). After touching the feature gate, run `cargo test` and
+library. After touching the feature gate, run `cargo test` and
 `cargo clippy` with `--no-default-features` as well: part of the suite needs no
 window, and all of it runs with `gui` on. Two parallel jobs (`frontend`, `rust`)
 on a pinned `ubuntu-24.04`, with clippy's warnings denied rather than merely
@@ -163,7 +163,7 @@ can only call the resolving half is a test that can only be green at home.
 
 ### Nothing polls a pocket
 
-**A poll only runs while somebody is looking** (DPLAN-0305). Every repeating lane
+**A poll only runs while somebody is looking.** Every repeating lane
 — the fleet and roster snapshot, the wheel's per-branch git sweep, the bell's
 badge, the git app's repository count, the feed screen's own poller — starts
 through `phone/lib/whileVisible.ts`, which stops the interval on
@@ -203,7 +203,7 @@ drift through.
 **The intervals are operator-visible calls, not performance knobs.** `POLL_MS`
 (10s) and `GIT_SWEEP_MS` (5s) set how stale a wheel is allowed to look.
 
-**The machine lane is gated twice** (FPLAN-0561). It goes through `whileVisible`
+**The machine lane is gated twice.** It goes through `whileVisible`
 like every other lane, and also only runs while the monitor row is the visible
 wheel — the wheel reports its layer up, and leaving the row tears the lane down
 and forgets its reading. So the one lane on this face that polls every 2 s costs

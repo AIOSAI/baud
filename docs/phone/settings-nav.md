@@ -111,10 +111,12 @@ so the tile takes a wider share of the row in a smaller face.
 
 **The bell row is a door to its message.** A mail notification's body is a
 100-character preview, and it stays one: the feed is read whole on every poll and
-is the wrong store for whole letters. Under contract C-A (devpulse's
-`docs.local/baud_review/CONTRACTS.md`) @ai_mail stamps `mail_id`, `recipient`
-and `project` into the event, and a row carrying them opens that message in the
-recipient's inbox screen; back lands on the feed. With `project`, that project's
+is the wrong store for whole letters. @ai_mail stamps three strings into a
+`kind: "mail"` event beside its preview: `mail_id`, the message's `id` in the
+recipient's inbox; `recipient`, the branch whose inbox holds it, without `@` (a
+stray one is stripped); and `project`, the project that branch belongs to. A row
+carrying `mail_id` and `recipient` opens that message in the recipient's inbox
+screen; back lands on the feed. With `project`, that project's
 inbox is read directly; an event without it finds the recipient in the seated
 census first, then the roster. A message the inbox no longer holds says so in one
 line. Rows without the keys stay plain.

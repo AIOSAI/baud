@@ -17,7 +17,7 @@ flick, and it gives the phone something the desktop does not have: a current
 agent at all.
 
 **The approved mockup is the specification.**
-`dropbox/wheel_round/wheel_mockup_APPROVED_SHAPE.html` is the specification
+[`wheel_mockup_APPROVED_SHAPE.html`](../design/wheel_mockup_APPROVED_SHAPE.html) is the specification
 rather than a suggestion, so its numbers — 76px cards, 52px avatars, the 1.28
 scale, the `.12s linear` transition — are ported literally. Only its hard-coded
 hex colours are changed, into `--baud-*` tokens, so the rail follows the theme
@@ -146,7 +146,7 @@ that says why it will not fire; hiding them would make a designed absence look
 exactly like a broken build. A read-scoped token is the everyday case, so that
 dimmed state is the everyday one, not an error path.
 
-**The header lock chip reads the lock, too** (FPLAN-0585). Away from home, a
+**The header lock chip reads the lock, too.** Away from home, a
 glance should answer *did I lock the laptop?* — so the chip polls `GET /v1/lock`
 (@skills' `lock_state()`, relayed verbatim by @api, read scope) every 5 s while
 the app is looked at, re-reads at once and again a second after a tap because the

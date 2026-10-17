@@ -6,7 +6,7 @@ This page covers the backup app on the wheel's apps layer: what the store holds,
 
 ### The backup app — the store, and four presses that add to it
 
-**The third card on the apps layer**, `BKP`, after `git` and `files` (DPLAN-0411).
+**The third card on the apps layer**, `BKP`, after `git` and `files`.
 A project's backup store belongs to nobody in it, which is why it sits on the
 apps layer. The card carries no badge. Tapping it opens
 `phone/backup/BackupApp.tsx` over the stage, for the **seated project** (the
@@ -30,7 +30,7 @@ verbatim, and re-reads the status. The other presses stay live while one runs,
 since @backup decides what overlapping lanes mean. A sheet opened mid-run adopts
 every run from status's `running` list.
 
-**Stop and progress** (DPLAN-0412). The running list comes from @backup's own
+**Stop and progress.** The running list comes from @backup's own
 running files, so it carries runs started from a terminal or by the daemon as
 well as the phone's, each with its pressed `verb`, the `lane` at work and a
 `progress` object.
@@ -89,6 +89,50 @@ outcome.
 
 **The desktop does not have it.** `transport.ts` refuses `backup_run`,
 `backup_job`, `backup_status` and `backup_cancel` by name, because the desktop
-sits beside `drone @backup` in its own terminal. Every wire shape is pinned in
-one place, `src/aipass/devpulse/docs.local/backup_door_contract.md` in the AIPass tree.
-`types.ts` mirrors it field for field.
+sits beside `drone @backup` in its own terminal.
+
+### The wire
+
+Four routes on the host API, with the same token rules as the rest of the phone's
+surface. `types.ts` holds them as `BackupStatus`, `BackupRunning`,
+`BackupProgress`, `BackupJob` and `BackupCancel`, and `transport.http.ts` maps the
+verbs `backup_run`, `backup_job`, `backup_status` and `backup_cancel` onto them.
+The lane is always one of the four drone verb names: `snapshot`, `versioned`,
+`all`, `drive_sync`.
+
+| route | scope | sends | answers |
+| --- | --- | --- | --- |
+| `POST /v1/backup/run` | operate | body `{project, lane}` | **202**, a job with `state: "running"` |
+| `GET /v1/backup/job?id=` | read | the job id | the job |
+| `GET /v1/backup/status?project=[&sizes=1]` | read | the seat, and `sizes=1` only when asked | the status |
+| `POST /v1/backup/cancel` | operate | body `{project, lane}`, the pressed verb | **200**, `{project, lane, stopped, message}` |
+
+- **Status** is @backup's own `status --json`, passed through: `project`, `root`,
+  `registered`, `mode`, `drive_sync` (the setting), `runs`, `lanes` with
+  `{last, files}` for `snapshot`, `versioned` and `drive_sync` (both null when the
+  lane never ran), `drive.tracked_files`, and `store` with `snapshots_bytes` and
+  `versioned_bytes`, present only under `sizes=1`. An unregistered root answers
+  `registered: false`, every `last` null and `runs` 0, which is not an error.
+- **Running** is a list on the status, `[]` when idle. Each entry has `job` (this
+  server's id when it started the run, `null` for a terminal or daemon run),
+  `verb`, `lane`, `pid`, `started_at` and `progress`. `progress` is `null` while
+  the lane scans. Otherwise it holds `done`, `total` and `failed` file counts,
+  `bytes_done`, `bytes_total` (`null` when the lane does not know it), `current`
+  (`null` before the first file) and `updated_at`.
+- **A job** has `job`, `project`, `lane`, `state` and `started_at`. Once it ends it
+  also has `finished_at`, `exit`, `summary` (the command's last lines verbatim, at
+  most about 600 characters) and `error`. `state` is `running`, `done` (exit 0),
+  `stopped` (exit 130, the lane ending on a stop request) or `failed` (any other
+  exit, a timeout, or a routing error mid-run). The server keeps finished jobs
+  for an hour, in memory only.
+- **The errors the sheet handles:** **400 `verb_refused`** for an unknown project,
+  a lane outside the four, or a run already in flight for that project and lane
+  (*"<lane> already running for <project> since <iso>"*). **404 `job_unknown`**
+  for a job the server forgot, which sends the sheet to the status. **404
+  `not_running`** from cancel when nothing of that lane runs. **503
+  `verb_unavailable`** when @backup cannot be reached or is too old to answer
+  `status --json`. A run that went ahead and failed is not an HTTP error: it is a
+  `failed` job, read with a 200, with its sentence in `summary` or `error`.
+
+@backup's side of the store and the Drive lane is in its own tracked docs,
+`src/aipass/backup/docs/` in the AIPass repo.

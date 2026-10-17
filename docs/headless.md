@@ -75,7 +75,7 @@ arguments to `run_headless` and exits with its code.
   `--roster` exits `0` inside a tree with `src/aipass`, and outside any tree
   exits `1` with the envelope saying so.
 - **The host API prefers it.** @api resolves the binary per request, in the
-  order FPLAN-0589 pins: its `baud_bin` setting, then
+  this order: its `baud_bin` setting, then
   `~/.aipass/baud/bin/baud-cli` (where `aipass baud install` lands it), then
   this checkout's `target/release/baud-cli`, then `target/release/baud`, then
   `baud-cli` and `baud` on `PATH`. That resolution is @api's code; this repo
