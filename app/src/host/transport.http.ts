@@ -456,7 +456,7 @@ const ROUTES: Record<string, Route> = {
   },
 
   /* ------------------------------------------------------------ backup -- */
-  /* DPLAN-0411; shapes in devpulse/docs.local/backup_door_contract.md. Run is
+  /* Shapes in docs/phone/backup.md. Run is
      OPERATE scope, job and status are read. `call` already puts a non-empty
      `project` on the query string, which is exactly where status wants it;
      run carries it in the body as the contract names it. */
@@ -834,8 +834,7 @@ export async function verifyToken(token: string): Promise<{ id: string; label: s
 }
 
 /**
- * Trade a pairing code for a bearer (DPLAN-0406; contract
- * devpulse/docs.local/contract_pairing_door_2026-10-13.md).
+ * Trade a pairing code for a bearer.
  *
  * `POST /v1/pair` is the one route without a bearer, so this is a fetch of its
  * own rather than a `call`: `call` refuses before the wire when no token is

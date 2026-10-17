@@ -1,7 +1,6 @@
 /**
  * The BAT card's face and the battery sheet's words (2026-10-12, the owner:
- * "add laptop battery status - ok go"; contract
- * devpulse/docs.local/contract_battery_section_2026-10-12.md).
+ * "add laptop battery status - ok go").
  *
  * Its own file rather than more of machine.ts because it is pure and pinned:
  * machine.ts carries the poll (react, the host transport), and a test of this

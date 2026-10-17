@@ -105,7 +105,7 @@ export function findMessage(inbox: Inbox, id: string): InboxMessage | null {
 /**
  * Where a bell row's message lives, or null when the row is not a door.
  *
- * Contract C-A (devpulse `docs.local/baud_review/CONTRACTS.md`): a mail event
+ * The stamps (docs/phone/settings-nav.md): a mail event
  * carries `mail_id` and `recipient` through `send_notification`'s `extra`,
  * which merges them into the event at its top level. BOTH must be present and
  * non-empty: an older line, a wake or a dispatch carries neither and stays the

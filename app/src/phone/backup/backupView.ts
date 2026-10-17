@@ -3,8 +3,8 @@
  * "in the apps wheel in baud id like backup in there, i open the card and i see
  * my click options, i can backup from baud").
  *
- * Every wire shape is @backup's and @api's, pinned in
- * devpulse/docs.local/backup_door_contract.md; `types.ts` carries them field
+ * Every wire shape is @backup's and @api's, described in
+ * docs/phone/backup.md; `types.ts` carries them field
  * for field. This file decides only what the sheet SAYS about them and which
  * press has to ask first, so that both can be tested without a server.
  */

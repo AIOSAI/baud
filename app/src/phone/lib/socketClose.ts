@@ -1,6 +1,5 @@
 /**
- * WHAT A CLOSED SOCKET MEANS - for the room and the watch alike (DPLAN-0414
- * T5 and T6; contract C-C in devpulse `docs.local/baud_review/CONTRACTS.md`).
+ * WHAT A CLOSED SOCKET MEANS - for the room and the watch alike.
  *
  * The room lane read every close but two the same way: "detached, still
  * running", and the reconnect ladder started again. Three closes are not that,

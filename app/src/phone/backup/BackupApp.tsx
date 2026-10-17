@@ -5,7 +5,7 @@
  *
  * One screen, for the seated project: what the store holds, lane by lane, and
  * the four presses that add to it. The mechanism is @backup's and the door is
- * @api's; every shape is pinned in devpulse/docs.local/backup_door_contract.md.
+ * @api's; every shape is described in docs/phone/backup.md.
  * This screen composes no sentence about a run of its own: the server's words,
  * the command's summary and @backup's dates are shown as they came.
  *

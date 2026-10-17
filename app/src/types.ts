@@ -710,9 +710,9 @@ export interface MemoryConfigPatch {
 }
 
 /* ------------------------------------------------------------ backup -- */
-/* THE BACKUP DOOR (DPLAN-0411). Not a Rust mirror: these are @backup's and
-   @api's shapes, phone-only, pinned in devpulse/docs.local/backup_door_contract.md.
-   Field for field with that file; change it there first. */
+/* THE BACKUP DOOR. Not a Rust mirror: these are @backup's and
+   @api's shapes, phone-only, described in docs/phone/backup.md.
+   Field for field with the host's answer; change both together. */
 
 /** The four lanes on the wire, exactly the drone verbs' names. */
 export type BackupLane = "snapshot" | "versioned" | "all" | "drive_sync";

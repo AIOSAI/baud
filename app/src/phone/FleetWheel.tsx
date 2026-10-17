@@ -3,7 +3,7 @@
  *
  * SHAPE LOCKED BY A THUMB, NOT BY ME. Patrick flicked a live mockup on his S24
  * and approved it in one round ("no tweaks, as is is good"), so
- * `dropbox/wheel_round/wheel_mockup_APPROVED_SHAPE.html` is the spec and this
+ * `docs/design/wheel_mockup_APPROVED_SHAPE.html` is the spec and this
  * file is its real implementation - matched on behaviour and feel, built with
  * this face's own components and real fleet data. Where I judged something the
  * mockup could not answer, the comment says so; nothing here "improves" the

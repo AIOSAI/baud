@@ -358,8 +358,8 @@ export const verbNewProject = (name: string, template: string) =>
   call<NewProjectResult>("verb_new_project", { name, template });
 
 /* -------------------------------------------------------------- backup -- */
-/* PHONE-ONLY (DPLAN-0411). @backup's verbs through @api's door; the shapes are
-   pinned in devpulse/docs.local/backup_door_contract.md. The project is
+/* PHONE-ONLY. @backup's verbs through @api's door; the shapes are
+   described in docs/phone/backup.md. The project is
    REQUIRED and travels verbatim, like every verb: the server resolves it, the
    face never composes a path. */
 

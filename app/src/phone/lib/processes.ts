@@ -1,6 +1,5 @@
 /**
- * THE PROCESS LIST - what the PROC card's sheet draws (DPLAN-0414 T3, B#1;
- * contract C-B in devpulse `docs.local/baud_review/CONTRACTS.md`).
+ * THE PROCESS LIST - what the PROC card's sheet draws.
  *
  * The owner, 2026-10-16 14:27: *"list top 20. Its just a quick ref to see if
  * anything is high usage. Say I hear laptop fan going crazy and no agents

@@ -1,7 +1,7 @@
 /**
  * The pair door's reading and its one decision (DPLAN-0406 / FPLAN-0643; the
  * owner, 2026-10-13: "qr pairing thats it right there ... it auto connects.
- * qr expires after 5 mins"; contract devpulse/docs.local/contract_pairing_door_2026-10-13.md).
+ * qr expires after 5 mins").
  *
  * The machine shows a QR of `http://<bind>/#pair=<code>`. The phone's camera
  * opens it, and this face trades the code for a real bearer at `POST /v1/pair`.

@@ -43,8 +43,7 @@ import { type Scope, scopeRefusal } from "./lib/verbs";
  * ── THE REORGANIZATION (Patrick, on the first version: "unorganized", the
  * scroll knob loose at the top level, and NO BACK BUTTON) ────────────────────
  *
- * The layout below is the one he approved from a touchable mock
- * (devpulse docs.local/design/passport_mock_20260817.html, screens s-set-*):
+ * The layout below is the one he approved from a touchable mock:
  * a HOME that is nothing but doors, and one screen behind each door.
  *
  * The first version was a flat panel that grew a door - which is exactly how a
