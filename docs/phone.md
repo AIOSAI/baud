@@ -2282,3 +2282,60 @@ unavailable" (with its reason) come from the refusal, as before.
 **The MAIL tile reads "N new · M opened"**, always both halves, so the tiles
 add up to the rail's badge, which counts opened mail as waiting. The figure is
 words, so the tile takes a wider share of the row in a smaller face.
+
+### Files that keep their place, and a git app that says why (DPLAN-0414 wave 5)
+
+**`copy` and `copy path` say "copied" only when the clipboard confirmed it.**
+Both buttons (a browse row's `copy`, the Reader's `copy path`) go through
+`copyThrough` and `copyShown` (`lib/copyPath.ts`), the same truthful pair the
+terminal's copy uses. Over plain http on the tailnet the only lane is the legacy
+`execCommand`, which can say yes and copy nothing, so a legacy copy shows
+`copyReport`'s sentence and the path in a read-only field, selected on focus, for
+Android's own long-press Copy. A refused copy says "not copied" and shows the same
+field. The button lights "copied" only for a confirmed clipboard copy.
+
+**A file opened from a browse comes back to its folder.** The owner reversed the
+08-16 tab ruling: "it's annoying when a tab drops, I have to start again." A tapped
+file still opens as a tab and the browser still closes, but the browse (root,
+project, floor and the level the file was tapped on) rides the file's pane as
+`from`. `‹ back` on that tab re-opens the browse at that level; the tab stays in
+the row, so a second file from the same folder stacks a second tab, and each tab
+goes back to its own folder. The tab's ✕ closes it. A file opened from a card,
+the memory screen or the feed has no `from`, and its `‹ back` closes the tab as
+before. `FilesScreen` takes `at` (the level to open on, never above the floor)
+and reports the level with every file it opens.
+
+**Home, project and aipass browses say the chips are off.** Git chips are keyed
+by a branch, so outside a branch root the listing is plain. A quiet line under
+the head says "git status is not shown here", so plain rows do not read as clean.
+
+**Every refusal ends with its ref.** @api answers a refusal built from a caught
+exception with one fixed sentence per code and a short `ref` that joins it to the
+host's log line. The transport's `errorFrom` appends it (`host/errorRef.ts`):
+"This read was refused; the reason is in this host's log (ref a1b2c3d4e5f6)". A
+refusal without a ref (the fence's named refusals) reads as before.
+
+**An untracked row no longer opens a refusal.** git's diff cannot see a file it
+has never seen. In the card's GIT tile (branch grain) a U file opens in the Reader
+on the git app's own stack, so `‹ back` returns to the list. A collapsed new
+`dir/` answers under its row: "new directory — nothing to diff; browse it from the
+files door". In the wheel's git app (repo grain) a U file answers under its row,
+"new file — nothing to diff; read it from the files door": its path is relative
+to the repository, and no root the phone can name is sure to be that repository's
+top. A second tap closes the answer.
+
+**A commit prints its subject once.** @api's `message` is the whole message, so
+the block under the subject now holds the message without its first line and the
+blank line after it, and is not drawn when nothing is left. A commit with no files
+of its own (a merge) says "this merge changes no files of its own" instead of an
+empty "files changed" heading.
+
+**The git sheet's no-agent line tells the two cases apart.** "the fleet read has
+not landed" stays for a fleet read that has not answered. When it answered and
+the seated project has no agent, the sheet says "no agent in this project to read
+the repository through".
+
+**No remote is an answer (contract C-D).** When @api answers the remote read with
+`remote: null`, the sheet shows "no remote configured — no links" where the links
+go. A refusal (an unreadable repository, or the old answer for no remote until
+@api lands C-D) still shows its sentence there, now with its ref.

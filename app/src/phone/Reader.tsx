@@ -19,7 +19,7 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { gitDiffText, readFileText } from "../host";
 import { HostError } from "../host/transport.http";
-import { COPY_REFUSED, NO_FLOOR, copyText, machinePath, underRoot } from "./lib/copyPath";
+import { NO_FLOOR, copyShown, copyThrough, machinePath, underRoot } from "./lib/copyPath";
 
 export interface ReadTarget {
   /** `<branch>/<file>` for a file, or just the branch name for a diff. */
@@ -87,8 +87,11 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
   const [floor, setFloor] = useState("");
   /** This file's path is on the clipboard. No timer: the clipboard has none. */
   const [copied, setCopied] = useState(false);
-  /** Why the copy did not happen, when it did not. */
+  /** Why the copy did not happen, or why it may not have. */
   const [said, setSaid] = useState<string | null>(null);
+  /** The path, held out for a long-press Copy when no lane confirmed the copy
+   *  (DPLAN-0414 A#21). Null when the tick said it all. */
+  const [byHand, setByHand] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -97,6 +100,7 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
     setFloor("");
     setCopied(false);
     setSaid(null);
+    setByHand(null);
     const read =
       target.kind === "diff"
         ? gitDiffText(target.ref, target.project)
@@ -110,8 +114,11 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
       })
       .catch((cause) => {
         if (!mounted) return;
-        // @api's sentence, verbatim - "Unknown branch: 'baud'" is a far better
-        // thing to read on a phone than "could not load".
+        // @api's sentence, unreworded - "Unknown branch: 'baud'" is a far
+        // better thing to read on a phone than "could not load". A refusal
+        // built from a caught exception is @api's fixed sentence for its code,
+        // and the transport puts its `ref` on the end (DPLAN-0414 C#1), so the
+        // operator has something to find the real words by in the host's log.
         setError(cause instanceof HostError ? cause.message : String(cause));
       });
     return () => {
@@ -136,15 +143,23 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
    */
   const machine = machinePath(floor, underRoot(target.ref));
 
+  /* THE LANE IS THE ANSWER (DPLAN-0414 A#21). Only a confirmed clipboard copy
+     lights "copied"; the legacy lane - the only one over plain http on the
+     tailnet - can say yes and land nothing, so it says that and holds the path
+     out for a long-press. `copyThrough` reaches `execCommand` before its first
+     await, so the copy still runs inside the tap. */
   const copy = async () => {
     setSaid(null);
     setCopied(false);
+    setByHand(null);
     if (!machine) {
       setSaid(NO_FLOOR);
       return;
     }
-    if (await copyText(machine)) setCopied(true);
-    else setSaid(COPY_REFUSED);
+    const shown = copyShown(await copyThrough(machine), machine);
+    setCopied(shown.copied);
+    setSaid(shown.note);
+    setByHand(shown.byHand);
   };
 
   return (
@@ -176,6 +191,7 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
       </header>
 
       {said ? <p className="baud-phone-said">{said}</p> : null}
+      {byHand ? <CopyByHand text={byHand} /> : null}
       {error ? <p className="baud-phone-error">{error}</p> : null}
       {!error && text === null ? <p className="baud-phone-empty">reading…</p> : null}
       {truncated ? <p className="baud-phone-truncated">truncated by the server — this is the head of the file</p> : null}
@@ -192,5 +208,28 @@ export default function Reader({ target, render, onClose }: ReaderProps) {
           same case as no renderer at all, and both land on the raw text. */}
       {text ? (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>) : null}
     </section>
+  );
+}
+
+/**
+ * A path held out for Android's own long-press Copy (DPLAN-0414 A#21).
+ *
+ * Read-only and selected on focus, so one long-press offers Copy at once - the
+ * terminal's takeout field, path-sized. Shared with the files screen, whose
+ * rows answer a copy the same way.
+ *
+ * Args:
+ *   text: The machine path to copy by hand.
+ */
+export function CopyByHand({ text }: { text: string }) {
+  return (
+    <textarea
+      className="baud-phone-copy-field"
+      readOnly
+      rows={2}
+      value={text}
+      aria-label="the path, to copy by hand"
+      onFocus={(event) => event.currentTarget.select()}
+    />
   );
 }

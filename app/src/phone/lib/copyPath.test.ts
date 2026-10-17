@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { copyReport, copyText, machinePath, underRoot } from "./copyPath";
+import { copyReport, copyShown, copyText, machinePath, underRoot } from "./copyPath";
 
 describe("machinePath", () => {
   it("puts the relative on the end of the floor: /home/alice + app/src/main.ts", () => {
@@ -71,5 +71,32 @@ describe("copyReport", () => {
     expect(report.showText).toBe(true);
     expect(report.note).toMatch(/^not copied/);
     expect(report.note).not.toMatch(/copied 18/);
+  });
+});
+
+describe("copyShown", () => {
+  const PATH = "/home/alice/games/.REGISTRY.lock";
+
+  it("ticks only for a confirmed clipboard copy, with no note and no field", () => {
+    expect(copyShown("clipboard", PATH)).toEqual({ copied: true, note: null, byHand: null });
+  });
+
+  it("does not tick on the legacy lane: it says so and holds the path out for a long-press", () => {
+    expect(copyShown("legacy", PATH)).toEqual({
+      copied: false,
+      note: copyReport("legacy", "the path").note,
+      byHand: PATH,
+    });
+  });
+
+  it("does not tick on a refusal: it says not copied and holds the path out", () => {
+    const shown = copyShown("refused", PATH);
+    expect(shown.copied).toBe(false);
+    expect(shown.note).toBe(copyReport("refused", "the path").note);
+    expect(shown.byHand).toBe(PATH);
+  });
+
+  it("names the thing it copied as the path", () => {
+    expect(copyShown("legacy", PATH).note).toMatch(/^the browser says it copied the path, /);
   });
 });

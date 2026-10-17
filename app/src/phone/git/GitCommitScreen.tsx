@@ -25,6 +25,7 @@ import { useEffect, useState } from "react";
 
 import { gitCommit } from "../../host";
 import type { GitCommit } from "../../types";
+import { NO_FILES_OF_ITS_OWN, messageBody } from "../lib/gitWords";
 import GitFileRow from "./GitFileRow";
 
 /**
@@ -72,12 +73,16 @@ export default function GitCommitScreen({
         if (mounted) setCommit(got);
       })
       .catch((cause) => {
+        // The transport's message: @api's sentence, with the `ref` on the end
+        // when it carried one (DPLAN-0414 C#1).
         if (mounted) setError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
       mounted = false;
     };
   }, [branch, project, commitRef]);
+
+  const body = commit ? messageBody(commit.message) : "";
 
   return (
     <section className="baud-phone-reader baud-git">
@@ -112,26 +117,37 @@ export default function GitCommitScreen({
 
           <p className="baud-git-subject-line">{commit.subject}</p>
 
-          {/* THE BODY ONLY WHEN THERE IS ONE. @api sends the message whole and a
-              one-line commit's body is empty; an empty block with a border
-              around it is this face inventing an absence to draw. */}
-          {commit.message.trim() ? <pre className="baud-git-message">{commit.message.trim()}</pre> : null}
+          {/* THE BODY ONLY WHEN THERE IS ONE. @api sends the message WHOLE -
+              subject line included - and `subject` beside it, so drawing the
+              message as it came printed the subject twice (DPLAN-0414 C#5).
+              `messageBody` drops the first line and the blank line under it;
+              a one-line commit leaves nothing, and an empty block with a
+              border around it is this face inventing an absence to draw. */}
+          {body ? <pre className="baud-git-message">{body}</pre> : null}
 
-          <div className="baud-git-groups">
-            <div className="baud-git-group">
-              <p className="baud-git-grouphead">files changed</p>
-              {commit.files.map((file) => (
-                <GitFileRow
-                  key={file.path}
-                  label={file.path}
-                  status={TOUCHED_BY_THIS_COMMIT}
-                  additions={file.additions}
-                  deletions={file.deletions}
-                  onOpen={() => onOpenFile(file.path)}
-                />
-              ))}
+          {/* A MERGE HAS NO FILES OF ITS OWN (DPLAN-0414 C#6). @api splits the
+              shown commit on `diff --git` headers and a merge prints none, so
+              the list is empty - one line says so, where a heading over
+              nothing used to stand. */}
+          {commit.files.length === 0 ? (
+            <p className="baud-phone-empty">{NO_FILES_OF_ITS_OWN}</p>
+          ) : (
+            <div className="baud-git-groups">
+              <div className="baud-git-group">
+                <p className="baud-git-grouphead">files changed</p>
+                {commit.files.map((file) => (
+                  <GitFileRow
+                    key={file.path}
+                    label={file.path}
+                    status={TOUCHED_BY_THIS_COMMIT}
+                    additions={file.additions}
+                    deletions={file.deletions}
+                    onOpen={() => onOpenFile(file.path)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </>
       ) : null}
     </section>

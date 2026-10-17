@@ -25,6 +25,7 @@ import type { GitRow } from "../../types";
 import type { GitGrain } from "./GitApp";
 import GitFileRow from "./GitFileRow";
 import { splitPath } from "../lib/gitStatus";
+import { UNTRACKED_DIR_ANSWER, UNTRACKED_FILE_ANSWER, rowOpen } from "../lib/gitWords";
 
 /**
  * HOW DEEP A GROUP CUTS, PER GRAIN - a number rather than a rule about this
@@ -73,6 +74,11 @@ interface GitChangesScreenProps {
   backLabel: string;
   /** A path at THIS grain, ready to hand straight back to the diff lane. */
   onOpenFile: (path: string) => void;
+  /**
+   * An untracked file at branch grain, to read rather than diff (DPLAN-0414
+   * C#3). The path is branch-local, which is what the files lane takes.
+   */
+  onReadFile: (path: string) => void;
   onBack: () => void;
 }
 
@@ -82,6 +88,7 @@ export default function GitChangesScreen({
   grain,
   backLabel,
   onOpenFile,
+  onReadFile,
   onBack,
 }: GitChangesScreenProps) {
   /**
@@ -100,6 +107,12 @@ export default function GitChangesScreen({
   const [answer, setAnswer] = useState<{ rows: GitRow[]; untracked: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rows = answer?.rows ?? null;
+  /**
+   * WHICH ROW HAS AN ANSWER UNDER IT, and what it says (DPLAN-0414 C#3) - an
+   * untracked row with nothing to diff answers where it was tapped, the way
+   * the files screen's gone row does. One at a time; a second tap closes it.
+   */
+  const [said, setSaid] = useState<{ path: string; text: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -116,9 +129,11 @@ export default function GitChangesScreen({
         if (mounted) setAnswer({ rows: got.rows, untracked: got.untracked });
       })
       .catch((cause) => {
-        // @api's own sentence, verbatim. A refusal here is a real answer - no
-        // git in the tree, drone declining a foreign project, the lane down -
-        // and every one of them says which in words this face must not reword.
+        // @api's own sentence, unreworded. A refusal here is a real answer -
+        // no git in the tree, drone declining a foreign project, the lane down.
+        // One built from a caught exception is the code's fixed sentence with
+        // its `ref` on the end (DPLAN-0414 C#1): the reason is in the host's
+        // log, under that ref.
         if (mounted) setError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
@@ -127,6 +142,27 @@ export default function GitChangesScreen({
   }, [branch, project, grain]);
 
   const groups = useMemo(() => groupRows(rows ?? [], grain), [rows, grain]);
+
+  /**
+   * WHERE A TAP GOES (DPLAN-0414 C#3). Tracked rows open their patch. An
+   * untracked FILE at branch grain opens in the Reader - git's diff cannot see
+   * a file it has never seen, so the diff screen could only refuse. An
+   * untracked DIRECTORY, and an untracked file at repo grain (no root this face
+   * can name is sure to be that repository's top), answer under the row.
+   */
+  const open = (row: GitRow) => {
+    const how = rowOpen(row.path, row.status, grain);
+    if (how === "diff") {
+      onOpenFile(row.path);
+      return;
+    }
+    if (how === "read") {
+      onReadFile(row.path);
+      return;
+    }
+    const text = how === "dir" ? UNTRACKED_DIR_ANSWER : UNTRACKED_FILE_ANSWER;
+    setSaid(said?.path === row.path ? null : { path: row.path, text });
+  };
 
   return (
     <section className="baud-phone-reader baud-git">
@@ -179,15 +215,17 @@ export default function GitChangesScreen({
           <div key={group.dir} className="baud-git-group">
             <p className="baud-git-grouphead">{group.dir}</p>
             {group.rows.map((row) => (
-              <GitFileRow
-                key={row.path}
-                // The path MINUS its heading: the heading already carries the
-                // part every row in the group shares, and a phone screen is too
-                // narrow to spend it again on every line.
-                label={row.path.startsWith(group.dir) ? row.path.slice(group.dir.length) : row.path}
-                status={row.status}
-                onOpen={() => onOpenFile(row.path)}
-              />
+              <div key={row.path} className="baud-git-fileblock">
+                <GitFileRow
+                  // The path MINUS its heading: the heading already carries the
+                  // part every row in the group shares, and a phone screen is too
+                  // narrow to spend it again on every line.
+                  label={row.path.startsWith(group.dir) ? row.path.slice(group.dir.length) : row.path}
+                  status={row.status}
+                  onOpen={() => open(row)}
+                />
+                {said?.path === row.path ? <p className="baud-git-said">{said.text}</p> : null}
+              </div>
             ))}
           </div>
         ))}

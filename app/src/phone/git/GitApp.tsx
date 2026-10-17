@@ -44,6 +44,11 @@ import { useCallback, useEffect, useState } from "react";
 
 import { gitRemote } from "../../host";
 import type { GitRemote } from "../../types";
+import { isMarkdownRef } from "../lib/markdown";
+import { NO_REMOTE, noAgentLine, noRemote } from "../lib/gitWords";
+import { splitPath } from "../lib/gitStatus";
+import { renderMarkdown } from "../Markdown";
+import Reader from "../Reader";
 import GitChangesScreen from "./GitChangesScreen";
 import GitCommitScreen from "./GitCommitScreen";
 import GitCommitsScreen from "./GitCommitsScreen";
@@ -91,7 +96,11 @@ export type GitView =
   | { kind: "commits" }
   | { kind: "commit"; ref: string }
   /** `ref` is "" for the working tree, or the commit the file is read from. */
-  | { kind: "diff"; path: string; ref: string };
+  | { kind: "diff"; path: string; ref: string }
+  /** An untracked file, read through the files lane - git has no patch for a
+   *  file it has never seen (DPLAN-0414 C#3). Branch grain only; `path` is
+   *  branch-local. */
+  | { kind: "file"; path: string };
 
 interface GitAppProps {
   /**
@@ -128,6 +137,12 @@ interface GitAppProps {
    */
   changed?: number | null;
   /**
+   * REPO GRAIN ONLY - whether the fleet read has answered (DPLAN-0414 C#13).
+   * With no `branch`, false means the read has not landed and true means it
+   * landed and the project has no agent: two different sentences.
+   */
+  fleetAnswered?: boolean;
+  /**
    * Out of the app from the floor - and the floor is the grain's, so this means
    * two different destinations. See `changesBack` in the body, which is the
    * word the operator is shown for whichever one it is.
@@ -141,6 +156,7 @@ export default function GitApp({
   grain = "repo",
   projectLabel = "",
   changed = null,
+  fleetAnswered = false,
   onClose,
 }: GitAppProps) {
   /* THE FLOOR IS THE GRAIN'S, decided once when the app opens. A lazy
@@ -161,12 +177,15 @@ export default function GitApp({
      guessing. */
   const changesBack = grain === "branch" ? "card" : "git";
 
-  /* WHERE THE ROWS THAT LEAVE COME FROM. Two absences, and they are not the
-     same absence: `remote` null with nothing said is a read still in the air,
-     and `said` is the server's own sentence about why there will never be one.
-     The first draws NOTHING - a skeleton link is a promise this face has not
-     been given yet - and the second draws that sentence where the links would
-     have been. */
+  /* WHERE THE ROWS THAT LEAVE COME FROM. Three absences, and they are not the
+     same absence. `remote` null with nothing said is a read still in the air,
+     and draws NOTHING - a skeleton link is a promise this face has not been
+     given yet. An ANSWER whose own `remote` is null is "no remote configured"
+     (contract C-D, DPLAN-0414 C#12), and draws one quiet line, `NO_REMOTE`.
+     And `said` is a REFUSAL: @api's fixed sentence for its code with the
+     `ref` the transport appends (C#1) - an unreadable repository, or, until
+     @api lands C-D, the old answer for no remote. It is drawn where the links
+     would have been, as it is. */
   const [remote, setRemote] = useState<GitRemote | null>(null);
   const [said, setSaid] = useState<string | null>(null);
 
@@ -185,8 +204,9 @@ export default function GitApp({
         if (mounted) setRemote(got);
       })
       .catch((cause) => {
-        // The server's sentence, unreworded - it is the only thing on this
-        // screen that knows whether the repository has a forge at all.
+        // The refusal as the transport built it - @api's fixed sentence and
+        // its `ref` (C#1), unreworded. Not a "no remote": that one is an
+        // answer since contract C-D, and lands in `remote` above.
         if (mounted) setSaid(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
@@ -249,7 +269,27 @@ export default function GitApp({
         grain={grain}
         backLabel={changesBack}
         onOpenFile={(path) => push({ kind: "diff", path, ref: "" })}
+        onReadFile={(path) => push({ kind: "file", path })}
         onBack={back}
+      />
+    );
+  }
+
+  if (view.kind === "file") {
+    /* THE SAME READER every other file on this face opens in, on this app's
+       stack - so `‹ back` comes back to the changes list it was tapped on.
+       `<branch>/<path>` is the files lane's own address; the path is
+       branch-local at the only grain that pushes this screen (C#3). */
+    return (
+      <Reader
+        target={{
+          ref: `${branch}/${view.path}`,
+          title: `${branch} · ${splitPath(view.path).name}`,
+          kind: "file",
+          project,
+        }}
+        render={isMarkdownRef(view.path) ? renderMarkdown : undefined}
+        onClose={back}
       />
     );
   }
@@ -336,7 +376,7 @@ export default function GitApp({
               background and everything else a phone already knows how to do
               with an address. No `›`: that chevron means "another floor of this
               app", and there is no floor behind these. */}
-          {remote?.web ? (
+          {remote?.web && !noRemote(remote) ? (
             <>
               <a
                 className="baud-git-row baud-git-link"
@@ -397,7 +437,7 @@ export default function GitApp({
               disk, and the server answers `web: null` rather than putting a
               scheme in front of a path. So the fact is shown and nothing is
               drawn that could be tapped - a dead card is worse than no card. */}
-          {remote && !remote.web ? (
+          {remote && !noRemote(remote) && !remote.web ? (
             <p className="baud-git-said">
               {remote.remote} · {remote.url}
               {remote.redacted ? " · password redacted" : ""}
@@ -405,19 +445,23 @@ export default function GitApp({
             </p>
           ) : null}
 
-          {/* THE SERVER'S OWN SENTENCE, WHERE THE LINKS WOULD HAVE BEEN. A
-              repository with no remote configured is the common case here (two
-              projects in this tree have none), and it is not an error worth a
-              red box - it is an answer. */}
+          {/* NO REMOTE CONFIGURED, said as the answer it is (contract C-D,
+              DPLAN-0414 C#12). The common case here - two projects in this
+              tree have none - and not an error worth a red box. */}
+          {remote && noRemote(remote) ? <p className="baud-git-said">{NO_REMOTE}</p> : null}
+
+          {/* A REFUSAL, WHERE THE LINKS WOULD HAVE BEEN - @api's fixed sentence
+              and its ref. Quiet rather than red: until @api lands C-D this is
+              also how "no remote" arrives, and both answers coexist. */}
           {said ? <p className="baud-git-said">{said}</p> : null}
         </div>
       ) : (
         /* No citizen means no address for the tree. Said plainly rather than
-           drawn as an empty list, which would read as a clean repository. */
-        <p className="baud-phone-empty">
-          no citizen named yet — the fleet read has not landed, so there is nothing to name the
-          repository with
-        </p>
+           drawn as an empty list, which would read as a clean repository - and
+           said TRULY (DPLAN-0414 C#13): "has not landed" only while the fleet
+           read has not answered; a read that answered with no agents for this
+           project says that instead. */
+        <p className="baud-phone-empty">{noAgentLine(fleetAnswered)}</p>
       )}
 
       {/* THE DIVIDE THIS SCREEN IS BUILT ON, said once at the bottom of it.

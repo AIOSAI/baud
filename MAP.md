@@ -23,6 +23,7 @@ Everything below is under `app/` unless it says otherwise.
 | `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
 | `src/host/transport.ts` | The desktop's answer: `invoke` into Rust. |
 | `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
+| `src/host/errorRef.ts` | The envelope's `ref` on the end of a refusal's message, "… (ref a1b2c3d4e5f6)", so every refusal on the phone has something to grep (DPLAN-0414 C#1). Pure, plus `errorRef.test.ts`, which also drives the transport's refusal path with `fetch` stubbed. |
 | `vite.config.phone.ts` | **The whole port**, one alias: `./transport` → `transport.http.ts`. |
 | `src/types.ts` | The shapes both faces read — hand-mirrored from Rust. See *The type seam*. |
 
@@ -101,6 +102,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `verbs.ts` | What each scope may do, and the sentence when it may not. |
 | `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
+| `gitWords.ts` | The git app's small rules and words: where a changed row's tap goes (an untracked file is read, an untracked directory answers under its row), a commit message without its subject line, the merge's no-files line, the no-agent line by whether the fleet answered, and the no-remote read of contract C-D. Pure, plus `gitWords.test.ts`. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
 | `feedMarks.ts` | The bell's read and cleared markers: one machine-wide key each (the feed takes no project), and the one-time lift of the seated project's old per-project mark. Pure over an injected store, plus `feedMarks.test.ts`. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
@@ -110,7 +112,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `battery.ts` | The BAT card's face and the battery sheet's time-left words - pure, so its test stands up neither react nor the host transport. `machine.ts` calls it from the one derivation. |
 | `lock.ts` | The header lock chip's lane: `GET /v1/lock` every 5 s while the app is looked at, re-read at once and 1 s after a tap, forgotten when the app goes away - and which of four faces (unread, unlocked, locked, unknown) a reading means. |
 | `pollers.ts` | **All four polling lanes**, as hooks: the fleet read, the per-branch change sweep, the bell's badge, the repository count. Each owns state nothing else writes — which is why they could leave the shell at all. |
-| `copyPath.ts` | floor + relative → a machine path, and the two clipboard lanes. |
+| `copyPath.ts` | floor + relative → a machine path, the two clipboard lanes, and `copyShown`, the truthful answer the two path buttons give (a tick only for a confirmed copy, the path held out for a long-press otherwise). |
 | `mailFigure.ts` | The agent card's MAIL tile, "N new · M opened", so the tiles add up to the rail's badge. Pure, plus `mailFigure.test.ts`. |
 | `roomLinks.ts` | Every http(s) URL in a room's rows, joined across soft and hard wraps - the ONE detection behind the terminal's tap-to-open link provider and its links panel. |
 | `push.ts` | The push hook, inert until phase 7. |

@@ -42,11 +42,15 @@ import { useEffect, useMemo, useState } from "react";
 import { gitChangeRows, listDirWindow } from "../host";
 import { HostError } from "../host/transport.http";
 import type { DirEntryInfo } from "../types";
-import { COPY_REFUSED, NO_FLOOR, copyText, machinePath } from "./lib/copyPath";
+import { NO_FLOOR, copyShown, copyThrough, machinePath } from "./lib/copyPath";
 import { chipOf, type GitChip } from "./lib/gitStatus";
+import { CopyByHand } from "./Reader";
 
 /** What a gone row answers when it is tapped. */
 const GONE_ANSWER = "deleted - there is no file left to open";
+
+/** The quiet line on a root that is not a branch (DPLAN-0414 C#11). */
+export const NO_CHIPS_HERE = "git status is not shown here";
 
 interface FilesScreenProps {
   /** The branch whose tree this browses. */
@@ -73,8 +77,17 @@ interface FilesScreenProps {
    * been a second place for "the server said no" to be worded.
    */
   start?: string;
-  /** A file was tapped - open it in the Reader, over this screen. */
-  onOpenFile: (ref: string, title: string) => void;
+  /**
+   * Where the browse OPENS, when that is not the floor (DPLAN-0414 C#9): the
+   * level a file was opened from, handed back so `‹ back` on that file lands
+   * in the same folder. Must sit at or under `start`; absent is the floor.
+   */
+  at?: string;
+  /**
+   * A file was tapped - open it in the Reader. `at` is the level it was
+   * tapped on, so the caller can bring the browse back to it (C#9).
+   */
+  onOpenFile: (ref: string, title: string, at: string) => void;
   onClose: () => void;
 }
 
@@ -101,11 +114,14 @@ export default function FilesScreen({
   project,
   root = "",
   start = "",
+  at,
   onOpenFile,
   onClose,
 }: FilesScreenProps) {
-  /** Where we are, relative to the branch root. "" is the root itself. */
-  const [dir, setDir] = useState(start);
+  /** Where we are, relative to the branch root. "" is the root itself. Opens
+   *  at `at` when a file's back brought the browse here (C#9) - read once, so
+   *  the caller keys this screen on it - and never above the floor. */
+  const [dir, setDir] = useState(() => (at !== undefined && isAtOrUnder(at, start) ? at : start));
   const [entries, setEntries] = useState<DirEntryInfo[] | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,8 +146,11 @@ export default function FilesScreen({
    * ONE row, belonging under that row rather than in a banner over a listing
    * that is otherwise perfectly true. One answer at a time, by construction -
    * a screen with four open explanations on it is a screen nobody reads.
+   *
+   * `byHand` is the copy's own half (DPLAN-0414 A#21): when no lane confirmed
+   * the copy, the path is held out under the row for a long-press Copy.
    */
-  const [said, setSaid] = useState<{ path: string; text: string } | null>(null);
+  const [said, setSaid] = useState<{ path: string; text: string; byHand?: string } | null>(null);
   /**
    * WHERE THIS LEVEL STANDS ON THE MACHINE, straight from the answer. "" is a
    * server that has not sent it, and the copy button refuses on "" rather than
@@ -166,7 +185,9 @@ export default function FilesScreen({
       })
       .catch((cause) => {
         if (!mounted) return;
-        // @api's sentence, verbatim - the fence's refusals name themselves.
+        // @api's sentence, unreworded - the fence's own refusals name
+        // themselves; one built from a caught exception is the code's fixed
+        // sentence with its `ref` on the end (DPLAN-0414 C#1).
         setError(cause instanceof HostError ? cause.message : String(cause));
       });
     return () => {
@@ -200,7 +221,8 @@ export default function FilesScreen({
   useEffect(() => {
     let mounted = true;
     setChanged(null);
-    /* CHIPS ARE OFF OUTSIDE A BRANCH ROOT, and silently (FPLAN-0443). The rows
+    /* CHIPS ARE OFF OUTSIDE A BRANCH ROOT (FPLAN-0443), and SAID since
+       DPLAN-0414 C#11 - one quiet line under the head, `NO_CHIPS_HERE`. The rows
        lane is keyed BY A BRANCH: it answers "what has changed in this
        citizen's working tree". Outside one there is no branch to key on - a
        home directory is not a repository, and a project root is a repository
@@ -209,9 +231,11 @@ export default function FilesScreen({
        some same-named citizen's change set painted over a stranger's files.
 
        SO THE LISTING GOES OUT PLAIN, which is the same picture this screen
-       drew before it ever learned to read status, and no banner says anything
-       is missing: an unpainted row claims nothing, where a row painted clean
-       would claim the file is unchanged. Never a false clean. Lighting them at
+       drew before it ever learned to read status: an unpainted row claims
+       nothing, where a row painted clean would claim the file is unchanged.
+       Never a false clean. But an operator who knows the branch roots paint
+       their changes read the plain rows here as clean, so the screen now says
+       the chips are off - one quiet line, not a banner. Lighting them at
        repo grain for the project and aipass roots is real and named as a
        follow-on in the plan - the `repo` grain already exists - and it is off
        here rather than guessed, because a chip keyed wrong is worse than no
@@ -300,8 +324,13 @@ export default function FilesScreen({
       setSaid({ path, text: NO_FLOOR });
       return;
     }
-    if (await copyText(machine)) setCopied(path);
-    else setSaid({ path, text: COPY_REFUSED });
+    /* THE LANE IS THE ANSWER (DPLAN-0414 A#21 = C#7). "copied" only for a
+       confirmed clipboard copy; the legacy lane over plain http says so under
+       the row and holds the path out for a long-press. `copyThrough` reaches
+       `execCommand` before its first await, so the copy runs inside the tap. */
+    const shown = copyShown(await copyThrough(machine), machine);
+    if (shown.copied) setCopied(path);
+    if (shown.note) setSaid({ path, text: shown.note, byHand: shown.byHand ?? undefined });
   };
 
   /* HOW MANY `up` PRESSES FROM HOME. The chip is drawn from two down, where it
@@ -334,6 +363,10 @@ export default function FilesScreen({
           {dir ? `/${dir}` : ""}
         </span>
       </header>
+
+      {/* THE CHIPS ARE OFF HERE, AND THE SCREEN SAYS SO (DPLAN-0414 C#11).
+          Same test as the git effect above - one rule, two readers. */}
+      {root && root !== "branch" ? <p className="baud-phone-files-quiet">{NO_CHIPS_HERE}</p> : null}
 
       {error ? <p className="baud-phone-error">{error}</p> : null}
       {!error && entries === null ? <p className="baud-phone-empty">listing…</p> : null}
@@ -378,6 +411,7 @@ export default function FilesScreen({
                   <span className="baud-phone-file-chip">D</span>
                 </div>
                 {said?.path === row.path ? <p className="baud-phone-said">{said.text}</p> : null}
+                {said?.path === row.path && said.byHand ? <CopyByHand text={said.byHand} /> : null}
               </div>
             ) : (
               <div key={row.entry.path} className="baud-phone-file-block">
@@ -403,6 +437,7 @@ export default function FilesScreen({
                         : onOpenFile(
                             `${branch}/${row.entry.path}`,
                             `${title} · ${row.entry.name}`,
+                            dir,
                           )
                     }
                   >
@@ -441,6 +476,7 @@ export default function FilesScreen({
                 {said?.path === row.entry.path ? (
                   <p className="baud-phone-said">{said.text}</p>
                 ) : null}
+                {said?.path === row.entry.path && said.byHand ? <CopyByHand text={said.byHand} /> : null}
               </div>
             ),
           )}
@@ -452,6 +488,9 @@ export default function FilesScreen({
 
 /**
  * The copy button one row wears.
+ *
+ * "copied" ONLY ON A CONFIRMED COPY (DPLAN-0414 A#21): `done` is set from
+ * `copyShown`, which keeps the legacy lane's unconfirmed yes off the button.
  *
  * A WORD, NOT A GLYPH, and both states are words. Every copy icon in circulation
  * is two overlapping rectangles that nobody recognises at 17px, and the ones
@@ -645,4 +684,23 @@ function placeOf(rows: FileRow[], name: string): number {
     if (other.toLowerCase() > key) return i;
   }
   return rows.length;
+}
+
+/**
+ * Whether a level sits at or under the browse's floor (DPLAN-0414 C#9).
+ *
+ * The level a file was opened from is handed back to a new browse, and the
+ * floor is where that browse may climb to and no further - so a level above
+ * it (it cannot happen through the doors that exist, which is exactly when a
+ * check is cheap) falls back to the floor rather than opening outside it.
+ *
+ * Args:
+ *   level: The level to open at, relative to the root.
+ *   floor: The browse's floor, relative to the same root.
+ *
+ * Returns:
+ *   True when `level` is the floor or a directory beneath it.
+ */
+function isAtOrUnder(level: string, floor: string): boolean {
+  return !floor || level === floor || level.startsWith(`${floor}/`);
 }

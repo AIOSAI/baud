@@ -93,11 +93,14 @@ export default function GitDiffScreen({
         if (mounted) setPatch(got);
       })
       .catch((cause) => {
-        // VERBATIM, and this screen is where that matters most. "No changes to
-        // X in this patch" is what a tap on a stale list earns, and an
-        // untracked file earns it too - git's own diff cannot see a file it has
-        // never seen, so a `??` row has no patch to show and the server says so
-        // in a sentence a person can act on.
+        // UNREWORDED, and this screen is where that matters most. A tap on a
+        // stale list earns a refusal here, and since @api stopped sending a
+        // caught exception's words it is the code's fixed sentence ("This read
+        // was refused; the reason is in this host's log") with the `ref` the
+        // transport appends (DPLAN-0414 C#1) - the one thing to grep the
+        // host's log for. An untracked row no longer reaches this screen:
+        // git's diff cannot see a file it has never seen, so the changes list
+        // reads it or answers under it instead (C#3).
         if (mounted) setError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {

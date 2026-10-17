@@ -22,6 +22,8 @@
  * feature that has not landed. Phase 6 fills these in behind the verb ruling.
  */
 
+import { withRef } from "./errorRef";
+
 /* ------------------------------------------------------------- the wire -- */
 
 /** Where `/v1` lives. Same-origin by default, so a bundle @api serves needs no
@@ -85,7 +87,8 @@ export function writeToken(token: string | null): void {
  * so a 503 carrying BAUD's own snapshot sentence ("no project named 'baud' in
  * BAUD's census") arrives at the card AS that sentence. Flattening it to
  * "request failed" would throw away the one thing that makes a remote read
- * debuggable from a phone.
+ * debuggable from a phone. When the envelope carries a `ref`, the message ends
+ * with it (`errorFrom`, DPLAN-0414 C#1).
  */
 export class HostError extends Error {
   readonly status: number;
@@ -117,10 +120,20 @@ export class HostError extends Error {
  * That is the learning-#389 failure in a different costume: the reason existed
  * and the operator could not read it. So both shapes are understood, and the
  * status is the last resort rather than the first.
+ *
+ * THE ENVELOPE'S `ref` RIDES THE MESSAGE (DPLAN-0414 C#1). A refusal built from
+ * a caught exception carries @api's fixed sentence for its code ("This read was
+ * refused; the reason is in this host's log") and a short `ref` that joins it
+ * to the log line holding the real words. The sentence alone is a dead end on a
+ * phone, so `withRef` puts the ref on the end of it, and every screen that
+ * shows the message shows something to grep for. An envelope with no ref (the
+ * fence's own named refusals) reads exactly as before.
  */
 function errorFrom(body: any, status: number): HostError {
   const envelope = body?.error;
-  if (envelope?.message) return new HostError(status, envelope.code ?? "error", envelope.message);
+  if (envelope?.message) {
+    return new HostError(status, envelope.code ?? "error", withRef(envelope.message, envelope.ref));
+  }
 
   // Validation errors: one or many, each naming the field it is about.
   const detail = body?.detail;

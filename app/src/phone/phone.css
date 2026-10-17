@@ -4748,3 +4748,50 @@ body {
   font-size: 0.65rem;
   max-width: 36ch;
 }
+
+/* ---- DPLAN-0414 wave 5: files and the git app ---- */
+
+/* THE PATH, TO COPY BY HAND (A#21). Shown under a browse row or the Reader's
+   head when no lane CONFIRMED the copy - the legacy lane over plain http can
+   say yes and land nothing. The terminal takeout field's look, path-sized:
+   selectable said out loud, wrapped and never cut, because a third of a path
+   is the bug this field exists for. */
+.baud-phone-copy-field {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 6px 0 8px;
+  resize: none;
+  padding: 6px 8px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* The Reader has no row to sit under; its field lines up with the text. */
+.baud-phone-reader > .baud-phone-copy-field {
+  width: auto;
+  margin: 6px calc(var(--baud-pad) / 1.5) 0;
+}
+
+/* GIT STATUS IS NOT SHOWN HERE (C#11). Under the head of a home, project or
+   aipass browse, where the chips are off: faint and small, a fact about the
+   screen rather than a warning about the files. */
+.baud-phone-files-quiet {
+  margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
+  color: var(--baud-ink-faint);
+  font-size: 0.66rem;
+}
+
+/* AN UNTRACKED ROW'S ANSWER (C#3), under the row it is about - the files
+   screen's gone-row idiom, in the git app's quiet voice. */
+.baud-git-fileblock .baud-git-said {
+  padding: 6px 2px 8px;
+}

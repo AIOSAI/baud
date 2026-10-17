@@ -285,14 +285,22 @@ export interface GitCommitFile {
  * only some remotes have; the server answers null for the rest rather than
  * putting a scheme in front of a filesystem path and calling it a page. So a
  * face builds its links out of `web` and shows `url` as the fact it is.
+ *
+ * NO REMOTE IS AN ANSWER, NOT A REFUSAL (contract C-D, DPLAN-0414 C#12). A
+ * repository with no remote configured answers 200 with `remote: null` and the
+ * link fields null or absent; only a repository that cannot be read at all is
+ * still refused. Until @api lands that, the old refusal arrives instead, and
+ * the face reads both.
  */
 export interface GitRemote {
   branch: string;
   grain: string;
-  /** Which remote answered - `origin` by convention, its own name otherwise. */
-  remote: string;
-  /** As configured, with any password already replaced on the server. */
-  url: string;
+  /** Which remote answered - `origin` by convention, its own name otherwise.
+   *  Null when the repository has no remote configured (contract C-D). */
+  remote: string | null;
+  /** As configured, with any password already replaced on the server. Null
+   *  or absent when there is no remote. */
+  url: string | null;
   /** A browsable address, or null when this remote has no page at all. */
   web: string | null;
   /** True when a credential was taken out of `url` before it was sent. */

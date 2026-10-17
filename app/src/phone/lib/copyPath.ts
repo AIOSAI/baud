@@ -137,6 +137,40 @@ export function copyReport(lane: CopyLane, what: string): CopyReport {
   };
 }
 
+/** What a path-copy button does with one lane's answer (DPLAN-0414 A#21). */
+export interface CopyShown {
+  /** The button may say "copied" - only a lane that CONFIRMED the copy earns it. */
+  copied: boolean;
+  /** The sentence under the button, or null when the tick says it all. */
+  note: string | null;
+  /** The text to show in a selectable field for a long-press Copy, or null. */
+  byHand: string | null;
+}
+
+/**
+ * `copyReport` for the two path buttons - a browse row's `copy` and the
+ * Reader's `copy path` (DPLAN-0414 A#21 = C#7).
+ *
+ * THE OWNER'S THUMB FOUND IT: a lock file's path, `copy`, "It lit copied" - over
+ * plain http, on the legacy lane, which can say yes and land nothing. Those two
+ * buttons used `copyText`, which folds that lane into a yes. This is the
+ * truthful pair those buttons now share: the tick only for a confirmed copy,
+ * and for the other two lanes `copyReport`'s own sentence with the path held
+ * out for Android's long-press Copy - the same answer the terminal's copy gives.
+ *
+ * Args:
+ *   lane: What `copyThrough` answered.
+ *   text: The path that was offered to the clipboard.
+ *
+ * Returns:
+ *   Whether to tick, what to say, and what to show for a copy by hand.
+ */
+export function copyShown(lane: CopyLane, text: string): CopyShown {
+  const report = copyReport(lane, "the path");
+  if (!report.showText) return { copied: true, note: null, byHand: null };
+  return { copied: false, note: report.note, byHand: text };
+}
+
 /**
  * Put text on the clipboard, and answer WHICH lane took it.
  *
@@ -194,8 +228,10 @@ export async function copyThrough(text: string): Promise<CopyLane> {
 /**
  * Put text on the clipboard, and answer whether a lane took it.
  *
- * `copyThrough` with the lane folded to a yes or no, so the callers that only
- * draw a tick stay as they were. The call still runs synchronously up to the
+ * `copyThrough` with the lane folded to a yes or no. NO PATH BUTTON USES IT
+ * since DPLAN-0414 A#21 - a yes from the legacy lane is not a copy, and those
+ * buttons answer through `copyShown` now. It stays for its test and for any
+ * caller that only needs to know some lane took the text. The call still runs synchronously up to the
  * legacy lane, because `copyThrough` is CALLED before anything is awaited.
  *
  * Args:

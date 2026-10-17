@@ -35,6 +35,9 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: the interface door says "poll every", "bell keeps" and "bell chime" apply to the desktop only (DPLAN-0414).**
 - **Phone: the memory screen points per-agent limits at the card's gear (DPLAN-0414)** instead of saying they are still to come.
 - **Phone: reasons that lived only in hover text are shown on screen (DPLAN-0414).** The room doors under a read token, the header lock chip's answer, the GIT tile's `n/a`, a refused manager monitor and the cross-project roster's refusal each show their reason as a small line. A tap on a passport number shows the full id.
+- **Phone: `copy` and `copy path` say "copied" only when the clipboard confirms it (DPLAN-0414).** Over plain http, where the browser may copy nothing, the screen says so and shows the path to long-press and copy.
+- **Phone: going back from a file opened in a folder returns to that folder (DPLAN-0414).** The file stays open as a tab; files opened from anywhere else close on back as before.
+- **Phone: an untracked file in the agent card's GIT list opens in the reader (DPLAN-0414)**, and a new directory says "new directory — nothing to diff; browse it from the files door" under its row instead of opening a refusal.
 
 ### Removed
 
@@ -42,6 +45,11 @@ and every change that lands adds its line there in the same sitting.
 
 ### Fixed
 
+- **Phone: every refusal ends with its reference, e.g. "(ref a1b2c3d4e5f6)" (DPLAN-0414)**, so the reason can be found in the host's log.
+- **Phone: a commit shows its subject once (DPLAN-0414)**, and a merge says "this merge changes no files of its own" instead of an empty file list.
+- **Phone: the git sheet says "no agent in this project to read the repository through" (DPLAN-0414)** when the project has no agents, instead of blaming a fleet read that landed.
+- **Phone: a repository with no remote reads "no remote configured — no links" (DPLAN-0414)** once the host API answers that way; a refused remote read still shows its refusal.
+- **Phone: home, project and aipass folders say "git status is not shown here" (DPLAN-0414).**
 - **Phone: a room that ended says "ended" and stays ended (DPLAN-0414).** When the host closes a room with "room ended" (from the desk, or a shell that exited), the overlay reads "ended — this room is gone; open it again from the card to start fresh" and the phone does not reattach into a fresh empty room under the same name. A watch that ends says "the watch ended" and does not re-arm.
 - **Phone: a room the host refuses stops retrying (DPLAN-0414).** An unknown branch or project, or a host without tmux, shows "refused" with the host's sentence instead of looping as "detached, still running". The launch line is typed on the room's first frame, so a refused try no longer uses it up.
 - **Phone: a rejected token at room open keeps its sentence (DPLAN-0414)** instead of being replaced by "the room did not answer".

@@ -139,6 +139,28 @@ const RELOAD_ACK_MS = 200;
  */
 let startupSpent = false;
 
+/**
+ * One files browse: whose tree, which project, the floor, which kind of root -
+ * and, when it is the browse a file was opened from, the level it stood on.
+ *
+ * NAMED SINCE DPLAN-0414 C#9 because it now lives in two places: the open
+ * browse, and every file pane opened out of one (`OpenPane.from`), which is how
+ * the browse survives the file's tab.
+ */
+interface Browse {
+  name: string;
+  project: string;
+  /** The floor: "" for the files door, `artifacts` for the passport's records
+   *  door (compass #291). */
+  start: string;
+  /** Which KIND of word `name` is, when the browse came off the roots roster
+   *  (FPLAN-0443). Absent for every door that names a citizen, which is every
+   *  door that existed before it. */
+  root?: string;
+  /** The level the browse opens at, under `start` (C#9). Absent is the floor. */
+  at?: string;
+}
+
 /** One open pane in the stage: an agent room, an empty shell, a watch, or a
  *  file view. Files joined the row on Patrick's call (08-16: "when i select a
  *  file to view. it should open to a tab. and tabs can just stack for multi
@@ -185,6 +207,23 @@ interface OpenPane {
    * could disagree.
    */
   document?: "certificate";
+  /**
+   * FILE PANES ONLY, and only those opened FROM A BROWSE: the browse as it
+   * stood when the file was tapped, level included (DPLAN-0414 C#9).
+   *
+   * THE OWNER'S RULING, reversing 08-16's: "it's annoying when a tab drops, I
+   * have to start again." So the browse is not thrown away when a file opens -
+   * it rides the file's pane, and the Reader's `‹ back` on that pane re-opens
+   * it at the same level. ON THE PANE rather than in one shell-wide slot,
+   * because every file tab came from its own folder: a second file opened from
+   * the same browse carries its own copy, and two tabs from two folders each go
+   * back to theirs.
+   *
+   * Absent on a file pane any other door opened, whose `‹ back` closes the tab
+   * as it always has. NOT PART OF `paneKey`, for `document`'s reason: the key
+   * is the file's identity, and where it was opened from is not.
+   */
+  from?: Browse;
   /**
    * SHELL PANES ONLY, and set at the moment of the tap: one command line to
    * type into this shell when it opens. The card's `?` sends the branch's help
@@ -374,15 +413,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
    *  across projects since 2026-08-16 and a name alone would resolve under the
    *  seat. `start` is the floor: "" for the files door, `artifacts` for the
    *  passport's records door (compass #291). Null means none. */
-  const [browsing, setBrowsing] = useState<{
-    name: string;
-    project: string;
-    start: string;
-    /** Which KIND of word `name` is, when the browse came off the roots
-     *  roster (FPLAN-0443). Absent for every door that names a citizen, which
-     *  is every door that existed before it. */
-    root?: string;
-  } | null>(null);
+  const [browsing, setBrowsing] = useState<Browse | null>(null);
   /** THE FILES APP's first screen - the roster of places to stand. A boolean
    *  because the roster IS the app's front door: picking a row opens a browse
    *  and closes this, so there is never a second thing to remember. */
@@ -1111,7 +1142,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               {pane.mode === "file" ? (
                 /* The SAME Reader that overlays for card reads, re-seated as
                    tab content - phone.css unpins its fixed/fullscreen shape
-                   inside a pane. Its `‹ back` and the tab's ✕ agree: close. */
+                   inside a pane. Its `‹ back` and the tab's ✕ agree - close -
+                   UNLESS A BROWSE OPENED IT (DPLAN-0414 C#9): then `‹ back`
+                   re-opens that browse at the level the file was tapped on,
+                   and the tab stays in the row, where the 08-16 ruling put it.
+                   The ✕ still closes. */
                 <Reader
                   target={{
                     ref: pane.ref ?? "",
@@ -1133,7 +1168,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                         ? renderMarkdown
                         : undefined
                   }
-                  onClose={() => closePane(key)}
+                  onClose={() => {
+                    const from = pane.from;
+                    if (from) setBrowsing(from);
+                    else closePane(key);
+                  }}
                 />
               ) : pane.mode === "watch" ? (
                 /* NO BRANCH IS A REAL ANSWER HERE, and only here. Everywhere
@@ -1412,24 +1451,30 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           never requires detaching" would have been false through the one door
           the operator uses most. Rendered on top, the room below keeps running
           and keeps receiving bytes while a file is being read. */}
-      {/* The browser renders BEFORE the reader so a tapped file's Reader sits
-          on top of the level it came from, and `‹ back` lands you back in it. */}
       {/* A tapped file opens as a TAB, not an overlay (Patrick, 08-16): the
           browser closes so the file is immediately in view, and each further
           pick stacks another tab - multi-file is the tab row doing its job.
-          Re-tapping an already-open file fronts its existing tab. */}
+          Re-tapping an already-open file fronts its existing tab.
+
+          THE BROWSE SURVIVES THE FILE (the owner, DPLAN-0414 C#9: "it's
+          annoying when a tab drops, I have to start again"). The browser still
+          closes, but the browse - root, floor, project and the level the file
+          was tapped on - rides the file's pane as `from`, and `‹ back` on that
+          tab re-opens it right there: the folder it came from, at the same
+          level. A second file from the same folder carries its own copy. */}
       {browsing ? (
         <FilesScreen
           /* KEYED ON THE WHOLE BROWSE, floor included: the start directory is
              read once, into state, so a second browse arriving while one is
              open must be a new component rather than the old one holding the
              old floor. */
-          key={`${browsing.root ?? ""}:${browsing.project}/${browsing.name}/${browsing.start}`}
+          key={`${browsing.root ?? ""}:${browsing.project}/${browsing.name}/${browsing.start}@${browsing.at ?? ""}`}
           branch={browsing.name}
           project={browsing.project}
           root={browsing.root}
           start={browsing.start}
-          onOpenFile={(ref) => {
+          at={browsing.at}
+          onOpenFile={(ref, _title, at) => {
             const from = browsing;
             setBrowsing(null);
             focusPane({
@@ -1447,6 +1492,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                  opens, including that same certificate reached the long way
                  round, carries no flag and reads as text. */
               document: isCertificateOpen(from.name, from.start, ref) ? "certificate" : undefined,
+              // The browse, at the level the file was tapped on (C#9).
+              from: { ...from, at },
             });
           }}
           onClose={() => setBrowsing(null)}
@@ -1528,6 +1575,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           branch={repoCitizen}
           project={seat}
           projectLabel={seat || "anchor"}
+          /* WHETHER THE FLEET HAS ANSWERED (DPLAN-0414 C#13). An empty card
+             list means "not read yet" with no snapshot and "this project has
+             no agents" with one, and the sheet says which. */
+          fleetAnswered={snapshot !== null}
           /* The measured number or NOTHING - `??` would turn "not read yet"
              into a confident zero, which is the one thing this lane may not
              say. `undefined` and `null` are the same absence here; the app's
