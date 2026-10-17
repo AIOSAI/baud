@@ -58,8 +58,7 @@ sandbox.sh --name NAME     # name the container (default baud-sandbox-HHMMSS)
 
 The PyPI wheel itself (its pin, its contents) and the GitHub release stamping of
 `install.sh`. Those stay the merge train's. Everything in `install.sh`, setup.sh,
-`aipass install` and the phone step is the sandbox's, which is where the three
-releases of 2026-10-13 went.
+`aipass install` and the phone step is the sandbox's.
 
 ## Needs
 

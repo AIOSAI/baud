@@ -22,9 +22,9 @@ rule — a caller who asked for a read *and* a kill does not know what they aske
 for, and guessing for them is how a read turns into a kill.
 
 It exists so that **"which agents are alive" has exactly one implementation.**
-The phone arc puts a host API in front of the same fleet (DPLAN-0300), and the
-alternative was a second room-judgment written in Python — which would drift
-from this one, and on the day it drifted neither answer could be trusted. One
+The phone reaches the same fleet through a host API, and the alternative to
+this flag is a second room-judgment written in Python, which would drift from
+this one, and once it drifted neither answer could be trusted. One
 reader rather than a separate `baud-snapshot` tool, for the same reason a step
 further out: a second implementation is a second version that can silently
 disagree with the GUI. `baud-cli` is a second binary but not a second reader —
@@ -52,10 +52,8 @@ the same crate, the same `run_headless`, cut from the same tag.
 
 The desktop `baud` links the whole GUI stack even to print a snapshot — 129
 shared objects, webkit2gtk and GTK 3 among them — so a server or a container
-with no desktop could not start it, and a fresh install's phone showed *The baud
-binary was not found* over an empty fleet. Patrick chose to fix the shape rather
-than write a Python re-reader (2026-09-14, FPLAN-0589): `baud-cli` is a second
-binary target in the same crate, `src-tauri/src/bin/baud_cli.rs`, which hands its
+with no desktop cannot start it. `baud-cli` is the headless shape of the same
+reader, not a Python re-reader: a second binary target in the same crate, `src-tauri/src/bin/baud_cli.rs`, which hands its
 arguments to `run_headless` and exits with its code.
 
 - **The six verbs answer exactly as above**: same arguments, same stdout, same
@@ -88,13 +86,12 @@ arguments to `run_headless` and exits with its code.
 ### `--end-room` — the kill seam
 
 `room_kill` is a tauri command, reachable only from inside the running desktop,
-so the host API had nothing to proxy: `/v1/verbs/kill` sat behind a gate that
-named BAUD. This flag is that gate's key, and it is a **door onto the one
+so the host API cannot proxy it. This flag is the host API's door to
+`/v1/verbs/kill`, and it is a **door onto the one
 mechanism, never a second one**. `--end-room` and the desktop's *end room*
 button both call the same `end_room_in`, which calls the same `room_kill_named`
-— there is no `tmux kill-session` anywhere in the headless path. Patrick's 2026-08-10
-ruling stands: one thing ends a session, because a second door eventually
-disagrees with the first.
+— there is no `tmux kill-session` anywhere in the headless path. One thing ends a
+session, because a second door eventually disagrees with the first.
 
 - **stdout** is always one `KillOutcome` object. `detail` and `error` are
   mutually exclusive by construction — exactly one is non-null, and which one
@@ -136,17 +133,11 @@ $ baud --end-room ../etc
  component - this door takes names, not paths"}                        # exit 1
 ```
 
-### `--capture-room` and `--send-room` — parked, revivable, and not the input path
+### `--capture-room` and `--send-room` — unused, and not the input path
 
-**Nothing calls these today, and that is recorded rather than left to be
-discovered.** They were built for a phone terminal that polled `capture-pane`
-and repainted it; that design was cut before it shipped (DPLAN-0300 Amendment
-1). The phone attaches a real client now, so keystrokes ride a PTY.
-
-Both stay in the binary by @devpulse's ruling — working tested code is not
-deleted on a late-evening say-so — on the condition that their status is
-documented in the same breath, so *unused-but-shipped* never quietly becomes a
-second door:
+**Nothing calls these.** The phone attaches a real tmux client, so keystrokes
+ride a PTY. Both stay in the binary as working, tested code, and their status
+is stated here so *unused-but-shipped* never quietly becomes a second door:
 
 - **`--send-room` is NOT the phone's input path and NOT a general input door.**
   The attach PTY is the one door for input. This flag exists, works, and is
@@ -154,7 +145,7 @@ second door:
 - **`--capture-room` earns its place on its own argument**: looking is a read,
   typing is a verb. Attach is operate-only *by nature* — a shell prompt has no
   reading half — so a capture is the only possible path to a look-don't-touch
-  view under a read token. That is a real future, not a leftover.
+  view under a read token.
 
 Neither flag attaches: `capture-pane` observes, so nothing about the operator's
 own view changes — no resize, no focus, no second client.
@@ -177,7 +168,7 @@ own view changes — no resize, no focus, no second client.
 - **`--text` never appends a newline.** A paste alone can therefore never
   execute; running it stays a separate, deliberate act. This is BAUD's own rule,
   already written into `Terminal.tsx` for the desktop, carried onto the wire
-  rather than reinvented for it. Proven by typing a command through the flag,
-  capturing the room, and finding it sitting unexecuted at the prompt.
+  rather than reinvented for it: a command typed through the flag sits
+  unexecuted at the prompt.
 - **A room that is not live is refused**, not returned as an empty screen. One
   is a fact about the fleet; the other looks exactly like a dead agent.

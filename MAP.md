@@ -282,7 +282,6 @@ headless and checks its `ldd` (FPLAN-0589); after touching the `gui` gate, run
 | `CHANGELOG.md` | Keep a Changelog shape: what each release changed, and the Unreleased lines waiting for the next. Every row that lands adds its line. |
 | `SECURITY.md` | The security model (your machine, your tailnet, per-device tokens, what a token reaches) and how to report. Dated; it moves after the scheduled security session. |
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
-| `docs/phone_input_AS_BUILT_2d744ac.md` | The phone's input system captured at one commit: viewport contract, the intent-reading typing lane, autocorrect, liveness, the one slot, the ended-room rule, known issues. Settings and line anchors, so the state can be rebuilt from the doc. |
 | `docs/architecture.md` | How BAUD reads the fleet, and the three rules everything else follows from. |
 | `docs/desktop.md` | The desktop window: running it, the window, cards, rooms, terminal, settings, camera, the command surface, the layout. |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |

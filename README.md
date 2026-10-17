@@ -12,15 +12,13 @@ curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | 
 - **Rooms:** an agent's live terminal session; read it, type into it, send it a photo.
 - **The machine:** CPU, memory, disks, temperature, fans, network, processes and battery, live.
 
-<!-- screenshots: the wheel, a room, the monitor row - after the owner's visual pass -->
-
 ## How it works
 
 Your machine serves the phone face over your own [Tailscale](https://tailscale.com) network. You scan a QR the machine shows, once, and the phone signs itself in. Nothing passes through our servers, because there are none: no account, no cloud, no telemetry.
 
 ## What it needs
 
-- Linux on x86_64 (other platforms later).
+- Linux on x86_64.
 - git, tmux, curl and Python 3.10 or newer.
 - [Claude Code](https://claude.com/claude-code), signed in to your Anthropic account.
 - Tailscale on the machine and on the phone.
@@ -71,7 +69,7 @@ Most of what runs is [AIPass](https://github.com/AIOSAI/AIPass): the agents' ide
 - [Development](docs/development.md): building, the palette, the host seam, and the checks.
 - [The install sandbox](docs/sandbox.md): the installer tested in minutes — a saved Docker image, the local script, the local checkout by `git clone`.
 - [Releases](docs/releases.md): versions, and what a release carries.
-- [History](docs/history.md): how it got here.
+- [CHANGELOG.md](CHANGELOG.md): what changed, release by release.
 - [MAP.md](MAP.md): where every file lives.
 
 ## Contributing

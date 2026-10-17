@@ -37,10 +37,12 @@ second palette anywhere.
 
 `app/src/host/` is the only part of the frontend that knows how a call reaches
 the machine. `transport.ts` holds the one `invoke` in the application;
-`index.ts` gives each of the 26 backend commands a typed function. Components
+`index.ts` gives each of the 29 backend commands in the desktop registry
+(`generate_handler!` in `app/src-tauri/src/lib.rs`) a typed function, beside the
+calls only the phone's HTTP binding answers. Components
 import from `../host` and never from `@tauri-apps` — the two exceptions are
 `App.tsx` and `Zoom.tsx`, which use `api/webview` for file-drop and window zoom,
 genuine desktop-window concerns rather than host calls.
 
-That second face now exists — see [The phone face](phone.md). The seam has two bindings and still no
+The second face is [the phone](phone.md). The seam has two bindings and no
 runtime switch: a build picks one, and nothing above the seam can tell which.

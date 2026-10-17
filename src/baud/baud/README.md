@@ -1,13 +1,14 @@
 # BAUD
 
-**Resident project agent and manager.**
+**Resident agent of the BAUD project.**
 
-**Module:** `baud` | **Class:** manager | **Created:** 2026-08-09
+**Module:** `baud` | **Class:** manager | **Role:** project_agent | **Created:** 2026-08-09
 
 ---
 
 ## What I Do
 
+- Own and develop the BAUD app in `app/` of this repo. The project root `README.md` is the app's source of truth.
 - Manage this project as its resident agent (citizen_class: manager)
 - Route commands to discovered modules
 - Coordinate project work and maintain project context
@@ -49,7 +50,3 @@ apps/
 
 - **aipass.prax** — Logging via `system_logger`
 - **aipass.cli** — Console output (header, error, warning)
-
----
-
-*Created by `aipass new` via spawn project_agent template.*

@@ -27,7 +27,7 @@ the honest part: the operator-facing surface can still move.
 **A release is the compatibility pin.** BAUD ships packaged with AIPass as one
 unit, and that unit pulls the latest AIPass release. So the release — not a
 version range in a manifest — is the statement of which BAUD and which AIPass
-are known to work together (Patrick's ruling, 2026-08-12).
+are known to work together.
 
 **Cutting a release is one human step.** Tags are `v<version>`, so this one is
 `v0.3.7`, and pushing that tag is the whole ceremony — `.github/workflows/release.yml`

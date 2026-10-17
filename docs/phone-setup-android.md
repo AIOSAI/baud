@@ -5,35 +5,25 @@ Your phone reaches BAUD over your own Tailscale network, so the phone and the ma
 ## Steps
 
 1. On the phone, open the Play Store, search for **Tailscale**, and install it.
-   <!-- screenshot: Play Store page for Tailscale, Install button -->
 2. Open Tailscale and sign in with the **same account** you used on the machine (`tailscale up` printed that sign-in link).
-   <!-- screenshot: Tailscale sign-in choice on Android -->
 3. Allow the VPN request Android shows. Tailscale uses Android's VPN slot to reach your tailnet.
-   <!-- screenshot: Android "Connection request" VPN dialog -->
 4. Check that Tailscale says **Connected** and that your machine is in its list of devices.
-   <!-- screenshot: Tailscale on Android, Connected, the machine listed -->
 5. **Hold your phone up.** The installer's last block on the machine is a QR code under **Pair your phone**. If the install ended without one, its **Server** line says *not answering*: the install could not start the server for you (a machine without systemd, such as a Docker container, is the usual case). Start it and mint the code yourself, in a new terminal or after `exec bash` in the same one so it sees the install's settings:
    ```
    drone @api host-api serve --detach
    drone @api host-api pair phone --scope operate
    ```
    Open the phone's camera and point it at the code. The code works once and expires after five minutes, so do this when you are ready to scan. To pair later, or to pair another phone, run `drone @api host-api pair phone --scope operate` on the machine for a fresh code.
-   <!-- screenshot: the terminal's last block, the QR under "Pair your phone" -->
 6. Tap the link the camera offers. If your camera offers none, use Google Lens or the QR scanner in Android's quick settings.
-   <!-- screenshot: the camera's link prompt over the QR -->
 7. BAUD opens in Chrome, says **pairing this phone…**, and signs itself in. Nothing is typed or pasted.
-   <!-- screenshot: the "pairing this phone…" screen -->
 8. The wheel appears with your agents on it. You are in.
-   <!-- screenshot: the wheel after pairing -->
 9. In Chrome's ⋮ menu, tap **Add to Home screen**, so BAUD opens from an icon like an app.
-   <!-- screenshot: Chrome menu, Add to Home screen -->
 
 ## When the code has expired
 
 BAUD's sign-in page says **This pairing code has expired or was already used**. On the machine, run `drone @api host-api pair phone --scope operate` and scan the new code (step 5).
 
 If you cannot scan at all, the sign-in page still takes a pasted token. On the machine, `drone @api host-api issue-token phone --scope operate` writes one to a receipt file it names. Get it onto the phone without a chat or an email, paste it into **access token**, and tap **connect**.
-<!-- screenshot: BAUD sign-in page with the expired line above the token field -->
 
 ## When the page does not load
 

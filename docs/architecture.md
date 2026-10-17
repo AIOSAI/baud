@@ -41,7 +41,7 @@ Three sentences of doctrine, because everything else follows from them:
 | interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
 | resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
-| mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift (12 of 17 cards were wrong when checked, 2026-08-10) |
+| mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift |
 | plans / todos / age | the branch's `DASHBOARD.local.json` |
 | room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory |
