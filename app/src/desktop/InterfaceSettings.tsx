@@ -4,39 +4,15 @@ import { baudSettingsRead, baudSettingsWrite, hooksSoundGet, hooksSoundSet } fro
 import type { BaudSettings } from "../types";
 
 /**
- * BAUD's own settings (m11 phase 6) - the header gear, sibling to the per-card
- * one. Where AgentSettings writes claude's file for ONE branch, this writes
- * BAUD's own `.aipass/baud.settings.json` for the seated project: which agent
- * opens at startup, how fast everything polls, how much the bell keeps, and
- * whether it makes a sound.
- *
- * Same idiom as its sibling on purpose - scrim, centered panel, Escape and
- * click-away, dirty-diff so an untouched field never writes a key.
- *
- * ONE ROW BREAKS THAT RULE, and says so: hook sounds are a flag FILE in the
- * temp dir (`aipass-hooks-muted`, @hooks' own switch), not a setting of ours.
- * It applies on the flip, it is never saved here, and the panel reads it live
- * on open because a shell or another window may have flipped it since.
- *
- * THIS FILE IS NOW ONLY THE FACE'S OWN LOOK AND FEEL. The memory dials used to
- * ride at the bottom of this panel and no longer do: they write @memory's
- * fleet-wide config, which is a different owner's file and has no business
- * behind a door labelled "interface" (Patrick's ruling). They live one row over
- * on both faces now - see SettingsDialog on the desk, the `memory` section on
- * the phone.
- *
- * TWO EXPORTS, ONE IMPLEMENTATION. `InterfaceControls` is the rows and their
- * save; the default export is those rows wearing this panel's own scrim and
- * title bar. The desk mounts the controls INSIDE a sectioned dialog that
- * already carries chrome, the phone mounts the whole panel on top of its own -
- * and a title bar drawn twice is the only thing the split exists to prevent.
+ * BAUD's own interface settings (`.aipass/baud.settings.json`), the header gear.
+ * Reference: docs/desktop/settings.md
  */
 
 /** What the app does when the file says nothing. */
 export const DEFAULT_POLL_MS = 5000;
 export const DEFAULT_BELL_MAX = 200;
 
-/** The cadences on offer. A file carrying something else keeps it (below). */
+/** A file carrying a value not on offer keeps it (see withCurrent). */
 const POLL_CHOICES = [2000, 5000, 10_000, 30_000];
 const RETENTION_CHOICES = [50, 100, 200];
 
@@ -60,11 +36,7 @@ function bounded(value: unknown, min: number, max: number, fallback: number): nu
     : fallback;
 }
 
-/**
- * Absence and nonsense both become the default. The file is operator-editable
- * by hand, so a string where a number belongs is a real possibility - and the
- * app must keep running on defaults rather than poll every 0ms.
- */
+/** Absence and nonsense both become the default: the file is hand-editable. */
 export function interfacePrefs(settings: BaudSettings | null): InterfacePrefs {
   return {
     startupAgent:
@@ -86,9 +58,7 @@ function seconds(ms: number): string {
   return `${ms % 1000 === 0 ? ms / 1000 : (ms / 1000).toFixed(1)}s`;
 }
 
-/** A value the file carries but this panel does not offer stays listed - the
- *  panel must never render as something the operator did not choose, and one
- *  careless save must never silently rewrite it. */
+/** A stored value the panel does not offer stays listed, so a save never silently rewrites it. */
 function withCurrent<T>(
   choices: T[],
   current: T,
@@ -108,26 +78,15 @@ interface InterfaceControlsProps {
 }
 
 interface InterfaceSettingsProps extends InterfaceControlsProps {
-  /**
-   * The close button's glyph. Absent is `✕`. The phone hands in `×`, its one
-   * close glyph across the face (DPLAN-0414 wave 6, item 10).
-   */
+  /** The close button's glyph. Absent is `✕`; the phone hands in `×`. */
   closeGlyph?: string;
-  /**
-   * What the close button and the click-away do, when that is not what Escape
-   * does. Absent: all three call `onClose`, as they always have. The phone
-   * mounts this panel as a SECTION of its settings and hands in the whole
-   * panel's close here (wave 6, item 8: the close glyph closes the whole
-   * panel), while Escape - `onClose` - goes back one level to settings home.
-   */
+  /** Close button and click-away, when they differ from Escape (`onClose`); the phone's Escape goes back one level. */
   onDismiss?: () => void;
   onClose: () => void;
 }
 
 /** The rows themselves, chrome-free, for a surface that carries its own. */
 export function InterfaceControls({ agents, settings, onSaved }: InterfaceControlsProps) {
-  // What the file says. Seeded from the running app so the panel never
-  // flashes defaults, then confirmed by a read on open.
   const [base, setBase] = useState<BaudSettings>(settings);
   const opening = interfacePrefs(settings);
   const [startupAgent, setStartupAgent] = useState<string>(opening.startupAgent ?? "");
@@ -135,8 +94,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
   const [bellMax, setBellMax] = useState(opening.bellMax);
   const [bellSound, setBellSound] = useState(opening.bellSound);
 
-  // The hooks flag: null until the live read lands, and the row stays
-  // disabled until it does - a toggle that guesses would flip the fleet.
+  // Null until the live read lands: a toggle that guesses would flip the fleet.
   const [hooksActive, setHooksActive] = useState<boolean | null>(null);
   const [hooksError, setHooksError] = useState<string | null>(null);
 
@@ -153,8 +111,6 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
     };
   }, []);
 
-  // Mounting IS opening: both reads happen here, so the panel never shows a
-  // stale picture of a file (or a flag) changed underneath it.
   useEffect(() => {
     baudSettingsRead()
       .then((next) => {
@@ -163,7 +119,6 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
         setReadError(null);
       })
       .catch((err) => {
-        // The app's own copy stays on screen - it came from a read too.
         if (alive.current) setReadError(message(err));
       });
 
@@ -191,8 +146,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
     setBellSound(prefs.bellSound);
   }
 
-  // Only genuine differences reach the wire. "None (empty)" is the one field
-  // that maps to null - which REMOVES the key rather than storing a blank.
+  // "None (empty)" maps to null, which REMOVES the key rather than storing a blank.
   const was = interfacePrefs(base);
   const chosenAgent = startupAgent === "" ? null : startupAgent;
   const patch: BaudSettings = {};
@@ -202,9 +156,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
   if (bellSound !== was.bellSound) patch.bell_sound = bellSound;
   const pending = Object.keys(patch).length;
 
-  // A stored agent that has no card here (a branch retired, or a project
-  // switched under a shared name) stays in the list rather than reading as
-  // "None" - the same reason the model list keeps an unknown model.
+  // A stored agent with no card here stays listed rather than reading as "None".
   const agentOptions =
     was.startupAgent && !agents.includes(was.startupAgent)
       ? [...agents, was.startupAgent]
@@ -216,8 +168,6 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
     setWriteError(null);
     baudSettingsWrite(patch)
       .then((next) => {
-        // What came back is the whole document as written - adopting it
-        // clears dirty, and the app takes the same copy.
         onSaved(next);
         if (!alive.current) return;
         adopt(next);
@@ -231,8 +181,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
       });
   };
 
-  // The flag file is the truth, so the reply corrects the optimistic flip and
-  // a failed write puts the switch back where the disk left it.
+  // The flag file is the truth: the reply corrects the optimistic flip.
   const flipHooks = () => {
     if (hooksActive === null) return;
     const previous = hooksActive;
@@ -322,8 +271,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
         <span className="baud-settings-state">{bellSound ? "on" : "off"}</span>
       </div>
 
-      {/* Not a setting of ours: the flag file IS the state, so this flips
-          on click and has nothing to do with save. */}
+      {/* @hooks' flag file IS the state: flips on click, never on save. */}
       <div className="baud-settings-row">
         <span className="baud-settings-label">hook sounds</span>
         <button
@@ -384,12 +332,7 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
   );
 }
 
-/**
- * The panel as the phone still opens it: the controls above, wearing the scrim,
- * the title bar and the Escape key. Chrome is the only thing this adds - every
- * row, every read and the save itself live one component up, so the desk's
- * sectioned dialog and this share an implementation rather than a resemblance.
- */
+/** The controls wearing their own scrim and title bar, as the phone opens them; the desk's dialog carries its own chrome. */
 export default function InterfaceSettings({
   agents,
   settings,

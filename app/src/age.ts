@@ -5,12 +5,8 @@ export interface RelativeAge {
   stale: boolean;
 }
 
-/**
- * Render an ISO-ish timestamp as a short age, e.g. "3m ago".
- * Dashboard files carry naive local timestamps, which `Date.parse` reads as
- * local time - which is exactly what we want here. Snapshot timestamps carry a
- * `Z`, which `Date.parse` reads as UTC - also what we want.
- */
+/** Render an ISO-ish timestamp as a short age, e.g. "3m ago". */
+// Naive dashboard timestamps parse as local and `Z` snapshot ones as UTC; both are intended.
 export function relativeAge(timestamp: string, now: number = Date.now()): RelativeAge {
   if (!timestamp) return { label: "never", stale: true };
 

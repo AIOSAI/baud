@@ -15,10 +15,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 
 
 /**
- * The read-only reading pane behind a file tab. CodeMirror deliberately runs
- * with editing OFF (`readOnly` + non-editable): BAUD reads the fleet, it does
- * not write it. If editing ever arrives it will be its own explicit feature
- * with its own save command - flipping these two flags is the easy part.
+ * The read-only pane behind a file tab. Editing is off by design: enabling it needs its own save command, not two flags flipped.
  */
 
 /** Blend one-dark's chrome into BAUD's panels; theme.css stays the palette. */
@@ -69,8 +66,7 @@ export default function FileView({ path, line }: { path: string; line?: number }
               lineNumbers(),
               highlightSpecialChars(),
               drawSelection(),
-              // Wrap long lines - this is a reading pane, and the fleet's
-              // JSON dashboards live on very long single lines.
+              // The fleet's JSON dashboards live on very long single lines.
               EditorView.lineWrapping,
               EditorState.readOnly.of(true),
               EditorView.editable.of(false),
@@ -85,8 +81,7 @@ export default function FileView({ path, line }: { path: string; line?: number }
           parent: host,
         });
 
-        // A `path:123` link lands ON its line: cursor there, scrolled to
-        // centre. Clamped - output can cite a line the file no longer has.
+        // Clamped: terminal output can cite a line the file no longer has.
         if (line && line > 0) {
           const target = view.state.doc.line(Math.min(line, view.state.doc.lines));
           view.dispatch({

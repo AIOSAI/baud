@@ -1,13 +1,6 @@
 /**
- * The Reader's markdown render (DPLAN-0414 A#23) - handed to `Reader`'s
- * `render` door for `.md` refs, the same door the birth certificate uses.
- *
- * The HTML comes from `lib/markdown.ts`, which escapes every raw HTML token and
- * makes only absolute web and mail links live, so the one `innerHTML` on this
- * face carries no markup an agent's file wrote. That file says why in full.
- *
- * It never declines: any text is valid markdown, and plain prose renders as
- * paragraphs - which is still easier to read on a phone than a `<pre>`.
+ * The Reader's markdown render for `.md` refs.
+ * The `innerHTML` is safe only because lib/markdown.ts escapes every raw HTML token; see there.
  */
 
 import type { ReactNode } from "react";

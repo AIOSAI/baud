@@ -1,31 +1,6 @@
 /**
- * THE MACHINE'S VITALS - what a monitor card opens to (FPLAN-0561 row 3).
- *
- * WHAT IS MEASURED NOW. Every number on this screen is @skills'
- * `machine_vitals()`, relayed verbatim by @api on `GET /v1/machine` and read by
- * `lib/machine.ts` while the monitor row is the visible wheel: CPU over the
- * skill's own window and the load averages, memory and swap, the CPU package
- * temperature against its sensor's own high and critical lines, the fan against
- * its range, network throughput, and the process count. The card faces draw
- * from the same read, so a card and its sheet cannot disagree. The ONE read
- * that is not the vitals is the PROC sheet's top-20 list (DPLAN-0414 T3),
- * `GET /v1/machine/processes`, read once per open and on a tap - see
- * `useProcessList` below.
- *
- * WHERE THE MEANING LIVES: in the skill, never on this face. Which sensor is the
- * CPU, which rows are nonsense, what an absence is called and the sentence that
- * says so are all the skill's (its README, "machine_vitals() - The Published
- * Read"). This screen prints them. A section the host cannot give keeps the
- * honest line, carrying THAT section's own sentence - never a zero, never an
- * invented scale - and a refusal prints the owner's own words.
- *
- * WHY THE RUST HALF NEVER HAPPENED. The placeholder round planned `sysinfo` in
- * Cargo.toml and a snapshot subcommand beside `--roster`. The probe (DPLAN-0341)
- * found sysinfo has no fan API at all - and the fan is the case Patrick named:
- * *"the fans going crazy and the screen is locked and it's all the way across
- * the room"*. psutil reads it, so the skill that already owned system status
- * publishes the reading, @api proxies it, and this face renders. The desktop
- * binary reads none of it and has no command behind the name.
+ * The machine's vitals - what a monitor card opens to. Reference: docs/phone/monitor.md
+ * Every number and every absence sentence is @skills' `machine_vitals()`, printed as sent.
  */
 
 import { type ReactNode, useEffect, useState } from "react";
@@ -65,9 +40,7 @@ export default function MachineSheet({
   read: MachineRead;
   onClose: () => void;
 }) {
-  // Read ONCE when the PROC sheet opens, and on a tap - never on the vitals'
-  // cadence and never while the sheet is shut, because this component is only
-  // mounted while it is open (DPLAN-0414 T3).
+  // Read once on open and on a tap, never on the vitals' cadence; mounted only while open.
   const procs = useProcessList(card === "mon-proc");
   return (
     <section className="baud-phone-reader">
@@ -83,8 +56,6 @@ export default function MachineSheet({
 }
 
 function sheetBody(card: string, { reading, refusal }: MachineRead, procs: ProcessList): ReactNode {
-  // The owner said no, or the host could not be reached. Every card says the
-  // same thing, because it is the same fact: no reading, and whose word that is.
   if (refusal) {
     return (
       <>
@@ -116,29 +87,18 @@ function sheetBody(card: string, { reading, refusal }: MachineRead, procs: Proce
   }
 }
 
-/* ------------------------------------------------------------- the cards -- */
 
-/**
- * THE CORES (FPLAN-0586 row 2). Patrick, 2026-09-13: *"when i open it id expect
- * to see the cores, not really sure what all this even is"*. So the page is the
- * headline, one bar per CPU, what the machine has, and the load averages with a
- * caption - every row says what it is in words. The percent row (the headline
- * again) is cut, and the sample window rides the sampled line.
- */
+/** The cores: the headline, one bar per CPU, the counts, and the load averages with a caption. */
 function CpuBody({ reading: { cpu, load, sampled_at } }: { reading: MachineVitals }) {
   return (
     <>
       <Headline value={cpu.percent === null ? "—" : fixed(cpu.percent, 1)} unit="%" note="busy" />
-      {/* One bar per entry the skill LISTS - the online CPUs - never one per
-          configured count, which can differ. Null while warming, and then the
-          section's own sentence stands in: never zero-height bars. */}
+      {/* One bar per CPU the skill lists (online), never per configured count; null while
+          warming, when the section's sentence stands in. */}
       {cpu.cores ? <CoreBars cores={cpu.cores} /> : null}
       <Section section={cpu} rows={[]} />
       <p className="baud-machine-counts">
         {countsLine(cpu)}
-        {/* No cpu_freq leaves the section available with the reason in
-            `detail` - said here, under the dashes it explains, unless the
-            section's own sentence above already carries it. */}
         {cpu.available && !cpu.sentence && cpu.detail ? <span className="baud-machine-detail">{cpu.detail}</span> : null}
       </p>
       <Section
@@ -160,8 +120,7 @@ function CpuBody({ reading: { cpu, load, sampled_at } }: { reading: MachineVital
   );
 }
 
-/** A bar per core. The fill is an SVG width, not a style attribute - the face's
- *  no-inline-styles discipline, the same way the wheel's ring holds it. */
+/** A bar per core; the fill is an SVG width, keeping the face free of inline styles. */
 function CoreBars({ cores }: { cores: number[] }) {
   return (
     <div className="baud-machine-bars">
@@ -178,8 +137,7 @@ function CoreBars({ cores }: { cores: number[] }) {
   );
 }
 
-/** "4 threads on 2 cores · 1.1 GHz, up to 3.3". Every piece is a dash when its
- *  value is null, never 0; equal counts say the cores once. */
+/** "4 threads on 2 cores · 1.1 GHz, up to 3.3"; a null piece is a dash, never 0. */
 function countsLine(cpu: MachineVitals["cpu"]): string {
   const counted = (n: number | null, one: string) => `${n ?? "—"} ${one}${n === 1 ? "" : "s"}`;
   const counts =
@@ -239,8 +197,6 @@ function TempBody({ reading: { temp, sampled_at } }: { reading: MachineVitals })
 }
 
 function FanBody({ reading: { fan, sampled_at } }: { reading: MachineVitals }) {
-  // A real rpm with no range headlines as the rpm - the face draws no ring for
-  // it, and the section's sentence below says why.
   const ranged = fan.percent_of_range !== null;
   return (
     <>
@@ -297,10 +253,8 @@ function NetworkBody({ reading: { network, sampled_at } }: { reading: MachineVit
   );
 }
 
-/* ---------------------------------------------------- the process list -- */
 
-/** One visit's process read: the latest list, the latest refusal, and whether
- *  a sample is in flight. `again` is the tap on the sampled line. */
+/** One visit's process read; `again` is the tap on the sampled line. */
 interface ProcessList {
   read: MachineProcesses | null;
   refusal: { code: string; message: string } | null;
@@ -309,21 +263,13 @@ interface ProcessList {
 }
 
 /**
- * THE TOP-20 READ (DPLAN-0414 T3, contract C-B). NOT POLLED, and that is the
- * ruling, not an economy: the owner's case is "laptop fan going crazy ... what
- * is running", a glance, and the skill sleeps about half a second per sample
- * to measure cpu honestly. So one read when the PROC sheet opens, one per tap
- * on the sampled line, and nothing on the monitor row's two-second cadence.
- * The sheet unmounts when it shuts, and this goes with it.
- *
- * A refusal is held exactly as the vitals lane holds one (`lib/machine.ts`):
- * the HostError's code and the server's own sentence, verbatim.
+ * The top-20 read. Not polled, by ruling: the skill sleeps about half a second per
+ * sample, so one read per open and one per tap, never on the row's cadence.
  */
 function useProcessList(active: boolean): ProcessList {
   const [read, setRead] = useState<MachineProcesses | null>(null);
   const [refusal, setRefusal] = useState<ProcessList["refusal"]>(null);
-  // Born sampling when the sheet is the PROC one: the read goes out in the
-  // effect, after the first paint, and that paint must already say so.
+  // Born sampling: the read goes out after the first paint, and that paint must say so.
   const [sampling, setSampling] = useState(active);
   const [asked, setAsked] = useState(0);
 
@@ -357,14 +303,7 @@ function useProcessList(active: boolean): ProcessList {
   return { read, refusal, sampling, again: () => setAsked((n) => n + 1) };
 }
 
-/**
- * THE PROC CARD'S SHEET (DPLAN-0414 B#1). The headline is EVERY pid the host
- * counted, sleeping ones included - so it says "processes", never "running"
- * (the host sends no running count). Below it, the twenty busiest by cpu as the
- * host sampled them, and a toggle that re-orders the same twenty by memory on
- * the phone. The line under the list says when the sample was taken and reads
- * again on a tap; while a sample is in flight it says "sampling…".
- */
+/** The PROC sheet: the headline counts every pid, sleeping too, so it says "processes", never "running". */
 function ProcessBody({ reading: { processes }, procs }: { reading: MachineVitals; procs: ProcessList }) {
   const [by, setBy] = useState<ProcessSort>("cpu");
   const rows = procs.read ? sortProcesses(procs.read.processes, by) : [];
@@ -373,7 +312,6 @@ function ProcessBody({ reading: { processes }, procs }: { reading: MachineVitals
       <Headline value={processes.count === null ? "—" : String(processes.count)} note="processes" />
       <Section section={processes} rows={[["count", processes.count === null ? "—" : String(processes.count)]]} />
       {procs.refusal ? (
-        // The same sentence the vitals refusal shows: the owner's own words.
         <Honest absent>{procs.refusal.message}</Honest>
       ) : rows.length > 0 ? (
         <>
@@ -420,12 +358,7 @@ function ProcessBody({ reading: { processes }, procs }: { reading: MachineVitals
   );
 }
 
-/**
- * THE BATTERY (2026-10-12). Charge, what the power is doing, and time left, with
- * the host's own low and critical lines when it publishes them. An older skill
- * sends no battery key at all, and that is said rather than drawn as an empty
- * machine.
- */
+/** The battery: charge, power state and time left; an older skill sends no battery key at all. */
 function BatteryBody({ reading: { battery, sampled_at } }: { reading: MachineVitals }) {
   if (!battery) {
     return (
@@ -461,7 +394,6 @@ function BatteryBody({ reading: { battery, sampled_at } }: { reading: MachineVit
   );
 }
 
-/* ------------------------------------------------------------ the pieces -- */
 
 function Headline({ value, unit, note }: { value: string; unit?: string; note?: string }) {
   return (
@@ -488,11 +420,7 @@ function Rows({ rows }: { rows: Array<[string, string]> }) {
   );
 }
 
-/**
- * One section: its rows when the host gave it, and the skill's sentence when
- * there is one - which is ALWAYS when it is absent, and sometimes beside a
- * reading that is real but partial (a fan with an rpm and no range).
- */
+/** One section: its rows, and the skill's sentence whenever it is absent or partial. */
 function Section({ section, rows }: { section: MachineSection; rows: Array<[string, string]> }) {
   return (
     <>
@@ -507,14 +435,11 @@ function Section({ section, rows }: { section: MachineSection; rows: Array<[stri
   );
 }
 
-/** THE HONEST LINE. Not the error voice - an absent sensor is a fact about this
- *  machine, not a failure of the face - so it is quiet, with an amber rule when
- *  it is saying something is missing. */
+/** The honest line: an absent sensor is a fact about the machine, so it is quiet, not the error voice. */
 function Honest({ absent = false, children }: { absent?: boolean; children: ReactNode }) {
   return <p className={`baud-machine-honest ${absent ? "baud-machine-honest-absent" : ""}`}>{children}</p>;
 }
 
-/** A sample's time of day, or the host's own string when it does not parse. */
 function clockTime(at: string): string {
   const when = new Date(at);
   return Number.isNaN(when.getTime()) ? at : when.toLocaleTimeString();

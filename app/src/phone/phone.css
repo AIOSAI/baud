@@ -1,41 +1,12 @@
-/*
- * The phone face's layout - and ONLY its layout (FPLAN-0413 phase 3).
- *
- * Every colour, radius and gap below is a `var(--baud-*)` from
- * tokens.generated.css. There is not one literal colour in this file, which is
- * the design-token payoff: the phone looks like BAUD because it drinks from the
- * same palette, not because someone matched hex values by eye.
- *
- * theme.css is loaded first and already styles the cards themselves, so this
- * file adds one thing: a single column that fits a hand.
- */
+/* The phone face's layout. Every colour, radius and gap is a var(--baud-*)
+   token from tokens.generated.css; no literal colour lives here. */
 
-/* THE BROWSER DOES NOT GET THE DOWN-SWIPE. Patrick: "the refresh pull down is
-   getting in the way of scrolling down" - reaching back through history is a
-   downward pan, which is exactly the gesture Chrome claims for pull-to-refresh,
-   so the room scrolled and a reload spinner argued with it.
-
-   `none`, NOT `contain` - CORRECTED 08-16, and the old note here had the
-   property backwards. `contain` stops scroll CHAINING and explicitly PRESERVES
-   the element's own overscroll affordance; `none` stops both. It looked right
-   for months because Chrome implements pull-to-refresh AS chaining out of the
-   document, so containing the chain happened to kill it. Firefox - which is the
-   acceptance browser, Patrick drives it on his S24 - treats the refresh as the
-   affordance, kept it, and ate the wheel's down-flick with it: "a refresh
-   gesture is in place at the ladt wheel. I guess preventing me from grabbing
-   the wheels."
-
-   This is an app, not a document; a stray thumb should never be able to reload
-   the fleet out from under itself. Ordinary scrolling inside the app is
-   untouched either way - overscroll-behavior only governs what happens AT a
-   scroll boundary. */
+/* `none`, not `contain`: `contain` keeps Firefox's pull-to-refresh, which
+   eats downward pans and the wheel's down-flick. */
 html,
 body {
   overscroll-behavior-y: none;
-  /* NO FONT BOOSTING. Android Chrome inflates tall blocks of small text it
-     judges unreadable - the file browser was its first victim here: rows kept
-     their boxes while the letters grew past them and collided (Patrick's
-     13:24 screenshot). Every size in this file is deliberate; adjust nothing. */
+  /* No font boosting: Android Chrome grows small text past its row boxes. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
@@ -50,8 +21,6 @@ body {
   font-family: var(--baud-mono);
 }
 
-/* ------------------------------------------------------------- the head -- */
-
 .baud-phone-head {
   position: sticky;
   top: 0;
@@ -59,35 +28,20 @@ body {
   display: flex;
   align-items: center;
   gap: var(--baud-gap);
-  /* ONE SLIM ROW (Patrick: the header was eating "probs 3 space"). Every
-     vertical pixel here comes out of the terminal below. */
+  /* One slim row: every vertical pixel comes out of the terminal below. */
   padding: 4px calc(var(--baud-pad) / 1.5);
-  /* The safe area keeps the header clear of a notch when installed. */
   padding-top: calc(4px + env(safe-area-inset-top, 0px));
   background: var(--baud-bg-panel);
   border-bottom: 1px solid var(--baud-line);
 }
 
-/* THE NAME IS THE REFRESH (Patrick, 2026-08-19: browser and OS gestures fight
-   him for the refresh gesture, so refreshing meant reaching for browser chrome
-   every time). It is a button now, and the first job of these rules is that
-   nobody can tell: a button arrives with its own font, colour, background,
-   border and padding, and every one of them is handed straight back. */
+/* The name is the refresh button, styled so it reads as plain text. */
 .baud-phone-title {
   font: inherit;
   font-weight: 600;
   font-size: 0.85rem;
   letter-spacing: 0.08em;
-  /* THE WORDMARK'S OWN GREEN (Patrick, 2026-08-19: "it was green before now its
-     white. I liked the green"). It drinks the desktop wordmark's token rather
-     than a colour of its own, so BAUD is one identity wearing two sizes - and
-     the glow keeps the desktop's ratio (0.6em of the type size) instead of its
-     pixel count, because 12px of halo around 13.6px of text is a smudge.
-
-     Worth recording beside the fix: this name has resolved to --baud-ink in
-     every committed state since the face landed, and turning the span into a
-     button did not change that (measured: rgb(214, 226, 220) both ways). The
-     green he remembers was never in git - see the archaeology in the README. */
+  /* The wordmark's token; the glow keeps the desktop's 0.6em ratio, not its px. */
   color: var(--baud-green);
   text-shadow: 0 0 8px var(--baud-glow-green);
   background: none;
@@ -95,29 +49,16 @@ body {
   padding: 0;
   margin: 0;
   cursor: pointer;
-  /* The origin for the hit area below. */
+  /* Origin for the ::after hit area. */
   position: relative;
-  /* Take the header row's own height rather than the word's. The button
-     centres its label, so nothing moves - this only buys the hit area the
-     handful of pixels between a 16px word and the 22px row it sits in. */
+  /* Stretch to the row's height: a bigger hit area, the label does not move. */
   align-self: stretch;
-  /* The grey wash Android paints over a tapped control: this button has its
-     own acknowledgement, and two of them read as a glitch. */
+  /* No Android tap wash; this button has its own acknowledgement. */
   -webkit-tap-highlight-color: transparent;
 }
 
-/* THE THUMB TARGET, and it is a pseudo-element for one reason: a thumb needs
-   more room than this word does, and the header is the one slim row Patrick
-   fought for ("probs 3 space"). So the HIT AREA grows and the LAYOUT does not
-   - not a pixel of the header moves, and the name does not shift or resize.
-
-   Where it reaches, and where it deliberately stops: left to the screen's own
-   edge, through the header's own padding where nothing else lives; up through
-   the notch inset to the very top; down to the header's bottom edge. Right by
-   10px of the 14px gap, so four pixels of dead space always stand between this
-   and the seat chip beside it. It does NOT reach below the header - an
-   overhang there would take taps from the wheel, and a refresh that eats a
-   card tap is a worse bug than a small target. */
+/* The hit area grows, the layout does not. It stops 4px short of the seat
+   chip and never reaches below the header, where it would steal wheel taps. */
 .baud-phone-title::after {
   content: "";
   position: absolute;
@@ -127,17 +68,13 @@ body {
   right: -10px;
 }
 
-/* Instant, and it costs no render: the finger is still down when this lands,
-   which is the half of the acknowledgement React cannot be fast enough for. */
+/* Instant while the finger is down; React cannot acknowledge that fast. */
 .baud-phone-title:active {
   color: var(--baud-amber);
   text-shadow: 0 0 8px var(--baud-glow-amber);
 }
 
-/* The other half - it fires ON the tap and holds for the 200ms before the
-   reload kicks, so the gesture is never silent while a slow reconnect thinks
-   about it. Amber because this is the machine working, not the machine
-   failing. */
+/* Holds for the 200ms before the reload, so the tap is never silent. */
 .baud-phone-title-going {
   color: var(--baud-amber);
   text-shadow: 0 0 8px var(--baud-glow-amber);
@@ -153,8 +90,7 @@ body {
   }
 }
 
-/* Motion off, the STATE stays - the same rule the dispatched lamp follows. An
-   operator who cannot take a flash must still see that their tap landed. */
+/* Reduced motion drops the flash but keeps the state. */
 @media (prefers-reduced-motion: reduce) {
   .baud-phone-title-going {
     animation: none;
@@ -162,18 +98,12 @@ body {
   }
 }
 
-/* The seat selector. The wrapper owns the header's flexible slot; the chip
-   inside is a button that reads like the plain name it replaced. */
+/* The seat selector; the wrapper owns the header's flexible slot. */
 .baud-phone-projectpick {
   position: relative;
   margin-right: auto;
   min-width: 0;
-  /* TAKES THE ROW'S SLACK rather than sizing to the name. Sized to the name,
-     the chip inside got exactly its own max-content width back, and a
-     sub-pixel shortfall was enough to break the last letter of AIPASS onto a
-     second line (Patrick 2026-09-13: *"now it's actually wrapping AI pass
-     which it wasn't wrapping before"*). With the slack, a short name has room
-     to spare and a long one is still bounded by the row. */
+  /* Takes the row's slack: sized to the name, sub-pixel rounding wraps AIPASS. */
   flex: 1 1 auto;
 }
 
@@ -183,25 +113,13 @@ body {
   padding: 0;
   color: var(--baud-ink-dim);
   font-family: inherit;
-  /* 0.75 until 2026-09-13, and 0.68 for ten minutes: the header's flexible
-     slot is ~51px on the S24 and AIPASS at 0.75 needs 52, so it bled a pixel
-     for weeks and wrapped AIPAS/S the moment the chip was bound to its slot.
-     Patrick: *"the character size needs to be smaller"*. 0.6 is `sign out`'s
-     size two chips over; AIPASS needs ~44px at it and sits on one line with
-     room, VERA-STUDIO wraps once at its hyphen. */
+  /* The slot is ~51px on a phone; AIPASS needs ~44px at this size. */
   font-size: 0.6rem;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  /* BOUND TO ITS SLOT, and it wraps (Patrick 2026-09-13, S24 screenshot:
-     *"vera studio actually bleeds into the terminal button"*). The old rule
-     capped this at 44vw and ellipsized - but the wrapper is the header's
-     flexible slot and shrinks below that on a phone, while an inline-flex
-     button sizes to its content, so the name simply drew past the slot into
-     the shell chip. Two lines cost nothing: the row is already two lines tall
-     because `sign out` wraps in its own chip, so VERA-STUDIO breaks at its
-     hyphen and the header does not grow a pixel. The name span clamps at two
-     lines, which is the guarantee the old dots gave. */
+  /* Bound to its slot and wraps rather than drawing into the shell chip; the
+     row is already two lines tall from `sign out`, so the header does not grow. */
   max-width: 100%;
   min-width: 0;
   text-align: left;
@@ -214,24 +132,11 @@ body {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  /* BREAKS AT A HYPHEN ONLY, never inside a word. This shipped for twenty
-     minutes as `overflow-wrap: anywhere` and Patrick caught the one case that
-     rule is wrong for: AIPASS-SITE and VERA-STUDIO broke cleanly at their
-     hyphen, but plain AIPASS - the one name the slot did NOT squeeze - came
-     back as AIPAS / S. A shrink-to-fit box that is exactly its text's width
-     gets rounded a fraction short, and with a break allowed anywhere the last
-     letter falls to line two. With breaks only at hyphens a whole word cannot
-     wrap at all, so an exact fit stays one line. The price: a long name with
-     no hyphen is clipped at the slot's edge instead of broken - the names on
-     this wheel are short and hyphenated, so that is the cheaper wrong. */
+  /* Break at hyphens only: with `anywhere`, an exact-fit name rounds a
+     fraction short and wraps its last letter. */
   overflow-wrap: normal;
   word-break: normal;
-  /* SLACK PAST THE TEXT. The same short-by-a-fraction box that used to wrap
-     the S now clipped it (Patrick's 16:24 shot: *"almost lol... see its
-     underlapping now"*) - the phone measures the run with fractional advances
-     and paints it a pixel or two wider, and overflow: hidden trims exactly
-     that much off the last glyph. Three pixels of padding sit inside the
-     clip, so the run has room to land; the caret's 4px gap follows it. */
+  /* Room inside the clip for fractional glyph advances, or the last glyph is cut. */
   padding-right: 3px;
 }
 
@@ -377,8 +282,6 @@ body {
   padding: 2px 6px;
 }
 
-/* ----------------------------------------------------------- the column -- */
-
 .baud-phone-column {
   display: flex;
   flex-direction: column;
@@ -387,8 +290,7 @@ body {
   padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
 }
 
-/* One card per row, full width. The desktop strip scrolls sideways; a thumb
-   scrolls down. Same card, different axis - that is the whole re-seating. */
+/* One card per row, full width: a thumb scrolls down. */
 .baud-phone-column .baud-chip {
   width: 100%;
   min-width: 0;
@@ -421,8 +323,6 @@ body {
   color: var(--baud-red);
   font-size: 0.75rem;
 }
-
-/* ------------------------------------------------------------- the door -- */
 
 .baud-phone-door {
   min-height: 100vh;
@@ -496,17 +396,13 @@ body {
   font-size: 0.68rem;
 }
 
-/* ------------------------------------------------- the read row (3b) -- */
-
 .baud-phone-card {
   display: flex;
   flex-direction: column;
 }
 
-/* The phone's own doors, sitting under the card rather than inside it - the
-   card is the report on both faces, and the doors belong to the face holding
-   it. Every one of these is a READ; verbs are not here and are not coming
-   until phase 6. */
+/* The phone's doors sit under the card, not in it: the card is the report on
+   both faces. */
 .baud-phone-reads {
   display: flex;
   flex-wrap: wrap;
@@ -524,8 +420,6 @@ body {
   /* 32px of height is a thumb target, not a mouse target. */
   padding: 7px 10px;
 }
-
-/* --------------------------------------------- the reader and the feed -- */
 
 .baud-phone-reader,
 .baud-phone-feed {
@@ -551,12 +445,7 @@ body {
   border-bottom: 1px solid var(--baud-line);
 }
 
-/* HOME shares `back`'s chrome because it is the same species of control - one
-   row, one chip family, and the glyph is the only thing that separates them.
-   It carries no rule of its own: a class here exists so a screen that styles
-   `back` (the settings panel does) cannot silently restyle a chip that isn't
-   one. Where it may be drawn at all is the screens' decision, and they draw
-   NOTHING rather than a disabled chip - this face has no dead controls. */
+/* Home has its own class so a screen that styles `back` cannot restyle it. */
 .baud-phone-back,
 .baud-phone-home,
 .baud-phone-copyhead,
@@ -571,18 +460,13 @@ body {
   padding: 6px 10px;
 }
 
-/* Clear, at the FAR END of the feed's head - the same chip as `‹ back` beside
-   it, because it is the same species of control, and as far from the back
-   button as the row allows: the two live on one sticky row and only one of them
-   is undoable. `flex: none` keeps a long title from squeezing it below a thumb;
-   the title shrinks and ellipses, this does not. */
+/* Far end, away from back: only one of the two is undoable. */
 .baud-phone-feedclear {
   margin-left: auto;
   flex: none;
 }
 
-/* In the head the feed button is the desktop's bell glyph, sized to the slim
-   row - the reader's `back` button above keeps the roomier tap target. */
+/* Slim-row size; the reader's back keeps the larger target. */
 .baud-phone-head .baud-phone-feedbutton {
   display: inline-flex;
   align-items: center;
@@ -591,10 +475,6 @@ body {
   position: relative;
 }
 
-/* UNREAD, and the count is the whole point - the bell was a bare glyph with no
-   state, because the only thing counting was the feed screen itself and that
-   only exists while it is open. Amber on the desk's own alert idiom: this is
-   news waiting, not an error. */
 .baud-phone-head .baud-phone-feedbutton-alert {
   border-color: var(--baud-amber);
   color: var(--baud-amber);
@@ -611,28 +491,19 @@ body {
   line-height: 1;
   border-radius: 8px;
   padding: 2px 4px;
-  /* The header row is a fixed height and this sits outside the button's box -
-     it must never be able to push its neighbours around. */
+  /* Sits outside the button's box; it must never take its neighbours' taps. */
   pointer-events: none;
 }
 
-/* The header's project-root shell: the desktop's own ❯_ glyph, monospaced so
-   it reads as a prompt rather than punctuation. Shares the feed button's
-   chrome - it is the same species of head chip. NOWRAP is load-bearing: when
-   the gear joined the row (08-16) the flex squeeze found a break opportunity
-   between ❯ and _ and folded the button to two lines, twice the height of
-   its neighbours. Text has wrap rules; the icon chips never did. */
+/* nowrap is load-bearing: the flex squeeze otherwise breaks between ❯ and _. */
 .baud-phone-shellbutton {
   font-family: var(--baud-mono, ui-monospace, monospace);
   font-size: 0.68rem;
   letter-spacing: -1px;
   white-space: nowrap;
-  /* One line, sized like the 14px icons beside it - same chip, same height. */
   line-height: 14px;
 }
 
-/* The file browser's rows - one level, thumb-sized, dirs brighter than files
-   because dirs are where a tap goes next. */
 .baud-phone-files {
   display: flex;
   flex-direction: column;
@@ -650,10 +521,6 @@ body {
   line-height: 1.3;
   text-align: left;
   padding: 10px 6px;
-  /* A ROW, not a line of text (DPLAN-0303 phase 2): the name takes the width
-     and a status chip rides the far end. The clipping rules moved off this box
-     and onto the name inside it, so a row without a chip renders exactly as it
-     did before the chip existed. */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -672,17 +539,8 @@ body {
   color: var(--baud-ink);
 }
 
-/* GIT'S ANSWER, WORN BY THE ROW ITSELF. VS Code's vocabulary because it is the
-   one every editor already taught: green means new, amber means modified, red
-   and struck through means gone. The chip repeats the colour as a letter, for
-   the same reason the fleet's dots carry shapes - colour alone is not a message
-   everyone receives. Every colour is the face's own token; the mock's hexes
-   were its own palette and are not copied in.
-
-   ONE CLASS PER STATUS, NAMED BY THE LETTER, and the four are the git app's own
-   four (`.baud-git-file-M` and friends) down to the token each one takes. Two
-   screens showing the same file is the whole reason: a palette that lived twice
-   would be a palette that could disagree with itself about one branch. */
+/* Status colours match the git app's `.baud-git-file-*` token for token, so
+   two screens cannot disagree; the letter repeats the colour. */
 .baud-phone-file-M {
   color: var(--baud-amber);
 }
@@ -695,28 +553,18 @@ body {
   color: var(--baud-red);
 }
 
-/* Untracked is green because it is new and DIM because git has never seen it -
-   the one status that is not yet part of the repository's story. */
+/* Untracked: green because new, dim because git has never seen it. */
 .baud-phone-file-U {
   color: var(--baud-untracked);
 }
 
-/* A FOLDER POINTS AT WHAT IS INSIDE IT (Patrick's ruling, 08-17 - white folders
-   made him hunt for the changes under them). The same amber as a modified file,
-   because it is the same news arriving one level up, and deliberately no letter
-   with it: an ancestor knows that something below it moved, never which thing
-   or how, so borrowing the chip's M/D vocabulary would have the row claiming
-   knowledge it does not have.
-
-   MUST STAY BELOW .baud-phone-file-dir. Both are one class deep, so the
-   cascade's last word is the only thing standing between an amber folder and a
-   white one - moving this block up the file silently unmarks every directory. */
+/* A folder with changes below is amber with no letter: it knows something
+   moved, not which. MUST STAY BELOW .baud-phone-file-dir; same specificity. */
 .baud-phone-file-inside {
   color: var(--baud-amber);
 }
 
-/* Deleted, shown IN PLACE - the row is synthesized because the directory
-   listing cannot contain a file that is not there. Absence you can see. */
+/* Deleted, shown in place: the row is synthesized; the listing cannot hold it. */
 .baud-phone-file-gone {
   color: var(--baud-red);
 }
@@ -725,24 +573,14 @@ body {
   text-decoration: line-through;
 }
 
-/* THE ROOTS ROSTER (FPLAN-0443) - the FILES app's first screen.
-   Deliberately almost no CSS of its own: the rows ARE file rows
-   (`baud-phone-file baud-phone-file-dir`), because picking a place to stand and
-   picking a directory to enter are the same gesture with the same shape, and a
-   second row style would make them look like two different kinds of thing one
-   tap apart. What is added is the grouping and the second line, and nothing
-   else. */
+/* The roots roster: its rows are file rows, so only the grouping and the
+   second line are added here. */
 .baud-phone-roots-group {
   display: flex;
   flex-direction: column;
   flex: none;
 }
 
-/* A HEADING, not a section - it names which kind the rows beneath it are and
-   carries no control, so it is styled down towards the listing rather than up
-   towards the screen title. Sticky is deliberately NOT used: the roster is
-   short by construction (a home, a handful of projects, one checkout), and a
-   sticky heading on a list that does not scroll is chrome paying rent. */
 .baud-phone-roots-head {
   margin: 0;
   padding: 12px 6px 4px;
@@ -754,10 +592,7 @@ body {
   text-transform: uppercase;
 }
 
-/* THE NAME THE FENCE WILL ACTUALLY BE HANDED, shown only when it is not
-   already the word on the row - so a project row can print a person's name for
-   it and still say what the server was told. Dim and second, because it is
-   evidence rather than the label. */
+/* The name the fence is handed, shown only when it differs from the label. */
 .baud-phone-roots-name {
   flex: none;
   color: var(--baud-ink-faint);
@@ -765,12 +600,7 @@ body {
   padding-left: 8px;
 }
 
-/* The dead row plus the answer it gives when tapped, as one block, so the
-   answer cannot drift away from the row that owns it. */
-/* A ROW AND WHATEVER IT HAS TO SAY (was `-dead`, widened by the FPLAN-0443
-   rider). It held the deleted row and its explanation; now every row is one of
-   these, because every row can refuse a copy and the refusal belongs under the
-   row it is about. */
+/* A row plus what it has to say, so a refusal stays under its own row. */
 .baud-phone-file-block {
   display: flex;
   flex-direction: column;
@@ -778,9 +608,7 @@ body {
   border-bottom: 1px solid var(--baud-line);
 }
 
-/* The rule between rows belongs to the BLOCK here, not to the row inside it, or
-   an open answer would sit below the line that separates its own row from the
-   next one - reading as a note about the wrong file. */
+/* The rule belongs to the block, or an open answer sits below the wrong line. */
 .baud-phone-file-block .baud-phone-file-row {
   border-bottom: none;
 }
@@ -789,14 +617,8 @@ body {
   padding-bottom: 8px;
 }
 
-/* THE ROW IS A LINE OF THREE THINGS NOW (FPLAN-0443 rider): the name, the copy
-   button, and one status slot. It exists because a button cannot contain
-   another button - the tappable name and the tappable copy have to be
-   siblings, so something has to hold them, and that something is also the
-   right place for the row's colour and its rule.
-
-   44px MINIMUM, which is the whole reason the rows grew: the copy target is
-   real or it is decoration. */
+/* Name, copy and status are siblings: a button cannot contain a button.
+   44px so the copy target is real. */
 .baud-phone-file-row {
   display: flex;
   align-items: center;
@@ -805,11 +627,8 @@ body {
   color: var(--baud-ink-dim);
 }
 
-/* THE NAME TAKES THE WIDTH AND INHERITS THE COLOUR. `inherit` rather than a
-   token: the status classes moved up to the row so that the chip's
-   `currentColor` border and the name's ink come from ONE declaration, and a
-   colour set here would win against the row and quietly unpaint every status.
-   The border goes to the block above, so a row never draws its own. */
+/* `inherit`: the status class sits on the row, and a colour here would
+   unpaint every status. */
 .baud-phone-file-row .baud-phone-file {
   flex: 1;
   min-width: 0;
@@ -817,9 +636,7 @@ body {
   color: inherit;
 }
 
-/* THE COPY BUTTON, on every row the listing paints. 44px square, the smallest
-   target a thumb reliably hits, and a plain border so it reads as a control
-   rather than as another status chip. */
+/* 44px square: the smallest target a thumb reliably hits. */
 .baud-phone-copy {
   flex: none;
   width: 44px;
@@ -834,26 +651,18 @@ body {
   text-align: center;
 }
 
-/* COPIED, and green because it is the face's "this landed" colour. It is drawn
-   only after a lane confirmed the copy - see `copyPath.ts`, where the whole
-   point is that this state is never assumed. */
+/* Drawn only after a lane confirmed the copy (copyPath.ts); never assumed. */
 .baud-phone-copy-done {
   border-color: var(--baud-green);
   color: var(--baud-green);
 }
 
-/* At the far end of a reader's head, past a title that shrinks and ellipses.
-   Same chrome as `‹ back` beside it, because it is the same species of
-   control. */
 .baud-phone-copyhead {
   margin-left: auto;
   flex: none;
 }
 
-/* THE EMPTY STATUS SLOT - the chip's 17px with nothing in it. A row with no
-   status still reserves the space, so the copy button beside it sits in one
-   column all the way down the listing instead of stepping sideways on every
-   row that happens to be unchanged. */
+/* Reserves the chip's width so the copy buttons stay in one column. */
 .baud-phone-file-slot {
   flex: none;
   width: 17px;
@@ -868,22 +677,12 @@ body {
   border-radius: var(--baud-radius);
   font-size: 0.6rem;
   font-weight: 700;
-  /* 15px, not 17: the border is inside the box under border-box, and the
-     letter has to sit between the two edges rather than on them. */
+  /* 15px, not 17: border-box puts the border inside the box. */
   line-height: 15px;
   text-align: center;
 }
 
-/* The folder's marker, drawn the way the wheel's pips are drawn rather than the
-   way the chip is: a box with a dot punched through the middle of it. The box
-   is the chip's 17px and that width is the entire reason it exists - dot and
-   letter then land in ONE right-hand column all the way down the level, so the
-   eye runs a single line asking "anything here?" and the chips stop stepping
-   sideways every time a folder sits between two files.
-
-   The dot itself is the non-colour half of the message, which is the job the
-   chip's letter does on a file row: a mark either sits at the end of the row or
-   it does not, and that reads without seeing amber at all. */
+/* The folder's marker: chip-width, so dot and letter share one column. */
 .baud-phone-file-dot {
   flex: none;
   width: 17px;
@@ -898,8 +697,6 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  /* currentColor, so the dot cannot drift off the name it belongs to - one
-     token sets both, the same way the chip's border takes the row's colour. */
   background: currentColor;
 }
 
@@ -911,8 +708,7 @@ body {
   white-space: nowrap;
 }
 
-/* Wrapped, not scrolled sideways: a phone has one axis worth using, and a diff
-   read with a horizontal scrollbar is a diff nobody reads. */
+/* Wrapped, not scrolled sideways: a phone has one axis worth using. */
 .baud-phone-text {
   margin: 0;
   padding: calc(var(--baud-pad) / 1.5);
@@ -988,11 +784,8 @@ body {
   line-height: 1.45;
 }
 
-/* ------------------------------------------------------- the verb lane -- */
-/* Deliberately NOT the read row's clothes. A read shows you something; a verb
-   changes the machine, so it is squarer, brighter and the destructive one is
-   the only red thing on the card. Refused chips stay visible and dim - the
-   whole doctrine of this phase is that a refusal is a state, not an absence. */
+/* Verbs change the machine, so they dress unlike reads. A refused chip stays
+   visible and dim: a refusal is a state, not an absence. */
 
 .baud-phone-verbs {
   display: flex;
@@ -1020,8 +813,7 @@ body {
   color: var(--baud-red);
 }
 
-/* Refused: readable, not gone. Never `disabled` - a disabled button on touch
-   has no hover, no title and no answer, so pressing it teaches nothing. */
+/* Refused, never `disabled`: a disabled button on touch teaches nothing. */
 .baud-phone-verb-refused {
   background: none;
   border-color: var(--baud-line);
@@ -1049,34 +841,23 @@ body {
   padding: 3px 7px;
 }
 
-/* THE LOCK'S POSITION, read (FPLAN-0585 row 3). Colour and border STYLE only -
-   no size, padding or width moves, because the header was tuned this afternoon
-   and a chip that changes box with the lock would shift the row it sits in.
-   A READ-scoped token may read the lock but not tap it, and sees the same faces:
-   `.baud-phone-lock` above already out-ranks `.baud-phone-verb-refused` by file
-   order, so the refused dashed look never reached this chip (measured in a
-   headless render) - the solid borders below only make that explicit. Before the
-   first answer none of these apply and the chip is exactly what it was. */
+/* Colour and border style only: a box change would shift the header row. */
 .baud-phone-lock-unlocked {
   border-style: solid;
   color: var(--baud-green);
 }
 
-/* Amber, not red: red on this face means dead or refused, and a locked laptop
-   is neither. One token to change if Patrick wants red. */
+/* Amber, not red: red means dead or refused, and a locked laptop is neither. */
 .baud-phone-lock-locked {
   border-style: solid;
   color: var(--baud-amber);
 }
 
-/* Could not tell - or could not ask. The wheel's dead-ring idiom: a dashed
-   outline says "a reading belongs here and there is none". */
+/* Unknown: the wheel's dashed dead-ring idiom. */
 .baud-phone-lock-unknown {
   border-style: dashed;
   color: var(--baud-ink-dim);
 }
-
-/* ----------------------------------------------------- asking me first -- */
 
 .baud-phone-confirm {
   margin: 8px 2px 0;
@@ -1115,7 +896,7 @@ body {
   border-radius: var(--baud-radius);
   font-family: inherit;
   font-size: 0.75rem;
-  /* 40px: this is the tap that cannot be taken back. Make it a deliberate one. */
+  /* 40px: this is the tap that cannot be taken back. */
   padding: 11px 12px;
 }
 
@@ -1131,22 +912,9 @@ body {
   color: var(--baud-red);
 }
 
-/* --------------------------------------------------- the terminal pane -- */
-/* A photograph of a screen, not a screen. Rendered at the ROOM's geometry and
-   scrolled sideways, because shrink-to-fit would lie about the layout the
-   agent is actually drawing. */
-
-/* The room doors: the desktop's launch set on a phone card. Sized and coloured
-   like verbs rather than like reads, because that is what they are - a door
-   that attaches a terminal and may type a command line into it.
-
-   NAMED `roomdoor`, NOT `door`, and that is a scar. The first cut called these
-   `.baud-phone-door` - which was ALREADY the token sign-in screen's class, a
-   full-viewport flex column. CSS does not collide loudly: my rule won the
-   properties it named and the sign-in screen's rule kept the rest, so every
-   room door button silently became `min-height: 100dvh` and the sign-in screen
-   picked up a button's padding. It shipped, and Patrick saw it. Class names in
-   this file are a flat namespace; check before adding one. */
+/* Room doors dress as verbs: they attach a terminal and may type into it.
+   Not `.baud-phone-door`, which is the sign-in screen: class names here are
+   one flat namespace, so check before adding one. */
 .baud-phone-roomdoors {
   display: flex;
   flex-wrap: wrap;
@@ -1177,12 +945,7 @@ body {
   flex-direction: column;
   height: 100%;
   background: var(--baud-bg);
-  /* THE VIEW-COLUMN CHIP SIZE, ONE NUMBER (Patrick 2026-08-20: "make them a
-     lil bit bigger maybe 20%" — 26px was the original thumb guess, this is
-     26 × 1.2). It is a variable rather than four literals because the column's
-     `top` is DERIVED from it: the fullscreen toggle sits at 4px and the stack
-     starts one chip plus one gap below it, so a hand-typed offset silently
-     overlaps the toggle the next time the chips resize. */
+  /* A variable because the view column's `top` is derived from it. */
   --baud-term-chip: 31px;
 }
 
@@ -1205,32 +968,22 @@ body {
   font-size: 0.68rem;
 }
 
-/* The screen takes what is left; the key bar and the field never scroll away,
-   because the reason you opened this is usually to press ^C. */
+/* The key bar and field never scroll away: you came here to press ^C. */
 .baud-phone-term-screen {
   flex: 1;
   min-height: 0;
-  /* HIDDEN, not auto. The repaint design scrolled a wide captured picture
-     sideways; a real client has no picture to scroll - FitAddon measures this
-     box and tells the room how many columns it actually has. A scrollbar here
-     would mean the client is lying about its own size. */
+  /* hidden: FitAddon sizes the room to this box; a scrollbar would be a lie. */
   overflow: hidden;
   padding: 4px;
-  /* Nothing bounces or chains out of the room's box either. */
   overscroll-behavior: none;
   background: var(--baud-bg);
 }
 
 .baud-phone-term-host {
-  /* Fills the box, and FitAddon reads the box. Vertical scrolling is xterm's
-     own, inside the viewport, because the scrollback is real now. */
   height: 100%;
   width: 100%;
-  /* THIS ELEMENT HANDLES ITS OWN TOUCHES. The pan is read here and paid out as
-     wheel notches to the room, so the browser must not also interpret it -
-     `preventDefault` alone is not enough, because a browser can claim a gesture
-     at touchstart before the first move is ever delivered. Taps still fire, so
-     focusing the terminal is unaffected. */
+  /* The pan is paid out as wheel notches. A browser can claim a gesture at
+     touchstart, so preventDefault alone is not enough. Taps still fire. */
   touch-action: none;
 }
 
@@ -1261,18 +1014,13 @@ body {
 .baud-phone-term-key:disabled,
 .baud-phone-term-field:disabled,
 .baud-phone-term-send:disabled {
-  /* Disabled, never hidden - and still legible, so it reads as "not from this
-     session" rather than as a dead button. */
+  /* Legible, so it reads as not-from-this-session rather than dead. */
   border-style: dashed;
   color: var(--baud-ink-faint);
   opacity: 1;
 }
 
-/* The selection row: copy and clear, shown only while the sel chip is armed.
-   What stood here was the probe's readout strip - dashed amber, six counters,
-   deliberately ugly because it existed to be read off a real S24 once and then
-   deleted. It has been. These two doors are not instruments: without them a
-   selection is text a thumb can highlight and never use. */
+/* Copy and clear, shown only while the sel chip is armed. */
 .baud-phone-term-selrow {
   margin: 0 calc(var(--baud-pad) / 1.5) 4px;
 }
@@ -1282,19 +1030,13 @@ body {
   gap: 6px;
 }
 
-/* Copy and clear, 20% up with the view chips (same ruling, same night).
-   SCOPED TO THIS ROW ON PURPOSE: they borrow `.baud-phone-term-key` from the
-   belt's key row, and the belt is eleven chips wide on a phone - growing that
-   class outright would push CTRL back into the border-bleed this file already
-   fixed once. Two classes beat one, so this wins wherever it sits. */
+/* Scoped to this row: the belt's key row is eleven chips wide and cannot grow. */
 .baud-phone-term-selrow-keys .baud-phone-term-key {
   font-size: 0.86rem;
   padding-block: 13px;
 }
 
-/* The copy result, and it wraps on purpose - it is written once, after the
-   tap, so it can never reflow under a live drag the way the old live readout
-   could. That is the whole reason the strip had a fixed-height clipped line. */
+/* Wraps: it is written once after the tap, never under a live drag. */
 .baud-phone-term-selnote {
   margin: 0 0 4px;
   color: var(--baud-amber);
@@ -1303,39 +1045,25 @@ body {
   word-break: break-word;
 }
 
-/* Armed is not a state the operator can be left guessing about: while it is
-   on, the room takes no taps at all. The toggle moved into the terminal's view
-   column on Patrick's placement, so the armed face moved with it - see
-   .baud-phone-term-viewbtn-armed. */
 .baud-phone-term-viewbtn-armed {
   border-color: var(--baud-amber);
   color: var(--baud-amber);
-  /* Full opacity and a glow: the view column sits at 0.75 so it stays out of
-     the way, and "out of the way" is the wrong volume for a mode that has
-     taken the room's taps away. An icon-only control cannot say ARMED in
-     words, so it has to say it in weight. */
+  /* Full opacity and glow: the view column is dimmed, and armed must not be. */
   opacity: 1;
   box-shadow: 0 0 6px var(--baud-glow-amber);
 }
 
-/* THE ONE SLOT (r8). One rectangle, two modes: the baud composer, or the armed
-   bar. Both are laid out by this row, so the belt's rhythm - the padding, the
-   gap, the distance from the key row above - is identical across the flip and
-   nothing under his thumb moves except the contents. */
+/* One slot, two modes (composer or armed bar), laid out by this row so
+   nothing under the thumb moves on the flip. */
 .baud-phone-term-input {
   display: flex;
-  /* Bottom-aligned so photo and send hold their size while the compose box
-     grows upward past one line - the messaging-app shape. */
+  /* Bottom-aligned: the compose box grows upward. */
   align-items: flex-end;
   gap: 6px;
   padding: 8px calc(var(--baud-pad) / 1.5) var(--baud-pad);
 }
 
-/* The way back onto the wire. Full width and directly under the sentence that
-   asks for it, because it is the answer to that sentence - and a thumb reaching
-   for it is usually reaching in a hurry, having just watched a send fail. It
-   is deliberately NOT styled as an error: a detached room is intact, and red
-   would say something untrue about it. */
+/* Not styled as an error: a detached room is intact. */
 .baud-phone-term-reattach {
   margin: 0 var(--baud-pad) 8px;
   padding: 10px;
@@ -1347,20 +1075,13 @@ body {
   font-size: 0.78rem;
 }
 
-/* The photo door sits LEFT of the line it writes into, in the input row rather
-   than the key bar: the key bar is for stopping things in a hurry, and this is
-   a compose action. */
 .baud-phone-term-photo {
   background: var(--baud-bg-card);
   border: 1px solid var(--baud-line-strong);
   border-radius: var(--baud-radius);
   color: var(--baud-ink);
-  /* ICON-ONLY, and a FIXED box. 40px wide against the word "photo"'s ~52 gives
-     the compose field the difference, and the width is stated rather than
-     grown from contents so nothing in this row can move while a photo uploads.
-     The 11px vertical padding is `send`'s, so the three controls sit on one
-     line with matching heights - the row reads as one control, not three
-     sizes. */
+  /* A fixed width so nothing moves while a photo uploads; send's padding, so
+     the row's heights match. */
   flex: none;
   width: 40px;
   padding: 11px 0;
@@ -1400,25 +1121,10 @@ body {
   font-family: inherit;
   font-size: 0.8rem;
   padding: 11px 10px;
-  /* A textarea now: long lines wrap and the box grows with them (the height
-     itself is scripted to fit the content). Five-ish lines, then it scrolls -
-     the terminal above is the centrepiece and keeps the rest. */
+  /* A textarea whose height is scripted to fit, up to the cap below. */
   resize: none;
   overflow-y: auto;
-  /* 8.6rem, up from 7.2 (r8), and the unit that matters is CHARACTERS VISIBLE
-     AT ONCE - which is what this cap is really for. Measured at 360px off this
-     stylesheet, not estimated:
-
-       before the merge   221px wide, ~23 chars a line, cap ~5.2 lines  ~120 ch
-       after, old cap     175px wide, ~17 chars a line, cap ~5.2 lines   ~89 ch
-       after, 8.6rem      175px wide, ~17 chars a line, cap ~6.6 lines  ~112 ch
-
-     The arm door beside it took 46px, so at the old cap the box would have
-     held a quarter less of his message than it did the day before - and this
-     box exists so that "what was typed ten words ago is still on screen".
-     The taller cap gives that back. It costs the terminal nothing except
-     while a long message is actually being composed, which is the one moment
-     the box is the thing being looked at rather than the room. */
+  /* The cap is about characters visible at once: ~112 at a 360px screen. */
   max-height: 8.6rem;
   line-height: 1.35;
 }
@@ -1433,31 +1139,17 @@ body {
   padding: 11px 16px;
 }
 
-/* ---------------------------------------------------------------- the wheel
-   The approved probe's numbers, kept literally: 76px cards, 52px avatars,
-   1.28/0.90 scale, .12s linear. Those were voted on by a thumb on a real S24,
-   so they are the specification and not a starting point. What changed is the
-   PALETTE - every hard-coded hex in the probe becomes its --baud-* token, so
-   the rail follows the same theme as the rest of the face instead of freezing
-   one night's colours into a second source of truth. */
+/* The wheel. The 1.28/0.90 scale and .12s linear are the approved spec, not
+   a starting point. */
 
 .baud-wheel-wrap {
-  /* The layer accent - green for every wheel of citizens, ember orange for the
-     apps layer. See `.baud-wheel-wrap-apps` below for why it lives here. */
+  /* The layer accent; `.baud-wheel-wrap-apps` overrides it. */
   --baud-wheel-accent: var(--baud-green);
   position: relative;
-  /* The vertical room moved INTO the rail below, where the scaled card needs
-     it - see .baud-wheel's padding. Net rail height is within 2px of what it
-     was, which matters: this box sits directly above the terminal and every
-     pixel here is a pixel of room the operator does not get. */
   padding: 0 0 2px;
   flex: 0 0 auto;
-  /* The wheel's DRAG SURFACE is this box, not just the rail inside it - so it
-     declares the same fence the rail does. `pan-x` hands the browser the
-     horizontal flick and refuses the vertical one, which is what leaves the
-     up/down swipe to be classified in FleetWheel. Matching the rail matters:
-     an ancestor with a laxer touch-action can hand a vertical drag started on
-     the padding to the page instead. */
+  /* The drag surface declares the rail's own fence: a laxer touch-action here
+     would hand a vertical drag on the padding to the page. */
   touch-action: pan-x;
 }
 
@@ -1469,41 +1161,16 @@ body {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  /* Half the viewport of dead space at each end, so the FIRST and LAST cards
-     can still reach the notch. Without it the fleet's edges are unselectable.
-     THE 32px IS HALF THE CARD and has to move whenever the card does - it did,
-     from 38 to 32 when the cards came down to 64px. Miss this and the snap
-     centre stops being the visual centre, which reads as a wheel that will not
-     quite settle.
-
-     THE VERTICAL PADDING IS NOT SYMMETRY, IT IS HEADROOM for the centre card,
-     and 5px of it was not enough (Patrick: "the agent cards get cut off, and
-     some words almost completely covered"). The centred card is
-     `transform: scale(1.28)`, and a transform does not change layout - the row
-     is still as tall as the UNSCALED card, so the scaled one renders about
-     10px past it at each end and `overflow-y: hidden` right here cuts whatever
-     lands outside. The bottom is where it showed, because that is where the
-     label is: the descenders of the selected agent's name were being sliced
-     off. 11px covers the overflow of a ~71px card at 1.28 with a hair spare.
-     RE-MEASURE THIS IF THE CARD OR THE SCALE CHANGES - they are one number in
-     two places, exactly like the 32px above. */
+  /* Half the viewport at each end so the edge cards reach the centre; 32px is
+     half the card. The vertical padding is headroom for the centre card's
+     scale(1.28), which overflow-y clips. RE-MEASURE BOTH IF THE CARD OR THE
+     SCALE CHANGES. */
   padding: 11px calc(50vw - 32px);
-  /* The rail's gesture fence, and the reason it can live above a terminal that
-     synthesises its own vertical touches. `pan-x` hands the browser the
-     horizontal flick and refuses the vertical one at the same time, so a
-     thumb that drifts while flicking never steals a line of scrollback.
-     `contain` on x stops an overscrolled flick becoming browser back-nav -
-     the same class of bug as the pull-to-refresh that ate the down-swipe. */
+  /* pan-x refuses vertical drags, so a drifting flick never steals scrollback;
+     contain on x stops an overscroll becoming back-nav. */
   touch-action: pan-x;
   overscroll-behavior-x: contain;
-  /* THE EDGES FADE, because the clipping is real and should look decided.
-     A rail wider than the screen always has a partial card at each end; before
-     this they were sliced mid-circle with half a badge hanging, which reads as
-     a layout accident rather than as more fleet over there. The fade says the
-     same thing the slice was trying to: keep going. 26px is about a third of a
-     card - enough to read as a fade, short enough that a peeking card is still
-     identifiable as a card you can flick to. Purely visual: it changes no
-     geometry, no scroll extent and no hit target. */
+  /* The edges fade so a partial card's clip reads as decided. Visual only. */
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0,
@@ -1525,9 +1192,6 @@ body {
 }
 
 .baud-wheel-card {
-  /* Tighter on Patrick's "cards a bit smaller", with the wheel FEEL untouched:
-     the 1.28-to-0.90 scale and the .12s linear are the part he approved, and
-     they are unchanged - only the box they act on got smaller. */
   flex: 0 0 64px;
   scroll-snap-align: center;
   display: flex;
@@ -1553,18 +1217,12 @@ body {
   font-family: inherit;
   font-size: 0.9rem;
   font-weight: 700;
-  /* The card is the tap target, not this - the delegated listener reads the
-     card's data-name, so the button must not swallow the event. */
+  /* The card is the tap target: the delegated listener reads its data-name. */
   pointer-events: none;
 }
 
-/* THE WHEEL'S ACCENT, in one property so a layer switch is one move.
-   Green is the fleet's colour and every agent wheel keeps it exactly; the apps
-   layer takes ember orange, which is deliberately hotter and redder than the
-   amber the badges and M-chips use so an accent and a status can never trade
-   places at a glance. Set on the wrap, read by the notch, the pips and the
-   centred card's ring - the three things that say WHERE you are. The default
-   sits on `.baud-wheel-wrap` itself, further up this file. */
+/* Ember is hotter than the status amber, so accent and status never trade
+   places. The default sits on `.baud-wheel-wrap`. */
 .baud-wheel-wrap-apps {
   --baud-wheel-accent: var(--baud-apps);
 }
@@ -1581,14 +1239,11 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  /* Punched out of the page, not the avatar, so the dot reads as a lamp
-     sitting on top rather than a notch cut into the circle. */
+  /* Punched out of the page, so the dot reads as a lamp on top. */
   border: 2px solid var(--baud-bg);
 }
 
-/* The dot speaks the desktop lamp's three words (Patrick, live: a collapsed
-   green dot made a churning dispatch look like someone at the wheel). Same
-   colors, same pulse, same reduced-motion fallback as theme.css's lamp. */
+/* The desktop lamp's three states, pulse and reduced-motion fallback. */
 .baud-wheel-dot-live {
   background: var(--baud-green);
   box-shadow: 0 0 5px 1px var(--baud-glow-green);
@@ -1610,25 +1265,9 @@ body {
   }
 }
 
-/* EVERYTHING WAITING ON THIS AGENT, not just the mail the class is named for:
-   unread and opened mail, active plans, todos, and changed files once the slow
-   git lane has reached the branch (FleetWheel's `waiting`). The name stays
-   because renaming a class across a stylesheet is churn, and this is the same
-   badge in the same corner - only the arithmetic behind it grew.
-
-   IT IS A TWO-TO-THREE DIGIT BADGE NOW, which is what the two rules at the
-   bottom are for. The width is free: `right` is pinned and the box grows
-   leftward over the avatar, so "99+" spends its extra pixels inside a 44px
-   circle and never reaches the card's 64px edge. The HEIGHT is not free, and
-   that is why the badge came down from -5px: the rail clips at 11px of
-   headroom, the centred card is drawn at scale 1.28, and a badge hung 5px
-   above a ~61px card lands about 15px above it once scaled - four of them past
-   the clip. That was survivable while the badge was the occasional unread
-   message; with four counts behind it nearly every card wears one, so a
-   clipped badge would become the normal look. -2px brings it inside the
-   headroom the rail already has, without asking the terminal for a single row.
-   RE-MEASURE THIS IF THE CARD, THE SCALE OR THAT PADDING CHANGES - it is the
-   same one number in the same two places the rail's own note warns about. */
+/* Everything waiting on this agent (FleetWheel's `waiting`), not just mail.
+   top -2px keeps the scaled badge inside the rail's 11px headroom; re-measure
+   if the card, the scale or that padding changes. */
 .baud-wheel-mail {
   position: absolute;
   top: -2px;
@@ -1650,10 +1289,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* The SECOND clipper, and it would have survived the rail's new headroom.
-     `overflow: hidden` is here for the ellipsis, and it clips vertically too -
-     at the default `line-height: normal` a box this size leaves a descender
-     touching its own bottom edge. 1.4 gives the p in devpulse somewhere to go. */
+  /* overflow: hidden clips descenders too; 1.4 gives them room. */
   line-height: 1.4;
 }
 
@@ -1661,31 +1297,10 @@ body {
   color: var(--baud-ink);
 }
 
-/* THE NOTCH IS GONE (Patrick, 2026-08-21): *"remove the little arrow at the
-   bottom that points to the card - we don't need that arrow, because when I
-   hold a card it just lights up anyway. So that arrow is basically real estate
-   we don't need."*
-
-   He is right, and the file already proves it: `.baud-wheel-center` gives the
-   centred card an accent border, a 14px glow and brighter name ink, on agents
-   and app cards alike. Two marks were answering one question, and the quieter
-   one was costing 8px of vertical on a face where the terminal is fighting for
-   every row.
-
-   WHAT THE NOTCH WAS FOR is worth keeping written down, because it was not
-   decoration: it "names the centre as a PLACE, so the fleet has a current agent
-   rather than just a scrolled list". That job is unchanged and still done - by
-   the glow, which says the same thing louder and for free. */
-
-/* ------------------------------------------------------------ app cards --
-   The fourth layer's cards (DPLAN-0303). SQUARES, because one glance has to
-   separate a surface from a citizen without reading a word - same rail, same
-   snap, same notch, same name underneath, different shape. */
+/* App cards are squares, so a surface and a citizen separate at a glance. */
 .baud-wheel-avatar-app {
   border-radius: 11px;
   color: var(--baud-apps);
-  /* Three or four characters where an agent wears two initials, so the mark
-     comes down to fit the same 44px box. */
   font-size: 0.55rem;
   letter-spacing: 1px;
 }
@@ -1694,16 +1309,12 @@ body {
   box-shadow: 0 0 14px color-mix(in srgb, var(--baud-apps) 30%, transparent);
 }
 
-/* The badge is the same badge in the layer's own colour - a count of changed
-   files is not an alert, and amber here would put the dispatch colour on a
-   card that has nothing to do with an agent. */
+/* The layer's colour: a count of changed files is not an alert. */
 .baud-wheel-mail-app {
   background: var(--baud-apps);
 }
 
-/* The link-card's tell: a corner arrow means this one does not open a sheet,
-   it LEAVES for a web home. Door-cards wear nothing, which is why the mark is
-   on the card that navigates away rather than on the one that does not. */
+/* The arrow marks a link-card: it leaves for a web home, not a sheet. */
 .baud-wheel-out {
   position: absolute;
   top: -6px;
@@ -1713,20 +1324,9 @@ body {
   line-height: 1;
 }
 
-/* ------------------------------------------------------- monitor faces --
-   FPLAN-0561 row 3, Patrick's ruling A (2026-09-12): the monitor cards carry
-   their live headline, with the mark shrunk to a caption under it. A GAUGE card
-   - one whose reading has a range of its own - also wears a ring: the track in
-   the line colour, the value traced clockwise from top centre as a percent of
-   THAT range. NET and PROC have no range and draw no ring, because a number
-   with no scale must not wear one. An absent reading is a dash with a dead ring.
-
-   THE RING IS INSIDE THE BORDER, NOT OUTSIDE IT AS THE MOCK DREW IT. The rail's
-   11px of vertical headroom (see `.baud-wheel`) is already ~10px spent by the
-   centred card's scale(1.28) - anything drawn past the box's own edge on the
-   centred card, which is the card being read, is cut by the rail's
-   overflow-y. Inside the border it cannot clip, and the centred card keeps its
-   accent border and glow, which a ring on top of the border would have covered. */
+/* Monitor faces: a live headline, the mark as caption. A gauge card wears a
+   ring; NET and PROC have no range and must not. The ring sits inside the
+   border: past the scaled centre card's edge, the rail clips. */
 .baud-wheel-avatar-face {
   flex-direction: column;
   gap: 1px;
@@ -1747,13 +1347,11 @@ body {
   font-weight: 600;
 }
 
-/* A dash is not a number, so it does not get the number's ink. */
 .baud-wheel-face-absent {
   color: var(--baud-ink-faint);
 }
 
-/* Six characters or more ("999KB/s", "3.6krpm") overran the box at the normal
-   size - rendered and measured, not guessed - so a long face steps down. */
+/* Six characters or more overrun the box, so a long face steps down. */
 .baud-wheel-face-long {
   font-size: 0.64rem;
 }
@@ -1769,8 +1367,7 @@ body {
   line-height: 1;
 }
 
-/* The padding box of a 44px card with a 2px border is 40px, and the ring's
-   40-unit viewBox is drawn edge to edge inside it. */
+/* A 44px card with a 2px border pads to 40px; the 40-unit viewBox fills it. */
 .baud-wheel-ring {
   position: absolute;
   top: 0;
@@ -1790,8 +1387,7 @@ body {
   stroke: var(--baud-green);
 }
 
-/* Warm and hot are the TEMPERATURE's alone - the only reading that publishes a
-   line to be warm against. See TEMP_WARM_FRACTION in lib/machine.ts. */
+/* Warm and hot are temperature's alone; see TEMP_WARM_FRACTION, lib/machine.ts. */
 .baud-wheel-ring-warm .baud-wheel-ring-value {
   stroke: var(--baud-amber);
 }
@@ -1800,21 +1396,14 @@ body {
   stroke: var(--baud-red);
 }
 
-/* DASHED, not merely dim. The mock's 35% track could not be told from no ring
-   at all once rendered, and the difference is the whole message: a dashed ring
-   says "a gauge belongs here and has no reading", where a NET or PROC card with
-   no ring says "this reading has no range". Dash lengths are in pathLength
-   units (100 round the card). */
+/* Dashed, not dim: a gauge with no reading, distinct from no ring at all.
+   Dash lengths are pathLength units (100 round the card). */
 .baud-wheel-ring-dead .baud-wheel-ring-track {
   stroke: var(--baud-ink-faint);
   stroke-dasharray: 2 3;
 }
 
-/* --------------------------------------------------------- machine sheet --
-   What a monitor card opens to (FPLAN-0561 row 3): a headline, the section's
-   values as label/value rows, and the honest line - the skill's own sentence,
-   in the quiet voice rather than the error one, because an absent sensor is a
-   fact about this machine and not a failure of the face. */
+/* The machine sheet. An absent sensor is a fact, so its line is quiet. */
 .baud-machine {
   display: flex;
   flex-direction: column;
@@ -1902,9 +1491,7 @@ body {
   font-size: 0.64rem;
 }
 
-/* THE CPU PAGE'S CORES (FPLAN-0586 row 2). One bar per ONLINE CPU the skill
-   lists, filled in the ring's own green on the line-coloured track - the
-   monitor's colour idiom. The fill is an SVG width attribute, not a style. */
+/* CPU cores: one bar per online CPU; the fill is an SVG width attribute. */
 .baud-machine-bars {
   display: flex;
   flex-direction: column;
@@ -1944,14 +1531,12 @@ body {
   text-align: right;
 }
 
-/* What the machine has, in words: threads, cores, and the clock. */
 .baud-machine-counts {
   margin: 0;
   color: var(--baud-ink-dim);
   font-size: 0.72rem;
 }
 
-/* The line that makes a row readable without knowing the jargon. */
 .baud-machine-caption {
   margin: 0;
   color: var(--baud-ink-faint);
@@ -1959,15 +1544,8 @@ body {
   line-height: 1.4;
 }
 
-/* ------------------------------------------------------- stacked wheels --
-   A vertical flick on the rail changes which agents it holds. Everything
-   here is an OVERLAY on the wrap: the rail's own box is untouched, which is
-   the whole point of the round - the phone was out of room, so the filter
-   costs no height. */
+/* Stacked wheels: everything here overlays the wrap and costs no height. */
 
-/* The standing answer to "which wheel is this". Pinned to the rail's right
-   edge, small enough to read as a scrollbar's cousin rather than a control -
-   nothing here is tappable, the gesture is the only way through the stack. */
 .baud-wheel-stack {
   position: absolute;
   top: 50%;
@@ -1975,14 +1553,11 @@ body {
   transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  /* No gap: the padding on each pip's hit box is the spacing, so the dots stay
-     3px apart while the THUMB TARGETS touch each other and the column is one
-     continuous strip of reachable control. */
+  /* No gap: each pip's padding is the spacing, so the thumb targets touch. */
 }
 
-/* The dot is 4px; the button is 22px wide and 10px tall around it. A 4px tap
-   target is a decoration, and this one has a job now - it is the way off a
-   wheel whose gesture the browser ate. */
+/* 22x10 around a 4px dot: the pips are the way off a wheel whose gesture
+   the browser ate. */
 .baud-wheel-pip {
   width: 22px;
   height: 10px;
@@ -2006,18 +1581,8 @@ body {
   background: var(--baud-wheel-accent);
 }
 
-/* The momentary answer. Centred over the rail so it lands where the eye
-   already is mid-flick, then fades - it names the wheel you just arrived at
-   and gets out of the way of the cards it is sitting on.
-
-   The LOOK is the approved mock's, kept literally (design/git_mock_20260817:
-   Patrick put the two flashes side by side and ruled the mock's "much much
-   improved"). A bordered pill rather than a whisper of dim ink: the border and
-   the letters both take --baud-wheel-accent, so the pill arrives wearing the
-   colour of the layer you landed on - green on the agent wheels, ember on the
-   apps layer - and it recolours with the notch and the pips for free. The
-   backdrop is near-opaque so the word never has to compete with the card it
-   is sitting on top of. */
+/* The pill wears the layer accent; near-opaque so the name never competes
+   with the card beneath. */
 .baud-wheel-flash {
   position: absolute;
   top: 50%;
@@ -2037,10 +1602,8 @@ body {
   animation: baud-wheel-fade 1.1s ease-out forwards;
 }
 
-/* The mock's timing: a .22s fade in, the name simply STANDS there for the
-   second you are asking the question, a .22s fade out. Percentages of
-   FLASH_MS (1.1s, FleetWheel.tsx) - that timer is what unmounts the pill, so
-   the last frame here has to be the invisible one. */
+/* Percentages of FLASH_MS (1.1s, FleetWheel.tsx), which unmounts the pill,
+   so the last frame must be the invisible one. */
 @keyframes baud-wheel-fade {
   0% {
     opacity: 0;
@@ -2056,7 +1619,6 @@ body {
   }
 }
 
-/* Said out loud, in the rail, where the cards would have been. */
 .baud-wheel-empty {
   position: absolute;
   top: 50%;
@@ -2068,23 +1630,12 @@ body {
   pointer-events: none;
 }
 
-/* Holds the rail's height open when a wheel has nobody on it. Invisible, not
-   absent: `visibility` keeps the box, and the box is the entire job. */
+/* visibility, not display: the kept box holds the rail's height. */
 .baud-wheel-ghost {
   visibility: hidden;
 }
 
-/* THE REFUSAL LOST ITS AMBER. Patrick, on the first build that showed it:
-   "a strange warning??" - and he was right to ask. Amber is this app's
-   dispatch colour and its alarm colour, and a lane that simply has not
-   shipped yet is neither. The honesty stays in the words and in the
-   detail line under them (`.baud-wheel-empty-why`, DPLAN-0414 - it used to
-   be a long-press title, which touch never shows); only the volume came
-   down. */
-
-/* Where a foreign agent lives, under its name on the cross-project wheels.
-   Sized well under the name so the card still reads name-first - this is the
-   answer to "wait, which project is that", not a second title. */
+/* A foreign agent's home project, sized well under its name. */
 .baud-wheel-home {
   font-size: 0.46rem;
   letter-spacing: 0.04em;
@@ -2096,8 +1647,6 @@ body {
   opacity: 0.8;
 }
 
-/* The card's own version of the same sentence, said in full because the sheet
-   is the screen where the operator asked for detail. */
 .baud-agent-away {
   margin: 6px 0 0;
   padding: 6px 8px;
@@ -2107,11 +1656,6 @@ body {
   font-size: 0.68rem;
   line-height: 1.35;
 }
-
-/* ------------------------------------------------------ the current agent
-   Not in the probe, which had a whole terminal underneath to carry the
-   centred name. On the fleet screen the rail would otherwise sit over empty
-   space, and the notch would point at a card whose summary you cannot read. */
 
 .baud-phone-current {
   padding: 10px 14px;
@@ -2152,8 +1696,6 @@ body {
   margin-top: 6px;
 }
 
-/* -------------------------------------------------------- the expanded card */
-
 .baud-agent-scrim {
   position: fixed;
   inset: 0;
@@ -2176,27 +1718,18 @@ body {
   padding: 18px;
 }
 
-/* THE HEADER ROW (08-17): the name takes the width, the two icon chips take the
-   corner. Centred rather than top-aligned so the small ink sits on the name's
-   own line instead of hanging above it. */
 .baud-agent-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* The chips' 40px boxes are mostly padding, and padding that pushed the name
-     down the card or held the gear a thumb's width in from the corner would be
-     the tap target showing through as layout. So the row reclaims that overhang
-     into the card's own 18px padding: the name lands where it always did and
-     the gear's circle sits level with the content edge, while both boxes still
-     measure a full 40px in every direction. */
+  /* Pulls the chips' padding into the card's own, so the hit boxes stay 40px
+     without moving the name or the gear. */
   margin: -8px -6px 0;
 }
 
 .baud-agent-name {
   display: block;
-  /* Takes the row - the chips beside it are `flex: none`. `min-width: 0` so a
-     long branch name wraps within its own share rather than shouldering the
-     corner off the card. */
+  /* min-width: 0 so a long name wraps in its share, not off the card. */
   flex: 1 1 auto;
   min-width: 0;
   background: none;
@@ -2209,16 +1742,8 @@ body {
   text-align: left;
 }
 
-/* THE HEADER CHIPS - the desk's two quiet circles (theme.css:766 and :796),
-   grown for a thumb. A 40px box with nothing drawn on it holding a 28px circle
-   is what "small icon, finger-sized target" actually looks like: the whole box
-   takes the tap, only the circle takes the ink.
-
-   NO NEGATIVE MARGIN BETWEEN THEM. Twenty pixels of air between two small
-   circles is more than the desk leaves, and that is the point - these are two
-   unrelated doors, one of which can be refused while the other is not, and a
-   pair sitting shoulder to shoulder would read as one segmented control. The
-   gap is also the eight pixels that keep a thumb aimed at `?` off the gear. */
+/* A 40px hit box around a 28px circle. No negative margin between the two:
+   they are unrelated doors, and the gap keeps a thumb aimed at `?` off the gear. */
 .baud-agent-chip {
   flex: none;
   width: 40px;
@@ -2245,10 +1770,7 @@ body {
   font-weight: 700;
 }
 
-/* The card's own refusal idiom, worn by the ink and not the hit box: dashed and
-   dimmed but still fully drawn, because "you may not, and here is why" must not
-   read as "this is broken". The why rides the title for a pointer and the
-   sentence above the doors for a thumb. */
+/* Refused: dashed and dim but fully drawn; a refusal must not read as broken. */
 .baud-agent-chip:disabled .baud-agent-chip-face {
   border-style: dashed;
   border-color: var(--baud-line);
@@ -2293,9 +1815,7 @@ body {
   letter-spacing: 1px;
 }
 
-/* THE MAIL TILE'S FIGURE IS WORDS (DPLAN-0414 A#3): "3 new · 1 opened" where
-   the other tiles hold one number. It takes a wider share of the row and a
-   smaller face, and may wrap at its spaces rather than spill into GIT. */
+/* The mail tile's figure is words, so it takes a wider share and may wrap. */
 .baud-agent-stat-words {
   flex: 2;
 }
@@ -2329,8 +1849,7 @@ body {
   color: var(--baud-green);
 }
 
-/* A refused door stays legible and keeps its title - the reason is the point.
-   Dimming it to unreadable would turn "you may not" into "this is broken". */
+/* Refused doors stay legible: the reason is the point. */
 .baud-agent-door:disabled {
   border-style: dashed;
   border-color: var(--baud-line);
@@ -2338,10 +1857,6 @@ body {
   opacity: 1;
 }
 
-/* THE DOOR ZONES (compass #291). The card grew past the point where one flat
-   row of doors reads as a list: the main doors are what you do with an agent,
-   the manager doors belong to a class, and the passport is a different KIND of
-   thing entirely. A label and a gap say so for the price of one line each. */
 .baud-agent-zone {
   margin-top: 14px;
 }
@@ -2353,7 +1868,6 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* The only door in its zone takes the whole row - it is alone, not louder. */
 .baud-agent-door-wide {
   flex: 1 1 100%;
 }
@@ -2365,10 +1879,7 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* ------------------------------------------------------ the persistent stage
-   FPLAN-0424. The rail and the terminal are on screen together permanently, so
-   the shell owns exactly one screen and nothing below it scrolls the page: the
-   stage takes whatever height is left and the room fills the stage. */
+/* The persistent stage: the shell owns one screen and nothing scrolls the page. */
 
 .baud-phone {
   height: 100vh;
@@ -2376,8 +1887,6 @@ body {
   overflow: hidden;
 }
 
-/* The stage's tab row - one thin line, shown only when panes exist. Chips are
-   pane doors; the ✕ is the close that works for all three kinds. */
 .baud-phone-panes {
   display: flex;
   gap: 4px;
@@ -2431,12 +1940,8 @@ body {
   position: relative;
 }
 
-/* One live pane. ALL open panes are mounted and stacked; only the active one
-   paints. `visibility`, NEVER display:none - a display:none pane measures
-   0x0, FitAddon would propose garbage, and through `window-size smallest`
-   a pane nobody is looking at would SHRINK THE SHARED ROOM under the desk.
-   Hidden-by-visibility keeps the real geometry, so background panes stay
-   byte-for-byte quiet on the wire. */
+/* Every open pane stays mounted; only the active one paints. visibility, NEVER
+   display:none: a 0x0 pane makes FitAddon shrink the shared room under the desk. */
 .baud-phone-pane {
   position: absolute;
   inset: 0;
@@ -2453,10 +1958,8 @@ body {
   min-height: 0;
 }
 
-/* A file tab hosts the Reader INSIDE the stage. It is the same component
-   that rides fixed/fullscreen when a card read opens it - in a pane, the
-   pane's box is its world: absolute within the pane, no viewport min-height,
-   and no safe-area pad on a header that no longer touches the screen top. */
+/* A file tab hosts the Reader inside the pane: absolute, no viewport height,
+   no safe-area pad. */
 .baud-phone-pane .baud-phone-reader {
   position: absolute;
   inset: 0;
@@ -2495,11 +1998,7 @@ body {
   max-width: 30ch;
 }
 
-/* ---------------------------------------------------- reads sit ON TOP now
-   Not a destination. These were full-screen routes reached by an early return,
-   which unmounted the terminal and closed the room's socket - under a
-   persistent rail that would make "observing never requires detaching" false
-   through the most-used door on the face. */
+/* Reads sit on top: routing away would unmount the terminal and close its socket. */
 
 .baud-phone-reader,
 .baud-phone-feed {
@@ -2509,34 +2008,11 @@ body {
   overflow-y: auto;
 }
 
-/* ------------------------------------------------- the keyboard compaction
-   THE ONE PLACE THE PERSISTENT LAYOUT GIVES. A rail, a room, the chips and a
-   soft keyboard do not fit; the terminal is the centrepiece and is what the
-   typing is aimed at, so the rail compacts instead. It does NOT leave - hiding
-   it is the state that was just revoked, and a keyboard is not a reason to
-   re-introduce it. Card WIDTH is untouched on purpose: change that and the snap
-   geometry moves, and the centred card would drift under the operator's thumb
-   the moment the keyboard opened. */
+/* While typing, the rail compacts but stays. Card WIDTH is untouched: it is
+   the snap geometry. */
 
-/* THE CARDS DO NOT SHRINK ANY MORE (Patrick, 2026-08-21: *"I'm thinking we
-   keep the larger size only"*). What stood here shrank every avatar to 30px
-   and set font-size 0.7rem with it, and it carried a bug the whole time: app
-   cards deliberately use 0.55rem so a four- or five-letter mark fits the 44px
-   box, and `.baud-phone-typing .baud-wheel-avatar` is two classes to their
-   one - so it WON, and typing gave app cards a BIGGER font in a SMALLER box.
-   That is the "text bleeds out of the boxes" he reported, and it could only
-   ever hit the app layer: an agent wearing two initials survives the squeeze,
-   FILES and TEMP do not. The rule was written when this rail held agents only
-   and never met the layer that came later.
-
-   Deleting the size change fixes the bleed and the complaint in one move, and
-   costs nothing structural - card WIDTH was already untouched here on purpose
-   (see the note above), so the snap geometry never depended on the height.
-
-   THE VERTICAL SAVING IS STILL TAKEN, just not out of the cards: names, the
-   current line and the footer still go while the keyboard is up. That was the
-   real point of compacting - the terminal is the centrepiece and must not
-   shrink - and it survives without touching the one thing he has to aim at. */
+/* Cards keep their size while typing (a shrink once overrode the app cards'
+   small font); the names, current line and foot go instead. */
 .baud-phone-typing .baud-wheel-name,
 .baud-phone-typing .baud-phone-current,
 .baud-phone-typing .baud-phone-foot {
@@ -2547,20 +2023,7 @@ body {
   padding: 4px 0 0;
 }
 
-/* ------------------------------------------------- FPLAN-0425 fine-tune ----
-   Standing chrome down to wheel + terminal. Everything below either costs no
-   row at all or replaces something that did. */
-
-/* WHERE THE SPLIT-NAMING WENT. The strip's sentence - "the room below stays
-   attached to X" - died with the strip, but the fact cannot: browsing away from
-   an attached room with nothing acknowledging it reads as a flick that failed
-   to switch. An amber ring, deliberately NOT the centred card's green: those
-   are two different questions ("which card am I looking at" vs "which room is
-   below"), and answering both in one colour would make the wheel say less, not
-   more. The two marks stack on the same card when they agree. */
-/* GREEN, not amber (Patrick, 08-16): amber is the dispatch word now, and the
-   seated agent wearing it read as wrong status. The ring and the card's
-   "open below" line mean the same thing, so they wear the same green. */
+/* The card whose room is attached below: green, like its open-below line. */
 .baud-wheel-attached .baud-wheel-avatar {
   outline: 2px solid var(--baud-green);
   outline-offset: 3px;
@@ -2572,11 +2035,7 @@ body {
   margin-bottom: 10px;
 }
 
-/* The sub-agent count, on the state line's family rather than in the counter
-   row - see the reasoning where it is rendered. Quiet at zero, because a
-   stated zero is there to remove an ambiguity, not to be read every time;
-   RED-family when it is not, matching the wheel disc that is pulsing about the
-   same fact on the screen behind this sheet. One indicator, one colour. */
+/* Quiet at zero; red when live, matching the wheel disc that pulses for it. */
 .baud-agent-subagents {
   color: var(--baud-ink-faint);
   font-size: 0.65rem;
@@ -2592,11 +2051,8 @@ body {
   color: var(--baud-amber);
 }
 
-/* --------------------------------------------------------- the passport --
-   The desk's document at 46 columns. It sits HIGHER and TALLER than the agent
-   sheet on purpose: that sheet is a menu you act from and dismiss in seconds,
-   this is a document you read, and a document that stops at 76vh with four
-   memory tabs inside it spends its life being scrolled in a letterbox. */
+/* The passport sits higher and taller than the agent sheet: it is a document
+   to read, not a menu to dismiss. */
 .baud-pass-scrim {
   position: fixed;
   inset: 0;
@@ -2620,8 +2076,7 @@ body {
   overflow: hidden;
 }
 
-/* The title block does not scroll away - on a real passport the issuer and the
-   holder are the page you are always looking at. */
+/* The title block does not scroll away. */
 .baud-pass-title {
   position: relative;
   padding: 14px 16px 12px;
@@ -2636,10 +2091,6 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* THE DOCUMENT'S OWN NAME IS THE BIG LINE NOW. It sat under the holder's name
-   in both size and colour while the name lived in this block; with the name
-   moved down to the holder, what a passport prints largest at the top is what
-   the document IS. */
 .baud-pass-type {
   margin: 3px 0 0;
   font-size: 0.95rem;
@@ -2647,16 +2098,11 @@ body {
   color: var(--baud-ink);
 }
 
-/* THE HOLDER'S NAME LEFT THIS BLOCK (compass #291) and went where a passport
-   prints it - beside the photo, in `.baud-pass-holder-name` below. It was in
-   both places, which is the one thing this round exists to stop. */
-
 .baud-pass-close {
   position: absolute;
   top: 8px;
   right: 8px;
-  /* A finger target, not a glyph target - the ✕ is small and everything around
-     it is a document nobody wants to mis-tap. */
+  /* A finger target around a small glyph. */
   min-width: 34px;
   min-height: 34px;
   background: none;
@@ -2672,17 +2118,13 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
-/* THE HOLDER PAGE - photo, name, class, in the one row a passport gives them.
-   The pages and their headings are gone with the contents they organised: a
-   document with one page needs no page furniture. */
 .baud-pass-holder {
   display: flex;
   align-items: center;
   gap: 14px;
 }
 
-/* The wheel's avatar at document scale - the same disc, the same two letters,
-   so the thing tapped and the thing opened are visibly the same agent. */
+/* The wheel's avatar at document scale: visibly the same agent. */
 .baud-pass-photo {
   flex: 0 0 auto;
   width: 58px;
@@ -2713,16 +2155,11 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* FIELDS STACK. A two-column grid would leave a Purpose sentence about thirty
-   characters of width; label-over-value gives it the whole card and prints the
-   way a real passport field prints. */
+/* Fields stack: a grid would leave a Purpose sentence thirty characters. */
 .baud-pass-fields {
   margin: 16px 0 0;
 }
 
-/* THE ONE ROW WHERE TWO FACTS SHARE A LINE - issued and the number, exactly as
-   a real passport prints them. Both are short by nature; stacking them would
-   spend two rows saying almost nothing. */
 .baud-pass-fieldrow {
   display: flex;
   gap: 16px;
@@ -2733,10 +2170,7 @@ body {
   margin-top: 8px;
 }
 
-/* AFTER the stacking rule above, on purpose: the two share a specificity, so
-   the one that wins is the one that comes last. Side by side means side by
-   side - the second field must not inherit the stack's top margin and sit a
-   line lower than the first. */
+/* AFTER the stacking rule: same specificity, so order decides. */
 .baud-pass-fieldrow .baud-pass-field {
   flex: 1;
   margin-top: 0;
@@ -2762,8 +2196,6 @@ body {
   color: var(--baud-green);
 }
 
-/* A field that arrived as a LIST rather than a sentence - @devpulse's traits.
-   Bulleted, because six sentences run together read as one long one. */
 .baud-pass-field-list {
   margin: 2px 0 0;
   padding-left: 15px;
@@ -2781,8 +2213,7 @@ body {
   color: var(--baud-ink-dim);
 }
 
-/* The host's own sentence about a read it refused. Amber, not red: this is a
-   fence answering correctly, not a fault. */
+/* Amber, not red: a fence answering correctly is not a fault. */
 .baud-pass-refusal {
   margin: 0 0 10px;
   padding: 6px 8px;
@@ -2793,17 +2224,13 @@ body {
   line-height: 1.35;
 }
 
-/* THE STAMPS. Rotated, because a stamp is pressed by a hand and not laid out
-   by a grid - and slightly transparent, because ink soaks into paper. Blue is
-   the class stamp (the wheel's own manager colour); gold is the admin grant,
-   which is the rarer thing and looks it. */
+/* Blue is the class stamp, gold the admin grant. */
 .baud-pass-stamps {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   margin-top: 20px;
-  /* The rotation overhangs its box; without this the row's own scroll box
-     would clip the corner of a stamp at the card's edge. */
+  /* The rotation overhangs its box; this keeps a stamp's corner unclipped. */
   padding: 4px 2px;
 }
 
@@ -2824,8 +2251,6 @@ body {
   transform: rotate(4deg);
 }
 
-/* THE ONE DOOR A DOCUMENT MAY HAVE. Full width and quiet - it is a reference
-   to the records behind the passport, not an action taken on an agent. */
 .baud-pass-docdoor {
   margin-top: 22px;
 }
@@ -2850,21 +2275,14 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* ------------------------------------------------------ the working memory --
-   The four tabs that used to be pages of the passport (compass #291), on the
-   reader shell - full height, one `‹ back`, sticky head - because four tabs of
-   thousand-character summaries is a reading surface and this face reads on
-   screens. The classes are the passport's old ones renamed to where they now
-   live: a rule called `baud-pass-tab` inside a memory screen is how the next
-   round loses an hour. */
+/* Working memory: the passport's old tabs on the reader shell. The classes are
+   named for where they live now, never `baud-pass-*`. */
 .baud-mem-body {
   padding: calc(var(--baud-pad) / 1.5);
   padding-bottom: calc(var(--baud-pad) * 2);
 }
 
-/* The tabs scroll sideways rather than wrapping to two rows - four labels do
-   not fit at 46 columns, and a tab strip that changes height as you pick
-   through it moves the screen under the reader's thumb. */
+/* Tabs scroll sideways: a strip that wraps changes height under the thumb. */
 .baud-mem-tabs {
   display: flex;
   gap: 6px;
@@ -2904,9 +2322,7 @@ body {
   gap: 10px;
 }
 
-/* CARDS, not ruled rows (the approved mock): an entry is a thing with edges,
-   and THE WHOLE CARD IS THE TAP TARGET - a "more" link would be a 20px word
-   inside a paragraph on a surface driven by a thumb. */
+/* The whole card is the tap target; a "more" link is too small for a thumb. */
 .baud-mem-entry {
   display: block;
   width: 100%;
@@ -2932,8 +2348,6 @@ body {
   font-weight: 500;
 }
 
-/* A learning's headline, which is its own field in every `key_learnings` array
-   in the fleet. It is the line that makes the tab scannable. */
 .baud-mem-entry-key {
   display: block;
   margin-top: 4px;
@@ -2952,8 +2366,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Six lines is about a phone-thumb of reading - enough to know whether this is
-   the entry you were looking for, short enough that four of them still scan. */
+/* Six lines: enough to recognise an entry, short enough that four still scan. */
 .baud-mem-clamp {
   display: -webkit-box;
   -webkit-line-clamp: 6;
@@ -2987,13 +2400,7 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* -------------------------------------------------- the birth certificate --
-   ONE FILE IN THE FLEET IS A DOCUMENT, and it is drawn as one (mock 08-17).
-   It rides INSIDE the reader shell rather than getting a screen of its own:
-   it is reached by tapping a file in the artifacts browse like any other, so
-   it keeps that browse's `‹ back` and its header - what changes is what is
-   under them, text or document. Everything here is centred, because a
-   certificate is the one document that is. */
+/* The birth certificate, drawn inside the reader shell so it keeps its back. */
 .baud-cert-body {
   padding: calc(var(--baud-pad) / 1.5);
   padding-bottom: calc(var(--baud-pad) * 2 + env(safe-area-inset-bottom, 0px));
@@ -3007,9 +2414,6 @@ body {
   border-radius: 14px;
 }
 
-/* THE DOUBLE RULE. A border and an outline offset from it - two lines round a
-   page is the oldest signal in print for "certificate", and the 10px of panel
-   between them is the mount the inner frame sits on. */
 .baud-cert-inner {
   padding: 24px 14px;
   border: 1px double var(--baud-line-strong);
@@ -3048,10 +2452,7 @@ body {
   margin-top: 10px;
 }
 
-/* THE HOLDER, at the size a certificate prints the name it certifies - the
-   biggest thing on the page, in the same green the passport's holder and the
-   wheel's disc use for the same agent. `anywhere` because a branch name is not
-   guaranteed to be short and a phone is 46 columns wide. */
+/* `anywhere`: a branch name is not guaranteed to be short. */
 .baud-cert-name {
   margin: 8px 0 0;
   font-size: 1.3rem;
@@ -3074,10 +2475,8 @@ body {
   color: var(--baud-ink);
 }
 
-/* THE PROVENANCE ROW - creator, template, rarity. CENTRED AND WRAPPING, not a
-   three-column grid: half the fleet's certificates carry no `template`, so the
-   row is built from the cells that exist and a grid would leave a hole where
-   the missing one was. */
+/* Wrapping, not a grid: many certificates carry no template, and a grid
+   would leave a hole. */
 .baud-cert-row {
   display: flex;
   flex-wrap: wrap;
@@ -3099,10 +2498,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* THE SEAL, and it is the passport's gold stamp seen up close - same amber,
-   same rotation, same soaked-into-paper opacity, because it is the same fact:
-   a signed privileges block on this certificate. It renders ONLY for a real
-   grant; most of the fleet has none and nothing takes its place. */
 .baud-cert-seal {
   max-width: 240px;
   margin: 22px auto 0;
@@ -3127,9 +2522,7 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* THE SIGNATURE, under a torn-off line. The hash is printed WHOLE and wrapped -
-   dim and small because it is not for reading, present in full because a
-   signature shortened for looks stops being evidence. */
+/* The hash is printed whole: a shortened signature stops being evidence. */
 .baud-cert-sig {
   margin-top: 26px;
   padding-top: 14px;
@@ -3158,20 +2551,14 @@ body {
   word-break: break-all;
 }
 
-/* News, not steady state - so this row exists only while something is
-   happening and costs nothing the rest of the time. */
 .baud-phone-term-status {
   color: var(--baud-ink-faint);
   font-size: 0.68rem;
   padding: 3px 10px 0;
 }
 
-/* ------------------------------------------------------------- fullscreen --
-   A CLASS ON THE MOUNTED NODE. Not a portal, not a re-render into a different
-   parent, not a second component - the section, its xterm and its WebSocket are
-   the same objects before and after. This sheet is keyed by room and unmounting
-   it closes the socket, so any implementation that moved the node would have
-   cost Patrick the room every time he pressed it. */
+/* Fullscreen is a class on the mounted node: unmounting this sheet closes
+   the room's socket, so the node must never move. */
 .baud-phone-term-full {
   position: fixed;
   inset: 0;
@@ -3185,16 +2572,8 @@ body {
   position: relative;
 }
 
-/* ------------------------------------------------------- the corpse frame --
-   A detached room goes on showing its last frame, because that is all a
-   terminal emulator can do once the bytes stop - and for one evening that
-   frame was indistinguishable from a live room. This is the correction, and
-   it sits ON the picture that lies rather than in a line above it.
-
-   z-index 2 is chosen, not arbitrary: above the grid, BELOW the view column
-   and the fullscreen toggle (both 3), so zoom and fullscreen keep working on
-   a detached room - reading the last frame is exactly when somebody wants to
-   make it bigger. */
+/* A detached room's last frame, veiled so it cannot pass for live. z-index 2:
+   below the view column and the fullscreen toggle (3), which still work. */
 .baud-phone-term-dead {
   position: absolute;
   inset: 0;
@@ -3206,15 +2585,12 @@ body {
   gap: 8px;
   padding: var(--baud-pad);
   text-align: center;
-  /* The house scrim, one step thinner than the card's (93%): the stale frame
-     stays readable underneath on purpose. It is the last true thing the room
-     said - it just is not now. */
+  /* Thinner than the card's scrim: the stale frame stays readable. */
   background: color-mix(in srgb, var(--baud-bg) 86%, transparent);
   backdrop-filter: blur(1px);
 }
 
-/* The word itself. Amber because this is a state the operator must act on to
-   leave, not an error - nothing broke and nothing was lost. */
+/* Amber: a state to act on, not an error. */
 .baud-phone-term-dead-word {
   color: var(--baud-amber);
   font-size: 0.82rem;
@@ -3229,8 +2605,6 @@ body {
   max-width: 30ch;
 }
 
-/* In the overlay the button is centred by the flex column and owes nothing to
-   the sheet's horizontal rhythm, so it drops the margins it needs above. */
 .baud-phone-term-dead .baud-phone-term-reattach {
   margin: 0;
   padding: 10px 18px;
@@ -3258,27 +2632,9 @@ body {
   opacity: 0.75;
 }
 
-/* SEVEN controls in one row on a phone (eleven until 2026-08-20, when the four
-   arrows moved to the terminal's view column - Patrick: *"it's a little
-   squashed"*, and it was). They still earn their width rather than being padded
-   to it: the whole point of the move is that the survivors get the slack, which
-   `flex: 1 1 auto` hands them automatically. Height is what a thumb actually
-   needs and is unchanged.
-
-   AND THEY EARN IT FROM THEIR CONTENT, which is the fix for CTRL bleeding its
-   border (Patrick's screenshot). `flex: 1` is `flex: 1 1 0%` - every slot gets
-   an IDENTICAL width no matter what is in it, so a row of one- and two-glyph
-   chips sets the width and the only four-letter label in it overflows. With
-   `min-width: 0` it could shrink below its own text, and with no overflow rule
-   the text simply drew past the border.
-
-   `flex: 1 1 auto` starts each slot at its own content width and shares the
-   slack equally, so CTRL gets the ~32px it needs and the arrows give up a few
-   they never used. `min-width: min-content` is the guarantee rather than the
-   mechanism: it makes shrinking below the text impossible even if the row gets
-   tighter than today. Clipping with `overflow: hidden` was the other option and
-   would have shipped a chip reading CTR - a control that lies about which key
-   it sends is worse than one that is a few pixels wide. */
+/* Keys start at their content width and share the slack; min-content stops
+   CTRL shrinking below its label and bleeding its border. Clipping would
+   show CTR, a key that lies. */
 .baud-phone-term-keys {
   gap: 4px;
 }
@@ -3286,8 +2642,7 @@ body {
 .baud-phone-term-key {
   flex: 1 1 auto;
   min-width: min-content;
-  /* nowrap: without it a squeezed CTRL wraps to two lines and takes the whole
-     belt's height with it - the row sits above the terminal. */
+  /* nowrap: a wrapped CTRL doubles the belt's height. */
   white-space: nowrap;
   padding-inline: 3px;
   font-size: 0.72rem;
@@ -3297,23 +2652,16 @@ body {
   color: var(--baud-ink-dim);
 }
 
-/* ------------------------------------------------------------ settings -- */
-/* The desktop's two settings panels, mounted as-is (08-16). Their scrim and
-   rows ride theme.css untouched; the ONE thing a phone must add is a height
-   fence - the memory dials run taller than any phone (they were the bottom of
-   the interface panel then and are a section of their own now, which changed
-   nothing about their height), and a clipped panel strands the save button
-   past the bottom edge. The panel scrolls; the scrim never does. */
+/* The desktop's settings panels, mounted as-is. The phone adds a height fence
+   so the save button is never stranded below the edge. */
 .baud-phone .baud-settings-panel {
   max-height: calc(100vh - 24px);
   max-height: calc(100dvh - 24px); /* the visual viewport - see .baud-phone */
   overflow-y: auto;
 }
 
-/* ------------------------------------------------------- sticky keys -- */
-/* DPLAN-0301: the Termux-model chip row. The stickies wear their state on
-   their face - latched and locked MUST read differently at a glance, because
-   a forgotten lock eats every following keystroke. */
+/* Sticky keys: latched and locked must read differently, because a forgotten
+   lock eats every following keystroke. */
 .baud-phone-term-sticky {
   color: var(--baud-ink-dim);
   text-transform: uppercase;
@@ -3330,8 +2678,7 @@ body {
   color: var(--baud-green);
 }
 
-/* Locked: staying down. Same ink plus a glow and an underline pin - the
-   "this will keep happening" face. */
+/* Locked: staying down. */
 .baud-phone-term-sticky-locked {
   background: var(--baud-bg-card-live);
   border-color: var(--baud-green);
@@ -3340,20 +2687,16 @@ body {
   text-decoration: underline;
 }
 
-/* Every chip: no text selection, no long-press callout - the hold lane is
-   ours (HoldButton), not the OS's. */
+/* The hold lane is ours (HoldButton): no selection, no long-press callout. */
 .baud-phone-term-key {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-/* The view column: fullscreen toggle up top (its own rule), zoom stacked
-   beneath - Patrick's placement. On the screen, costing zero rows. */
 .baud-phone-term-viewcol {
   position: absolute;
-  /* Below the toggle, derived not typed: toggle top (4px) + one chip + the
-     column's own gap (4px). See --baud-term-chip. */
+  /* Derived, not typed: toggle top (4px) + one chip + the gap. */
   top: calc(8px + var(--baud-term-chip));
   right: 6px;
   z-index: 3;
@@ -3368,12 +2711,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* HALF THE PANEL COLOUR, not a solid (Patrick 2026-09-13: *"sometimes I
-     can't read the words behind them... it is just a little annoying. Let's
-     see if we can just reduce that... 50%"*). The element opacity below fades
-     glyph and box together, so it was left alone and the fill was cut on its
-     own: the mark stays as legible as before, the room shows through the box.
-     The arrows ride the same fill at their own opacity (next rule). */
+  /* Half the panel colour, so the room shows through; the glyph keeps its opacity. */
   background: color-mix(in srgb, var(--baud-bg-panel) 50%, transparent);
   border: 1px solid var(--baud-line);
   border-radius: 6px;
@@ -3384,36 +2722,19 @@ body {
   opacity: 0.75;
 }
 
-/* The arrows in the view column (Patrick's placement - see CHIPS_ARROWS).
-   Two differences from their neighbours, both because these are pressed and
-   the others are set-and-forget:
-
-   - a full-size glyph. "A+" is a label you read once; an arrow is a TARGET,
-     and 0.74rem draws a mark smaller than the box it has to be aimed at.
-   - less transparency. The column sits at 0.75 so it stays out of the way of
-     the room underneath, which is right for controls touched twice a session
-     and wrong for the ones walking a menu row by row. */
+/* Arrows are pressed, not set and forgotten: a full-size glyph, less fade. */
 .baud-phone-term-arrowbtn {
   font-size: 1rem;
   opacity: 0.9;
 }
 
-/* A breath between the two families - view controls above, byte-writers
-   below. Selects exactly the first arrow (the one that follows a non-arrow
-   view chip), so re-ordering the column cannot strand the gap in the middle
-   of the arrows. */
+/* A gap before the first arrow only, so reordering cannot strand it. */
 .baud-phone-term-viewbtn:not(.baud-phone-term-arrowbtn) + .baud-phone-term-arrowbtn {
   margin-top: 8px;
 }
 
-/* ------------------------------------------------------- the takeout --
-   FPLAN-0641: the links panel, and the selected text when a copy cannot be
-   confirmed. An OVERLAY on the screen, never a row: the belt does not grow,
-   FitAddon has nothing to re-measure, and a live selection is not dropped by a
-   resize. z-index 4 is chosen, not arbitrary - above the view column and the
-   fullscreen toggle (both 3) and the corpse frame (2), because while it is open
-   it is the only thing on the screen meant to be touched. Its own close button
-   is the way back. */
+/* The takeout is an overlay, never a row, so FitAddon never re-measures and a
+   selection survives. z-index 4: above the view column (3) and the corpse (2). */
 .baud-phone-term-takeout {
   position: absolute;
   inset: 0;
@@ -3444,8 +2765,6 @@ body {
   text-transform: uppercase;
 }
 
-/* What the lane said, or why the list is empty. Amber like the selrow note:
-   it is the operator's only way to know what a tap did. */
 .baud-phone-term-takeout-note {
   margin: 0;
   color: var(--baud-amber);
@@ -3471,10 +2790,7 @@ body {
   border-bottom: 1px solid var(--baud-line);
 }
 
-/* The text to copy by hand. Selectable said out loud, because this field is
-   the one place Android's long-press Copy has to work. The whole URL, wrapped,
-   never cut: a link that is a third of itself is the bug this panel exists
-   for. */
+/* Selectable for Android's long-press Copy; the whole URL, wrapped, never cut. */
 .baud-phone-term-takeout-field {
   width: 100%;
   box-sizing: border-box;
@@ -3492,7 +2808,6 @@ body {
   -webkit-user-select: text;
 }
 
-/* A selection can be long; it takes the panel's height and scrolls itself. */
 .baud-phone-term-takeout-text {
   flex: 1;
   min-height: 6rem;
@@ -3503,8 +2818,6 @@ body {
   gap: 6px;
 }
 
-/* Open is an anchor and copy is a button; both wear this so they read as one
-   pair. Sized for a thumb, like the selrow's copy and clear. */
 .baud-phone-term-takeout-key {
   flex: 1;
   display: flex;
@@ -3526,25 +2839,12 @@ body {
   color: var(--baud-ink-dim);
 }
 
-/* THE ARMED BAR - what the one slot becomes in typing mode (r8).
-
-   It was door C's own permanent row above the belt (round 4). Patrick ruled
-   that row away at 00:39 - "I dont need 2 comment boxes" - so the bar moved
-   INTO the compose row and fills it: same rectangle, same rhythm, same
-   radius as the field it replaces. Occupying the composer's footprint rather
-   than sitting above it is the safety property, not the tidiness one: there
-   is no second surface on screen to mis-aim at while this one is live.
-
-   LOUD, and the loudness is the point rather than decoration. Every keystroke
-   is leaving this face for a real program, and an operator who is unsure where
-   his keys are going is the entire bug this plan was opened for. */
+/* The armed bar takes the composer's slot: no second surface to mis-aim at
+   while it is live. Loud, because every keystroke leaves for a real program. */
 .baud-phone-term-typebar {
-  /* Fills the slot the composer had - the whole width inside the row's own
-     padding, so the belt keeps its rhythm across the mode change. */
   flex: 1;
   min-width: 0;
-  /* 11px is `send`'s and the field's, so the slot is the same height in both
-     modes and the belt does not jump under his thumb when he arms it. */
+  /* send's padding, so the slot height holds across the mode change. */
   padding: 11px 10px;
   border: 1px solid var(--baud-line-strong);
   border-radius: var(--baud-radius);
@@ -3554,8 +2854,7 @@ body {
   line-height: 1.35;
   letter-spacing: 0.02em;
   text-align: center;
-  /* The tap belongs to this bar, not to the OS: no double-tap delay, no
-     long-press text selection eating the gesture. */
+  /* The tap belongs to this bar: no double-tap delay, no long-press selection. */
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
@@ -3570,29 +2869,9 @@ body {
   color: var(--baud-amber);
 }
 
-/* THE DOOR INTO ARMED MODE, and the only thing the merge added to this row.
-
-   A WORD, NOT A GLYPH. It carried `⌨ room` for one build and the keyboard
-   glyph cost 18 of the 40 pixels; the word alone is also the stricter reading
-   of Patrick's rule, which is that a mode states itself in words. Nothing is
-   lost by dropping it: the title carries the whole sentence, and the tap it
-   opens replaces this row with a sentence.
-
-   40px EXACTLY - the paperclip's box, chosen so the two doors on the left of
-   the field are one shape and so this row's geometry is STATED rather than
-   grown from its contents. Nothing here may move while a photo uploads or the
-   field grows past a line; that is the paperclip's own rule and this control
-   is subject to it for the same reason.
-
-   THE WIDTH IS THE WHOLE COST OF THE MERGE and it was measured, not estimated:
-   360px viewport, the compose field goes 221px -> 175px, about 23 characters
-   a line down to 17. What it buys is 32px of belt - the belt goes 143px to
-   111px with the box empty, roughly two terminal rows, permanently. The field
-   below gets a taller max-height to pay for the extra wrapping; see it.
-
-   QUIET. Dim ink, the card's own background, no accent. Armed is where the
-   colour lives; a door that shouts before it has been opened would compete
-   with the room for a thumb's attention. */
+/* The door into armed mode: a word, because a mode states itself in words.
+   40px exactly, the photo door's box, so nothing in this row moves. Quiet:
+   armed is where the colour lives. */
 .baud-phone-term-arm {
   flex: none;
   width: 40px;
@@ -3611,27 +2890,19 @@ body {
 }
 
 .baud-phone-term-arm:disabled {
-  /* Read-only room: still legible, so it reads as "not from this session"
-     rather than as a dead button - the rule every disabled control in this
-     belt follows. */
+  /* Read-only room: legible, not dead. */
   border-style: dashed;
   color: var(--baud-ink-faint);
   opacity: 1;
 }
 
-/* The room slides under the keyboard rather than shrinking - the transform is
-   set by the visualViewport effect, and the transition is what makes it read
-   as the room moving instead of the picture jumping. */
+/* Slides under the keyboard; the visualViewport effect sets the transform. */
 .baud-phone-term-host {
   transition: transform 140ms ease-out;
 }
 
-/* The typing probe's readout - armed only, and temporary by design. Small,
-   dim and on its own line so it never competes with the bar's own word. */
-
-/* The belt: key row + compose bar as one strip. The visualViewport effect
-   lifts it above the soft keyboard by transform; the background is opaque
-   because when lifted it rides OVER the terminal's bottom rows. */
+/* Lifted above the soft keyboard by transform; opaque because it rides over
+   the terminal's bottom rows. */
 .baud-phone-term-belt {
   background: var(--baud-bg);
   will-change: transform;
@@ -3639,21 +2910,9 @@ body {
   z-index: 4;
 }
 
-/* The chip row's own field: the only door a soft keyboard has into the room,
-   and it opens onto BAUD rather than onto the pty (FPLAN-0446 round 3).
-
-   INVISIBLE, NEVER ABSENT. `display:none` and `visibility:hidden` both make an
-   element unfocusable, and focus is the entire mechanism - so this is a real,
-   rendered, one-pixel field that simply cannot be seen. `pointer-events: none`
-   means no thumb can ever land on it: the only way in is arming a modifier,
-   which is the stated intent this door exists to serve.
-
-   Absolutely positioned so gaining it costs the row no height, and anchored
-   inside the belt so focusing it never scrolls the page to somewhere else.
-
-   16px because a smaller font on a focused input makes some mobile browsers
-   zoom the whole page. Nothing is drawn at that size - the box is one pixel -
-   but the browser reads the number before it decides. */
+/* The soft keyboard's door into BAUD, not the pty. Invisible, never absent:
+   display or visibility would make it unfocusable. Only arming a modifier
+   focuses it. 16px, or mobile browsers zoom the page on focus. */
 .baud-phone-term-proxy {
   position: absolute;
   left: 0;
@@ -3671,29 +2930,15 @@ body {
   pointer-events: none;
 }
 
-/* --------------------------------------------------- passport marks (A) */
-/* The wheel's avatars gain the two marks the desktop card gained, from the
-   same fleet payload and on the same rulings. Nothing here is phone-specific
-   except the size it is drawn at. */
-
-/* Manager: BLUE-family, Patrick's explicit ruling that it must not be red.
-   Red is the alarm colour; owning a project is not an alarm. */
+/* Manager: blue, never red; owning a project is not an alarm. */
 .baud-wheel-avatar-manager {
   border-color: var(--baud-blue);
   color: var(--baud-blue);
   box-shadow: inset 0 0 0 1px var(--baud-glow-blue);
 }
 
-/* Sub-agents running inside the session: red-family, and it flashes, because
-   this one IS news - a session doing work nothing else on screen reports.
-
-   THE DISC FILLS, rather than growing a halo. Patrick caught the first version
-   on the desktop - "no flash just a solid red" - and the cause was not a
-   stalled animation but an invisible one: a 35%-alpha glow cannot be seen
-   against a border and initials that are already solid red. The phone's
-   avatar is 44px, even more steady colour than the desk's 26px, so it had the
-   same fault waiting for the first phone session with sub-agents in it. Fixed
-   on both faces together, because they are one indicator wearing two sizes. */
+/* Sub-agents running: the disc fills and flashes, because a glow alone is
+   invisible against solid red. */
 .baud-wheel-avatar-busy {
   border-color: var(--baud-red);
   color: var(--baud-red);
@@ -3714,9 +2959,7 @@ body {
   }
 }
 
-/* Motion off, STATE kept - the same bargain the lamps make, and kept in the
-   readable form: the disc stays filled rather than falling back to a halo
-   nobody can see. */
+/* Reduced motion keeps the filled disc, not an invisible halo. */
 @media (prefers-reduced-motion: reduce) {
   .baud-wheel-avatar-busy {
     animation: none;
@@ -3726,11 +2969,8 @@ body {
   }
 }
 
-/* ------------------------------------------------- the phone's settings (D) */
-/* The gear's first screen. Everything in it wears the shared `baud-settings-*`
-   furniture from theme.css - the two panels must be one object to a thumb - so
-   the only thing that needs a rule of its own is the door DOWN to the desk's
-   panel, which is a row-shaped button no other face has. */
+/* The phone's settings wear theme.css's shared `baud-settings-*`; only the
+   door down to the desk's panel needs rules of its own. */
 
 .baud-phone-settings-door {
   display: flex;
@@ -3749,15 +2989,10 @@ body {
   cursor: pointer;
 }
 
-/* The label inside the door is the panel's own uppercase label, so it lines up
-   with the rows below it rather than reading as a heading of its own. */
 .baud-phone-settings-door .baud-settings-label {
   width: 104px;
 }
 
-/* What is behind the door, in the operator's words - a door that only says
-   "interface" makes you open it to find out whether it holds what you came
-   for, which on a phone costs a tap and a reorientation. */
 .baud-phone-settings-doorwords {
   flex: 1;
   min-width: 0;
@@ -3772,24 +3007,14 @@ body {
   font-size: 13px;
 }
 
-/* ------------------------------------- the reorganized layout (08-17) -- */
-/* Four doors at home, one screen behind each, and a back control on every one
-   of them - Patrick's approved layout. The doors above were already the right
-   object; all this level adds is the back chip sized for an 11px head, a value
-   cell wide enough for an address, and the destructive face for sign out. */
-
-/* The head grew a third child (back · title · ✕) and `space-between` lays out
-   three as happily as two. The chip is the face's own `‹ back`, taken down to
-   the head's own scale - the reader's roomier one would tower over an 11px
-   title. */
+/* Back sized to the head's 11px title. */
 .baud-phone-settings-panel .baud-phone-back {
   flex: none;
   padding: 3px 7px;
   font-size: 9px;
 }
 
-/* The title sits between them, so it takes the squeeze rather than pushing a
-   control off the row. */
+/* The title takes the squeeze, never a control. */
 .baud-phone-settings-panel .baud-settings-title {
   flex: 1;
   min-width: 0;
@@ -3799,9 +3024,7 @@ body {
   white-space: nowrap;
 }
 
-/* A READ-ONLY value, which the shared `baud-settings-readout` cannot be: that
-   one is 42px for a number ("10s"), and a server address is a whole URL. Same
-   ink, same size, all the room the row has. */
+/* Not `baud-settings-readout`, which is 42px for a number; this is a URL. */
 .baud-phone-settings-value {
   flex: 1;
   min-width: 0;
@@ -3811,9 +3034,7 @@ body {
   word-break: break-all;
 }
 
-/* Sign out wears the door shape (it is a row you tap) in the alarm colour -
-   the one control in settings that takes something away should not look like
-   the four that take you somewhere. */
+/* Sign out takes something away, so it wears the alarm colour. */
 .baud-phone-settings-door-danger {
   border-color: var(--baud-red);
   color: var(--baud-red);
@@ -3823,22 +3044,8 @@ body {
   color: var(--baud-red);
 }
 
-/* ------------------------------------------------------------- the git app --
-   DPLAN-0303, the mock approved on 08-17. Five screens that share the reader's
-   shell (full height, sticky head, one back chip) and add a vocabulary of their
-   own: a row of doors, a grouped file list, and a patch.
-
-   THE ACCENT IS THE WHEEL'S. Ember orange marks every surface reached through
-   the apps layer, so arriving from an orange card lands on an orange screen -
-   one colour, one stack, one story.
-
-   AND IT STAYS THE APP'S WHEREVER THE APP IS REACHED FROM. Since 08-17 the
-   agent card's GIT tile opens these same screens at branch grain, so orange is
-   now reachable from a green wheel. That is deliberate: the colour marks THIS
-   SCREEN'S vocabulary, not the corridor walked to it, and a second palette for
-   the same list would say the card's changes and the repo's changes are two
-   different kinds of thing. They are one list asked at two scopes, and the
-   grain line - not the colour - is what says which. */
+/* The git app. Ember marks this screen's vocabulary wherever it is reached
+   from; the grain line, not the colour, says which scope. */
 
 .baud-git {
   --baud-git-accent: var(--baud-apps);
@@ -3849,8 +3056,6 @@ body {
   font-weight: 600;
 }
 
-/* WHAT WAS MEASURED, said before anything that was measured. Faint and small:
-   it is a caption on the screen, not a heading of its own. */
 .baud-git-grain {
   margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
   color: var(--baud-ink-faint);
@@ -3864,8 +3069,6 @@ body {
   font-size: 0.66rem;
   line-height: 1.6;
 }
-
-/* ---- the app's own doors ---- */
 
 .baud-git-rows {
   display: flex;
@@ -3901,7 +3104,6 @@ body {
   font-weight: 500;
 }
 
-/* The second line: what this door actually opens, in the quiet voice. */
 .baud-git-row-label span {
   display: block;
   margin-top: 2px;
@@ -3909,7 +3111,6 @@ body {
   font-size: 0.68rem;
 }
 
-/* The count, in the accent - it belongs to the app, not to the alert palette. */
 .baud-git-row-n {
   flex: none;
   color: var(--baud-git-accent);
@@ -3923,12 +3124,7 @@ body {
   font-size: 0.8rem;
 }
 
-/* ---- the rows that LEAVE (DPLAN-0303 phase 4) ----
-   Same card as the doors above, because they belong to the same list and a
-   second shape would say they are a different kind of thing. What tells them
-   apart is the ↗ where the other rows carry a ›: one means another floor of
-   this app, the other means a browser tab. They are anchors in the markup, so
-   they only need the underline taking off and the row's own colour keeping. */
+/* Rows that leave for a browser tab: the same card, with ↗ instead of ›. */
 
 .baud-git-link {
   text-decoration: none;
@@ -3939,17 +3135,12 @@ body {
   font-style: normal;
 }
 
-/* THE QUIET WORD BESIDE A FACT - a redaction the server performed, never a
-   thing to alarm about, and never left unsaid either. */
 .baud-git-quiet {
   color: var(--baud-ink-faint);
   font-style: normal;
 }
 
-/* WHERE THE LINKS WOULD HAVE BEEN, when there are none. Holds the server's own
-   sentence, and it is deliberately NOT the red error box: a repository with no
-   remote has answered the question, it has not failed to. Inset to the card's
-   own text so the sentence lines up with the rows it stands in for. */
+/* Not the red error box: a repository with no remote has answered. */
 .baud-git-said {
   margin: 2px 0 0;
   padding: 0 13px;
@@ -3964,8 +3155,6 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* ---- the file list, shared by the changes screen and a commit ---- */
-
 .baud-git-groups {
   display: flex;
   flex-direction: column;
@@ -3977,8 +3166,6 @@ body {
   margin-top: var(--baud-gap);
 }
 
-/* The heading carries the part every row below it shares. Dashed underneath so
-   it reads as a divider rather than as another row. */
 .baud-git-grouphead {
   margin: 0 0 6px;
   padding: 0 2px 6px;
@@ -4009,9 +3196,7 @@ body {
   background: var(--baud-bg-card-live);
 }
 
-/* THE ROW CARRIES THE COLOUR AND THE CHIP BORROWS IT. `currentColor` on the
-   chip's border is what makes one class per status enough: the letter, its box
-   and (where it matters) the filename all follow the row's own ink. */
+/* currentColor on the chip's border: one class per status is enough. */
 .baud-git-file-M {
   color: var(--baud-amber);
 }
@@ -4024,8 +3209,7 @@ body {
   color: var(--baud-red);
 }
 
-/* Untracked is green because it is new and DIM because git has never seen it -
-   the one status that is not yet part of the repository's story. */
+/* Untracked: green because new, dim because git has never seen it. */
 .baud-git-file-U {
   color: var(--baud-untracked);
 }
@@ -4038,23 +3222,18 @@ body {
   border-radius: var(--baud-radius);
   font-size: 0.6rem;
   font-weight: 700;
-  /* 15px, not 17: the border is inside the box under border-box, and the letter
-     has to sit between the two edges rather than on them. */
+  /* 15px, not 17: border-box puts the border inside the box. */
   line-height: 15px;
   text-align: center;
 }
 
-/* THE PATH BREAKS RATHER THAN ELLIPSES. A changed file's name is the whole
-   point of the row and the TAIL is the part that identifies it, so a long path
-   wraps onto a second line instead of hiding the filename behind a `…`. */
+/* The path wraps rather than ellipses: the tail identifies the file. */
 .baud-git-path {
   flex: 1;
   min-width: 0;
   word-break: break-all;
 }
 
-/* The directory dim, the filename bright: the eye lands on the name and the
-   path is there when it is wanted. */
 .baud-git-path i {
   font-style: normal;
   color: var(--baud-ink-faint);
@@ -4065,8 +3244,6 @@ body {
   color: var(--baud-ink);
 }
 
-/* Gone, and struck through where it used to be - absence you can see, the same
-   idiom the files browser uses for a deleted row. */
 .baud-git-file-D .baud-git-path b {
   color: var(--baud-red);
   text-decoration: line-through;
@@ -4090,8 +3267,6 @@ body {
   color: var(--baud-red);
   margin-left: 4px;
 }
-
-/* ---- commits ---- */
 
 .baud-git-commits {
   display: flex;
@@ -4124,10 +3299,7 @@ body {
   font-size: 0.72rem;
 }
 
-/* TWO LINES, NOT ONE. A commit subject in this fleet is a sentence, and one
-   line of it at this width is "feat(fleet):" and nothing else - which tells the
-   operator which commit it is NOT. Two lines is where a subject starts being
-   recognisable, and the whole message is one tap away. */
+/* Two lines: one line of a subject at this width is just its prefix. */
 .baud-git-subject {
   flex: 1;
   min-width: 0;
@@ -4147,8 +3319,6 @@ body {
   line-height: 1.5;
 }
 
-/* The commit body as it was written - wrapped, never scrolled sideways,
-   because prose with a horizontal scrollbar is prose nobody reads. */
 .baud-git-message {
   margin: 8px calc(var(--baud-pad) / 1.5) 0;
   color: var(--baud-ink-dim);
@@ -4157,8 +3327,6 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-/* ---- one file's patch ---- */
 
 .baud-git-difhead {
   margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
@@ -4186,26 +3354,10 @@ body {
   font-size: 0.68rem;
 }
 
-/* THE PATCH WRAPS, AND THE PAGE IS WHAT SCROLLS (Patrick, 08-17, on his own
-   phone: no wrapping and "there is no scroll up or down").
-
-   THIS BOX MUST NOT CARRY AN `overflow` OF ITS OWN, and that is the whole bug
-   rather than a style preference. `.baud-phone-reader` is a fixed, full-height
-   COLUMN FLEX container, so its height is definite and its children shrink to
-   fit it - and a flex item's automatic minimum size, the thing that normally
-   stops that shrink at the content's own height, applies ONLY while its
-   overflow is `visible`. The old `overflow-x: auto` took that floor away, and
-   measured at 412px wide the result was exact: an 8000px patch was squeezed
-   into the screen's leftover height, `overflow-y: hidden` clipped the rest, and
-   because the item had absorbed every pixel of the excess the reader's own
-   scroll height stayed equal to one screen - so there was nothing to scroll, on
-   either axis, exactly as reported. Overflow visible here hands the height back
-   to the reader, whose `overflow-y: auto` is the scroll the finger expects.
-
-   THE LIBRARY'S PALETTE IS DRIVEN FROM HERE. It exposes every colour as a
-   `--diff-*` custom property, so retheming it is setting variables rather than
-   fighting its selectors - and there is not one literal colour below, exactly
-   as everywhere else in this file. */
+/* NO `overflow` ON THIS BOX. In the reader's flex column, any overflow but
+   visible drops the item's automatic min size and squeezes the patch to one
+   screen with nothing to scroll; the page is what scrolls. The library's
+   palette is driven through its `--diff-*` properties. */
 .baud-git-diff {
   margin: 12px calc(var(--baud-pad) / 1.5) 0;
   padding: 8px 0;
@@ -4226,13 +3378,8 @@ body {
   --diff-omit-gutter-line-color: var(--baud-line-strong);
 }
 
-/* `table-layout: fixed` plus `width: 100%` is the library's own rule, and it is
-   LOAD-BEARING FOR THE WRAP: a table sizes to its content by default, so a
-   single long line makes the table wider than the phone and the cell never
-   wraps at all. Fixed layout takes the column widths from the `<col>`s above
-   the content instead, which is what leaves the code cell no choice but to fold
-   inside the width it was given. Wrapping the cell without this changes
-   nothing. */
+/* Fixed layout is load-bearing for the wrap: an auto table grows to its
+   longest line and the cell never wraps. */
 .baud-git-diff .diff {
   table-layout: fixed;
   width: 100%;
@@ -4243,20 +3390,14 @@ body {
   line-height: 1.5;
 }
 
-/* FOLDED, NOT CUT OFF. `pre-wrap` keeps a patch's leading indentation - which
-   is half of what a diff line means - while allowing the break; `break-all` is
-   what makes it fold mid-token, and code at ~40 columns is mostly one long
-   token (a path, an import, a call chain) with nowhere polite to break. */
+/* pre-wrap keeps the indentation; break-all folds long tokens. */
 .baud-git-diff .diff-code {
   white-space: pre-wrap;
   word-break: break-all;
   padding: 0 8px 0 6px;
 }
 
-/* Not a link and not selectable: on a phone the gutter is a ruler, and a
-   tappable line number is a tap target that does nothing. `nowrap` because the
-   ruler must stay one column wide no matter what the code beside it does - a
-   line number folded in half would move every row it sits on. */
+/* The gutter is a ruler: not tappable, and nowrap so it stays one column. */
 .baud-git-diff .diff-gutter {
   color: var(--baud-ink-faint);
   cursor: default;
@@ -4268,10 +3409,8 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* The `@@` line. Wrapped like the code around it, because it is a line of the
-   patch and not a caption about one - and because it is often the longest line
-   on screen: git puts the enclosing function's signature after the ranges, so
-   left at `pre` this one row would hold the whole table open sideways. */
+/* The @@ line wraps too: git appends the function signature, often the
+   longest line on screen. */
 .baud-git-hunk {
   display: block;
   padding: 2px 10px;
@@ -4280,15 +3419,8 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* THE RAW PATCH - what the screen shows when the parser produced no file out of
-   text that is perfectly readable (a binary file, a mode-only change, a shape
-   the parser has not met). Never a blank screen.
-
-   SAME TWO RULES AS THE RENDERED PATCH ABOVE, for the same two reasons: it
-   wraps, and it carries no `overflow` of its own. The bug was here too and it
-   only takes one axis to cause it - an `overflow-x` computes `overflow-y` from
-   `visible` to `auto`, which is already enough to zero this item's automatic
-   minimum size and let the flex parent shrink it away from its content. */
+/* The raw patch, when the parser yields no file. The same two rules: it
+   wraps, and has no `overflow` (one axis is enough to zero the min size). */
 .baud-git-raw {
   margin: 12px calc(var(--baud-pad) / 1.5) 0;
   padding: 10px;
@@ -4302,9 +3434,7 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ------------------------------------------------------- the backup app -- */
-/* DPLAN-0411. The git app's frame and the apps layer's accent: the third card
-   on that layer reads as one of the family, not as a new kind of screen. */
+/* The backup app: the git app's frame and the apps layer's accent. */
 
 .baud-backup {
   --baud-backup-accent: var(--baud-apps);
@@ -4322,8 +3452,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* WHAT THE STORE HOLDS - facts read from disk, in the quiet card the git
-   app's rows use, so a status line never looks like a button. */
 .baud-backup-status {
   margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
   padding: 10px 13px;
@@ -4338,8 +3466,7 @@ body {
   line-height: 1.7;
 }
 
-/* The sizes ask: a chip, because the walk takes seconds and is asked for by
-   name rather than run on every open. */
+/* A chip: the size walk takes seconds, so it runs only when asked. */
 .baud-backup-chip {
   margin-top: 6px;
   background: none;
@@ -4350,8 +3477,6 @@ body {
   font-size: 0.68rem;
   padding: 4px 9px;
 }
-
-/* ---- the four click options ---- */
 
 .baud-backup-buttons {
   display: grid;
@@ -4376,23 +3501,19 @@ body {
   background: var(--baud-bg-card-live);
 }
 
-/* Running: the accent outline and the dim word, so a lane in flight reads as
-   busy rather than broken, and is visibly not a second press waiting. */
+/* Running reads as busy, not broken, and not as a second press waiting. */
 .baud-backup-button-running {
   border-color: var(--baud-backup-accent);
   color: var(--baud-ink-dim);
 }
 
-/* Stop (DPLAN-0412): the same accent outline with the accent word, so the
-   press that ends a run reads as live, and nothing red - stopping is the safe
-   direction, not an alarm. */
+/* Stop wears the accent, never red: stopping is the safe direction. */
 .baud-backup-button-stop {
   border-color: var(--baud-backup-accent);
   color: var(--baud-backup-accent);
   font-weight: 600;
 }
 
-/* What the server said to a press or a read, verbatim. */
 .baud-backup-said {
   margin: 8px calc(var(--baud-pad) / 1.5) 0;
   color: var(--baud-ink-dim);
@@ -4408,10 +3529,6 @@ body {
   margin: 8px calc(var(--baud-pad) / 1.5) 0;
 }
 
-/* ---- what is running (DPLAN-0412) ---- */
-
-/* One block per lane in flight, in the status block's quiet card: a reading
-   of the store's own running files, not a control. */
 .baud-backup-progress {
   margin: 12px calc(var(--baud-pad) / 1.5) 0;
   padding: 10px 13px;
@@ -4426,9 +3543,7 @@ body {
   font-weight: 600;
 }
 
-/* The bar is a real <progress>: its width is the element's value, so no
-   inline style carries it, and with no value it is the platform's own
-   indeterminate bar, which is what scanning is. */
+/* A real <progress>: no inline width, and no value is the indeterminate bar. */
 .baud-backup-bar {
   display: block;
   width: 100%;
@@ -4463,8 +3578,6 @@ body {
   line-height: 1.5;
 }
 
-/* The file in flight, in the mono face, one line: the tail is already cut to
-   fit, so the ellipsis here only guards a narrow screen. */
 .baud-backup-current {
   margin-top: 2px;
   color: var(--baud-ink-faint);
@@ -4474,8 +3587,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* ---- how a run ended ---- */
 
 .baud-backup-outcome {
   margin: 12px calc(var(--baud-pad) / 1.5) 0;
@@ -4494,8 +3605,7 @@ body {
   color: var(--baud-red);
 }
 
-/* Stopped (DPLAN-0412) is its own word in the dim colour: the owner asked for
-   it, so it is not an error and must not read as one. */
+/* Stopped is dim: the owner asked for it, so it must not read as an error. */
 .baud-backup-stopped {
   color: var(--baud-ink-dim);
 }
@@ -4504,7 +3614,6 @@ body {
   color: var(--baud-ink-dim);
 }
 
-/* The command's own last lines, as it printed them: the git app's raw block. */
 .baud-backup-summary {
   margin-top: 6px;
   padding: 10px;
@@ -4519,20 +3628,15 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ------------------------------------------- DPLAN-0414 wave 1: the reads --
-   The plans and inbox screens wear the memory screen's clothes (`baud-mem-*`)
-   on the reader shell; these few rules are only what those two screens say
-   that the memory screen never had to: a head line with the count, a label
-   over each list, and a message read whole. */
+/* Plans and inbox wear the memory screen's `baud-mem-*`; these rules add only
+   what those screens need beyond it. */
 
-/* The count over a list - "25 active plans", "2 unread · 14 total". */
 .baud-list-head {
   margin: 0 0 4px;
   font-size: 0.72rem;
   color: var(--baud-ink-dim);
 }
 
-/* One labelled list on the plans screen: open, then recently closed. */
 .baud-list-zone {
   margin-top: 14px;
 }
@@ -4541,13 +3645,11 @@ body {
   margin-top: 0;
 }
 
-/* An unread message: the card's edge says it before the word does. */
 .baud-inbox-unread {
   border-color: var(--baud-green);
 }
 
-/* A message, read whole. The head is the reader's sticky bar's sibling, not a
-   second sticky bar - one thing pinned to the top of a phone is enough. */
+/* Not a second sticky bar: one thing pinned to a phone's top is enough. */
 .baud-inbox-message-head {
   padding: calc(var(--baud-pad) / 1.5);
   padding-bottom: 0;
@@ -4567,8 +3669,7 @@ body {
   color: var(--baud-ink-faint);
 }
 
-/* A bell row that opens its message: the same row, as a button. Everything the
-   row's own rule sets stays; only a button's own chrome comes off. */
+/* A bell row as a button: only the button's own chrome comes off. */
 .baud-phone-event-door {
   width: 100%;
   background: none;
@@ -4581,11 +3682,7 @@ body {
   text-align: left;
 }
 
-/* ---------------------------------------------- markdown, drawn (A#23) --
-   A README in the reader. Sized to the reader's own text so a document and a
-   file feel like one face; headings step up a little, code keeps the mono
-   block the plain reader uses, and a table scrolls inside itself rather than
-   pushing the page sideways. */
+/* Markdown in the reader, sized to its text; a table scrolls inside itself. */
 .baud-phone-md {
   padding: calc(var(--baud-pad) / 1.5);
   padding-bottom: calc(var(--baud-pad) + env(safe-area-inset-bottom, 0px));
@@ -4685,19 +3782,14 @@ body {
   margin: 1em 0;
 }
 
-/* ------------------------------ reasons said, not hovered (T4, A#11-14) --
-   Every rule below is the verb chips' answer voice (`baud-phone-said`) placed
-   where a title used to be the only carrier of a reason. Touch never shows a
-   title; these lines do. The titles stay for the desk. */
+/* Reasons said, not hovered: touch never shows a title. */
 
-/* Under a door row or the tiles on the agent card. */
 .baud-agent-why {
   margin: 6px 0 0;
   padding: 0 2px;
 }
 
-/* The ⚡ door, armed: one more tap fires it. Amber, the dispatch colour, on
-   the door and its line - attention, not failure. */
+/* The armed ⚡ door: amber, attention not failure. */
 .baud-agent-armed {
   border-color: var(--baud-amber);
   border-style: solid;
@@ -4708,8 +3800,7 @@ body {
   color: var(--baud-amber);
 }
 
-/* The lock chip's answer hangs under the chip, outside the header's one slim
-   row, so nothing in that row moves when it appears. */
+/* Hangs under the chip, outside the slim row, so nothing in the row moves. */
 .baud-phone-lockwrap {
   position: relative;
   display: inline-flex;
@@ -4730,7 +3821,6 @@ body {
   text-align: left;
 }
 
-/* The roster's reason, under its short word in the empty rail. */
 .baud-wheel-empty-why {
   display: block;
   width: min(70vw, 36ch);
@@ -4742,7 +3832,6 @@ body {
   white-space: normal;
 }
 
-/* The passport serial as a button: the serial's own look, a thumb's target. */
 .baud-pass-serial-door {
   background: none;
   border: 0;
@@ -4754,13 +3843,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* ---------------------------------------------- DPLAN-0414 wave 3 --
-   The PROC sheet's top-20 list (T3), and the startup agent's one line in the
-   resting state (A#16). The room's and the watch's dead overlay need nothing
-   new: the watch reuses `.baud-phone-term-dead` inside its own
-   `.baud-phone-term-screen`, which is the room's layout already. */
-
-/* The cpu/mem toggle: two small chips, the pressed one in the ring's green. */
 .baud-machine-sort {
   display: flex;
   gap: 6px;
@@ -4781,8 +3863,6 @@ body {
   color: var(--baud-green);
 }
 
-/* One row per process: the name takes what is left, the three numbers sit in
-   right-aligned tabular columns so a glance down a column compares. */
 .baud-machine-procs {
   margin: 0;
   padding: 0;
@@ -4815,7 +3895,6 @@ body {
   font-size: 0.62rem;
 }
 
-/* The sampled line is the re-read: the meta line's own look, as a button. */
 .baud-machine-sampled {
   padding: 4px 0;
   background: none;
@@ -4828,20 +3907,14 @@ body {
   color: var(--baud-amber);
 }
 
-/* Why the startup agent did not open - quiet, under the hint. */
 .baud-phone-resting-startup {
   color: var(--baud-amber);
   font-size: 0.65rem;
   max-width: 36ch;
 }
 
-/* ---- DPLAN-0414 wave 5: files and the git app ---- */
-
-/* THE PATH, TO COPY BY HAND (A#21). Shown under a browse row or the Reader's
-   head when no lane CONFIRMED the copy - the legacy lane over plain http can
-   say yes and land nothing. The terminal takeout field's look, path-sized:
-   selectable said out loud, wrapped and never cut, because a third of a path
-   is the bug this field exists for. */
+/* Shown when no lane confirmed the copy: the legacy lane over plain http can
+   say yes and land nothing. Selectable, wrapped, never cut. */
 .baud-phone-copy-field {
   display: block;
   width: 100%;
@@ -4861,23 +3934,18 @@ body {
   -webkit-user-select: text;
 }
 
-/* The Reader has no row to sit under; its field lines up with the text. */
 .baud-phone-reader > .baud-phone-copy-field {
   width: auto;
   margin: 6px calc(var(--baud-pad) / 1.5) 0;
 }
 
-/* GIT STATUS IS NOT SHOWN HERE (C#11). Under the head of a home, project or
-   aipass browse, where the chips are off: faint and small, a fact about the
-   screen rather than a warning about the files. */
+/* Git status is off for these browses: a fact, not a warning. */
 .baud-phone-files-quiet {
   margin: calc(var(--baud-gap) / 2) calc(var(--baud-pad) / 1.5) 0;
   color: var(--baud-ink-faint);
   font-size: 0.66rem;
 }
 
-/* AN UNTRACKED ROW'S ANSWER (C#3), under the row it is about - the files
-   screen's gone-row idiom, in the git app's quiet voice. */
 .baud-git-fileblock .baud-git-said {
   padding: 6px 2px 8px;
 }

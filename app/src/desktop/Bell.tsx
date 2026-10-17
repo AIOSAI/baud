@@ -4,23 +4,7 @@ import { notificationsRead } from "../host";
 import { relativeAge } from "../age";
 import type { NotificationEvent } from "../types";
 
-/**
- * The notification bell, wired (m10). Desktop toasts are retired (Patrick
- * ruling 2026-08-11) - ai_mail appends every event to the project's
- * notification feed and this bell is where they land: a count badge on the
- * header, a scrollable history panel on click.
- *
- * Nothing clears itself (Patrick ruling 2026-08-11 20:45, reversing the
- * first cut's phone-shade behavior): events stay, badge and all, until the
- * operator clicks CLEAR - "I should be the only one who clears them." One
- * click wipes the lot; there is deliberately no per-row dismiss, because
- * these are glances, not an inbox - the mailbox itself is the record.
- *
- * Clearing is LOCAL: a cleared-up-to timestamp in localStorage, per
- * project. The feed file is never touched - BAUD is a reader, and the
- * feed's only writer is ai_mail. Rows click to expand: collapsed shows two
- * body lines, expanded shows everything the event carried.
- */
+/** The notification bell: reads ai_mail's feed, cleared only by the operator, locally. Reference: docs/desktop/rooms.md */
 
 /** How events introduce themselves: a color per kind, dim for the unknown. */
 const KIND_TONES: Record<string, string> = {
@@ -29,13 +13,7 @@ const KIND_TONES: Record<string, string> = {
   dispatch: "baud-bell-kind-dispatch",
 };
 
-/**
- * The chime (m11 phase 6), synthesized rather than played: the CSP allows no
- * external assets, and a notification sound that needs a file shipped beside
- * the binary is a sound that eventually goes missing. Two short sine notes,
- * quiet on purpose - this sits behind a toggle that is OFF by default, and an
- * operator who turns it on wants a hint, not an alarm.
- */
+/** Synthesized, not a file: the CSP allows no external assets. */
 const CHIME_NOTES: { hz: number; delay: number }[] = [
   { hz: 784, delay: 0 },
   { hz: 1046.5, delay: 0.085 },
@@ -80,7 +58,7 @@ function chime() {
 interface BellProps {
   /** Seated project name - scopes the cleared-up-to marker. */
   project: string | null;
-  /** Feed poll cadence, from BAUD's interface settings (m11 phase 6). */
+  /** Feed poll cadence, from BAUD's interface settings. */
   pollMs: number;
   /** Reader-side retention: how many events this bell keeps at all. */
   maxEvents: number;
@@ -124,19 +102,16 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
       notificationsRead()
         .then((next) => {
           if (!mounted) return;
-          // Retention is reader-side: the feed file is ai_mail's alone, and
-          // the tail is what a bell is for. File order is append order.
+          // Retention is reader-side: the feed file is ai_mail's alone.
           const kept = next.slice(-maxEvents);
           setEvents(kept);
           const newest = kept.length > 0 ? kept[kept.length - 1].ts : "";
           const previous = newestRef.current;
           newestRef.current = newest;
-          // ISO timestamps compare as strings, same as the cleared marker.
           if (previous !== null && newest > previous && soundRef.current) chime();
         })
         .catch(() => {
-          // A failed poll keeps the last good list - the badge never
-          // invents events, and the next tick retries anyway.
+          // A failed poll keeps the last good list; the next tick retries.
         });
     };
     refresh();
@@ -164,9 +139,7 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
     };
   }, [open]);
 
-  // ISO timestamps compare as strings - no Date parsing to disagree with
-  // the feed's own ordering. Everything newer than the cleared marker is
-  // live; the marker only ever moves when the operator clicks CLEAR.
+  // ISO timestamps compare as strings, matching the feed's own ordering.
   const visible = clearedUpTo
     ? events.filter((event) => event.ts > clearedUpTo)
     : events;

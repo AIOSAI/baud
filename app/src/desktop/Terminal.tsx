@@ -22,23 +22,13 @@ import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
 
-/**
- * A launch since m6 is an ATTACH: the pty runs a tmux client into the
- * branch's persistent room. Switching cards replaces the client (SIGHUP =
- * detach - the room and whatever runs in it survive), and the staged command
- * is typed only where it can land at a prompt: into a room this spawn just
- * created, or one the fleet scan says has no live claude. `typeIfAttached`
- * carries that second judgment from the card's snapshot.
- */
+/** A launch attaches a tmux client to the branch's room; the command is typed only where it lands at a prompt. */
 export interface LaunchSpec {
   /** Branch name - the backend derives the tmux session name from it. */
   room: string;
   /** Branch directory a NEW room starts in (ignored on attach). */
   cwd: string;
-  /**
-   * The project the branch belongs to. A room name carries its project, so
-   * a roster card from elsewhere must name its own - null means the seat's.
-   */
+  /** The branch's project; a room name carries it, so a roster card names its own. null means the seat's. */
   project: string | null;
   /** The one visible claude command line the click asked for. */
   command: string;
@@ -48,51 +38,21 @@ export interface LaunchSpec {
 
 export interface TerminalHandle {
   launch(spec: LaunchSpec): void;
-  /**
-   * Type text into the live pty as if the operator had - because they did:
-   * every call traces to a click (camera button) or a drop gesture. The text
-   * is inserted WITHOUT a newline; sending stays the operator's keystroke.
-   * Returns false when there is no live session to type into.
-   */
+  /** Type text into the live pty WITHOUT a newline (sending stays the operator's keystroke); false when no session. */
   typeText(text: string): boolean;
 }
 
 interface TerminalProps {
-  /**
-   * A ctrl+clicked file path in the output, already resolved and fenced by
-   * the backend - the reading room takes it from here. `line` carries a
-   * `:123` suffix when the mention had one.
-   */
+  /** A ctrl+clicked file path from the output, already resolved and fenced by the backend. */
   onOpenFile: (path: string, line: number | null) => void;
-  /**
-   * The operator ended this branch's room and tmux confirmed it (m12). App
-   * records the intent: an ended room stays dead until they open the card
-   * again, whatever a hot reload does to this component's state.
-   */
+  /** The operator ended this branch's room and tmux confirmed it; App keeps it dead until the card reopens. */
   onRoomEnded: (branch: string) => void;
-  /**
-   * Every tmux session holding a live interactive claude, machine-wide, so
-   * the slash-command chips only render where a chat box actually exists to
-   * receive them.
-   *
-   * Sessions, not branch names, and not filtered by the seat (m13): this used
-   * to be the seated project's live branches, so attaching to a room in
-   * ANOTHER project - which the seat's card list knows nothing about - made
-   * the chips silently vanish from a terminal that had a claude sitting right
-   * there in it. The pty reports the session it actually attached to; that is
-   * the thing to ask about.
-   */
+  /** Every tmux session holding a live claude, machine-wide: sessions, not seat branches, so a room in
+   *  another project still gets its slash-command chips. */
   liveSessions: string[];
 }
 
-/**
- * The memory rituals as one-click chips (Patrick idea 2026-08-10): slash
- * commands are invisible culture - a new operator has no way to discover
- * /prep exists, let alone when to use it. The hover text IS the teaching.
- * Sent WITH the newline - one click runs the command, that is the point.
- * /clear stays typed on purpose: deliberate friction on the one that
- * discards a conversation.
- */
+/** The memory rituals as one-click chips. /clear is left out on purpose: it discards a conversation. */
 const SLASH_COMMANDS: { cmd: string; hint: string }[] = [
   {
     cmd: "/memo",
@@ -108,19 +68,11 @@ const SLASH_COMMANDS: { cmd: string; hint: string }[] = [
   },
 ];
 
-/**
- * What a file mention looks like in terminal output: a slashed path
- * (absolute or relative) or a bare filename with an extension, optionally
- * carrying a `:123` line suffix. Deliberately loose - every candidate still
- * has to RESOLVE to a real file inside the fence before it becomes a link,
- * so a false match here costs nothing.
- */
+/** A file mention, with an optional `:123`. Deliberately loose: every candidate must still resolve inside the fence. */
 const PATH_CANDIDATE = /(?:\/?[\w.+-]+(?:\/[\w.+-]+)+|[\w+-][\w.+-]*\.[A-Za-z][A-Za-z0-9]{0,7})(?::\d+)?/g;
 
 interface PathMention {
-  /** 0-based column of the match in the row's text. */
   index: number;
-  /** The exact matched text - the underline covers all of it. */
   raw: string;
   path: string;
   line: number | null;
@@ -154,10 +106,7 @@ type Phase = "opening" | "live" | "ended";
 const FONT_SIZE = 13;
 const SCROLLBACK_LINES = 5000;
 
-/**
- * The xterm theme is read out of the stylesheet, so theme.css stays the single
- * source of truth for BAUD's colours - there is no second palette to drift.
- */
+/** Read from the stylesheet, so theme.css stays the one palette. */
 function terminalTheme(host: HTMLElement) {
   const style = getComputedStyle(host);
   const token = (name: string, fallback: string) =>
@@ -172,11 +121,7 @@ function terminalTheme(host: HTMLElement) {
   };
 }
 
-/**
- * Shell output arrives base64-encoded: a 4KB read can split a multi-byte UTF-8
- * character, and only raw bytes let xterm's stateful decoder stitch it back
- * together across chunks.
- */
+/** Raw bytes, not a string: a chunk can split a UTF-8 character and only xterm's stateful decoder rejoins it. */
 function decodeChunk(base64: string): Uint8Array {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -193,9 +138,8 @@ function describe(err: unknown): string {
 }
 
 /**
- * The operator's shell. One PTY, the user's own privileges, opened in the
- * AIPass root. Every byte comes from the human: typed keystrokes, or the one
- * visible command line `run()` writes when they click a card's launch button.
+ * The operator's shell: one PTY with the user's privileges; every byte comes from a keystroke or a click.
+ * Reference: docs/desktop/rooms.md
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   { onOpenFile, onRoomEnded, liveSessions },
@@ -206,29 +150,17 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   const [phase, setPhase] = useState<Phase>("opening");
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Mirrors of the effect's locals, so launch() can reach the live session.
   const sessionRef = useRef<string | null>(null);
   const termRef = useRef<XTerm | null>(null);
-  // A launch waiting for the next spawn; consumed exactly once.
   const pendingRef = useRef<LaunchSpec | null>(null);
-  // The room the CURRENT pty is a window into - null for the scratch shell.
   const [room, setRoom] = useState<string | null>(null);
-  // The project that room was resolved in. The terminal outlives any project
-  // switch by design, and a roster attach can seat it in another project
-  // entirely, so end-room must ask in the scope the attach used - never the
-  // seat's, which may have moved on since.
+  // End-room must ask in the project the attach used: the seat may have moved on since.
   const roomProjectRef = useRef<string | null>(null);
-  // The tmux session that room actually resolved to, straight from the spawn
-  // (m12): BAUD's own `baud-<branch>`, or the outside session the branch's
-  // agent was already living in. Shown on the end-room button, because the
-  // operator should never have to guess what a kill will hit.
+  // The tmux session the room resolved to (BAUD's or an outside one), named on the end-room button.
   const [session, setSession] = useState<string | null>(null);
-  // Where relative paths in the output resolve: the seated room's branch
-  // dir, or null (= the AIPass root) for the scratch shell. Best effort -
-  // the shell can cd away, but claude cites repo-relative or absolute paths.
+  // Best effort: the shell can cd away, but claude cites repo-relative or absolute paths.
   const cwdRef = useRef<string | null>(null);
-  // The prop, ref'd so the link provider (created once per pty) never goes
-  // stale against a re-rendering parent.
+  // Ref'd because the link provider is created once per pty.
   const onOpenFileRef = useRef(onOpenFile);
   onOpenFileRef.current = onOpenFile;
 
@@ -243,10 +175,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     () => ({
       launch(spec: LaunchSpec) {
         pendingRef.current = spec;
-        // Bumping the generation tears the old pty down. For a room client
-        // that SIGHUP is a detach - the previous agent keeps running - and
-        // the new spawn attaches to the next room. Also revives a dead
-        // terminal for free.
+        // The old room client's SIGHUP is a detach: the previous agent keeps running.
         restart();
       },
       typeText(text: string) {
@@ -260,20 +189,13 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     [restart],
   );
 
-  // Detach (room) / kill (scratch shell): end what is on the pty. A room and
-  // everything inside it survives - only the window closes. The exit event
-  // then raises the curtain.
   const kill = useCallback(() => {
     const id = sessionRef.current;
     if (!id) return;
     void ptyKill(id).catch(() => {});
   }, []);
 
-  // The one door that actually ENDS a room (Patrick ruling 2026-08-10).
-  // tmux kills the session; our client dies with it, which raises the
-  // curtain through the normal exit event. Only a CONFIRMED kill records the
-  // "stays dead" intent (Patrick ruling 2026-08-12) - a room that refused to
-  // die is still alive, and BAUD must not pretend otherwise.
+  // Only a CONFIRMED kill records "stays dead": a room that refused to die is still alive.
   const endRoom = useCallback(() => {
     if (!room) return;
     void roomKill(room, roomProjectRef.current)
@@ -283,12 +205,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       });
   }, [room, onRoomEnded]);
 
-  // A slash-command chip: the command, a beat, then Enter - exactly as if
-  // the operator typed it, because they clicked for it. Enter is `\r`
-  // (what a keyboard sends), NOT `\n`: claude's raw-mode input treats a
-  // linefeed as text, which left the command sitting unsubmitted in the
-  // box (Patrick-caught on the first live click, 2026-08-10). The beat
-  // lets the slash palette settle on the exact match before the submit.
+  // Enter is `\r`, NOT `\n`: claude's raw-mode input takes a linefeed as text. The beat lets the slash palette settle.
   const sendCommand = useCallback((cmd: string) => {
     const id = sessionRef.current;
     if (!id) return;
@@ -314,12 +231,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       fontSize: FONT_SIZE,
       scrollback: SCROLLBACK_LINES,
       theme: terminalTheme(host),
-      // Claude wraps its file citations in OSC 8 hyperlinks (file:// URIs).
-      // Without a handler xterm silently DROPS non-http links - no hover, no
-      // click - and anything that does fire escapes to the OS. This handler
-      // claims the layer: file:// goes to the reading room through the same
-      // fence as everything else, http(s) to the system browser, both only
-      // on the ctrl-chord. Every other scheme is ignored on purpose.
+      // Claude's OSC 8 file:// links: without this handler xterm drops non-http links. Other schemes are ignored on purpose.
       linkHandler: {
         allowNonHttpProtocols: true,
         activate: (event, uri, range) => {
@@ -331,8 +243,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
             } catch {
               return;
             }
-            // The URI carries no line number, but the visible citation often
-            // does - inside the link text (`foo.py:42`) or right after it.
+            // The URI has no line number; the visible citation often does.
             const row = term.buffer.active.getLine(range.end.y - 1);
             const rowText = row?.translateToString(true) ?? "";
             const inLink = /:(\d+)$/.exec(rowText.slice(range.start.x - 1, range.end.x));
@@ -355,9 +266,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     const fit = new FitAddon();
     term.loadAddon(fit);
 
-    // Ctrl+click links, IDE-style. Plain clicks stay tmux's (mouse mode is
-    // on in rooms) - only the ctrl-chord activates. URLs go to the system
-    // browser through the opener plugin's url-only grant.
+    // Ctrl-chord only: plain clicks belong to tmux's mouse mode.
     term.loadAddon(
       new WebLinksAddon((event, uri) => {
         if (!event.ctrlKey && !event.metaKey) return;
@@ -367,10 +276,6 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       }),
     );
 
-    // File paths become links only if the backend resolves them to a real
-    // file inside the fence - hover asks, per line, and an unresolvable
-    // mention simply never underlines. Ctrl+click opens it in the reading
-    // room beside the live terminal, at the cited line.
     const fileLinks = term.registerLinkProvider({
       provideLinks(row, callback) {
         const bufferLine = term.buffer.active.getLine(row - 1);
@@ -442,8 +347,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       });
     });
 
-    // One path for sizing: fit the view *and* tell the shell, or the two
-    // disagree about the column count and every long line wraps wrong.
+    // Fit the view AND tell the shell, or they disagree on columns and long lines wrap wrong.
     const pushSize = () => {
       if (!measure() || !sessionId || disposed) return;
       void ptyResize(sessionId, term.cols, term.rows).catch(
@@ -458,9 +362,6 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     });
     observer.observe(host);
 
-    // The staged launch, if any, is consumed by THIS spawn: its room shapes
-    // the pty_create call, and the created-flag decides whether the command
-    // gets typed.
     const spec = pendingRef.current;
     pendingRef.current = null;
     setRoom(spec?.room ?? null);
@@ -478,7 +379,6 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     })
       .then(({ id, created, room: attached }) => {
         if (disposed) {
-          // Unmounted mid-flight: kill the client we just asked for.
           void ptyKill(id).catch(() => {});
           return;
         }
@@ -491,10 +391,7 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         term.focus();
         pushSize();
 
-        // Type the claude command only where it lands at a prompt: a room
-        // this spawn created, or one the card's snapshot said holds no live
-        // claude. Typing into an existing claude would fill its input box.
-        // The pty's input buffer holds it until the shell reads - no race.
+        // Typing into a live claude would fill its input box. The pty buffers it until the shell reads.
         if (spec && (created || spec.typeIfAttached)) {
           void ptyWrite(id, `${spec.command}\n`).catch((err) => {
             if (!disposed) setFailure(describe(err));

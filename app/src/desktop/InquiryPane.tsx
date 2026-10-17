@@ -5,22 +5,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
 
-/**
- * A tier-1 inquiry terminal (m9 phase 4): the card's help button pops a
- * REAL shell seated in that branch with the agent's help already run.
- *
- * Deliberately NOT keyboard-blocked (Patrick ruling 2026-08-11): the whole
- * point is continuing the investigation - follow-up commands, `drone
- * @agent <cmd> --help`, a peek at a README. There is no technical fence on
- * what can be typed, because a typed-input filter would be theater
- * (enforcement-honesty doctrine, DPLAN-0284) - the framing and the name do
- * the work, exactly like the scratch shell. A hard fence, if ever wanted,
- * is tier 2's Docker isolation, not a keyword list.
- *
- * One per branch, closable only by its tab's ✕ or the corner kill - when
- * the shell exits (operator types `exit`, or the kill button fires) the
- * pane reports up and the tab closes.
- */
+/** A help terminal: a real shell seated in the branch, keyboard on by design. Reference: docs/desktop/rooms.md */
 
 /** Mirrors `PtyEvent` in src-tauri/src/pty.rs. */
 type PtyEvent =
@@ -32,22 +17,13 @@ interface InquiryPaneProps {
   branch: string;
   /** Directory the shell opens in. */
   cwd: string;
-  /**
-   * One command line typed into the fresh shell, or null for a bare prompt.
-   * The caller decides: the card's `?` sends the branch's help command, the
-   * terminal buttons send nothing and hand over an empty shell.
-   */
+  /** One command line typed into the fresh shell, or null for a bare prompt. */
   command?: string | null;
   /** The shell ended - operator exit, or the corner kill. */
   onExited: () => void;
 }
 
-/**
- * The help command a branch answers to. `aipass` is the ecosystem's one
- * exception (Patrick-caught 2026-08-11): the user's front-door CLI with its
- * own binary - drone cannot resolve @aipass, so its card asks the binary
- * itself. Everyone else speaks through drone.
- */
+/** The help command a branch answers to; drone cannot resolve @aipass, so it asks its own binary. */
 export function helpCommand(branch: string): string {
   return branch === "aipass" ? "aipass --help" : `drone @${branch} --help`;
 }
@@ -171,10 +147,7 @@ export default function InquiryPane({
         sessionRef.current = id;
         term.focus();
         pushSize();
-        // The one visible command line the click asked for - typed into the
-        // fresh shell's input buffer, exactly what the operator would have
-        // typed by hand. A terminal button asks for none, and gets a prompt
-        // and nothing else.
+        // Typed into the input buffer, exactly as the operator would by hand.
         if (command) {
           void ptyWrite(id, `${command}\n`).catch((err) => {
             if (!disposed) setFailure(err instanceof Error ? err.message : String(err));

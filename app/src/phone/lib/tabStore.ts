@@ -1,31 +1,4 @@
-/**
- * THE TAB ROW, KEPT ACROSS A RELOAD (DPLAN-0414 wave 6, items 3 and 4).
- *
- * The owner, 16:20: "Yea its annoying when a tab drops i have to start again."
- * The back survey found the likeliest cause: `open[]` and `active` lived only
- * in React state, so the header's own reload button, a pull-to-refresh or a
- * PWA restart dropped every tab - while the comment on that button called the
- * reload lossless. The tabs now sit in localStorage beside the seat
- * (`baud-phone-project`), and the face reads them back on load.
- *
- * WHAT A RESTORE IS, AND WHAT IT IS NOT. A restored room, shell or watch tab
- * is a REATTACH through the lane it always used: the room lives in tmux on
- * the host, so the tab only has to find it again. It is never a door press -
- * PhoneApp marks every restored pane `restored`, and TerminalSheet types no
- * launch line into a restored room (a stored card's `interactive` is from the
- * last session; trusting it is how a second claude gets started). A restored
- * file tab simply re-reads. A tab whose agent has left the census is dropped
- * with one console line, not an error screen.
- *
- * AND THE FOCUS HISTORY (item 4). Closing a tab used to front the RIGHTMOST
- * one left, so closing a file you opened from a room landed on some other
- * file. `focus` is the order tabs were fronted in; closing the front tab
- * fronts the one before it. It is kept with the tabs, so a reload remembers
- * it too.
- *
- * PURE, like `trail.ts`: storage is passed in (a fake in the tests), and the
- * pane's identity is PhoneApp's `paneKey`, handed in rather than copied here.
- */
+/** The phone's tab row kept across a reload, and which tab a close fronts; pure over an injected store. Reference: docs/phone/settings-nav.md */
 
 import type { BranchStatus } from "../../types";
 import type { Browse, Stop } from "./trail";
@@ -36,22 +9,12 @@ export const TABS_KEY = "baud-phone-tabs";
 /** The stored shape's version. A blob with any other is not read. */
 export const TABS_VERSION = 1;
 
-/** How many fronted keys the focus history keeps. A row past this is not a
- *  row a thumb walks back through, and the list must not grow for ever. */
+/** How many fronted keys the focus history keeps, so the list never grows for ever. */
 export const FOCUS_CAP = 24;
 
-/** Every mode a pane can have: the launch modes, shell, watch, file. */
 const MODES = ["fresh", "resume", "shell", "watch", "file"] as const;
 
-/**
- * One pane as it is stored and read back - the fields of PhoneApp's
- * `OpenPane`, same names and types, so a pane read here is an `OpenPane`
- * without a cast. See `OpenPane` for what each one means.
- *
- * `command` is NEVER stored: it is a one-shot line typed when the `?` door
- * opens a shell, and a reload is not that door. `restored` is never stored
- * either; `loadTabs` sets it on everything it reads.
- */
+/** One pane as stored: PhoneApp's `OpenPane` fields so it reads back without a cast; `command` and `restored` are never stored. */
 export interface StoredPane {
   name: string;
   mode: (typeof MODES)[number];
@@ -66,35 +29,21 @@ export interface StoredPane {
   restored?: boolean;
 }
 
-/** The tab row: the panes in row order, which one is in front, and the order
- *  tabs were fronted in (oldest first). */
+/** The tab row: panes in row order, the front tab, and the focus order (oldest first). */
 export interface Tabs<P> {
   open: P[];
   active: string | null;
   focus: string[];
 }
 
-/** The two calls of `Storage` this file uses - a fake one in the tests. */
 export type TabStorage = Pick<Storage, "getItem" | "setItem">;
 
-/**
- * A tab was fronted: the focus history with `key` moved to the end.
- *
- * A key fronted twice appears once, at its newest place. Past `FOCUS_CAP`
- * the oldest goes.
- */
+/** A tab was fronted: `key` moves to the end of the focus history, capped at `FOCUS_CAP`. */
 export function focusOn(focus: readonly string[], key: string): string[] {
   return [...focus.filter((held) => held !== key), key].slice(-FOCUS_CAP);
 }
 
-/**
- * A tab was closed: who is in front now, and the history without it.
- *
- * `keys` is the row BEFORE the close. Closing a tab that is not in front
- * leaves the front tab alone. Closing the front tab fronts the most recently
- * fronted tab still in the row; with no history left, the rightmost remaining
- * tab (the old rule, kept as the floor); with no tab left, nothing.
- */
+/** A tab was closed: the new front (most recently fronted, else rightmost) and the history without it; `keys` is the row before the close. */
 export function closeTab(
   keys: readonly string[],
   focus: readonly string[],
@@ -109,15 +58,12 @@ export function closeTab(
   return { active: left.length ? left[left.length - 1] : null, focus: history };
 }
 
-/** The pane as it goes into storage: everything but the one-shot line and
- *  the restore mark. */
 function forStorage(pane: StoredPane): StoredPane {
   const { command: _command, restored: _restored, ...kept } = pane;
   return kept;
 }
 
-/** Write the tab row. Called on every change to it; a refusing storage
- *  (private mode, quota) loses the restore, never the session. */
+/** Write the tab row; a refusing storage (private mode, quota) loses the restore, never the session. */
 export function saveTabs(store: TabStorage, tabs: Tabs<StoredPane>): void {
   try {
     store.setItem(
@@ -130,8 +76,7 @@ export function saveTabs(store: TabStorage, tabs: Tabs<StoredPane>): void {
       }),
     );
   } catch {
-    // Nothing to tell: the tabs on screen are untouched, only the next load
-    // will not find them.
+    // The tabs on screen are untouched; only the next load will not find them.
   }
 }
 
@@ -140,8 +85,7 @@ const optionalText = (value: unknown) => value === undefined || isText(value);
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** One stored pane, checked field by field - or null when it is not one. A
- *  hand-edited or older blob drops the pane, never the face. */
+/** One stored pane checked field by field, or null; a hand-edited or older blob drops the pane, never the face. */
 function readPane(value: unknown): StoredPane | null {
   if (!isRecord(value)) return null;
   const { name, mode, ref, root, project, document, from, fromTrail, card } = value;
@@ -155,14 +99,7 @@ function readPane(value: unknown): StoredPane | null {
   return { ...(value as unknown as StoredPane), restored: true };
 }
 
-/**
- * Read the tab row back, or null when there is none to read.
- *
- * Null for: no key, a blob that is not JSON, another version, or no pane that
- * survives `readPane`. Every pane read is marked `restored`. An `active` that
- * names no surviving pane falls to the newest fronted one that does, then to
- * the rightmost.
- */
+/** Read the tab row back, or null; panes are marked `restored`, and a stale `active` falls to the newest fronted, then the rightmost. */
 export function loadTabs(store: TabStorage, keyOf: (pane: StoredPane) => string): Tabs<StoredPane> | null {
   let raw: string | null;
   try {
@@ -185,8 +122,6 @@ export function loadTabs(store: TabStorage, keyOf: (pane: StoredPane) => string)
   return { open, active: frontOf(keys, focus, parsed.active), focus };
 }
 
-/** The front tab: `wanted` when it is in the row, else the newest fronted,
- *  else the rightmost. */
 function frontOf(keys: readonly string[], focus: readonly string[], wanted: unknown): string | null {
   if (isText(wanted) && keys.includes(wanted)) return wanted;
   const fronted = focus[focus.length - 1];
@@ -194,33 +129,14 @@ function frontOf(keys: readonly string[], focus: readonly string[], wanted: unkn
   return keys.length ? keys[keys.length - 1] : null;
 }
 
-/**
- * Who is on the machine now, as the first fleet read after load saw it.
- *
- * `seated` is the seated project's cards, null when that read failed (a read
- * that failed is not a project with no agents). `roster` is the cross-project
- * roster, null when it was refused. A pane is only ever dropped against a
- * list that ANSWERED.
- */
+/** Who is on the machine after load; a null list did not answer, and a pane is only dropped against a list that answered. */
 export interface Census {
   seat: string;
   seated: readonly BranchStatus[] | null;
   roster: readonly BranchStatus[] | null;
 }
 
-/**
- * Check restored panes against the census.
- *
- * A pane that names an agent (a room, a named shell or watch) takes that
- * agent's card FRESH from the census, so the room it reattaches to is judged
- * on what is true now. One whose agent is in no list that answered is
- * dropped, with one line saying so. Panes that name no agent - the
- * project-root shell, mission control, every file - are kept as they are: a
- * file re-reads, and its own read says if it is gone.
- *
- * When the list a pane would be found in did not answer, the pane is KEPT on
- * its stored card: an unanswered read is no evidence the agent left.
- */
+/** Check restored panes against the census: agent panes take a fresh card or drop; an unanswered list keeps the pane on its stored card. */
 export function restoreTabs(
   tabs: Tabs<StoredPane>,
   census: Census,
@@ -246,16 +162,7 @@ export function restoreTabs(
   return { open, active: frontOf(keys, focus, tabs.active), focus, dropped };
 }
 
-/**
- * Fold the restored row into whatever HANDS opened while the census was
- * being read.
- *
- * Hands win: a pane the operator opened stays, at the end of the row, and
- * stays in front. A restored pane with the same key is left out (the hand's is
- * the fresher door), and so is a restored agent seat when the hands already
- * took one - the face holds ONE agent seat (PhoneApp `focusPane`), and the
- * operator's pick outranks a memory of yesterday's.
- */
+/** Fold restored tabs into what hands opened meanwhile: hands win, and the face holds one agent seat (PhoneApp `focusPane`). */
 export function mergeTabs<P extends StoredPane>(
   restored: Tabs<P>,
   current: Tabs<P>,

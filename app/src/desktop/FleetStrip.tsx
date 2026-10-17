@@ -15,9 +15,9 @@ interface FleetStripProps {
   seatedProject: string | null;
   /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
-  /** Operator clicked the gear: open this branch's settings panel (m11). */
+  /** Operator clicked the gear: open this branch's settings panel. */
   onSettings: (branch: BranchStatus) => void;
-  /** Operator clicked the avatar: open this agent's passport (round A). */
+  /** Operator clicked the avatar: open this agent's passport. */
   onOpenPassport: (branch: BranchStatus) => void;
 }
 
@@ -32,9 +32,7 @@ function sortForDisplay(branches: BranchStatus[]): BranchStatus[] {
 }
 
 /**
- * The fleet as one horizontal band above the terminal. It scrolls sideways
- * rather than wrapping, so the terminal below it never loses height as the
- * fleet grows.
+ * The fleet as one horizontal band; it scrolls sideways rather than wrapping so the terminal keeps its height.
  */
 export default function FleetStrip({
   branches,

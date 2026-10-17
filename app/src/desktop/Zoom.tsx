@@ -2,14 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 /**
- * Whole-window zoom: browser-style ctrl +/- for a webview that ships
- * with none. The webview's zoom factor scales everything — cards, tabs and
- * the terminal together (xterm's DOM renderer re-fits through the normal
- * ResizeObserver path, so the shell learns its new column count for free).
- *
- * React state is the single source of truth: every change goes through
- * setZoom(), so the chip's percentage can never drift from what the window
- * actually shows. The level survives restarts via localStorage.
+ * Whole-window zoom (ctrl +/-, ctrl+scroll) for a webview that ships with none.
+ * Every change goes through React state, so the chip's percentage never drifts from the window.
  */
 
 const MIN_ZOOM = 0.5;
@@ -45,10 +39,7 @@ export default function Zoom() {
       });
   }, [zoom]);
 
-  // Ctrl+= / Ctrl+- / Ctrl+0 and ctrl+scroll, captured at the window BEFORE
-  // the terminal's textarea can see them - zoom keys belong to the app, not
-  // the shell, exactly like a browser. Plain keystrokes pass through
-  // untouched.
+  // Capture phase: zoom keys must reach the app before the terminal's textarea takes them.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.altKey) return;

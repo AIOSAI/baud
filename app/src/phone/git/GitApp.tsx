@@ -1,44 +1,5 @@
-/**
- * THE GIT APP - the phone's fourth-wheel app (DPLAN-0303), and since 08-17 the
- * agent card's git door as well.
- *
- * AN APP IS NOT AN AGENT, and that is still why the wheel grew a fourth layer.
- * Every other door on that face is addressed to somebody - a card, a room, a
- * passport, a memory - and the repository they all live in belongs to nobody,
- * so it has nowhere to hang on a rail made of citizens.
- *
- * TWO GRAINS, ONE APP (Patrick, 08-17: "it should open just like this but show
- * only the agent local changes"). The card's GIT tile used to open a raw
- * whole-branch patch - one unhighlighted wall of text - and his ruling is that
- * it should open THE SAME grouped list, tap a file, read the patch flow this
- * app already ships, narrowed to that one citizen's working tree.
- *
- * SO THE GRAIN IS A PROP, NOT A SECOND COMPONENT. A copy of these screens
- * scoped to a branch would be the same four reads, the same refusal voice and
- * the same grouping rule written twice, and the second copy is where the two
- * start disagreeing about what a changed file looks like. What the grain
- * changes is small and named in one place each: which floor the stack starts
- * on, what the changes screen asks the server for, and how deep a group cuts.
- *
- * WHY THE STACK LIVES HERE. Five screens reach each other in one direction and
- * come back one level at a time, and the per-file diff is reachable from two
- * places (a changed file, and a file inside a commit) which means "back" is a
- * question about where you came FROM, not about which screen you are on. A
- * stack answers that by construction; five booleans in PhoneApp would have to
- * re-derive it, and would get it wrong the first time a sixth screen appeared.
- *
- * NOTHING IS HELD ACROSS A CLOSE. Every screen reads on mount, so re-opening
- * the app is a fresh read rather than a picture of a working tree that has
- * moved on. A phone in a pocket is out of date by definition; the fix is to
- * read again, not to cache harder.
- *
- * AND SINCE 08-17 THERE ARE ROWS THAT LEAVE (DPLAN-0303 phase 4). Pull
- * requests, issues and the remote are the forge's pages, not this app's
- * screens: they are anchors, they open a browser tab, and they act on the first
- * tap rather than pushing a floor onto the stack. They exist at REPO grain
- * only - a remote belongs to the repository, so the branch-grain door the
- * card's tile opens neither shows them nor asks for them.
- */
+/** The git app: the wheel's door at repo grain and the card's GIT door at branch grain, as one stack of screens.
+ * Reference: docs/phone/files-git.md */
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -55,42 +16,18 @@ import GitCommitScreen from "./GitCommitScreen";
 import GitCommitsScreen from "./GitCommitsScreen";
 import GitDiffScreen from "./GitDiffScreen";
 
-/**
- * An address as a person reads it off a card, with the scheme taken off.
- *
- * A DISPLAY TRIM AND NOTHING ELSE - every `href` on this screen carries the
- * server's `web` untouched. The HOST STAYS: it is the fact that decides where a
- * tap lands, and a line reading `AIOSAI/AIPass` would look identical whether
- * the remote points at github or at a box in somebody's basement.
- */
+/** An address without its scheme, for display only; the host stays because it decides where a tap lands. */
 function plainly(url: string): string {
   return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "");
 }
 
-/** Which forge a link leaves for, said in the row that leaves for it. */
 function hostOf(url: string): string {
   return plainly(url).split("/")[0];
 }
 
-/**
- * WHICH TREE A READ WAS TAKEN OVER - @api's own word, in @api's own spelling.
- *
- * `repo` is every branch in the checkout at once, which is the wheel app's
- * question and nobody else's. `branch` is one citizen's own subtree, which is
- * what the card, the badge sweep and the files screen have always meant - and
- * it is the server's DEFAULT, so it travels as an omitted parameter rather than
- * a spelled-out one (see the changes screen, which is the only caller).
- *
- * The union lives here because this component is what a grain decides the shape
- * of; the two screens that read it take it as a prop rather than inventing a
- * second vocabulary for the same fact.
- */
+/** Which tree a read covers, in @api's spelling; `branch` is the server default and travels as an omitted parameter. */
 export type GitGrain = "repo" | "branch";
 
-/**
- * One screen in the app, with everything that screen needs to be re-rendered
- * from nothing. No screen reads state off the one below it.
- */
 export type GitView =
   | { kind: "sheet" }
   | { kind: "changes" }
@@ -98,56 +35,21 @@ export type GitView =
   | { kind: "commit"; ref: string }
   /** `ref` is "" for the working tree, or the commit the file is read from. */
   | { kind: "diff"; path: string; ref: string }
-  /** An untracked file, read through the files lane - git has no patch for a
-   *  file it has never seen (DPLAN-0414 C#3). Branch grain only; `path` is
-   *  branch-local. */
+  /** An untracked file, read through the files lane since git has no patch for it; branch grain only. */
   | { kind: "file"; path: string };
 
 interface GitAppProps {
-  /**
-   * THE CITIZEN, and what it names depends on the grain.
-   *
-   * At `repo` grain it is an ADDRESS FOR THE TREE and nothing about the branch
-   * itself is shown anywhere. At `branch` grain it is the SUBJECT: the tree
-   * being read is its own, and its name is on the title.
-   */
+  /** At repo grain an address for the tree; at branch grain the subject named on the title. */
   branch: string;
-  /** The project, as a census name. "" means the anchor project. */
   project: string;
-  /**
-   * WHICH TREE, and it is the app's shape rather than one query parameter.
-   *
-   * `repo` (the default, and the wheel app's whole reason) opens on the sheet -
-   * a door to changes, a door to commits. `branch` opens STRAIGHT INTO THE
-   * CHANGES LIST, because a card's git tile is a question about local changes
-   * and a sheet between the tap and the answer would be a screen that exists
-   * only to be passed through. Commits stay a wheel-app thing: a commit is
-   * repo-wide by construction, so there is no such thing as this branch's.
-   */
+  /** `repo` opens on the sheet; `branch` opens straight into the changes list. Commits are repo-wide, so repo grain only. */
   grain?: GitGrain;
-  /**
-   * REPO GRAIN ONLY - what the sheet's title calls the project, as the operator
-   * picked it. The branch-grain flow never renders a sheet, so it names none.
-   */
   projectLabel?: string;
-  /**
-   * REPO GRAIN ONLY, and the sheet is its only reader. How many changed files
-   * the repo holds, from PhoneApp's slow lane - or null when that lane has not
-   * answered yet. Null draws no number at all; a zero here would be a claim
-   * ("nothing has changed") that nothing has measured.
-   */
+  /** Repo grain only: the repo's changed-file count, or null before the slow lane answers (draws no number, never a zero). */
   changed?: number | null;
-  /**
-   * REPO GRAIN ONLY - whether the fleet read has answered (DPLAN-0414 C#13).
-   * With no `branch`, false means the read has not landed and true means it
-   * landed and the project has no agent: two different sentences.
-   */
+  /** Repo grain only: false means the fleet read has not landed, true means the project has no agent. */
   fleetAnswered?: boolean;
-  /**
-   * Out of the app from the floor - and the floor is the grain's, so this means
-   * two different destinations. See `changesBack` in the body, which is the
-   * word the operator is shown for whichever one it is.
-   */
+  /** Out of the app from the floor; `changesBack` names where that lands per grain. */
   onClose: () => void;
 }
 
@@ -160,42 +62,20 @@ export default function GitApp({
   fleetAnswered = false,
   onClose,
 }: GitAppProps) {
-  /* THE FLOOR IS THE GRAIN'S, decided once when the app opens. A lazy
-     initializer rather than an effect: the first render must already be on the
-     right screen, or the branch-grain flow would paint a sheet for one frame -
-     a flash of a screen this door does not have. */
+  /* A lazy initializer, not an effect, so branch grain never paints the sheet for a frame. */
   const [stack, setStack] = useState<GitView[]>(() =>
     grain === "branch" ? [{ kind: "changes" }] : [{ kind: "sheet" }],
   );
   const view = stack[stack.length - 1];
 
-  /* WHAT THE FLOOR'S BACK CHIP RETURNS TO, in the one word that is true of it.
-     At repo grain the floor is the sheet and back leaves for the wheel the app
-     hangs on; at branch grain the floor is the changes list and back leaves for
-     the card the tile was pressed on - PhoneApp re-opens it, so the word and
-     what happens are the same thing. The changes screen is BOTH a floor and a
-     first storey depending on grain, which is why it is told rather than
-     guessing. */
   const changesBack = grain === "branch" ? "card" : "git";
 
-  /* WHERE THE ROWS THAT LEAVE COME FROM. Three absences, and they are not the
-     same absence. `remote` null with nothing said is a read still in the air,
-     and draws NOTHING - a skeleton link is a promise this face has not been
-     given yet. An ANSWER whose own `remote` is null is "no remote configured"
-     (contract C-D, DPLAN-0414 C#12), and draws one quiet line, `NO_REMOTE`.
-     And `said` is a REFUSAL: @api's fixed sentence for its code with the
-     `ref` the transport appends (C#1) - an unreadable repository, or, until
-     @api lands C-D, the old answer for no remote. It is drawn where the links
-     would have been, as it is. */
+  /* null `remote` with no `said` is a read in flight and draws nothing; an answer whose `remote` is null is "no remote" (`NO_REMOTE`); `said` is a refusal. */
   const [remote, setRemote] = useState<GitRemote | null>(null);
   const [said, setSaid] = useState<string | null>(null);
 
   useEffect(() => {
-    /* REPO GRAIN ONLY, and the request is not merely hidden at branch grain -
-       it is never made. A remote is a repository fact; asking for one on the
-       card's door would be this app reading something it has decided not to
-       show. No citizen means no address to resolve, so that asks nothing
-       either. */
+    // A remote is a repository fact: at branch grain the request is never made.
     if (grain !== "repo" || !branch) return;
     let mounted = true;
     setRemote(null);
@@ -205,9 +85,6 @@ export default function GitApp({
         if (mounted) setRemote(got);
       })
       .catch((cause) => {
-        // The refusal as the transport built it - @api's fixed sentence and
-        // its `ref` (C#1), unreworded. Not a "no remote": that one is an
-        // answer since contract C-D, and lands in `remote` above.
         if (mounted) setSaid(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
@@ -216,33 +93,14 @@ export default function GitApp({
   }, [branch, project, grain]);
 
   const push = useCallback((next: GitView) => setStack((held) => [...held, next]), []);
-  /**
-   * One level up, and out of the app from the floor - the back chip's whole
-   * contract, and Escape's, so the key and the button can never disagree.
-   *
-   * The decision is made OUT HERE rather than inside the updater: an updater
-   * that called the parent's `onClose` would be a side effect in a place React
-   * is entitled to run twice, and "close" is not a thing to do twice.
-   */
+  // Decided outside the updater: React may run an updater twice, and `onClose` must not run twice.
   const back = useCallback(() => {
     if (stack.length > 1) setStack((held) => held.slice(0, -1));
     else onClose();
   }, [onClose, stack.length]);
 
-  /**
-   * THE WHOLE WAY BACK IN ONE TAP (Patrick, 08-17: "I have to go back back
-   * back... I should be able to return to the entry point").
-   *
-   * The floor, whatever the floor is - `slice(0, 1)` keeps the screen the app
-   * OPENED on rather than a screen named here, so the wheel's door lands on its
-   * sheet and the card's tile lands on its changes list, and neither can ever
-   * land somewhere the operator did not come in through. It never leaves the
-   * app: that is `back` from the floor, and this chip is not another way out.
-   */
   const home = useCallback(() => setStack((held) => held.slice(0, 1)), []);
 
-  /* THE PHONE'S OWN BACK IS `back` TOO (DPLAN-0414 wave 6, item 2) - the
-     chip, Escape and the system Back are one function, one level each. */
   useSystemBack(back);
 
   useEffect(() => {
@@ -253,17 +111,7 @@ export default function GitApp({
     return () => document.removeEventListener("keydown", key);
   }, [back]);
 
-  /* DRAWN ONLY WHERE IT DOES SOMETHING `back` DOESN'T. One floor above the
-     entry, back IS home, and two chips onto one screen is a second control that
-     answers a question the operator hasn't got. From two floors up it replaces
-     the repeated taps that earned the chip. UNDEFINED, NEVER DISABLED - this
-     face draws no dead controls, so the depth decides whether the chip exists
-     at all rather than whether it responds.
-
-     Only the two screens that CAN sit that deep are offered it: at repo grain a
-     commit is two floors up and a diff is two or three, while changes and
-     commits are the sheet's own storey and can never be more. A prop on those
-     would be a promise nothing can keep. */
+  /* Undefined, never disabled: one floor above the entry `back` already lands home. */
   const onHome = stack.length > 2 ? home : undefined;
 
   if (view.kind === "changes") {
@@ -281,10 +129,6 @@ export default function GitApp({
   }
 
   if (view.kind === "file") {
-    /* THE SAME READER every other file on this face opens in, on this app's
-       stack - so `‹ back` comes back to the changes list it was tapped on.
-       `<branch>/<path>` is the files lane's own address; the path is
-       branch-local at the only grain that pushes this screen (C#3). */
     return (
       <Reader
         target={{
@@ -348,10 +192,6 @@ export default function GitApp({
         </span>
       </header>
 
-      {/* THE GRAIN, SAID OUT LOUD AND FIRST. Every number under this line is
-          measured over the whole repository - which in this fleet means every
-          branch at once, not the one that happens to be under the notch. A
-          count that big is only honest if the screen says what it counted. */}
       <p className="baud-git-grain">whole repo — every branch, one working tree</p>
 
       {branch ? (
@@ -361,8 +201,7 @@ export default function GitApp({
               <b>changes</b>
               <span>uncommitted, across every branch</span>
             </span>
-            {/* Absent until measured. A badge that guesses zero would say the
-                tree is clean on the strength of a read that never happened. */}
+            {/* Absent until measured: a guessed zero would claim a clean tree. */}
             {changed === null ? null : <span className="baud-git-row-n">{changed}</span>}
             <span className="baud-git-row-go">›</span>
           </button>
@@ -375,12 +214,7 @@ export default function GitApp({
             <span className="baud-git-row-go">›</span>
           </button>
 
-          {/* THE ROWS THAT LEAVE. Anchors, not buttons: a link-card opens the
-              forge on the first tap, so it is a link in the markup as well as
-              in the design - which is what gives it long-press, share, open-in-
-              background and everything else a phone already knows how to do
-              with an address. No `›`: that chevron means "another floor of this
-              app", and there is no floor behind these. */}
+          {/* Anchors, not buttons, so long-press and share work; no `›`, because no in-app floor is behind them. */}
           {remote?.web && !noRemote(remote) ? (
             <>
               <a
@@ -393,10 +227,6 @@ export default function GitApp({
                   <b>
                     pull requests <i className="baud-git-out">↗</i>
                   </b>
-                  {/* NO COUNT HERE, and its absence is the honest one: how many
-                      are open is a question for the forge's API with the
-                      operator's own credentials, and this lane read a config
-                      file. A number would have to be invented to appear. */}
                   <span>opens on {hostOf(remote.web)} — not browsed in-app</span>
                 </span>
               </a>
@@ -427,10 +257,6 @@ export default function GitApp({
                   </b>
                   <span>
                     {remote.remote} · {plainly(remote.web)}
-                    {/* SAID, NEVER SILENT. The configured URL carried a
-                        credential and the server took it out; the browsable
-                        address on this row never had one to take. Either way
-                        the operator is entitled to know it was there. */}
                     {remote.redacted ? <i className="baud-git-quiet"> · password redacted</i> : null}
                   </span>
                 </span>
@@ -438,10 +264,7 @@ export default function GitApp({
             </>
           ) : null}
 
-          {/* A REMOTE WITH NO PAGE. Real: a remote can be a directory on this
-              disk, and the server answers `web: null` rather than putting a
-              scheme in front of a path. So the fact is shown and nothing is
-              drawn that could be tapped - a dead card is worse than no card. */}
+          {/* A remote can be a local directory: the server sends `web: null`, so nothing tappable is drawn. */}
           {remote && !noRemote(remote) && !remote.web ? (
             <p className="baud-git-said">
               {remote.remote} · {remote.url}
@@ -450,30 +273,16 @@ export default function GitApp({
             </p>
           ) : null}
 
-          {/* NO REMOTE CONFIGURED, said as the answer it is (contract C-D,
-              DPLAN-0414 C#12). The common case here - two projects in this
-              tree have none - and not an error worth a red box. */}
           {remote && noRemote(remote) ? <p className="baud-git-said">{NO_REMOTE}</p> : null}
 
-          {/* A REFUSAL, WHERE THE LINKS WOULD HAVE BEEN - @api's fixed sentence
-              and its ref. Quiet rather than red: until @api lands C-D this is
-              also how "no remote" arrives, and both answers coexist. */}
+          {/* An older @api also sends "no remote" as a refusal, so it stays quiet, not red. */}
           {said ? <p className="baud-git-said">{said}</p> : null}
         </div>
       ) : (
-        /* No citizen means no address for the tree. Said plainly rather than
-           drawn as an empty list, which would read as a clean repository - and
-           said TRULY (DPLAN-0414 C#13): "has not landed" only while the fleet
-           read has not answered; a read that answered with no agents for this
-           project says that instead. */
+        /* No citizen means no address for the tree; an empty list would read as a clean repository. */
         <p className="baud-phone-empty">{noAgentLine(fleetAnswered)}</p>
       )}
 
-      {/* THE DIVIDE THIS SCREEN IS BUILT ON, said once at the bottom of it.
-          What can be read from the machine is read here; what lives on the web
-          is LEFT FOR. The phone browses no forge - it links to one - so the
-          counts beside the mock's link rows are not missing from this build,
-          they are the other side of that line. */}
       <p className="baud-git-note">
         reads and lists live here; anything with a web home leaves for it — the phone browses no
         forge of its own

@@ -1,17 +1,5 @@
-/**
- * An agent's plans, read off its dashboard (DPLAN-0414 T1, A#2).
- *
- * The PLANS tile used to open the whole `DASHBOARD.local.json` raw. It now
- * opens a screen that reads that same file through the files lane and draws
- * the one section the tile counts: `sections.flow`, which @flow keeps -
- * `active_plans`, `open_recent[]` (`plan_id`, `subject`, `created`) and
- * `recently_closed[]` (`id`, `subject`, `closed`). No new route (compass
- * #293), the memory screen's pattern.
- *
- * PURE, so the words are tested without a browser.
- */
+/** An agent's plans, read off `sections.flow` of its DASHBOARD.local.json (kept by @flow); pure. */
 
-/** One plan row: its id, its subject, and the timestamp its age is read from. */
 export interface PlanRow {
   id: string;
   subject: string;
@@ -26,12 +14,9 @@ export interface Plans {
   closed: PlanRow[];
 }
 
-/** The two stated absences. A list with nothing in it says so. */
 export const NO_OPEN = "no open plans";
 export const NOTHING_CLOSED = "nothing closed lately";
-/** The head when no count is written anywhere on the dashboard. */
 export const NO_COUNT = "no plan count on this dashboard";
-/** A row whose subject is missing. */
 export const NO_PLAN_SUBJECT = "(no subject)";
 
 const text = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);
@@ -51,12 +36,7 @@ function rows(list: unknown, idKey: string, whenKey: string): PlanRow[] {
   });
 }
 
-/**
- * The flow section, parsed. The count is `flow.active_plans`, falling back to
- * the dashboard's own `quick_status.active_plans` - the figure the tile itself
- * shows - when the section does not carry one. An absent section is two empty
- * lists, which the screen states in words.
- */
+/** The flow section, parsed; the count falls back to `quick_status.active_plans`, the figure the tile shows. */
 export function readPlans(raw: unknown): Plans {
   const doc = (raw ?? {}) as Record<string, unknown>;
   const sections = (doc.sections ?? {}) as Record<string, unknown>;
@@ -69,7 +49,6 @@ export function readPlans(raw: unknown): Plans {
   };
 }
 
-/** The screen's head: `25 active plans`, `1 active plan`, or the absence. */
 export function plansHead(active: number | null): string {
   if (active === null) return NO_COUNT;
   return `${active} active plan${active === 1 ? "" : "s"}`;

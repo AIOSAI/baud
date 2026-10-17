@@ -1,25 +1,4 @@
-/**
- * ONE COMMIT - who, when, what it said, and which files moved.
- *
- * NO PATCH ON THIS SCREEN, by the lane's own design: the commit read answers
- * facts and per-file stats, and every file's patch rides the diff lane one file
- * at a time. A commit in this fleet routinely touches thirty files across four
- * branches, and loading that as one blob is the thing a phone cannot do.
- *
- * THE FILE LIST IS THE CHANGES SCREEN'S LIST, through the same row component -
- * one vocabulary for every set of files. What it adds is the stat, because a
- * commit knows how many lines moved and a working tree does not.
- *
- * EVERY ROW WEARS THE SAME LETTER, and that is a refusal to guess rather than a
- * shortcut. A commit's file carries additions and deletions and NO porcelain
- * code - a commit has no index and no worktree columns to report - and the two
- * numbers cannot be turned back into one. A file with no additions is as likely
- * to be five deleted lines as a deleted file; a file with no deletions is as
- * likely to be a new paragraph as a new file. Colouring those rows green and
- * red would put a confident wrong word on most of them, so they say the one
- * thing that is true of every file in a commit - this commit MODIFIED it - and
- * the +/- numbers beside the name carry what actually happened.
- */
+/** One commit: facts, message and per-file stats; each file's patch rides the diff lane one file at a time. */
 
 import { useEffect, useState } from "react";
 
@@ -28,13 +7,7 @@ import type { GitCommit } from "../../types";
 import { NO_FILES_OF_ITS_OWN, messageBody } from "../lib/gitWords";
 import GitFileRow from "./GitFileRow";
 
-/**
- * What a commit's file row says instead of a status it does not have.
- *
- * A porcelain code shaped the way the INDEX reports one, so it travels through
- * `gitStatus.chipOf` like every other row on this face - one vocabulary, one
- * reader, and this screen decides nothing about how a letter is drawn.
- */
+/** A commit file has no porcelain code and +/- cannot be turned back into one, so every row says only "modified". */
 const TOUCHED_BY_THIS_COMMIT = "M ";
 
 interface GitCommitScreenProps {
@@ -44,12 +17,7 @@ interface GitCommitScreenProps {
   commitRef: string;
   onOpenFile: (path: string) => void;
   onBack: () => void;
-  /**
-   * Straight to the floor the app opened on - or ABSENT when this screen is
-   * only one floor above it, because then `back` already lands there and a
-   * second chip onto the same screen says nothing. The app owns the stack, so
-   * the app is what knows; this screen only draws what it was handed.
-   */
+  /** Absent when this screen is one floor above home, since `back` already lands there. */
   onHome?: () => void;
 }
 
@@ -73,8 +41,6 @@ export default function GitCommitScreen({
         if (mounted) setCommit(got);
       })
       .catch((cause) => {
-        // The transport's message: @api's sentence, with the `ref` on the end
-        // when it carried one (DPLAN-0414 C#1).
         if (mounted) setError(cause instanceof Error ? cause.message : String(cause));
       });
     return () => {
@@ -104,9 +70,6 @@ export default function GitCommitScreen({
       {commit ? (
         <>
           <div className="baud-git-difhead">
-            {/* THE FULL SHA, not the short one the list showed. The list's job
-                is recognition, this document's job is identification - and a
-                seven-character name is not one, however convenient. */}
             <b>{commit.sha}</b>
             <p className="baud-git-difsub">
               {commit.author}
@@ -117,18 +80,10 @@ export default function GitCommitScreen({
 
           <p className="baud-git-subject-line">{commit.subject}</p>
 
-          {/* THE BODY ONLY WHEN THERE IS ONE. @api sends the message WHOLE -
-              subject line included - and `subject` beside it, so drawing the
-              message as it came printed the subject twice (DPLAN-0414 C#5).
-              `messageBody` drops the first line and the blank line under it;
-              a one-line commit leaves nothing, and an empty block with a
-              border around it is this face inventing an absence to draw. */}
+          {/* @api sends the message whole, subject included; `messageBody` drops the subject line. */}
           {body ? <pre className="baud-git-message">{body}</pre> : null}
 
-          {/* A MERGE HAS NO FILES OF ITS OWN (DPLAN-0414 C#6). @api splits the
-              shown commit on `diff --git` headers and a merge prints none, so
-              the list is empty - one line says so, where a heading over
-              nothing used to stand. */}
+          {/* A merge prints no `diff --git` headers, so its file list is empty. */}
           {commit.files.length === 0 ? (
             <p className="baud-phone-empty">{NO_FILES_OF_ITS_OWN}</p>
           ) : (

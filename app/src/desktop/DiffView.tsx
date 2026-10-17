@@ -13,10 +13,8 @@ import { oneDark } from "@codemirror/theme-one-dark";
 
 
 /**
- * The changes tab behind a card's git badge: the branch's full uncommitted
- * diff, rendered read-only in patch syntax. Unlike a file tab, a diff goes
- * stale the moment the agent keeps working - so this pane refetches every
- * time it comes back to the front instead of holding its first snapshot.
+ * The changes tab: a branch's uncommitted diff, read-only. A diff goes stale as the agent works,
+ * so it refetches each time the tab comes to the front.
  */
 
 /** Same chrome blend as FileView - the panes should be indistinguishable. */
@@ -62,7 +60,6 @@ export default function DiffView({ dir, active }: { dir: string; active: boolean
           return;
         }
 
-        // language-data ships a Diff mode keyed to .diff/.patch names.
         const description = LanguageDescription.matchFilename(languages, "changes.diff");
         const language = description ? await description.load() : [];
         if (disposed) return;

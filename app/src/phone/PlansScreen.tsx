@@ -1,22 +1,5 @@
-/**
- * PLANS - what the card's PLANS tile opens (DPLAN-0414 T1, A#2).
- *
- * The tile used to open the agent's whole `DASHBOARD.local.json` in the plain
- * reader, titled "dashboard": raw JSON behind a figure that promised plans. The
- * owner's ruling (14:04, "we already do view with memories, already clean
- * read") makes the memory screen the pattern for every designed read, so this
- * is that screen's shape over the dashboard's flow section: the same file, the
- * same named-file lane, parsed here (`lib/plans.ts`), drawn as two lists. No
- * new route - @api is a gateway (compass #293).
- *
- * THE READER SHELL, as the memory screen wears it: full height, one `‹ back`,
- * sticky head, the memory screen's own list classes inside. Each list that has
- * nothing in it says so in a sentence, never a blank.
- *
- * NAMES, NEVER PATHS, and the PROJECT IS NAMED - the memory screen's reason: an
- * unnamed project resolves under the seat, which for a foreign card quietly
- * reads a same-named local agent's dashboard.
- */
+/** The PLANS tile's screen: the dashboard's flow section as two lists, in the memory screen's shell.
+ * The project is always named: an unnamed one resolves under the seat and reads a same-named local agent. */
 
 import { useEffect, useRef, useState } from "react";
 
@@ -24,16 +7,13 @@ import { relativeAge } from "../age";
 import { readFileText } from "../host";
 import { NOTHING_CLOSED, NO_OPEN, type PlanRow, type Plans, plansHead, readPlans } from "./lib/plans";
 
-/** The file behind the tile, by the name @api's fence takes. */
 const PLANS_FILE = "DASHBOARD.local.json";
 
 interface PlansScreenProps {
-  /** The branch whose dashboard this is. */
   branch: string;
   /** Which project that branch lives in. Empty means the seat. */
   project: string;
-  /** The word after `‹`: where back lands - `card`, from the trail
-   *  (DPLAN-0414 wave 6). Absent is `back`. */
+  /** The word after `‹`: where back lands, from the trail. */
   backLabel?: string;
   onClose: () => void;
 }
@@ -54,8 +34,7 @@ export default function PlansScreen({ branch, project, backLabel = "back", onClo
     };
   }, []);
 
-  // Mounting IS opening, the memory screen's rule: every open re-reads, so a
-  // plan closed while the screen was shut is never shown as open.
+  // Every open re-reads, so a plan closed while the screen was shut never shows as open.
   useEffect(() => {
     setPlans(null);
     setError(null);
@@ -70,7 +49,6 @@ export default function PlansScreen({ branch, project, backLabel = "back", onClo
         }
       })
       .catch((err) => {
-        // @api's own sentence, verbatim - a fence that refuses says why.
         if (alive.current) setError(message(err));
       });
   }, [branch, project]);
@@ -103,14 +81,7 @@ export default function PlansScreen({ branch, project, backLabel = "back", onClo
   );
 }
 
-/**
- * One list, or the sentence that stands in for it.
- *
- * A ROW IS NOT A DOOR THIS ROUND. The plan files live in the branch directory
- * and opening one in the Reader is a later row of DPLAN-0414; until then a row
- * that looked pressable would promise a read this screen cannot give, so the
- * rows are cards without a button inside.
- */
+// Rows carry no button: opening a plan file is not built, and a pressable row would promise it.
 function PlanList({ label, rows, empty }: { label: string; rows: PlanRow[]; empty: string }) {
   return (
     <section className="baud-list-zone">

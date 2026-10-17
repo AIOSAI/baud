@@ -5,18 +5,7 @@ import { Terminal as XTerm } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
 
-/**
- * A tier-0 monitor pane (m9): live output, no keyboard. The one operator
- * terminal stays the only seat of agency - this pane is a window, not a
- * seat. The no-stdin line is held twice: xterm's `disableStdin` up here,
- * and the backend's read-only refusal in `pty_write` (the one that counts).
- *
- * Lifecycle is the toggle's: mount spawns the monitor, unmount kills it.
- * If the process dies on its own - or the corner button kills it - the exit
- * event reports up through `onExited` and the parent closes the tab, which
- * is what resets the header toggle. Button state never drifts from truth
- * because the button state IS the pane's existence.
- */
+/** A read-only monitor pane; its existence is the header toggle's state. Reference: docs/desktop/rooms.md */
 
 /** Mirrors `PtyEvent` in src-tauri/src/pty.rs. */
 type PtyEvent =
@@ -24,11 +13,7 @@ type PtyEvent =
   | { kind: "exit"; session: string };
 
 interface MonitorPaneProps {
-  /**
-   * What to watch: `null` = mission control (all branches), `"commons"` =
-   * the live social feed, a branch list = just those branches. Handed to
-   * the backend as a token, never as a command line.
-   */
+  /** What to watch: null = mission control, "commons", or a branch list; sent as a token, never a command line. */
   target: string | null;
   /** A human word for the corner button's title. */
   label: string;

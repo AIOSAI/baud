@@ -4,10 +4,8 @@ import { listProjects, projectSwitch } from "../host";
 import type { ProjectListing } from "../types";
 
 /**
- * The seat selector (m7). The chip shows which project the fleet view is
- * seated in; opening it asks the backend for its census of sealed projects
- * and clicking a row reseats by NAME. The list is the backend's own
- * discovery - this component never sees, sends, or invents a path.
+ * The seat selector: lists the backend's sealed projects and reseats by name.
+ * It switches by name only; the backend owns discovery and never takes a path from here.
  */
 export default function ProjectSwitch({
   project,
@@ -23,7 +21,6 @@ export default function ProjectSwitch({
   const [failure, setFailure] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // A click anywhere outside the switcher closes the menu.
   useEffect(() => {
     if (!open) return;
     const close = (event: MouseEvent) => {

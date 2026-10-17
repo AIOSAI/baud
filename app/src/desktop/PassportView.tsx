@@ -4,23 +4,8 @@ import { readFileText } from "../host";
 import type { BranchStatus } from "../types";
 
 /**
- * The opened passport: one agent read as a document rather than a chip.
- *
- * A MODAL, NOT A WORKBENCH TAB - the call devpulse left me. Three reasons, in
- * order of weight. The workbench is where the operator WORKS: a terminal and
- * the files open beside it, all of them things you keep. A passport is
- * something you consult and dismiss, and parking it in the tab bar would put
- * a document that never changes next to a live session that does. Second, the
- * app already has exactly this shape for exactly this kind of thing - the
- * settings panels - so the operator learns no new gesture and escape already
- * means close. Third, the phone's AgentSheet is a sheet over the fleet for
- * the same reason; two faces, one idea.
- *
- * EVERY PAGE IS READ, NOTHING IS OWNED. The passport, the working memory and
- * the observations are @spawn's and the agent's own files. BAUD renders them
- * and cannot write one byte back - which is why a read that fails says so in
- * the file's own words instead of drawing an empty document that looks like
- * an agent with nothing to say.
+ * The opened passport: one agent's `.trinity/` files read as a document, read-only.
+ * Reference: docs/desktop/window-and-cards.md
  */
 
 /** A monitor the passport can open, for manager-class agents only. */
@@ -35,15 +20,11 @@ export interface PassportMonitor {
 interface PassportViewProps {
   branch: BranchStatus;
   onClose: () => void;
-  /**
-   * The two global monitors, relocated off the top bar (m-round A). Passed
-   * only for manager-class passports - the caller decides, because the caller
-   * is what owns the tabs these toggles reflect.
-   */
+  /** The global monitors, for manager-class passports only; the caller owns their tabs. */
   monitors: PassportMonitor[];
 }
 
-/** The working-memory tabs, in the order Patrick named them. */
+/** The working-memory tabs, in display order. */
 const MEMORY_TABS = [
   { id: "sessions", label: "Sessions", file: "local", container: "sessions" },
   { id: "key_learnings", label: "Key Learnings", file: "local", container: "key_learnings" },
@@ -53,15 +34,7 @@ const MEMORY_TABS = [
 
 type MemoryTabId = (typeof MEMORY_TABS)[number]["id"];
 
-/**
- * The text of an entry, whichever of its names this container uses.
- *
- * The four containers were written by four different hands over months and
- * none of them agree: a session carries `summary`, a learning carries
- * `learning`, an observation carries `note`, a todo carries `task`. Rather
- * than four renderers, one lookup - and an entry whose text is under a name
- * nobody has used yet renders as a stated absence, never as a blank card.
- */
+/** The text of an entry, whichever of its names this container uses; none found is a stated absence. */
 const TEXT_KEYS = ["summary", "learning", "note", "task", "text", "content"] as const;
 
 interface Entry {
@@ -115,9 +88,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
     };
   }, []);
 
-  // Mounting IS opening, exactly as the settings panels do it: every open
-  // re-reads, so a passport can never show a picture of a file the agent
-  // rewrote while the card sat on screen.
   useEffect(() => {
     const load = (relative: string, adopt: (next: Document) => void) => {
       readFileText(`${branch.path}/.trinity/${relative}`)
@@ -159,12 +129,7 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
   const line = (source: Record<string, unknown>, key: string): string | null =>
     typeof source[key] === "string" && source[key] !== "" ? (source[key] as string) : null;
 
-  /**
-   * A field that is a STRING on most passports and a LIST on some - measured,
-   * not assumed: @devpulse and @aipass carry `traits` as arrays. A string-only
-   * reader printed their populated Traits as an em-dash here, which is the
-   * phone sheet's exact warning come true on this face.
-   */
+  /** A field that is a string on most passports and a list on some (`traits`). */
   const lines = (source: Record<string, unknown>, key: string): string[] => {
     const held = source[key];
     if (typeof held === "string") return held === "" ? [] : [held];
@@ -173,9 +138,7 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
   };
   const traits = lines(identity, "traits");
 
-  // The class the FILE claims, falling back to the snapshot's copy of the same
-  // field - the passport read is fenced to the seated project, so a roster
-  // card gets no document and the strip's value is all there is.
+  // The read is fenced to the seated project, so a roster card falls back to the snapshot.
   const citizenClass = line(identity, "citizen_class") ?? branch.citizen_class;
 
   const entries = useMemo(() => {
@@ -184,8 +147,7 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
     const source = spec.file === "local" ? local : observations;
     const rows = source.data?.[spec.container];
     if (!Array.isArray(rows)) return [];
-    // Newest first, and by POSITION not by date: these files are appended to,
-    // and a hand-written date can be wrong in a way the order never is.
+    // Newest first by POSITION, not date: a hand-written date can be wrong, the order cannot.
     return rows.map(readEntry).reverse();
   }, [tab, local, observations]);
 
@@ -201,8 +163,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
         aria-label={`${branch.name} passport`}
         onClick={(event) => event.stopPropagation()}
       >
-        {/* THE TITLE BLOCK, real-passport order and Patrick's design: who
-            issued it, what the document is, then whose it is. */}
         <header className="baud-passport-title">
           <p className="baud-passport-issuer">AIPASS</p>
           <p className="baud-passport-type">AGENT PASSPORT</p>
@@ -225,8 +185,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
                 {passport.error}
               </p>
             ) : null}
-            {/* A passport is a document of FIELDS, so it is rendered as
-                fields - never as the raw JSON it happens to be stored in. */}
             <dl className="baud-passport-fields">
               <dt>Class</dt>
               <dd>{citizenClass || "no class declared"}</dd>
@@ -238,13 +196,8 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
               <dd>{traits.length > 0 ? traits.join(" · ") : "—"}</dd>
               <dt>Issued</dt>
               <dd>{line(branchInfo, "created") ?? "—"}</dd>
-              {/* TWO NUMBERS, TWO MEANINGS (Patrick's ruling, 2026-08-24):
-                  citizen_id is the citizen's own unique id - the passport
-                  number, no two agents share one. registry_id is the id of
-                  the REGISTRY holding the citizen, shared by every sibling BY
-                  DESIGN - the lock to the branch registry. This row used to
-                  print the shared lock as "Passport no.", which is how a
-                  fleet-wide audit briefly read as 18 duplicate passports. */}
+              {/* citizen_id is unique per agent; registry_id is shared by every sibling.
+                  Printing registry_id as the passport number reads as duplicate passports. */}
               <dt>Passport no.</dt>
               <dd
                 className="baud-passport-serial"
@@ -263,8 +216,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
               <dd>{line(branchInfo, "email") ?? "—"}</dd>
               <dt>Project</dt>
               <dd>{branch.project}</dd>
-              {/* A count, and only ever a count: sub-agents are not citizens,
-                  they have no names in this lane and BAUD will not imply any. */}
               <dt>Sub-agents</dt>
               <dd>
                 {branch.subagents > 0
@@ -281,11 +232,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
             ) : null}
           </section>
 
-          {/* MANAGER PASSPORTS ONLY. These two lived in the top bar, which had
-              no room for them; they belong to the agent that runs them, and a
-              manager's passport is where an operator goes looking for what a
-              manager runs. The doors are the same openMonitor/closeFile the
-              header used - relocated, not reimplemented. */}
           {monitors.length > 0 ? (
             <section className="baud-passport-page">
               <h3 className="baud-passport-page-head">Monitors</h3>
@@ -361,8 +307,6 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
                 ))}
               </ol>
             )}
-            {/* The files roll over into @memory's vectors, so what is on
-                screen is the RECENT end and saying so costs one line. */}
             <p className="baud-passport-foot">
               The recent end only — older entries roll over into @memory's archive.
             </p>

@@ -1,39 +1,13 @@
-/**
- * The links in a room's output, found ONCE for both doors that use them
- * (2026-10-12, devpulse's brief: a claude login has to finish from the phone).
- *
- * A login prints an OAuth URL into the room, and on the phone that URL was
- * plain text: no tap opened it, and nothing lifted it off the screen. Two doors
- * read this module - the link provider TerminalSheet registers on xterm, so a
- * tap on the URL opens it, and the links panel, which lists every URL in the
- * scrollback because a thin wrapped line on a six-inch screen is a hard target.
- * One detection behind both, so the panel can never list a link the tap cannot
- * see, or the reverse.
- *
- * WHY NOT THE WEB-LINKS ADDON, which the desktop loads. The addon joins rows
- * only where xterm itself wrapped them (`isWrapped`). A URL can also arrive
- * HARD-wrapped - a full-screen interface that breaks long text into lines of
- * its own, or tmux repainting a pane - and then each row is its own line to
- * xterm, so the addon underlines one row of the URL and a tap opens a third of
- * it. A tap on a wrapped URL has to open the whole URL, so the join is done
- * here, where tests can pin it.
- *
- * A HARD WRAP IS A JUDGEMENT, made narrowly. A row joins the URL above it only
- * when that URL runs to the right edge of its row, and the row below is nothing
- * BUT URL characters - no space anywhere in it - starting at the left edge or at
- * the indent of the line the URL began on. A sentence under a URL ("Paste code
- * here") has spaces, so it never joins.
- */
+/** The links in a room's output, found once for both doors (the tap provider and the links panel).
+ * A hard wrap joins only when the URL reaches the right edge and the row below is all URL characters.
+ * Reference: docs/phone/room-delivery.md */
 
-/** One terminal row, as the buffer hands it over. */
 export interface RoomRow {
-  /** The row's text, trailing blanks trimmed. */
   text: string;
   /** True when xterm wrapped the previous row into this one. */
   wrapped: boolean;
 }
 
-/** A cell position: buffer row and column, both 0-based. */
 export interface Cell {
   row: number;
   col: number;
@@ -46,25 +20,18 @@ export interface RoomLink {
   end: Cell;
 }
 
-/** The characters RFC 3986 allows in a URL, as one class. */
 const URL_CHAR = "A-Za-z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%";
 const URL_RUN = new RegExp(`https?://[${URL_CHAR}]+`, "g");
 const URL_AT_END = new RegExp(`https?://[${URL_CHAR}]+$`);
 const ALL_URL_CHARS = new RegExp(`^[${URL_CHAR}]+$`);
 const STARTS_A_URL = /^https?:\/\//;
 
-/**
- * How close to the right edge a row must reach for a hard wrap to be read.
- * An interface that wraps one or two cells short of the edge is common; a row
- * that stops further in than that is a line that ended, not one that broke.
- */
+/** How close to the right edge a row must reach for a hard wrap to be read. */
 const EDGE_SLACK = 2;
 
-/** Sentence punctuation that sits after a URL and is not part of it. */
 const TRAILING = /[.,;:!?'"]+$/;
 
-/** A matched run without what a sentence put after it: trailing punctuation,
- *  and a closing bracket the URL never opened. */
+/** A matched run without trailing punctuation or a closing bracket the URL never opened. */
 function trimTail(run: string): string {
   let url = run.replace(TRAILING, "");
   for (const [open, close] of [
@@ -92,20 +59,8 @@ function continuesUrl(line: string, lastRow: string, next: string, cols: number,
   return lead === 0 || lead === indent;
 }
 
-/**
- * Every http(s) URL in `rows`, each joined across the rows it was wrapped over.
- *
- * Columns assume one cell per character, which holds for a URL; a wide
- * character earlier on the same row shifts the underline, never the URL.
- *
- * Args:
- *   rows: Consecutive buffer rows, top first.
- *   cols: The terminal's width in cells.
- *   firstRow: The buffer row `rows[0]` is, so cells come back in buffer terms.
- *
- * Returns:
- *   The links, top first.
- */
+/** Every http(s) URL in `rows`, top first, each joined across the rows it was wrapped over. */
+// One cell per character: a wide character earlier on the row shifts the underline, never the URL.
 export function findLinks(rows: RoomRow[], cols: number, firstRow = 0): RoomLink[] {
   const links: RoomLink[] = [];
   let r = 0;
@@ -123,8 +78,7 @@ export function findLinks(rows: RoomRow[], cols: number, firstRow = 0): RoomLink
     while (last + 1 < rows.length) {
       const next = rows[last + 1];
       if (next.wrapped) {
-        // The row above was trimmed; a soft wrap means it really ran to the
-        // edge, so its blanks go back or two words would fuse across the wrap.
+        // A soft-wrapped row ran to the edge, so its trimmed blanks go back or two words fuse across the wrap.
         const short = cols - rows[last].text.length;
         if (short > 0) add(last, rows[last].text.length, " ".repeat(short));
         add(last + 1, 0, next.text);
@@ -150,18 +104,11 @@ export function findLinks(rows: RoomRow[], cols: number, firstRow = 0): RoomLink
   return links;
 }
 
-/** Whether `link` covers any cell of buffer row `row`. */
 export function coversRow(link: RoomLink, row: number): boolean {
   return link.start.row <= row && row <= link.end.row;
 }
 
-/**
- * The distinct URLs, most recent (lowest in the buffer) first.
- *
- * Args:
- *   links: What `findLinks` returned.
- *   limit: How many to keep.
- */
+/** The distinct URLs, most recent (lowest in the buffer) first. */
 export function recentUrls(links: RoomLink[], limit: number): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -174,20 +121,11 @@ export function recentUrls(links: RoomLink[], limit: number): string[] {
   return out;
 }
 
-/** The slice of an xterm buffer this module reads. */
 export interface RowSource {
   readonly length: number;
   getLine(y: number): { readonly isWrapped: boolean; translateToString(trimRight?: boolean): string } | undefined;
 }
 
-/**
- * Buffer rows `from` up to (not including) `to`.
- *
- * Args:
- *   buffer: xterm's active buffer, or anything shaped like it.
- *   from: The first buffer row.
- *   to: One past the last.
- */
 export function readRows(buffer: RowSource, from: number, to: number): RoomRow[] {
   const rows: RoomRow[] = [];
   for (let y = Math.max(0, from); y < Math.min(buffer.length, to); y += 1) {

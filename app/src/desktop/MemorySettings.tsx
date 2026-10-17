@@ -10,26 +10,8 @@ import { CAPS_AT_DESKTOP, capsLine, enforcementWarns, pushScope } from "../memor
 import type { MemoryConfig, MemoryConfigPatch } from "../types";
 
 /**
- * The memory dials (m13), a section inside BAUD's interface panel.
- *
- * These numbers are @memory's, not BAUD's: one shared config file that every
- * citizen in the ecosystem lives under. Two consequences shape this component.
- *
- * It saves SEPARATELY from the rest of the panel. The interface gear writes
- * BAUD's own `.aipass/baud.settings.json`; this writes another agent's file
- * through another command, and one button doing both would make a poll-cadence
- * tweak silently rewrite the fleet's memory limits.
- *
- * And the two halves apply differently, which the UI has to say out loud
- * rather than imply: character caps are re-read live by the enforcement hook,
- * so they bind on the next memory write, while keep-counts are defaults that
- * only reach the branches when the operator runs `drone @memory rollover push`.
- * BAUD prints that command and stops there - pushing config to seventeen
- * branches is @memory's job, not a side effect of closing a dialog.
- *
- * Per-branch overrides are shown, never edited: they are written BY that push,
- * and seventeen editable copies of the same three dials is a panel nobody can
- * read.
+ * The memory dials: @memory's fleet-wide config, saved separately from BAUD's own settings.
+ * Reference: docs/desktop/settings.md
  */
 
 /** Tauri rejects with the backend's error string, not an Error. */
@@ -50,12 +32,7 @@ function capHint(file: string, container: string, field: string): string {
 type Numbers = Record<string, number>;
 
 interface MemorySettingsProps {
-  /**
-   * The face mounting this panel has NO character-caps lane (DPLAN-0414 A#7).
-   * The phone passes it: its route serves the rollover dials only, so an empty
-   * caps list there means "set elsewhere", not "none set". The desktop never
-   * passes it, and an empty list on the desktop keeps the desktop's sentence.
-   */
+  /** The mounting face has no caps lane (the phone), so an empty caps list means "set elsewhere". */
   capsAtDesktop?: boolean;
 }
 
@@ -101,15 +78,10 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
     setConfig(next);
     setCaps(Object.fromEntries(next.entry_limits.map((l) => [l.key, l.max_chars])));
     setCounts(Object.fromEntries(next.rollover.map((d) => [dialId(d.group, d.key), d.count])));
-    // auto_compact_cap is NOT mirrored into editor state any more: it is
-    // read-only in v1, and holding an edit buffer for a value nothing can
-    // write is how a dead input gets re-added by accident later.
+    // auto_compact_cap is read-only in v1: no edit buffer, so no dead input creeps back.
   }
 
-  // Only genuine differences reach the wire, and a field the operator cleared
-  // (NaN, not a number) is treated as untouched rather than written as zero -
-  // the backend would refuse it anyway, and refusing the whole save because
-  // one box is mid-edit would be a hostile way to say so.
+  // A cleared field (NaN) counts as untouched rather than written as zero.
   const patch: MemoryConfigPatch = { caps: [], rollover: [] };
   if (config) {
     for (const limit of config.entry_limits) {
@@ -118,12 +90,8 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
         patch.caps.push({ key: limit.key, max_chars: next });
       }
     }
-    // ROLLOVER COUNTS NO LONGER TRAVEL IN THIS PATCH (round A ruling). They
-    // were direct file writes; they are now @memory's `config set-default`,
-    // one verb per moved dial, so the 1-100 bounds and the refusal wording
-    // come from @memory rather than from a second copy of its rules here.
-    // `patch.rollover` stays in the type because the CAP writer still uses
-    // the same envelope - it is simply always empty from this panel now.
+    // Keep-counts go through @memory's `config set-default`, not this patch, so
+    // `patch.rollover` is always empty from this panel.
   }
   const movedDials = config
     ? config.rollover.filter((dial) => {
@@ -134,18 +102,9 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
   const pending = patch.caps.length + movedDials.length;
 
   /**
-   * Two lanes, deliberately, and the split is the round's ruling: character
-   * caps have no verb behind them and stay on the direct file write; every
-   * keep-count goes through @memory's own `config set-default`.
-   *
-   * The dials run in SEQUENCE, not in parallel - they all edit one shared
-   * file, and three concurrent writers to one JSON document is how a config
-   * loses a key. Slower by a few hundred milliseconds, and correct.
-   *
-   * Whatever comes back is the file RE-READ after the verb, so the panel
-   * always settles on what @memory's config actually says rather than on what
-   * BAUD asked for. That matters more than usual here: a refused verb exits
-   * zero, so the read-back is the only honest proof a number moved.
+   * Caps write the file directly; keep-counts go through @memory's verb.
+   * The dials run in SEQUENCE: concurrent writers to one JSON file lose keys.
+   * A refused verb exits zero, so the re-read config is the only proof a number moved.
    */
   const save = async () => {
     if (pending === 0 || saving) return;
@@ -168,10 +127,7 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
     }
   };
 
-  /**
-   * The fleet-wide reset. Two taps, never one: this rewrites the limits of
-   * every branch at once and there is no undo verb to offer afterwards.
-   */
+  /** The fleet-wide reset: two taps, because there is no undo. */
   const [confirmPush, setConfirmPush] = useState(false);
   const [pushing, setPushing] = useState(false);
   const push = () => {
@@ -208,8 +164,7 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
     <section className="baud-memory" aria-label="memory dials">
       <header className="baud-memory-head">
         <span className="baud-memory-title">memory · @memory's config</span>
-        {/* No path, no row (DPLAN-0414 A#6): the phone read a route, not a
-            file, and a URL under this header read as the file it came from. */}
+        {/* No path, no row: the phone reads a route, not a file. */}
         {config?.path ? (
           <span className="baud-memory-path" title={config.path}>
             {config.path}
@@ -225,13 +180,7 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
 
       {config ? (
         <>
-          {/* THE CAPS HEADING ON A FACE WITH NO CAPS LANE (DPLAN-0414 A#7).
-              The phone's list is always empty - its route serves no caps and
-              the write is refused - so the hook sentence used to stand over
-              nothing. There it reads the one true thing and nothing else. The
-              desktop never passes the flag and keeps its sentence. The warning
-              shows only on an enforcement flag somebody READ as false (A#6):
-              the phone's is unknown, and an unknown is not an alarm. */}
+          {/* The warning shows only on an enforcement flag READ as false; the phone's is unknown. */}
           {capsLine(config.entry_limits.length, capsAtDesktop) === "desktop" ? (
             <p className="baud-memory-note">{CAPS_AT_DESKTOP}</p>
           ) : (
@@ -254,10 +203,7 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
             </label>
           ))}
 
-          {/* THE TIMING SENTENCE, corrected this round: there is no daemon
-              tick and nothing here is scheduled. A changed limit is applied by
-              the next rollover RUN - a compaction hook, a watch, or somebody
-              running it by hand. Never promise a clock we do not own. */}
+          {/* No daemon tick: limits apply at the next rollover RUN. Never promise a clock we do not own. */}
           <p className="baud-memory-note">
             rollover keep-counts · defaults only, written through @memory's own verb.
             A change applies at the next rollover run, and does NOT reach any agent
@@ -271,10 +217,6 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
                 <span className="baud-settings-label">{dial.key.replace(/_/g, " ")}</span>
                 {number(counts[id], (next) => setCounts({ ...counts, [id]: next }), 1)}
                 <span className="baud-settings-hint">kept in {dial.group}</span>
-                {/* READ-ONLY IN v1 - @memory displays this dial and does not
-                    take a value for it, so BAUD shows the number and offers no
-                    box. An input that silently does nothing is worse than no
-                    input at all. */}
                 {dial.auto_compact_cap !== null ? (
                   <span className="baud-settings-hint">
                     auto-compact cap {dial.auto_compact_cap} · read-only in v1
@@ -284,9 +226,6 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
             );
           })}
 
-          {/* THE EMPTY STATE IS A FACT, NOT A BLANK. Every branch sitting at
-              the defaults is the healthy case and the panel should say so out
-              loud - an empty region reads as a list that failed to load. */}
           {config.per_branch.length === 0 ? (
             <p className="baud-memory-note">
               no branch overrides · every agent is at the defaults above
@@ -321,11 +260,7 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
             </div>
           ) : null}
 
-          {/* THE PUSH. Its copy carries @memory's real semantics, which are
-              easy to soften and must not be: changing a default above does NOT
-              reach a single agent. Until this button is pressed, every branch
-              that already carries an override keeps showing its OLD number.
-              That is the whole reason the button exists. */}
+          {/* @memory's real semantics, unsoftened: a changed default reaches no agent until the push. */}
           <div className="baud-memory-push">
             <p className="baud-memory-note">
               changing a default does not reach agents · until you push, every agent with
@@ -333,9 +268,6 @@ export default function MemorySettings({ capsAtDesktop = false }: MemorySettings
             </p>
             {confirmPush ? (
               <div className="baud-memory-push-row">
-                {/* The count is the overrides' when there are any; "every
-                    branch" when there are none (DPLAN-0414 A#8) - it used to
-                    fall back to a literal 17, a guess at this fleet's size. */}
                 <span className="baud-memory-warn">
                   this resets {pushScope(config.per_branch.length)} to the defaults — there is
                   no undo

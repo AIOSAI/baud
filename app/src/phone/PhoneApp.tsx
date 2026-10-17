@@ -1,71 +1,12 @@
-/**
- * BAUD as a wheel - the phone face (FPLAN-0413 phase 3, read depth in 3b, the
- * rail in FPLAN-0423, the rail made permanent in FPLAN-0424).
- *
- * ONE LAYOUT, NOT TWO. The rail sits above the terminal at all times and the
- * region below it shows either an attached room or the resting state. This
- * REVOKES the hide-the-rail-in-a-room state I designed into the approved
- * mockup: live use falsified it in a day. Patrick, verbatim: "I have to detach
- * every time I want to observe agents. the terminal is the center piece, always
- * there just like desktop, I can navigate as agents are working." A shape can be
- * approved and still be wrong; the thumb that approved it is the same thumb that
- * revoked it, and that is the correct order.
- *
- * BROWSING IS NOT SWITCHING. Flicking the rail moves the notch, the current
- * strip and the expand target - and touches NOTHING else. It never closes the
- * socket, never opens one, never types. Switching rooms is one explicit act:
- * attach from an expanded card. This mirrors the desk, where clicking another
- * agent's room switches the tab and the cards stay where they were.
- *
- * THE COLUMN IS GONE AND THAT IS THE POINT. Seventeen cards stacked vertically
- * was a scroll-to-find, which is the opposite of what a fleet screen is for:
- * knowing at a glance who is awake. Patrick voted on a horizontal wheel from a
- * live mockup on his own phone and locked it in one round, so the rail is the
- * fleet now, the centred chip is the CURRENT agent, and everything
- * context-bound follows it. The cards, the reads and the verbs did not go
- * anywhere - they moved into the sheet that a tap on the centre opens.
- *
- * This is the payoff of the transport seam. Every card below is the SAME
- * `BranchChip` the desktop renders, reading the same 18 fields, coloured by
- * the same design tokens. Nothing here reimplements the fleet; it re-seats it.
- * The only thing that changed underneath is which transport `host/index.ts`
- * was built against.
- *
- * READS ARE NOT VERBS - the correction that phase 3b exists for. The first cut
- * wired every card callback to a handler that threw, so the face showed all
- * seventeen agents and did nothing at all (Patrick's review, verbatim: "it
- * shows all agents but zero function"). Opening a file and reading a diff were
- * never verbs; they are exactly what @api's read lane serves. Now the figures
- * on each card open the file they came from, the read row opens the rest, and
- * only the true verbs - launch, shell, settings, end room - stay withdrawn.
- *
- * ALIVENESS COMES FROM ONE FIELD. The lamp is driven by the card's own
- * `dispatched`/`interactive`, exactly as on the desktop, and the session list
- * is shown as its own line rather than joined into the cards. `has_room` means
- * a room EXISTS, not that anyone is in it - deriving a green light from it
- * would ship the lie the m12 badge work existed to kill.
- */
+/** BAUD's phone face: the fleet wheel above a permanent terminal stage. Reference: docs/phone/wheel.md */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { baudSettingsRead, listProjects } from "../host";
 import type { BaudSettings, BranchStatus, NewProjectResult, ProjectListing } from "../types";
-// The two gears are the DESKTOP'S OWN panels, mounted as-is: their host calls
-// go through this build's http transport, and their `baud-settings-*` styling
-// lives in theme.css, which this face already imports. Two settings screens
-// drifting apart over one file is exactly the bug this avoids.
-//
-// THE HEADER GEAR NOW OPENS `PhoneSettings` FIRST, one screen in front of the
-// desk's interface panel - which it then mounts UNMODIFIED, so the sentence
-// above still holds in full. The screen exists because this face gained a
-// preference the desk does not have (terminal scroll speed, a thumb's problem);
-// see the header of PhoneSettings.tsx for why that became a screen rather than
-// a row in the shared panel or a second gear in this header.
+// The desktop's own settings panels, mounted as-is so two settings screens cannot drift apart.
 import AgentSettings from "../desktop/AgentSettings";
-// `interfacePrefs` comes with the panel and is not re-derived here: it is the
-// one place absence or a hand-edited nonsense value becomes a default
-// (InterfaceSettings.tsx:56), and a second reading of `startup_agent` would be
-// a second chance for the two faces to disagree about what the file says.
+// Taken from the panel, not re-derived: a second reading of `startup_agent` lets the faces disagree.
 import { interfacePrefs } from "../desktop/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
 import BackupApp from "./backup/BackupApp";
@@ -89,236 +30,68 @@ import Reader, { type ReadTarget } from "./Reader";
 import TerminalSheet from "./TerminalSheet";
 import { LockChip } from "./VerbChips";
 import { clearRoomEnded, markRoomEnded, roomEnded } from "../intent";
-// THE FOUR POLLING LANES, and the constant the render still names. They left
-// this file in FPLAN-0445 without changing a line of what they do - see the
-// header of pollers.ts for why the ORDER of the hook calls below is part of
-// the contract and not a matter of taste. The feed's two marker keys left
-// pollers.ts for `feedMarks` in DPLAN-0414 A#4: one machine-wide key each.
 import { writeMark } from "./lib/feedMarks";
 import { POLL_MS, useFeedBadge, useFleetPoll, useGitSweep, useRepoCount } from "./lib/pollers";
 import { machineFaces, useMachineVitals } from "./lib/machine";
 import { bornCard, bornSeat } from "./lib/newProject";
 import { type PhoneMode, helpCommand, roomDoors } from "./lib/rooms";
 import { PHONE_VERBS, type Scope, scopeRefusal } from "./lib/verbs";
-// THE BACK RULE (DPLAN-0414 wave 6; the owner, 16:29: "back just goes back to
-// where it came from"). The trail and the tab store are pure and pinned by
-// their own tests; this file only acts on what they return.
 import { type Browse, type Stop, backWord, leave, stepBack } from "./lib/trail";
 import { closeTab, focusOn, loadTabs, mergeTabs, restoreTabs, saveTabs } from "./lib/tabStore";
 import { useHistoryGuard, useSystemBack } from "./lib/systemBack";
 
-/** Where the phone keeps its seat. The server holds no seat for this face -
- *  the chosen project rides every read as a parameter instead, so two phones
- *  (or a phone and a curl) can look at two projects through one server. */
 const PROJECT_KEY = "baud-phone-project";
 
-/**
- * How long the header name flashes before the reload actually kicks.
- *
- * Short enough that it never reads as a delay, long enough that the flash has
- * landed on screen before the page goes away - the whole point is that the tap
- * is acknowledged BEFORE the reconnect, because on a slow one the reload
- * itself has nothing to show for a while.
- */
 const RELOAD_ACK_MS = 200;
 
-/**
- * THE STARTUP AGENT'S ONE SHOT, spent for this PAGE LOAD.
- *
- * Patrick, 08-17: "In baud settings I have devpulse set as the default startup
- * agent. On desktop when I open baud, devpulse is there waiting... Phone does
- * not do this - when I refresh, devpulse doesn't reload/seat."
- *
- * A MODULE VARIABLE, NOT `intent.ts`'s `sessionStorage` SHOT, and the store is
- * the whole difference between the two faces. The desk spends its shot in
- * `sessionStorage` because its "app run" outlives a React remount: `npm run
- * tauri dev` IS the operator's seat, so every frontend save hot-reloads App and
- * a ref-held guard would re-arm and resurrect a room the operator just ended
- * (intent.ts, Patrick-caught 18:27). None of that is true here. The phone ships
- * a built bundle with no HMR, and its refresh is a TAB RELOAD - which
- * `sessionStorage` deliberately SURVIVES. Borrowing the desk's store would have
- * armed the shot exactly once per tab, ever, and left the second refresh in
- * precisely the state this round exists to fix. Module scope dies with the page
- * load, which is what "once per open, every open" actually means in a browser.
- *
- * Not a ref for the same reason it is not state: signing out and back in
- * remounts PhoneApp, and a token change mid-session is not a fresh arrival -
- * the pane lifecycle changes by HANDS from there on.
- */
+/** The startup agent's one shot, spent once per page load. */
+// Module scope: sessionStorage survives a tab reload, and a ref re-arms on the sign-in remount.
 let startupSpent = false;
 
-/** One open pane in the stage: an agent room, an empty shell, a watch, or a
- *  file view. Files joined the row on Patrick's call (08-16: "when i select a
- *  file to view. it should open to a tab. and tabs can just stack for multi
- *  files") - a file is an observer, exactly what tabs are reserved for. */
 interface OpenPane {
-  /** Branch name; empty ONLY for the project-root shell. */
   name: string;
   mode: PhoneMode | "file";
-  /** File panes only: `<branch>/<relative>` - the pane's identity AND its
-   *  read request, names-never-paths as everywhere on this face. */
+  /** File panes only: `<branch>/<relative>`, the pane's identity and its read request. */
   ref?: string;
-  /**
-   * FILE PANES ONLY: which KIND of word `ref`'s first component is - `home`,
-   * `project`, `aipass`, or `branch` (FPLAN-0443). Absent is the branch
-   * meaning every file pane had before the roots roster existed.
-   *
-   * PART OF `paneKey`, unlike `document` - and for the opposite reason. The
-   * key is the file's IDENTITY, and the same spelling under two roots is two
-   * different files: `README.md` in the home directory and `README.md` in the
-   * AIPass checkout are not one document seen twice. A key that dropped the
-   * root would front the wrong tab and show a stranger's file under a name the
-   * operator recognised.
-   */
+  /** File panes only: the root kind of `ref`; part of `paneKey`, since one spelling under two roots is two files. */
   root?: string;
-  /** Which project the pane's branch lives in. Empty means the seat, which is
-   *  what every pane meant before browsing went free. */
   project?: string;
-  /**
-   * FILE PANES ONLY, and set at the moment of the tap: this file is a known
-   * DOCUMENT and should be drawn rather than printed.
-   *
-   * It rides the pane rather than being re-derived at render time because the
-   * question it answers is "which door opened this" - the passport's records
-   * door, floored at `artifacts` - and that fact exists only while the browse
-   * that opened it exists. Absent on every other file, which is all of them
-   * but one: no flag, no designed render, the Reader prints the text - or,
-   * since DPLAN-0414, draws it as markdown when the ref ends `.md`. That one
-   * is decided by the NAME at render time, not by this flag: any door may
-   * open a `.md` file, and every one of them should read as a document.
-   *
-   * NOT PART OF `paneKey`, deliberately. The key is the file's identity and
-   * one file is one tab; a key that carried the render would stack a second
-   * tab on the same path and let the operator hold two views of one file that
-   * could disagree.
-   */
+  /** File panes only: draw as a known document. Not part of `paneKey`: one file is one tab. */
   document?: "certificate";
-  /**
-   * FILE PANES ONLY, and only those opened FROM A BROWSE: the browse as it
-   * stood when the file was tapped, level included (DPLAN-0414 C#9).
-   *
-   * THE OWNER'S RULING, reversing 08-16's: "it's annoying when a tab drops, I
-   * have to start again." So the browse is not thrown away when a file opens -
-   * it rides the file's pane, and the Reader's `‹ folder` on that pane
-   * re-opens it at the same level. ON THE PANE rather than in one shell-wide
-   * slot, because every file tab came from its own folder: a second file opened
-   * from the same browse carries its own copy, and two tabs from two folders
-   * each go back to theirs.
-   *
-   * Absent on a file pane any other door opened, whose `‹ back` closes the tab
-   * as it always has. NOT PART OF `paneKey`, for `document`'s reason: the key
-   * is the file's identity, and where it was opened from is not.
-   */
+  /** File panes opened from a browse: the browse `‹ folder` reopens. Not part of `paneKey`. */
   from?: Browse;
-  /**
-   * WITH `from`: the trail the browse stood on when the file was tapped
-   * (DPLAN-0414 wave 6, item 5). The file tab lands on the stage, so the live
-   * trail is cleared then; this is how `‹ folder` puts it back, and so how the
-   * browse's own floor `‹` still reaches the roster, the passport or the card
-   * the browse came from. `from` and this travel together and are only ever
-   * set together, which is the whole of "the trail and `from` agree".
-   */
+  /** With `from`, and only ever set together with it: the trail the browse stood on. */
   fromTrail?: Stop[];
-  /**
-   * READ BACK FROM STORAGE after a reload (wave 6, item 3), not opened by a
-   * door this session. A restored room is a REATTACH: TerminalSheet types no
-   * launch line into it, whatever its card says. Never stored itself
-   * (`tabStore.saveTabs` drops it); every pane `loadTabs` reads carries it.
-   */
+  /** Read back from storage: a reattach, so no launch line is typed. Never stored itself. */
   restored?: boolean;
-  /**
-   * SHELL PANES ONLY, and set at the moment of the tap: one command line to
-   * type into this shell when it opens. The card's `?` sends the branch's help
-   * line; the `shell` doors send nothing and hand over a bare prompt.
-   *
-   * The desktop's own field, same name and same job (`App.tsx:56`: "What an
-   * inquiry shell types on open - absent is a bare prompt").
-   *
-   * NOT PART OF `paneKey`, for the same reason `document` is not: the key is
-   * the ROOM's identity, and `?` and `shell` open the one room the host names
-   * `baud-shell-<project>-<branch>`. A key that carried this would describe two
-   * panes where the host has one session - two tmux clients on it, fighting
-   * over the window size through `window-size smallest`.
-   */
+  /** Shell panes only: one command typed on open. Not part of `paneKey`: the host has one session per shell. */
   command?: string;
-  /**
-   * THE CARD AS IT WAS WHEN THIS PANE OPENED - and the pane's ONLY source of
-   * it, ever again.
-   *
-   * This field exists because its absence was a live bug. Every pane used to
-   * re-resolve its card by NAME out of the seated project's poll list on every
-   * render; switching the header made that lookup miss, the pane rendered a
-   * resting line instead of its sheet, and unmounting a sheet closes its
-   * socket. Patrick: "I can change project and the terminal drops your chat.
-   * nothing changes the terminal agent except my hands."
-   *
-   * The desktop never had this bug and the reason is structural, not careful:
-   * its `<Terminal>` is mounted once with NO branch prop and holds its own room
-   * internally, so there is no lookup to miss. This is that model inside the
-   * phone's tab architecture - the snapshot is taken once, at the moment the
-   * operator opens the pane, and the live poll is never consulted for it again.
-   * Absent only where no card exists: the project-root shell and the global
-   * watch, which are requests for a place rather than for an agent.
-   */
+  /** The card as it was when the pane opened, its only source: re-resolving from the poll drops the pane on a project switch. */
   card?: BranchStatus;
 }
 
-/**
- * One pane per ROOM, not per door. An agent room is keyed by branch - resume vs
- * fresh is a choice made at open time, not a second room - while a shell and a
- * watch on the same branch are genuinely different panes (three different
- * processes on the host). The desktop keys its tabs the same way.
- *
- * EVERY KEY IS PROJECT-QUALIFIED, and that is not decoration. The host names a
- * room `baud-<project>-<branch>` and a shell `baud-shell-<project>-<branch>`:
- * the project is part of the room's identity on the host, so a key that omits
- * it describes a room that does not exist. It cost nothing while the face could
- * only reach one project. The moment browsing went free it became live: two
- * projects can hold a same-named agent, and an unqualified key makes the second
- * one look ALREADY OPEN - so attaching it would quietly focus the first one's
- * pane instead, and the operator would be typing to the wrong agent under the
- * right name. The root shell is the worst of them, since `@project` was the
- * same string for every project on the machine.
- *
- * WITH ONE EXCEPTION, and it is the same exception the whole face makes: the
- * target-less watch. Global mission control names no branch AND no project on
- * the wire - @api's route ignores the project outright when no target is given
- * - so a key that qualified it by seat would describe two panes where the host
- * has one view, and flicking the header between projects would stack identical
- * monitors. A key must name what the host names, which here is nothing.
- */
+/** One pane per room, project-qualified because the host names rooms by project. */
+// The target-less watch alone is unqualified: the host names no project for it.
 function paneKey(pane: OpenPane): string {
   const where = pane.project ?? "";
   if (pane.mode === "shell") return `shell:${where}/${pane.name || "@project"}`;
   if (pane.mode === "watch") return pane.name ? `watch:${where}/${pane.name}` : "watch:@fleet";
-  // The root joins the key because it is part of the file's identity - see
-  // `OpenPane.root`. Absent stays absent in the string, so every file pane
-  // opened before roots existed keys exactly as it did.
   if (pane.mode === "file") return `file:${pane.root ?? ""}:${where}/${pane.ref}`;
   return `room:${where}/${pane.name}`;
 }
 
-/** An agent room, as opposed to the observers (shells, watches, files). */
 function isSeat(pane: OpenPane): boolean {
   return pane.mode !== "shell" && pane.mode !== "watch" && pane.mode !== "file";
 }
 
-/** What the pane's tab says - short enough for a thumb-width chip. */
 function paneLabel(pane: OpenPane, seatName: string): string {
   if (pane.mode === "shell") return `❯ ${pane.name || seatName}`;
   if (pane.mode === "watch") return pane.name ? `watch ${pane.name}` : "mission control";
-  // The file's own name; the pane header carries the full <branch>/<path>,
-  // so two same-named files in different dirs stay tellable apart.
   if (pane.mode === "file") return pane.ref?.split("/").pop() ?? "file";
   return pane.name;
 }
 
-/**
- * The seat selector, phone shape. Same contract as the desktop's
- * ProjectSwitch - the rows are the backend's own census, chosen by NAME, and
- * this component never sees or sends a path - but picking a row sets CLIENT
- * state rather than switching a server seat.
- */
+/** The seat selector: picks a census NAME as client state, never a path or a server seat. */
 function ProjectPick({
   current,
   onPick,
@@ -359,14 +132,11 @@ function ProjectPick({
         title="switch project"
         onClick={() => void toggle()}
       >
-        {/* Its own span so the name can wrap and clamp on its own while the
-            caret stays put at the end - see .baud-phone-project-name. */}
         <span className="baud-phone-project-name">{current}</span>
         <span className="baud-phone-project-caret">▾</span>
       </button>
       {open ? (
         <>
-          {/* A tap anywhere else closes the menu - the phone's click-away. */}
           <div className="baud-phone-project-away" onClick={() => setOpen(false)} />
           <div className="baud-phone-project-menu" role="menu">
             {failure ? <div className="baud-phone-project-fail">{failure}</div> : null}
@@ -417,231 +187,61 @@ function ProjectPick({
 }
 
 interface PhoneAppProps {
-  /** The token's own label, from `/v1/whoami` - who this face is connected as. */
   label: string;
-  /**
-   * What this token may do, from `/v1/whoami`. It does not decide whether the
-   * chips EXIST - only whether they fire or answer with their reason.
-   */
+  /** What this token may do: whether the chips fire, not whether they exist. */
   scope: Scope;
-  /**
-   * Whether `scope` above is the SERVER's answer yet or still its safe default.
-   * Only the startup seat reads it - see the note on it in `main.tsx`. Every
-   * other consumer is right to treat all three flavours of "read" alike.
-   */
+  /** Whether `scope` is the server's answer yet; only the startup seat reads it. */
   scopeKnown: boolean;
-  /** Operator signed out: forget the token and go back to the door. */
   onSignOut: () => void;
 }
 
 export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneAppProps) {
-  /** The phone's seat: a census NAME, "" meaning the anchor. Survives a
-   *  reload via localStorage; the server never holds it. */
   const [project, setProject] = useState<string>(
     () => window.localStorage.getItem(PROJECT_KEY) ?? "",
   );
   const [reading, setReading] = useState<ReadTarget | null>(null);
   const [feedOpen, setFeedOpen] = useState(false);
-  /** Whose file browser is open - branch AND project, because browsing is free
-   *  across projects since 2026-08-16 and a name alone would resolve under the
-   *  seat. `start` is the floor: "" for the files door, `artifacts` for the
-   *  passport's records door (compass #291). Null means none. */
   const [browsing, setBrowsing] = useState<Browse | null>(null);
-  /** THE FILES APP's first screen - the roster of places to stand. A boolean
-   *  because the roster IS the app's front door: picking a row opens a browse
-   *  and closes this, so there is never a second thing to remember. */
   const [rootsOpen, setRootsOpen] = useState(false);
-  /** Which monitor card is open, by key - null when none is. A key rather than
-   *  a boolean because one sheet serves every card and needs to know which. */
   const [monitorCard, setMonitorCard] = useState<string | null>(null);
-  /** Whose working memory is open - the card's `memory` door (compass #291).
-   *  By NAME and PROJECT, the same address every read on this face takes. */
   const [memoryOf, setMemoryOf] = useState<{ name: string; project: string; tab?: MemoryTabId } | null>(
     null,
   );
-  /** Whose plans are open - the card's PLANS tile (DPLAN-0414 A#2). Same
-   *  address as `memoryOf`, for the same reason. */
   const [plansOf, setPlansOf] = useState<{ name: string; project: string } | null>(null);
-  /**
-   * Whose inbox is open - the card's MAIL tile, or a bell row's message
-   * (DPLAN-0414 A#2, contract C-A). `messageId` is set only by the bell: it
-   * opens the screen straight onto that message.
-   */
   const [inboxOf, setInboxOf] = useState<{ name: string; project: string; messageId?: string } | null>(
     null,
   );
-  /**
-   * EVERY OPEN PANE, not one. Patrick, first session with shells and watches:
-   * "I have to detach the shell and attach again to get back to u... watch,
-   * shell and ur terminal should be available without disturbing." So the
-   * stage holds tabs now, the desktop's own answer: every open pane stays
-   * MOUNTED with its socket alive, and switching is visibility, not
-   * lifecycle. A room keeps its bytes flowing while a shell is on top.
-   * Held as names + modes, never cards, for the freshest-poll reason above.
-   */
+  /** Every open pane: all stay mounted with sockets alive; switching is visibility, not lifecycle. */
   const [open, setOpen] = useState<OpenPane[]>([]);
-  /** Which pane is showing, by paneKey. The rest stay live underneath. */
   const [active, setActive] = useState<string | null>(null);
-  /**
-   * THE ORDER TABS WERE FRONTED IN, oldest first (wave 6, item 4). Closing the
-   * front tab fronts the one before it (`tabStore.closeTab`) instead of the
-   * rightmost - the tab you were on, which is where "back to where it came
-   * from" puts you.
-   */
+  /** The order tabs were fronted in, oldest first; closing the front tab fronts the one before it. */
   const [focus, setFocus] = useState<string[]>([]);
-  /**
-   * THE TABS THE LAST SESSION LEFT, read once at load (wave 6, item 3) and
-   * held here until the first fleet read can vouch for them - see the restore
-   * effect below. Null when storage held none.
-   */
   const [stored] = useState(() => loadTabs(window.localStorage, paneKey));
-  /**
-   * Has the stored row been folded in (or was there none)? Until it has, the
-   * row is not WRITTEN either: an empty row saved in the first second would
-   * erase the tabs it is about to restore. The startup agent waits on it too,
-   * so a restored seat outranks the startup preference the way a hand does.
-   */
+  // Until then nothing is saved either: an early empty save would erase the tabs being restored.
   const [tabsSettled, setTabsSettled] = useState(() => stored === null);
-  /**
-   * THE TRAIL - the screens left through a door, newest last (wave 6, item 1;
-   * `lib/trail.ts`). A door pushes the screen it leaves; every `‹` pops one
-   * and reopens it. Empty means the screen in front was opened from the
-   * resting face, and its `‹` says `wheel`.
-   */
   const [trail, setTrail] = useState<Stop[]>([]);
-  /**
-   * Has a seat already been taken by HANDS? The desk's own `seatedRef`
-   * (App.tsx:144) and held for its reason: it is only ever read at the one
-   * moment the startup shot is spent, so it never has to survive anything. The
-   * SHOT itself is not here - see the module note on `startupSpent`.
-   */
   const seatedRef = useRef(false);
-  /**
-   * WHY THE STARTUP AGENT DID NOT OPEN, when it did not (DPLAN-0414 A#16).
-   * The two refusals below used to go to the console only, so a phone that
-   * was set to open devpulse on load simply opened nothing and said nothing.
-   * One line in the resting state now: "startup agent X not opened — reason".
-   * Null when it opened, when none is set, or when its room was ended by hand
-   * (the operator's own choice is not news to the operator).
-   */
   const [startupNote, setStartupNote] = useState<string | null>(null);
-  /** Which branch's claude-settings panel is open. Null means none. */
   const [settingsAgent, setSettingsAgent] = useState<string | null>(null);
-  /** The header gear - BAUD's own settings for the machine's seat. */
   const [interfaceOpen, setInterfaceOpen] = useState(false);
-  /**
-   * BAUD's document, held so the settings panel opens on the truth instead of
-   * flashing defaults - and, for two keys now, so the face can RUN on it.
-   *
-   * It began as the file's mirror and nothing more. `startup_agent` made it
-   * config, and `terminal_scroll_percent` makes it live config: the pane below
-   * re-reads this on every render, so a save (or the read the panel does on
-   * open) reaches an attached room without a reattach. The poll cadence is
-   * still the one pref the phone does NOT take from here - its own is above,
-   * and a phone on cellular does not want the desk's.
-   */
+  /** BAUD's settings document; live config, read every render so a save reaches an attached room. */
   const [baudSettings, setBaudSettings] = useState<BaudSettings | null>(null);
   useEffect(() => {
     baudSettingsRead()
       .then(setBaudSettings)
-      // A failed read is not a blank document; the panel re-reads on open
-      // and carries its own error line, so nothing is invented here.
+      // A failed read is not a blank document; the panel re-reads on open.
       .catch(() => setBaudSettings(null));
   }, []);
-  /**
-   * The card under the notch as `PROJECT/name`. The face's "where am I".
-   *
-   * A REF, NOT A NAME, since the rail learned to cross projects: eleven
-   * projects share a naming convention, so a bare name can address two
-   * different agents and the lookup would silently prefer the seated one.
-   */
+  /** The card under the notch as a `project/name` ref; a bare name is ambiguous across projects. */
   const [centered, setCentered] = useState<string | null>(null);
-  /** The centred card, opened. Null while the rail is just being flicked. */
   const [expanded, setExpanded] = useState<string | null>(null);
-  /**
-   * Whose passport is open, by REF - `project/name`, the same key the wheel
-   * and the expanded card use.
-   *
-   * The ref AND the card as it was at the click, which is the desk's own shape
-   * (`App.tsx`: `{ name, project, held }`), and both halves earn their place.
-   * The REF is looked up live every render, because the poll hands down a fresh
-   * object every tick and a passport pinned to the click is frozen - the
-   * sub-agent count on this document has to be able to move while it is read.
-   * The HELD copy is what the lookup falls back to, and it is what makes this
-   * document survive a project switch: the same species of bug that dropped the
-   * terminal lived here too, one modal instead of one socket. Project-qualified,
-   * so two projects with a same-named agent can never hand it the wrong one.
-   */
+  /** Whose passport is open: the ref is looked up live, `held` is the fallback that survives a project switch. */
   const [passportOf, setPassportOf] = useState<{ ref: string; held: BranchStatus } | null>(null);
-  /**
-   * Is the operator typing INTO the room right now?
-   *
-   * The one piece of the persistent layout that has to give. Rail plus a room
-   * plus chips plus a soft keyboard does not fit on a phone, and the thing that
-   * must not shrink is the terminal - it is the centrepiece and it is what the
-   * typing is aimed at. So the rail COMPACTS while the compose field has focus:
-   * names and notch drop, the avatars shrink, the strip and footer go. The rail
-   * itself never leaves - the amendment revoked hiding it, and a keyboard is not
-   * a reason to break that. Card WIDTH is deliberately untouched, so the snap
-   * geometry does not move and the centred card cannot drift under the operator
-   * while the keyboard opens.
-   */
   const [typing, setTyping] = useState(false);
 
-  /**
-   * The header name is the reload button (Patrick, 2026-08-19: browser and OS
-   * gestures fight him for the refresh, so refreshing meant reaching for
-   * browser chrome every time).
-   *
-   * A FULL reload, not a re-poll, because that is the gesture being replaced:
-   * `location.reload()` has exactly the semantics of the browser refresh he
-   * already uses, and needs no confirm because almost nothing this face knows
-   * is only in this face - the seat is in localStorage, every room lives in
-   * tmux on the host, and the fleet is one poll away.
-   *
-   * "ALMOST", AND THIS COMMENT USED TO SAY "LOSSLESS". It was not: the tab row
-   * lived only in React state, so this very button dropped every tab (the back
-   * survey, DPLAN-0414; the owner: "its annoying when a tab drops i have to
-   * start again"). Since wave 6 the tabs, the front tab and the focus history
-   * are in localStorage too (`lib/tabStore.ts`) and come back on load. What a
-   * reload still drops: whatever screen was open over the stage and the trail
-   * under it - the face comes back on the wheel, tabs in place - and a room
-   * tab whose agent has left the census.
-   *
-   * The flag exists for the 200ms of acknowledgement BEFORE the reload kicks.
-   * A tap that does nothing visible on a slow reconnect reads as a dead
-   * button, and the operator's next move is to tap it again.
-   */
   const [reloading, setReloading] = useState(false);
 
-  /**
-   * One tap, no ceremony: flash the name, then reload.
-   *
-   * THE ENTRY IS RE-READ OVER THE NETWORK FIRST, and that is not belt and
-   * braces - it is the fix for a measured lottery. FPLAN-0446 round 3 was
-   * declared failed live on evidence that turned out to be the OLD bundle
-   * still running after a reload through this very button.
-   *
-   * Why a reload can serve stale at all: the host answers `GET /` with an
-   * `etag` and a `last-modified` and NO `cache-control`, and a response with no
-   * explicit freshness lifetime MAY be cached heuristically - the usual browser
-   * rule being a tenth of the age since `last-modified`. So an entry document
-   * an hour old is treated as fresh for minutes, and a plain reload can be
-   * answered wholly from cache without asking the server. Content hashing makes
-   * that WORSE rather than better: the bundle names live inside that document,
-   * so a stale entry means the browser faithfully fetches yesterday's bundle.
-   * The assets are safe by construction; the entry that names them is the hole.
-   *
-   * `cache: "reload"` fetches from the network AND updates the HTTP cache, so
-   * the navigation that follows reads the fresh entry.
-   *
-   * THIS IS THE CLIENT HALF, NOT THE FIX. One `cache-control: no-cache` on the
-   * host's HTML response is the real answer and it is @api's lane (reported,
-   * with this measurement). This is what BAUD can do from its own side while
-   * that is pending, and it is deliberately best-effort: if the network read
-   * fails, the reload still happens, because a refresh button that refuses to
-   * refresh is worse than one that occasionally refreshes to the same bundle.
-   */
+  // `cache: "reload"` defeats heuristic caching of the entry; best-effort, the reload happens regardless.
   const reloadFace = useCallback(() => {
     // Guarded, so a double-tap cannot queue two reloads or restart the flash.
     setReloading((already) => {
@@ -655,44 +255,23 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     });
   }, []);
 
-  /* THE FOUR POLLING LANES LIVE IN `lib/pollers.ts` (FPLAN-0445). Each hook
-     is called exactly where its effect used to be declared, because React runs
-     effects in declaration order and that order is load-bearing here. */
+  // The polling hooks are called in a load-bearing order: React runs effects in declaration order.
   const { snapshot, error, roster, rosterRefusal } = useFleetPoll(project, onSignOut);
 
   const gitCounts = useGitSweep(snapshot);
 
-  /** Pick a seat. The name is a census key and travels verbatim. */
   const pickProject = useCallback((name: string) => {
     setProject(name);
     window.localStorage.setItem(PROJECT_KEY, name);
   }, []);
 
-  /** Open a pane, or bring the already-open one forward - doors, not
-   *  toggles, the desktop's own re-click rule. An agent room is one pane per
-   *  branch regardless of which launch door was pressed: the launch mode is a
-   *  choice made at open time, not a second room.
-   *
-   *  ONE AGENT SEAT, Patrick's design (08-16, first night living with tabs):
-   *  "tabs without tabs - it is so flawless to move between agents via resume
-   *  or attach... no multi tab agent setup, multi tab agents are a nightmare
-   *  to manage." Attaching an agent REPLACES the agent already in the seat -
-   *  the swap IS the navigation, and the replaced room survives on the host
-   *  because unmounting is a detach. Tabs are reserved for the OBSERVERS -
-   *  shells and watches - which is what lets him chat with one agent while
-   *  watching others. Nineteen agent chips was the failure mode this rules
-   *  out; the wheel is the agent switcher, not the tab row. */
-  /** Front a tab: it is in front, and it is the newest in the focus history. */
   const front = useCallback((key: string) => {
     setActive(key);
     setFocus((held) => focusOn(held, key));
   }, []);
 
   const focusPane = useCallback((pane: OpenPane) => {
-    // A seat taken is a seat taken, whoever took it - and an operator who has
-    // already picked one outranks the startup preference (App.tsx:382, the same
-    // line inside the desk's own launch door). Observers do not count: a shell,
-    // a watch or a file is not the seat the preference is about.
+    // A seat taken by any path outranks the startup preference; observers do not count.
     if (isSeat(pane)) seatedRef.current = true;
     const key = paneKey(pane);
     setOpen((current) => {
@@ -700,7 +279,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       if (isSeat(pane)) {
         const seat = current.findIndex(isSeat);
         if (seat !== -1) {
-          // Swap in place: the chip keeps its slot, the old client detaches.
+          // One agent seat: attaching replaces the seated agent in place (unmount is a detach).
           const next = [...current];
           next[seat] = pane;
           return next;
@@ -711,12 +290,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     front(key);
   }, [front]);
 
-  /** Close one pane. Rooms and shells survive on the host (the close is a
-   *  detach); a watch's observer dies with it, which is a watch's contract.
-   *
-   *  THE TAB IN FRONT AFTERWARDS is the one fronted before it (wave 6, item
-   *  4), not the rightmost: `closeTab` walks the focus history, and only with
-   *  no history left falls back to the old rightmost rule. */
+  /** Close one pane (rooms and shells survive on the host); fronts the previously fronted tab. */
   const closePane = useCallback(
     (key: string) => {
       const next = closeTab(open.map(paneKey), focus, active, key);
@@ -727,18 +301,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     [open, focus, active],
   );
 
-  /**
-   * THE STORED TABS COME BACK (wave 6, item 3) - once, as soon as the census
-   * can vouch for them: the first fleet read, and the roster's answer or its
-   * refusal. `restoreTabs` takes each agent's card fresh from that census and
-   * drops a tab whose agent has gone, one console line each; `mergeTabs`
-   * folds the rest in under anything the operator's hands opened meanwhile.
-   *
-   * DECLARED BEFORE THE STARTUP EFFECT, and that order is part of the
-   * contract: a restored agent seat marks `seatedRef`, so the startup agent
-   * stands down for it exactly as it does for a seat a hand took. The startup
-   * effect also waits on `tabsSettled`, so the two can never race.
-   */
+  // Declared BEFORE the startup effect: a restored seat must mark `seatedRef` first.
   useEffect(() => {
     if (tabsSettled || stored === null) return;
     if (!snapshot || (roster === null && rosterRefusal === null)) return;
@@ -758,57 +321,20 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     setTabsSettled(true);
   }, [tabsSettled, stored, snapshot, roster, rosterRefusal, open, active, focus]);
 
-  /* THE ROW IS WRITTEN ON EVERY CHANGE TO IT, once the stored one is folded
-     in. One small JSON value beside the seat; nothing polls for it. */
+  // Saved on every change, but only once the stored row is folded in.
   useEffect(() => {
     if (!tabsSettled) return;
     saveTabs(window.localStorage, { open, active, focus });
   }, [tabsSettled, open, active, focus]);
 
-  /**
-   * THE STARTUP AGENT, on the phone (DPLAN-0302). The desk's own effect
-   * (App.tsx:424-440), mirrored guard for guard, through this face's doors.
-   *
-   * ONCE PER PAGE LOAD, as soon as the first fleet read AND the settings
-   * document have both landed: the named agent's room is opened as the SEAT,
-   * through `focusPane` - the very call the expanded card's attach door makes
-   * (`onAttach`), with the same pane shape, the same project qualification and
-   * the same held card. There is no second path into a room here and this one
-   * does not invent one; the operator arrives exactly where a tap would have
-   * put them, which is what "devpulse is there waiting" means.
-   *
-   * THE SHOT IS SPENT WHATEVER HAPPENS, before a single outcome is judged. That
-   * is what keeps this initialization rather than a poll consequence: `snapshot`
-   * is a dependency and it changes every ten seconds, a project switch changes
-   * it too, and NONE of those may open a pane. Panes change by hands from the
-   * moment this effect has had its one look. The desk spends it on the same
-   * line and for the same reason.
-   *
-   * WAITING FOR ALL THREE READS IS THE POINT. A settings document that has not
-   * arrived is not an empty one, a fleet that has not answered is not a fleet
-   * without the agent in it, and a scope nobody has asked for yet is not a read
-   * token - firing on any of those guesses would open the wrong thing, or open
-   * nothing at all and call it a preference. `scopeKnown` is the third and it is
-   * the one that was nearly missed: the fleet read ALWAYS lands before whoami
-   * here, so without it this effect would have refused itself on every single
-   * load while looking perfectly reasonable in review (main.tsx carries the
-   * measurement). A FOURTH WAIT since wave 6, `tabsSettled`: the stored tabs
-   * are folded in first, so a restored seat counts as a seat taken.
-   */
+  // Waits for fleet, settings, scopeKnown (the fleet lands before whoami) and tabsSettled; the shot
+  // is spent before any outcome, so later polls and project switches never open a pane.
   useEffect(() => {
     if (!snapshot || !baudSettings || !scopeKnown || !tabsSettled || startupSpent) return;
     startupSpent = true;
     const startupAgent = interfacePrefs(baudSettings).startupAgent;
     if (!startupAgent || seatedRef.current) return;
-    /* THE SCOPE, which the desk has no half of - it holds the machine, not a
-       bearer token. An attached room is a shell prompt with the operator's
-       credentials at it, so @api demands operate for it and serves read only to
-       a watch (server.py:979). A read-scoped session would therefore get a pane
-       that exists solely to print its own refusal, unasked - and TerminalSheet's
-       refusal line is honest precisely because a HAND opened that door and is
-       owed the reason. Nobody asked for this one, so it does not open; the
-       reason still reaches the operator the moment they tap a card, and the
-       lock chip in the header already says which token this is. */
+    // A read-scoped token gets no unasked room: it would only print a refusal nobody asked for.
     const refusal = scopeRefusal(scope);
     if (refusal) {
       console.info(`startup agent '${startupAgent}' stays closed - ${refusal}`);
@@ -817,34 +343,18 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     }
     const branch = snapshot.branches.find((item) => item.name === startupAgent);
     if (!branch) {
-      // Not a banner - an agent with no card in the seated project is not a
-      // fault - but not silence either (A#16): one quiet line where the room
-      // would have been.
       console.warn(`startup agent '${startupAgent}' has no card here - opening nothing`);
       setStartupNote(`startup agent ${startupAgent} not opened — it has no card in ${snapshot.project || "this project"}`);
       return;
     }
-    /* THE ENDED-ROOM RULING (intent.ts, Patrick 2026-08-12): a room the operator
-       ended stays dead until they open its card themselves. The phone WRITES
-       the mark now (DPLAN-0414 A#17 = B#7), in two places: `end room` on the
-       agent card (`onEnded` below), and a room that ended under its socket -
-       the host's 4000 close (TerminalSheet, contract C-C). Its card's attach
-       doors clear it (`onAttach` below), the desk's one door that revives an
-       ended room. All three address the room by the CARD's project and name,
-       which is what this guard reads - a seated card's project is the seat. */
+    // A room the operator ended stays dead until they open its card themselves (intent.ts).
     if (roomEnded(branch.project, branch.name)) {
       console.info(
         `startup agent '${branch.name}' stays closed - you ended its room; open its card to bring it back`,
       );
       return;
     }
-    /* Which door a tap would have taken, from the card's own judgment - a live
-       session ATTACHES and types nothing, history or a dispatch transcript
-       RESUMES, anything else starts fresh. `roomDoors(branch)[0]` IS that
-       judgment (rooms.ts), and a live room returns exactly one door, so the
-       first is the only one. Deliberately not a second copy of the desk's
-       `cardMode`: the two agree line for line today, and the way they stop
-       agreeing is by being written twice. */
+    // `roomDoors(branch)[0]` is the card's own door judgment; not a second copy of the desk's `cardMode`.
     focusPane({
       name: branch.name,
       mode: roomDoors(branch)[0].mode,
@@ -856,27 +366,20 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const { events, setEvents, readUpTo, setReadUpTo, clearedUpTo, setClearedUpTo } =
     useFeedBadge(project);
 
-  /* The LATER of the two markers is the floor: a cleared event is read by
-     definition, and a read event that was never cleared still renders. Taking
-     the max keeps the badge and the feed screen filtering on the same line. */
+  // The later marker is the floor, so the badge and the feed screen filter alike.
   const floor = readUpTo > clearedUpTo ? readUpTo : clearedUpTo;
   const unread = floor ? events.filter((event) => event.ts > floor).length : events.length;
 
-  /** The operator cleared what was on screen. DISPLAY ONLY - the marker moves,
-   *  the feed file does not, exactly as the desktop bell has always done it. */
   const clearFeed = useCallback(
     (upTo: string) => {
       setClearedUpTo(upTo);
-      // ONE KEY ON EVERY PROJECT (DPLAN-0414 A#4): the feed is machine-wide,
-      // so a clear here clears it wherever the phone is seated.
+      // One machine-wide key: the feed is not per project.
       writeMark(window.localStorage, "cleared", upTo);
     },
     [setClearedUpTo],
   );
 
-  /** Closing the feed IS the read - the one back on this face with a side
-   *  effect, kept by ruling (DPLAN-0414 wave 6, item 9). Its destination, the
-   *  wheel, already meets the back rule: the bell is on the header. */
+  /** Closing the feed IS the read - the one back on this face with a side effect. */
   const closeFeed = useCallback(() => {
     setFeedOpen(false);
     setEvents((seen) => {
@@ -891,126 +394,34 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
 
   const branches = snapshot?.branches ?? [];
   const live = snapshot?.live_agent_sessions ?? [];
-  /**
-   * Both resolved by NAME against the latest poll, never held as objects. A
-   * card captured when the rail stopped moving would be ten seconds stale by
-   * the time it is opened, and would show a dead agent as live.
-   */
-  //
-  // RESOLVED OUT OF BOTH CENSUSES, seated read first. A card centred on the
-  // live or dispatched wheel may live in another project entirely and is
-  // simply not in `branches` - looking there alone would hand back a
-  // same-named local agent, which is the exact confusion the ref exists to
-  // prevent. Seated first so an agent present in both is the local object.
+  // Resolved by ref against the latest poll every render, seated census first, never held.
   const pool = roster ? [...branches, ...roster] : branches;
-  /* THE UNCHOSEN CARD IS THE MANAGER, not `branches[0]` - the same rule the rail
-     itself opens on, through the same function, because these two saying
-     different things is a notch marking one card while the ring glows on
-     another. The window where it shows is small (the rail reports its real
-     centre a frame later) and it is exactly the window a cold load and a project
-     switch live in, which is the whole of what was asked for. */
+  // The unchosen card is the manager, via the rail's own function, so notch and ring agree.
   const current =
     pool.find((card) => cardRef(card) === centered) ??
     openingCard(branches, snapshot?.project ?? "");
   const expandedCard = expanded ? pool.find((card) => cardRef(card) === expanded) : undefined;
-  // Looked up EVERY render, never held - see `passportOf`. The document follows
-  // the poll, so a sub-agent that starts while the passport is open shows up.
   const passportCard = passportOf
     ? (pool.find((card) => cardRef(card) === passportOf.ref) ?? passportOf.held)
     : undefined;
 
-  /* --------------------------------------------------------- the git app -- */
 
-  /** The seat as the SERVER named it, which is what every read is addressed
-   *  with - `project` above is what the operator picked, and the anchor's is
-   *  "" on the way out and a real name on the way back. */
   const seat = snapshot?.project ?? "";
-  /**
-   * WHICH CITIZEN NAMES THE REPOSITORY, and why the git app takes one at all.
-   *
-   * Every read the app makes is repo-grain, so the branch is an address for a
-   * TREE and nothing about that branch is ever shown. The host resolves a
-   * branch to a directory and walks up to the repository above it, which is
-   * what makes a nested project (projects/baud carries its own marker) answer
-   * about itself rather than about the fleet repo it sits inside.
-   *
-   * THE MANAGER, through the same function the rail opens on. It is the one
-   * citizen every project has and the one that cannot be a temporary spawn, so
-   * the app's answer does not move when the wheel does - which matters
-   * precisely because the apps layer is where the rail is NOT pointing at an
-   * agent. `openingCard` falls back to the first card, and to nothing at all
-   * before the first read lands; the app says so rather than asking with "".
-   */
+  /** The manager names the repository, so the git app's answer does not move with the wheel. */
   const repoCitizen = openingCard(branches, seat)?.name ?? "";
   const repoCounts = useRepoCount(repoCitizen, seat);
 
-  /** The app cards' badges, by card key. One entry today; the shape is the
-   *  wheel's, so a second app is a second key and no new plumbing. */
   const appBadges = useMemo(() => ({ git: repoCounts[seat] }), [repoCounts, seat]);
-  /**
-   * WHICH WHEEL LAYER IS SHOWING, by key - reported up by the wheel, which owns
-   * the stack. The machine lane reads only while this is the monitor row
-   * (FPLAN-0561): nothing polls a pocket, and nothing polls a layer nobody is
-   * on. The machine sheet opens OVER the wheel without moving its layer, so the
-   * sheet stays live exactly as long as the row it was opened from.
-   */
+  /** Which wheel layer is showing; the machine lane polls only on the monitor row. */
   const [wheelLayer, setWheelLayer] = useState<string | null>(null);
   const machine = useMachineVitals(wheelLayer === "monitor");
-  /** The monitor cards' faces - from the same read the sheet draws. */
   const appFaces = useMemo(() => machineFaces(machine), [machine]);
-  /** Is the git app open. A boolean, not a screen name: the app owns its own
-   *  stack of screens, so this face only knows whether it is showing. */
   const [gitOpen, setGitOpen] = useState(false);
-  /** Is the backup app open (DPLAN-0411). A boolean for the same reason as
-   *  `gitOpen`: the app is one screen for the seated project. */
   const [backupOpen, setBackupOpen] = useState(false);
-  /**
-   * WHOSE CHANGES ARE OPEN - the agent card's GIT tile (Patrick, 08-17).
-   *
-   * The same component as the app above, at branch grain, and a SECOND state
-   * rather than a mode on `gitOpen` because the two doors carry different
-   * things: this one has a subject, and the subject is not the seat. Name and
-   * project both, for the reason every read on this face carries both - eleven
-   * projects share a naming convention, so half an address finds a same-named
-   * local agent's tree and shows it as this one's.
-   *
-   * `ref` is the CARD to come back to. Every other door on this face closes the
-   * card and lands on the wheel, and this one is deliberately different: the
-   * tile opens a detail OF that card, so leaving it should put the card back
-   * rather than making the operator find it on the rail again.
-   */
+  /** Whose branch-grain changes are open (the card's GIT tile); `ref` is the card to come back to. */
   const [gitOf, setGitOf] = useState<{ name: string; project: string; ref: string } | null>(null);
 
-  /**
-   * What a MANAGER runs - the desk's two global monitors, on the AGENT CARD
-   * since compass #291.
-   *
-   * They spent a round living inside the passport, which put two live doors
-   * inside an identity document; the ruling is that the passport carries
-   * nothing operational, so they moved to the card's MANAGER zone. The doors
-   * themselves are untouched - same targets, same read-only contract, same
-   * refusal when this face has no route.
-   *
-   * BOTH ARE LIVE NOW. The mission-control door shipped DISABLED last round
-   * because the host's watch lane could only express a branch monitor; @api
-   * built the target-less shape the same evening, and the door it was reported
-   * for is the door that opened. It was worth more shut than pointed at the
-   * `prax` BRANCH, which was a valid target sitting right there and would have
-   * rendered perfectly while being a different view entirely.
-   *
-   *  - PRAX MISSION CONTROL is the desk's target-LESS monitor: `drone @prax
-   *    monitor run` with nothing after it, every branch at once. On the wire
-   *    that is `kind=watch` with NO branch - measured against their handler,
-   *    not inferred: an absent branch and an empty one are the same value to
-   *    the route, and `if branch:` is what chooses global over per-branch.
-   *  - COMMONS is `drone @prax monitor run commons`, the same lane with a
-   *    target their contract names by keyword.
-   *
-   * BOTH RIDE THE SEAT, never the card's project. A watch is anchor tooling -
-   * the host refuses an external one outright, because @prax monitors the repo
-   * it lives in - so a manager card browsed from another project opens THIS
-   * seat's monitors, which is what those monitors are.
-   */
+  /** A manager card's two monitors; both ride the seat, since the host refuses an external watch. */
   const managerMonitors = useMemo(() => {
     if (!expandedCard?.manager) return [];
     const seat = snapshot?.project ?? "";
@@ -1020,12 +431,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         id: "monitor:prax",
         label: "prax",
         hint: "open prax mission control - a read-only live view of every branch",
-        // The empty NAME is the request for the global monitor, the same way
-        // the project-root shell asks for a room with no branch. The stand-in
-        // carries the two fields a watch reads.
-        // The card closes first: what it opens is a pane BELOW it, and a
-        // monitor nobody can see because a sheet is over it is a door that
-        // appears not to work. Every other door on this card does the same.
+        // The empty name asks for the global monitor; the card closes first so the pane is visible.
         open: () => {
           setExpanded(null);
           focusPane({ name: "", mode: "watch", project: seat });
@@ -1047,28 +453,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     ];
   }, [expandedCard, branches, snapshot, focusPane]);
 
-  /* ------------------------------------------------ the way back (wave 6) -- */
 
-  /**
-   * LEAVE A SCREEN THROUGH A DOOR: the trail remembers it (`lib/trail.ts`).
-   * The door still closes what it was pressed on - every screen here is a
-   * full-height overlay, and one left open underneath would only be covered -
-   * but it is no longer DISCARDED: `‹` on the screen the door opened reopens
-   * it.
-   */
   const leaveFor = useCallback((stop: Stop) => setTrail((held) => leave(held, stop)), []);
 
-  /**
-   * ONE STEP BACK: pop the newest stop and reopen what it names. Every `‹`
-   * that leaves a screen calls this after closing that screen; so does the
-   * system Back, through the same handler. An empty trail reopens nothing:
-   * the wheel.
-   *
-   * A CARD reopens by ref and is resolved against the live poll like any
-   * other; one that has left the fleet meanwhile resolves to nothing, and the
-   * operator is on the wheel - the same answer the rail would give. A
-   * PASSPORT reopens with its held copy, its own fallback.
-   */
   const walkBack = useCallback(() => {
     const { to, rest } = stepBack(trail);
     setTrail(rest);
@@ -1078,15 +465,9 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     else setPassportOf({ ref: to.ref, held: to.held });
   }, [trail]);
 
-  /** What every `‹` on a door's screen says: where `walkBack` will land. */
   const backTo = backWord(trail);
 
-  /**
-   * NOTHING OPEN OVER THE STAGE, NO TRAIL. The doors and backs above keep
-   * this true on their own; this is the net under them. A trail left standing
-   * on the resting face would send the NEXT screen's `‹` somewhere the
-   * operator has long since left.
-   */
+  /** Nothing open over the stage means no trail: a stale trail would misroute the next `‹`. */
   const overlayOpen =
     expanded !== null ||
     passportOf !== null ||
@@ -1107,15 +488,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     if (!overlayOpen && trail.length > 0) setTrail([]);
   }, [overlayOpen, trail.length]);
 
-  /**
-   * THE SYSTEM BACK (wave 6, item 2; `lib/systemBack.ts`). One guard entry in
-   * history while anything is open; the phone's Back runs the newest screen's
-   * handler - which is the same function that screen's `‹` (or, for the card,
-   * its tap outside) calls. The screens with levels of their own - files,
-   * inbox, git, settings - register inside themselves, so Back climbs one
-   * level the way their chip does. At rest nothing is registered and Back is
-   * the browser's.
-   */
+  /** The system Back runs the newest screen's close handler, the same one its `‹` calls. */
   useHistoryGuard();
   const closeCard = useCallback(() => setExpanded(null), []);
   const closePassport = useCallback(() => {
@@ -1167,28 +540,17 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   useSystemBack(backupOpen ? closeBackup : null);
   useSystemBack(feedOpen ? closeFeed : null);
 
-  /** A card door to a screen: close the card, and leave it on the trail. */
   const leaveCard = () => {
     if (!expandedCard) return;
     setExpanded(null);
     leaveFor({ kind: "card", ref: cardRef(expandedCard) });
   };
 
-  /* THE SELF-CLOSING EFFECT IS GONE, and its reason with it. It existed
-     because a ref alone could point at nothing: the document vanished on the
-     poll that dropped the card and would REAPPEAR on a later poll that brought
-     it back, which is a modal nobody can explain. Falling back to the held copy
-     removes the vanishing, so there is nothing left to reappear from - and the
-     passport now survives a project switch, which the closing version did not.
-     It closes on one gesture: the operator's. */
 
   return (
     <div className={`baud-phone ${typing ? "baud-phone-typing" : ""}`}>
       <header className="baud-phone-head">
-        {/* THE NAME IS THE REFRESH. Nothing about how it LOOKS changes - the
-            button carries the span's own class and resets everything a button
-            brings with it - but its hit area reaches the screen's corner and
-            the header's full height, which is where a thumb actually lands. */}
+        {/* The name is the refresh; its hit area reaches the corner where a thumb lands. */}
         <button
           type="button"
           className={`baud-phone-title ${reloading ? "baud-phone-title-going" : ""}`}
@@ -1197,20 +559,13 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         >
           BAUD
         </button>
-        {/* The name shown is the SNAPSHOT's own project - what is actually on
-            the wheel - not the stored choice, so a refused or misspelled seat
-            can never dress itself as the thing it failed to become. */}
+        {/* The snapshot's project, not the stored choice, so a refused seat never shows as taken. */}
         <ProjectPick
           current={snapshot?.project ?? (project || "—")}
           onPick={pickProject}
           scope={scope}
           onNew={() => setNewProjectOpen(true)}
         />
-        {/* The desktop header's own shell button, same glyph: an empty
-            terminal at the SELECTED project's root. Its own tmux room
-            (`baud-shell-<project>`), so it survives a screen lock exactly the
-            way agent rooms do - a phone terminal that dies with the lock
-            button would be furniture. */}
         <button
           type="button"
           className="baud-phone-feedbutton baud-phone-shellbutton"
@@ -1219,8 +574,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         >
           ❯_
         </button>
-        {/* The desktop header's bell, same paths, same stroke idiom - an emoji
-            here read as a sticker on a terminal (Patrick: "uggggg"). */}
         <button
           type="button"
           className={`baud-phone-feedbutton ${unread > 0 ? "baud-phone-feedbutton-alert" : ""}`}
@@ -1241,14 +594,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
-          {/* Capped at 99+ like the desk's: the badge is a "how much", and past
-              two digits it stops being one and starts breaking the header. */}
           {unread > 0 ? (
             <span className="baud-phone-feedbadge">{unread > 99 ? "99+" : unread}</span>
           ) : null}
         </button>
-        {/* The desktop header's gear, same paths - BAUD's own settings plus
-            the hooks sound switch, through /v1 instead of a Tauri command. */}
         <button
           type="button"
           className="baud-phone-feedbutton"
@@ -1270,7 +619,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             <path d="M20.2 14.6a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5v.3a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3.4a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3.4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1h.3a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1z" />
           </svg>
         </button>
-        {/* One machine, one lock chip - not one per card. */}
         <LockChip scope={scope} />
         <button type="button" className="baud-phone-signout" onClick={onSignOut} title={`connected as ${label}`}>
           sign out
@@ -1279,9 +627,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
 
       {error ? <p className="baud-phone-error">{error}</p> : null}
 
-      {/* THE WHEEL. One flick reaches the whole fleet, and the notch names a
-          current agent - which is the thing the desktop has no need for and a
-          phone cannot do without. */}
       <FleetWheel
         branches={branches}
         roster={roster}
@@ -1289,51 +634,26 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         seatedProject={snapshot?.project ?? ""}
         gitCounts={gitCounts}
         centered={current ? cardRef(current) : null}
-        /* THE RING FOLLOWS THE AGENT ROOM, not whichever tab is in front
-           (DPLAN-0414 A#15). A shell, a watch or a file in front is not an
-           attachment to any card; the seat pane is, wherever it sits. */
+        /* The ring follows the agent room, not whichever tab is in front. */
         attached={open.find(isSeat)?.name ?? null}
         appBadges={appBadges}
         appFaces={appFaces}
         onLayer={setWheelLayer}
         onCenter={setCentered}
         onExpand={setExpanded}
-        /* THE FOURTH LAYER'S DOOR. One key today and a switch would be one
-           branch of nothing, so the app is opened by name - the day there are
-           two, this is where the second one is named. */
         onOpenApp={(key) => {
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
           if (key === "backup") setBackupOpen(true);
-          // The monitor layer's cards all open the one machine sheet, which
-          // reads the key to know WHICH reading to draw.
-          // Prefix-matched rather than listed: the wheel owns that card list,
-          // and a second place naming every card is a second place to forget.
+          // Prefix-matched: the wheel owns the monitor card list.
           if (key.startsWith("mon-")) setMonitorCard(key);
         }}
       />
 
-      {/* THE CURRENT-AGENT STRIP IS GONE. Patrick, on a screenshot with three
-          visible terminal lines: "u see no room for the terminal... all agent
-          info goes in the card." He is right and it was duplication: the rail's
-          dots and badges are the at-a-glance layer, the expanded card is the
-          detail layer, and the strip was a third copy standing between them
-          paying rent in the one dimension the terminal needs. Nothing was lost -
-          every figure it showed is a door on the card. */}
       {branches.length === 0 ? (
         <p className="baud-phone-empty">{error ? "" : "reading the fleet…"}</p>
       ) : null}
 
-      {/* THE STAGE - the terminal's permanent place under the rail.
-          Patrick, after living with the hide-state: "the terminal is the center
-          piece, always there just like desktop, I can navigate as agents are
-          working." So this region never goes away; only its CONTENTS change,
-          between an attached room and the resting state. Fleet view and room
-          view stopped being two layouts. */}
-      {/* THE TAB ROW - the stage's own switcher, shown only when something is
-          open. Every chip is a live pane; the × is the one close affordance
-          that works for all three kinds (and the only one the project-root
-          shell has, since it owns no card). */}
       {open.length > 0 ? (
         <nav className="baud-phone-panes">
           {open.map((pane) => {
@@ -1365,23 +685,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       ) : null}
 
       <section className="baud-phone-stage">
-        {/* EVERY OPEN PANE STAYS MOUNTED - switching is visibility, never
-            lifecycle. An unmount closes that pane's socket, so hiding with
-            `visibility` (not display:none) is load-bearing twice over: the
-            hidden pane keeps its real size, so no resize ever fires from a
-            pane nobody is looking at - a display:none pane would measure 0x0
-            and, through `window-size smallest`, SHRINK THE SHARED ROOM under
-            the desk and every other client. The panes are keyed, so flipping
-            the active one re-renders nothing underneath. */}
+        {/* Hidden by `visibility`, never display:none: a 0x0 pane would shrink the shared tmux
+            room through `window-size smallest`, and an unmount would close its socket. */}
         {open.map((pane) => {
           const key = paneKey(pane);
-          /* THE POLL IS NOT CONSULTED HERE, and that line's absence is the fix.
-             `branches.find(held => held.name === pane.name)` used to sit on this
-             line: a re-resolution by NAME, every render, against the SEATED
-             project's list. Switching the header replaced that list, the lookup
-             missed, the pane fell through to a resting line, and unmounting the
-             sheet closed its socket - so browsing dropped the chat. A pane's
-             lifecycle now depends on nothing that can change underneath it. */
+          /* Never re-resolved from the poll: a pane's lifecycle must not depend on the seated list. */
           const held = pane.card;
           return (
             <div
@@ -1389,14 +697,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               className={`baud-phone-pane ${key === active ? "" : "baud-phone-pane-hidden"}`}
             >
               {pane.mode === "file" ? (
-                /* The SAME Reader that overlays for card reads, re-seated as
-                   tab content - phone.css unpins its fixed/fullscreen shape
-                   inside a pane. Its `‹ back` and the tab's × agree - close -
-                   UNLESS A BROWSE OPENED IT (DPLAN-0414 C#9): then `‹ folder`
-                   re-opens that browse at the level the file was tapped on,
-                   with the trail it stood on (wave 6), and the tab stays in
-                   the row, where the 08-16 ruling put it. The × still
-                   closes. */
+                /* Opened from a browse, `‹ folder` reopens it with its trail; otherwise back closes the tab. */
                 <Reader
                   target={{
                     ref: pane.ref ?? "",
@@ -1405,12 +706,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     project: pane.project,
                     root: pane.root,
                   }}
-                  /* TWO DESIGNED RENDERS, both opt-in per pane. The certificate
-                     rides its flag; a `.md` file is drawn as markdown by its
-                     name (DPLAN-0414 A#23). Anything else gets no renderer, and
-                     the Reader takes the same `<pre>` path it has always taken.
-                     The certificate's renderer can still decline - one that
-                     will not parse is read as the text it is. */
                   render={
                     pane.document === "certificate"
                       ? renderCertificate
@@ -1428,12 +723,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                   }}
                 />
               ) : pane.mode === "watch" ? (
-                /* NO BRANCH IS A REAL ANSWER HERE, and only here. Everywhere
-                   else on this face an absent branch is a bug; a target-less
-                   watch is global mission control - the desktop's own default
-                   pane - and it names no session to take over. The stand-in
-                   carries the two fields a watch reads, exactly as the
-                   project-root shell's does. */
+                /* No branch is valid only here: a target-less watch is global mission control. */
                 !pane.name ? (
                   <MonitorSheet
                     branch={
@@ -1446,24 +736,14 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     }
                   />
                 ) : (
-                  /* The pane's OWN card, never the poll's. A watch whose branch
-                     has left the current read is still a live observer with a
-                     process behind it; dropping it because a list changed would
-                     kill something the operator never asked to close. */
+                  /* The pane's own card, never the poll's: a list change must not kill a live observer. */
                   <MonitorSheet branch={held ?? ({ name: pane.name, path: "", project: pane.project ?? "" } as BranchStatus)} />
                 )
               ) : (
-                /* ALWAYS A SHEET. There is no "this branch left the read" arm
-                   any more, because that arm was the bug: a room drops its
-                   client only on the operator's own three gestures - the
-                   attach swap, end room, and the tab's close. A list changing
-                   is none of them. */
+                /* Always a sheet: a room drops its client only on attach swap, end room or tab close. */
                 <TerminalSheet
                   branch={
-                    /* The project-root shell has NO card - the fleet does not
-                       list the project as a branch of itself. The stand-in
-                       carries the two fields a shell reads: the empty name
-                       (the request for the root) and the project. */
+                    /* The project-root shell has no card; the stand-in carries the empty name and project. */
                     held ??
                     ({
                       name: pane.name,
@@ -1473,18 +753,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     } as BranchStatus)
                   }
                   mode={pane.mode}
-                  /* Absent on every pane but one: the shell the card's `?`
-                     opened, which types the help line once and then is an
-                     ordinary shell with the operator's keyboard in it. */
                   command={pane.command ?? null}
                   scope={scope}
-                  /* Resolved HERE, once, and handed to every pane - so two
-                     rooms open side by side can never scroll at two speeds,
-                     and a save reaches all of them on the same render. */
                   scrollPercent={scrollPercent(baudSettings)}
-                  /* A TAB READ BACK AFTER A RELOAD IS A REATTACH, never a door
-                     press (wave 6, item 3): it types no launch line, whatever
-                     its card says. */
+                  /* A tab restored after a reload is a reattach: no launch line. */
                   restored={pane.restored === true}
                   onComposeFocus={setTyping}
                 />
@@ -1495,9 +767,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         {open.length === 0 ? (
           <div className="baud-phone-resting">
             <p className="baud-phone-resting-line">no room attached</p>
-            {/* The aliveness line lives HERE now, because it is a fleet fact and
-                this is the fleet's resting state. With a room open the terminal
-                header names where you are and the rail's dots carry the rest. */}
             <p className="baud-phone-resting-live">
               {live.length ? `live: ${live.join(", ")}` : "no live agent sessions"}
             </p>
@@ -1510,29 +779,17 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       </section>
 
       {expandedCard ? (
-        /* EVERY DOOR TO A SCREEN LEAVES THE CARD ON THE TRAIL (wave 6, item
-           1): README, inbox, plans, todos, memory, files, claude-settings and
-           passport go through `leaveCard`, so their `‹ card` reopens it. The
-           doors to a PANE - attach, resume, fresh, shell, `?`, watch, the
-           monitors - still just close it: their destination is the stage, and
-           the operator went there on purpose. The GIT tile had this before
-           anything else did, through its own `gitOf.ref`, and keeps it. */
+        /* Doors to a screen leave the card on the trail (`leaveCard`); doors to a pane just close it. */
         <AgentSheet
           branch={expandedCard}
           seatedProject={snapshot?.project ?? ""}
           scope={scope}
           onRead={(ref, title, kind) => {
             leaveCard();
-            // The card's OWN project, not the seat - the read is fenced on the
-            // address it names, and naming half an address is how a foreign
-            // agent's file becomes a local agent's file.
+            // The card's own project, not the seat: half an address reads a same-named local agent's file.
             setReading({ ref, title, kind, project: expandedCard.project });
           }}
-          /* THE THREE FIGURES THAT USED TO OPEN RAW JSON (DPLAN-0414 A#2).
-             Each opens its designed screen by name and the card's OWN
-             project, the memory door's address - and TODOS is the memory
-             door itself with the todos tab in front, so the two doors on this
-             card that read `.trinity` cannot draw it two ways. */
+          /* TODOS is the memory door with the todos tab in front, so `.trinity` is drawn one way. */
           onInbox={() => {
             leaveCard();
             setInboxOf({ name: expandedCard.name, project: expandedCard.project });
@@ -1545,13 +802,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             leaveCard();
             setMemoryOf({ name: expandedCard.name, project: expandedCard.project, tab: "todos" });
           }}
-          /* THE GIT TILE, which used to be an `onRead` of kind `diff` - one
-             raw whole-branch patch in the plain reader. Patrick's 08-17 ruling
-             replaced it with the git app's own flow at branch grain: the
-             grouped list, a tap, the rendered patch. The card's OWN project
-             rides along, exactly as the tile's count fetch sends it, so a
-             foreign card's changes are that card's and not a same-named local
-             agent's. */
+          /* The card's own project rides along, so a foreign card's changes are its own. */
           onGit={() => {
             setExpanded(null);
             setGitOf({
@@ -1568,19 +819,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             setExpanded(null);
             focusPane({ name: expandedCard.name, mode: "shell", project: expandedCard.project, card: expandedCard });
           }}
-          /* THE `?` - the desk's `helpBranch` (App.tsx:297), which is this same
-             call with a command line attached. Nothing else differs: same door
-             press, same shell, same room.
-
-             ONE ROOM MEANS ONE PANE. `paneKey` ignores `command`, so pressing
-             `?` on a branch whose shell is already open brings that pane
-             forward and types nothing - which is the desk's own re-click rule
-             for this exact door ("Same door semantics as watch: re-click brings
-             the open one forward", App.tsx:296), arriving here through the
-             stricter route: the desk can afford a second help TAB because its
-             shells are throwaway ptys, and this face cannot, because the phone's
-             shell is a persistent tmux session that the desk and the pocket
-             share. Doors, not toggles - and never two clients on one session. */
+          /* `paneKey` ignores `command`, so an already-open shell is fronted and nothing is typed:
+             never two clients on one tmux session. */
           onHelp={() => {
             setExpanded(null);
             focusPane({
@@ -1599,9 +839,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             leaveCard();
             setSettingsAgent(expandedCard.name);
           }}
-          /* THE MEMORY DOOR (compass #291). By name and project, the same
-             address the passport read takes - the screen behind it reads the
-             two `.trinity` files that used to be pages of the passport. */
           onMemory={() => {
             leaveCard();
             setMemoryOf({ name: expandedCard.name, project: expandedCard.project });
@@ -1613,14 +850,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           }}
           onAttach={(mode) => {
             setExpanded(null);
-            // The operator opening this card's room is the ONE door that
-            // revives an ended room (intent.ts; the desk does the same).
+            // The one door that revives an ended room (intent.ts).
             clearRoomEnded(expandedCard.project, expandedCard.name);
             focusPane({ name: expandedCard.name, mode, project: expandedCard.project, card: expandedCard });
           }}
-          /* Built by paneKey itself rather than spelled out here - a key
-             written in two places drifts the first time its shape changes,
-             and it just did. */
           isAttachedRoom={open.some(
             (pane) =>
               paneKey(pane) ===
@@ -1630,23 +863,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             setExpanded(null);
             closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
           }}
-          /* THE ROOM IS GONE, so its client goes with it - the same pane and
-             the same key `onDetach` closes, on the machine's answer instead of
-             a door press. Only the `resume` pane: `end room` kills the AGENT's
-             session, and this branch's shell is a different one (`baud-shell-*`)
-             that survives it, so closing more than this would be the phone
-             inventing an outcome the verb never had.
-
-             The sheet deliberately STAYS OPEN. Every other handler here leads
-             with `setExpanded(null)` (or `leaveCard`, which does it) because a
-             door press means "take me somewhere"; this is a chip reporting back, and the chip renders the
-             machine's sentence inline - closing the sheet would delete the only
-             confirmation the operator gets that the room actually ended. */
+          /* Closes only the resume pane (the shell is a separate session); the sheet stays open
+             because the chip shows the machine's confirmation inline. */
           onEnded={() => {
-            // RECORDED NOW (DPLAN-0414 A#17 = B#7): the startup agent's guard
-            // reads this mark, so a reload does not recreate the room the
-            // operator just ended. Only after the machine confirmed the kill -
-            // the chip calls this on success alone.
+            // The startup guard reads this mark; called only after the machine confirmed the kill.
             markRoomEnded(expandedCard.project, expandedCard.name);
             closePane(paneKey({ name: expandedCard.name, mode: "resume", project: expandedCard.project }));
           }}
@@ -1654,48 +874,25 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
 
-      {/* THE PASSPORT (transfer round). It outranks the agent sheet in z-order
-          and replaces it on open - a document you read, over the menu you
-          reached it from. If the card leaves the fleet while it is open the
-          sheet closes itself rather than standing on a stale copy. */}
       {passportCard ? (
         <PassportSheet
           branch={passportCard}
-          /* The records door: the SAME browser the files door opens, floored
-             at `artifacts/`. The document closes first, exactly as every other
-             door on this face closes what it was reached from - what it opens
-             is a full-height screen, and a screen under a document is a door
-             that appears not to work. */
+          /* The records door: the files browser floored at `artifacts/`; the document closes first. */
           onArtifacts={() => {
             setPassportOf(null);
-            // LEFT, NOT DISCARDED (wave 6): the artifacts browse's floor
-            // `‹ passport` reopens this document from the trail.
             leaveFor({ kind: "passport", ref: cardRef(passportCard), held: passportCard });
             setBrowsing({
               name: passportCard.name,
               project: passportCard.project,
-              /* The floor, from the one constant the certificate's trigger
-                 tests against - spelled twice is how the door and the document
-                 stop agreeing. */
+              /* The certificate trigger's own constant, so door and document agree. */
               start: ARTIFACTS_DIR,
             });
           }}
-          /* `×` AND THE SCRIM LAND ON THE CARD when the card opened it (wave
-             6, item 7): closing the document is one step back, and the trail
-             says where that is. */
           onClose={closePassport}
         />
       ) : null}
 
-      {/* THE TWO GEARS - the desktop's own components. Their scrim and panel
-          styling ride theme.css; every read and write goes through the same
-          /v1 settings routes the desktop's semantics were ported to, so a dial
-          saved here and a dial saved at the desk land in one file.
-
-          ONE DIFFERENCE, CARRIED AS DATA (wave 6, item 10): the phone's one
-          close glyph is the tab's `×`, so the agent panel is handed it; the
-          desk keeps its `✕`. Its `×`, scrim and Escape all close the panel and
-          land on the card it was opened from (the trail). */}
+      {/* The desktop's own settings panel, through the same /v1 routes, so both faces write one file. */}
       {settingsAgent ? (
         <AgentSettings agent={settingsAgent} closeGlyph="×" onClose={closeAgentSettings} />
       ) : null}
@@ -1704,62 +901,26 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           agents={branches.map((card) => card.name)}
           settings={baudSettings ?? {}}
           scope={scope}
-          /* The connection screen reports the token, so it needs the one thing
-             every other consumer is happy to conflate: whether the server has
-             ANSWERED yet. "read" and "not asked" are the same safe thing to a
-             verb chip and two different sentences on a screen about the token. */
+          /* The connection screen must tell "not asked yet" from "read". */
           scopeKnown={scopeKnown}
-          /* A READ lands here too, not just a save - which is what carries a
-             speed written at the desk into the room already on screen. */
+          /* A read lands here too, carrying a desk-side save into the open room. */
           onDocument={setBaudSettings}
-          /* THE SAME FUNCTION THE HEADER CHIP CALLS - handed down, not rebuilt.
-             The connection screen is a second door on one sign-out. */
           onSignOut={onSignOut}
           onClose={() => setInterfaceOpen(false)}
         />
       ) : null}
 
-      {/* READS ARE OVERLAYS, NOT DESTINATIONS - and under the persistent layout
-          that stopped being a nicety. These used to be early returns, which
-          unmounted this whole tree: opening a README while attached would have
-          torn down the terminal and closed the room's socket, so "observing
-          never requires detaching" would have been false through the one door
-          the operator uses most. Rendered on top, the room below keeps running
-          and keeps receiving bytes while a file is being read. */}
-      {/* A tapped file opens as a TAB, not an overlay (Patrick, 08-16): the
-          browser closes so the file is immediately in view, and each further
-          pick stacks another tab - multi-file is the tab row doing its job.
-          Re-tapping an already-open file fronts its existing tab.
-
-          THE BROWSE SURVIVES THE FILE (the owner, DPLAN-0414 C#9: "it's
-          annoying when a tab drops, I have to start again"). The browser still
-          closes, but the browse - root, floor, project and the level the file
-          was tapped on - rides the file's pane as `from`, and `‹ folder` on
-          that tab re-opens it right there: the folder it came from, at the
-          same level. A second file from the same folder carries its own copy.
-
-          AND THE TRAIL UNDER IT (wave 6, item 5). The file lands on the
-          stage, so the live trail is cleared; the pane keeps it as
-          `fromTrail`, and `‹ folder` puts both back together - so the
-          browse's floor `‹` still reaches the roster, passport or card it came
-          from. A re-tapped open file fronts its tab unchanged and keeps the
-          `from` and trail of its FIRST open: one file is one tab. */}
+      {/* Reads are overlays, never early returns: unmounting the tree would close the room's socket.
+          A tapped file becomes a tab whose pane keeps the browse and trail for `‹ folder`. */}
       {browsing ? (
         <FilesScreen
-          /* KEYED ON THE WHOLE BROWSE, floor included: the start directory is
-             read once, into state, so a second browse arriving while one is
-             open must be a new component rather than the old one holding the
-             old floor. */
+          /* Keyed on the whole browse: the start directory is read once into state. */
           key={`${browsing.root ?? ""}:${browsing.project}/${browsing.name}/${browsing.start}@${browsing.at ?? ""}`}
           branch={browsing.name}
           project={browsing.project}
           root={browsing.root}
           start={browsing.start}
           at={browsing.at}
-          /* THE FLOOR'S `‹` NAMES ITS ORIGIN (wave 6, items 6 and 10): the
-             roster when a roots pick opened it, the passport for the artifacts
-             door, the card for the card's files door - each because that door
-             left it on the trail. */
           backLabel={backTo}
           onOpenFile={(ref, _title, at) => {
             const from = browsing;
@@ -1774,15 +935,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
               // The floor travels with the file: a read resolved against the
               // wrong root does not fail, it finds a different file.
               root: from.root,
-              /* THE ONLY PLACE A DESIGNED DOCUMENT IS EVER ASKED FOR: the
-                 browse floored at `artifacts` - the passport's records door -
-                 tapping the one certificate at its one name. The card's files
-                 door floors at "" and can never satisfy it, so every file it
-                 opens, including that same certificate reached the long way
-                 round, carries no flag and reads as text. */
+              /* Only the artifacts-floored browse ever asks for a designed document. */
               document: isCertificateOpen(from.name, from.start, ref) ? "certificate" : undefined,
-              // The browse, at the level the file was tapped on (C#9), and
-              // the trail it stood on (wave 6) - set together, always.
               from: { ...from, at },
               fromTrail: under,
             });
@@ -1793,32 +947,15 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           }}
         />
       ) : null}
-      {/* THE FILES APP - the roster first, the browser behind it. The two are
-          never open together: a pick closes the roster and LEAVES IT ON THE
-          TRAIL (wave 6, item 6; C#8), and the browse's floor `‹ roster`
-          reopens it. (This comment used to say the roster renders before the
-          browser; it renders after, and with one open at a time the order no
-          longer decides anything.) The roster's own `‹ wheel` is the trail's
-          empty end: the apps wheel is where it opens from. */}
+      {/* The roster and the browser are never open together; a pick leaves the roster on the trail. */}
       {rootsOpen ? (
         <RootsScreen
           onPick={(root) => {
             setRootsOpen(false);
             leaveFor({ kind: "roots" });
             setBrowsing({
-              /* THE FIRST PATH COMPONENT. A branch and a project name
-                 themselves; `home` and `aipass` name nothing, and the fence
-                 resolves those from the KIND alone - so the kind stands in as
-                 the component rather than leaving it empty, which would send
-                 a leading slash the transport refuses by design. One
-                 expression, one place: nothing downstream has to know which
-                 kinds carry a name. */
+              /* home and aipass name nothing, so the kind stands in: an empty component is a refused leading slash. */
               name: root.name || root.kind,
-              /* NO PROJECT. The root IS the scope here - a project root names
-                 its project in `name`, and home and aipass belong to the
-                 machine rather than to any project. Sending the seat would ask
-                 the fence to resolve a root inside a project, which is not a
-                 question it has. */
               project: "",
               start: "",
               root: root.kind,
@@ -1828,20 +965,13 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
 
-      {/* The machine's vitals - what a monitor card opens to, drawn from the
-          same read as the card faces. NAMED "machine", not "monitor", because
-          MonitorSheet above is already taken by the read-only WATCH pane over an
-          agent's room - two different things one word away from each other. */}
+      {/* "Machine", not "monitor": MonitorSheet is the watch pane. */}
       {monitorCard ? (
         <MachineSheet card={monitorCard} read={machine} onClose={closeMachine} />
       ) : null}
-      {/* WORKING MEMORY - a screen, not an overlay on the card: it is read, at
-          length, and the reader idiom is what this face uses for reading. */}
       {memoryOf ? (
         <MemoryScreen
-          /* KEYED ON THE TAB TOO: the tab in front is read once, at mount, so
-             the TODOS tile and the memory door asking for the same agent must
-             be two mounts rather than one holding the other's tab. */
+          /* Keyed on the tab too: the tab in front is read once, at mount. */
           key={`${memoryOf.project}/${memoryOf.name}/${memoryOf.tab ?? ""}`}
           branch={memoryOf.name}
           project={memoryOf.project}
@@ -1850,8 +980,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           onClose={closeMemory}
         />
       ) : null}
-      {/* PLANS - the card's PLANS tile, the memory screen's shape over the
-          dashboard's flow section (DPLAN-0414 A#2). */}
       {plansOf ? (
         <PlansScreen
           branch={plansOf.name}
@@ -1860,9 +988,6 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           onClose={closePlans}
         />
       ) : null}
-      {/* A `.md` file is drawn as markdown (DPLAN-0414 A#23) through the
-          Reader's own render door - the README behind the card's name is the
-          case that asked for it. Every other file reads as text. */}
       {reading ? (
         <Reader
           target={reading}
@@ -1871,57 +996,33 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           onClose={closeReading}
         />
       ) : null}
-      {/* THE GIT APP - a full-height screen over the stage, like every other
-          read on this face, so the room underneath keeps its socket and its
-          bytes while a diff is being read. It owns its own back stack; this
-          face only says whether it is open. */}
       {gitOpen ? (
         <GitApp
           branch={repoCitizen}
           project={seat}
           projectLabel={seat || "anchor"}
-          /* WHETHER THE FLEET HAS ANSWERED (DPLAN-0414 C#13). An empty card
-             list means "not read yet" with no snapshot and "this project has
-             no agents" with one, and the sheet says which. */
+          /* With no snapshot, an empty card list means "not read yet". */
           fleetAnswered={snapshot !== null}
-          /* The measured number or NOTHING - `??` would turn "not read yet"
-             into a confident zero, which is the one thing this lane may not
-             say. `undefined` and `null` are the same absence here; the app's
-             prop is null because a component's contract should have one. */
+          /* Null, never `??` a zero: "not read yet" must not read as no changes. */
           changed={repoCounts[seat] ?? null}
           onClose={() => setGitOpen(false)}
         />
       ) : null}
-      {/* THE BACKUP APP (DPLAN-0411) - the same full-height screen over the
-          stage, for the seated project. Keyed on the seat: its watch and its
-          summaries belong to one project, and a seat change underneath must
-          not show one project's runs under another's name. */}
+      {/* Keyed on the seat so a seat change never shows one project's runs under another's name. */}
       {backupOpen ? (
         <BackupApp key={seat} project={seat} scope={scope} onClose={closeBackup} />
       ) : null}
       {newProjectOpen ? <NewProjectSheet onClose={closeNewProject} onCreated={onProjectBorn} /> : null}
-      {/* THE SAME APP, AT BRANCH GRAIN - the card's GIT tile. It opens straight
-          into the changes list and carries no `changed` or `projectLabel`,
-          because both of those belong to the sheet screen this grain never
-          shows. A grain, not a copy: the list, the grouping, the tap and the
-          patch are one implementation, so the two doors cannot drift into two
-          pictures of the same file. */}
       {gitOf ? (
         <GitApp
-          /* KEYED ON THE SUBJECT. The app's back stack is state, and the floor
-             it starts on is decided once at mount - so a second card's changes
-             arriving while one is open must be a new component rather than the
-             old one holding the old branch. The card must be closed first
-             today, which is exactly the kind of "cannot happen" that stops
-             being true the first time a door opens from somewhere else. */
+          /* Keyed on the subject: the app's floor is decided once at mount. */
           key={`${gitOf.project}/${gitOf.name}`}
           branch={gitOf.name}
           project={gitOf.project}
           grain="branch"
           onClose={() => {
             setGitOf(null);
-            // BACK TO THE CARD IT WAS PRESSED ON - see `gitOf`. The chip on
-            // that screen says `‹ card`, and this is what makes the word true.
+            // Back to the card it was pressed on, which makes the `‹ card` chip true.
             setExpanded(gitOf.ref);
           }}
         />
@@ -1932,29 +1033,15 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           clearedUpTo={clearedUpTo}
           onClear={clearFeed}
           onClose={closeFeed}
-          /* THE BELL ROW'S DOOR (DPLAN-0414 A#2, contract C-A). An event that
-             carries `project` (C-A as amended) names the recipient's project
-             outright, and that inbox is read directly - no guess. One without
-             it (any line written before the amendment) falls back to how every
-             card is resolved on this face: the seated census first, then the
-             cross-project roster. A recipient found in neither is read under
-             the seat, the meaning an unnamed project has always had; a wrong
-             guess there cannot show the wrong mail, because the message is
-             matched by its id and a miss says so. */
+          /* The event's own project when it carries one, else the census then the roster;
+             a wrong guess is safe, since the message is matched by id. */
           onOpenMail={(recipient, mailId, project) => {
             const where = project ?? pool.find((each) => each.name === recipient)?.project ?? "";
             setInboxOf({ name: recipient, project: where, messageId: mailId });
           }}
         />
       ) : null}
-      {/* THE INBOX renders AFTER the feed, because the bell is one of its two
-          doors: a message opened off a feed row sits on top of the feed, which
-          stays mounted under it, and its `‹ feed` lands there - the one parent
-          on this face that is kept open rather than put on the trail, so the
-          feed keeps its scroll. Opened off the MAIL tile, the card is on the
-          trail and the list's `‹ card` reopens it (wave 6). Keyed on the whole
-          address so a second message arriving while one is open is a fresh
-          mount. */}
+      {/* After the feed: a message opened off the bell sits on the feed, which stays mounted. */}
       {inboxOf ? (
         <InboxScreen
           key={`${inboxOf.project}/${inboxOf.name}/${inboxOf.messageId ?? ""}`}
@@ -1970,13 +1057,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
 
-      {/* The footer states what this SESSION is, not what the build can do.
-          Same bundle, two sentences - the scope is the difference.
-          IT STANDS DOWN WHILE A ROOM IS OPEN. Not asked for, flagged as mine:
-          the round is about giving the terminal its rows back, this is a
-          standing status line, and the head's lock chip already carries the
-          scope permanently. It returns in the resting state where there is
-          nothing competing for the space. */}
+      {/* The footer states what this session is, and stands down while a room is open. */}
       {open.length ? null : (
         <footer className="baud-phone-foot">
           {scopeRefusal(scope)

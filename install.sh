@@ -4,16 +4,8 @@
 #   curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s -- ~/Projects     (installs to ~/Projects/AIPass)
 #
-# What it does, in order, and nothing before you press Enter:
-#   1. Checks what this machine has and prints one table: ok / missing / too old.
-#   2. Lists what is missing and installs all of it after one Enter; re-running the
-#      script resumes, since the table skips what is present.
-#   3. Installs the aipass CLI from PyPI, at the version this release was built with.
-#   4. Runs `aipass install`, which clones AIPass into <parent>/AIPass (default
-#      $HOME/AIPass) and lands this release's phone face and baud-cli.
-#   5. Prints the phone guide and how to undo it.
-#   6. When Tailscale is connected, waits for Enter when your phone's camera is
-#      ready, then shows the pairing QR.
+# Nothing installs before you press Enter: it checks this machine, lists what is missing,
+# installs it, runs `aipass install`, then shows the phone pairing QR. Re-running resumes.
 #
 # The careful path - check the script before running it:
 #   curl -fsSLO https://github.com/AIOSAI/baud/releases/latest/download/install.sh
@@ -21,8 +13,7 @@
 #   sha256sum -c --ignore-missing SHA256SUMS.txt
 #   sh install.sh [parent-directory]
 #
-# release.yml stamps these two lines at pack time. The source in the repo is
-# unstamped and refuses to run: download the script from a release.
+# release.yml stamps these two lines at pack time; the unstamped source refuses to run.
 BAUD_TAG="@BAUD_TAG@"
 AIPASS_VERSION="@AIPASS_VERSION@"
 
@@ -61,12 +52,10 @@ as_root() {
     fi
 }
 
-# The per-user installers (Claude Code, uv, pipx) land in ~/.local/bin, which a
-# fresh shell may not have on PATH yet.
+# Claude Code, uv and pipx land in ~/.local/bin, which a fresh shell may not have on PATH.
 PATH="$HOME/.local/bin:$PATH"
 export PATH
 
-# --- phase 1: the preflight table ------------------------------------------
 
 STATE_platform=""
 STATE_git=""
@@ -135,7 +124,6 @@ print_table() {
     say ""
 }
 
-# --- phase 2: list what is missing, one Enter, then install all of it -------
 
 APT_UPDATED=""
 
@@ -150,7 +138,6 @@ apt_install() {
     as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
 }
 
-# One apt row: its table state, then the package.
 apt_row() {
     [ "$1" = missing ] || return 0
     apt_install "$2"
@@ -166,8 +153,6 @@ stop_on_uninstallable() {
     fi
 }
 
-# The list the one Enter answers: every missing row with its installer named,
-# then the sign-ins still due.
 print_plan() {
     PLAN_MISSING=""
     PLAN_CLAUDE=""
@@ -255,7 +240,6 @@ install_missing() {
     fi
 }
 
-# --- phases 3 and 4: the aipass CLI, then aipass install --------------------
 
 install_aipass_cli() {
     if have aipass; then
@@ -264,11 +248,8 @@ install_aipass_cli() {
         return 0
     fi
     if [ -n "${AIPASS_SOURCE:-}" ]; then
-        # The sandbox (docker/sandbox.sh, DPLAN-0408) points this at a local
-        # checkout. The CLI is built from a CLONE of it, never the directory
-        # itself, so only committed, tracked files cross: no .venv, .trinity,
-        # logs, secrets or uncommitted edits — the committed HEAD, as GitHub
-        # would serve it. git is a row of phase 2, so it is here by now.
+        # The sandbox points this at a local checkout. Build from a CLONE of it, so only
+        # committed files cross, as GitHub would serve them.
         src_clone="$(mktemp -d "${TMPDIR:-/tmp}/aipass-src.XXXXXX")/aipass"
         say "Installing aipass from $AIPASS_SOURCE (a clone of its committed HEAD)"
         git clone --quiet "$AIPASS_SOURCE" "$src_clone" || fail "could not clone $AIPASS_SOURCE; stopping here, and what was already installed stays"
@@ -350,10 +331,7 @@ main() {
     if [ ! -d "$parent" ]; then
         mkdir -p "$parent" || fail "could not create $parent; stopping here, and what was already installed stays"
     fi
-    # Under the sandbox, aipass install clones the local checkout instead of
-    # GitHub (--source). The two ${AIPASS_SOURCE:+...} expansions add the flag and
-    # its value only when set, each as its own word, so a path with a space holds
-    # and shellcheck's SC2086 (which failed the v0.3.6 release stamp) has nothing to say.
+    # Each ${AIPASS_SOURCE:+...} adds its own word only when set: a spaced path holds and SC2086 stays quiet.
     say "Running aipass install (this clones AIPass into $HOME_DIR${AIPASS_SOURCE:+ from $AIPASS_SOURCE})"
     if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG" ${AIPASS_SOURCE:+--source} ${AIPASS_SOURCE:+"$AIPASS_SOURCE"}; then
         say ""
@@ -385,25 +363,17 @@ main() {
         say "Claude Code is not signed in: run 'claude auth login' before running 'claude' in $HOME_DIR."
     fi
     say "If a new terminal cannot find aipass or claude, add \$HOME/.local/bin to your PATH."
-    # One pointer, not the list: the pairing QR below is the last thing on the
-    # screen, and on an 80x40 terminal the full undo list (16 rows wrapped) would
-    # scroll it off before the phone sees it. The failure path above still prints
-    # the whole list, because no QR is printed when the install stops.
+    # One pointer, not the undo list: the full list scrolls the QR below off an 80x40 screen.
     say "To undo: $UNDO_URL (your home: $HOME_DIR)"
 
     # The code's five minutes start when it is made, so it waits for the phone.
     if tailscale_running; then
-        # drone finds the core branches through AIPASS_HOME. setup.sh wrote it
-        # into ~/.bashrc a minute ago, but this shell (and the terminal that ran
-        # the one line) started before that, so neither has it (the owner's test
-        # 14, 2026-10-13: "Branch '@api' not found in registry", no QR).
+        # drone needs AIPASS_HOME, which setup.sh wrote to ~/.bashrc after this shell started.
         export AIPASS_HOME="$HOME_DIR"
         say ""
         say "Press Enter when your phone's camera is ready to scan (the code lasts five minutes)."
         if read -r _ </dev/tty; then
-            # The last print is the whole solution, pasteable, never a pointer to
-            # a reason above: nobody reads an install's output, they read its end
-            # (the owner, test 14, 2026-10-13).
+            # The last print is the whole pasteable fix: people read an install's end, not its middle.
             if ! drone @api host-api pair phone --scope operate; then
                 say ""
                 say "No QR. Paste these three lines into this terminal, then hold your phone up to the QR they print:"

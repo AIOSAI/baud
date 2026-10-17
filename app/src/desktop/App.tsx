@@ -29,24 +29,13 @@ import {
 } from "../intent";
 import type { BaudSettings, BranchStatus, FleetSnapshot } from "../types";
 
-/**
- * Which door a card click would take for this branch - BranchChip's own
- * judgment, mirrored here so the startup agent (m11 phase 6) opens exactly
- * what a click on its card would: a live session ATTACHES (nothing is typed),
- * a branch with interactive history or a dispatch transcript RESUMES,
- * anything else starts fresh.
- */
+/** BranchChip's door judgment, mirrored so the startup agent opens exactly what a card click would. */
 function cardMode(branch: BranchStatus): LaunchMode {
   const live = (branch.has_room || branch.outside_room !== null) && branch.interactive;
   return live || branch.has_history || branch.resume_id !== null ? "resume" : "fresh";
 }
 
-/**
- * One workbench tab. A `file` tab views the file at `path`; a `diff` tab
- * shows the branch dir's uncommitted git diff; a `monitor` tab holds a
- * tier-0 read-only monitor pane (m9). Non-file kinds carry synthetic
- * `diff:` / `monitor:` ids so the kinds can never collide on one path.
- */
+/** One workbench tab. Non-file kinds carry synthetic `diff:` / `monitor:` ids so kinds never collide on one path. */
 interface FileTab {
   path: string;
   name: string;
@@ -62,12 +51,7 @@ interface FileTab {
   target?: string | null;
 }
 
-/**
- * Which passports the strip shows. `current` is the seated project's fleet -
- * the original strip, untouched. `live` and `dispatched` are census-wide
- * filters: the same cards, gathered from every project, so the operator can
- * reach a manager in another tree without moving the seat.
- */
+/** Which passports the strip shows: the seated fleet, or census-wide `live` / `dispatched` filters. */
 type StripTab = "current" | "live" | "dispatched";
 
 const STRIP_TABS: { id: StripTab; label: string; hint: string }[] = [
@@ -91,7 +75,7 @@ const STRIP_TABS: { id: StripTab; label: string; hint: string }[] = [
 /** The terminal's reserved tab id - never closable, never a real path. */
 const TERMINAL_TAB = "terminal";
 
-/** What a tier-0 monitor pane needs to exist as a tab (m9). */
+/** What a monitor pane needs to exist as a tab. */
 interface MonitorSpec {
   /** Doubles as the tab path - one pane per id, ever. */
   id: string;
@@ -101,11 +85,7 @@ interface MonitorSpec {
   name: string;
 }
 
-/**
- * The header's tier-0 monitor toggles (m9), one traffic light each. The
- * `id` doubles as the tab path, so "is it live" is one lookup and every
- * close door resets the light through the same closeFile.
- */
+/** The manager's monitor toggles. `id` doubles as the tab path, so "is it live" is one lookup. */
 const MONITOR_TOGGLES = [
   {
     id: "monitor:prax",
@@ -135,25 +115,16 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<FleetSnapshot | null>(null);
   const [transportError, setTransportError] = useState<string | null>(null);
   const terminalRef = useRef<TerminalHandle>(null);
-  // The latest snapshot, reachable from stable callbacks (openFromTerminal).
   const snapshotRef = useRef<FleetSnapshot | null>(null);
-  // Whether the operator has already taken a seat - that outranks the startup
-  // preference. A ref is enough for this one: a seat can only be taken after
-  // the first snapshot has landed, which is the same moment the startup shot
-  // is spent, and the SHOT survives remounts (intent.ts). The shot itself
-  // deliberately does not live here - see the startup effect below.
+  // A taken seat outranks the startup preference. A ref suffices; the startup shot itself lives in intent.ts.
   const seatedRef = useRef(false);
 
-  // The reading room: which branch's tree is docked, which files are open,
-  // which pane is on top. The terminal is ALWAYS mounted - switching tabs
-  // hides it (claude keeps streaming underneath), never unmounts it.
+  // The terminal is ALWAYS mounted: switching tabs hides it, and claude keeps streaming underneath.
   const [treeBranch, setTreeBranch] = useState<BranchStatus | null>(null);
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeTab, setActiveTab] = useState<string>(TERMINAL_TAB);
 
-  // The gear panel (m11): one agent at a time, owned here rather than by the
-  // card, so two cards can never have a panel open at once. Not a tab - it is
-  // a modal glance over the whole app, and it closes with itself.
+  // Owned here, not by the card, so two cards can never have a panel open at once.
   const [settingsAgent, setSettingsAgent] = useState<string | null>(null);
   const openSettings = useCallback(
     (branch: BranchStatus) => setSettingsAgent(branch.name),
@@ -161,23 +132,8 @@ export default function App() {
   );
   const closeSettings = useCallback(() => setSettingsAgent(null), []);
 
-  /**
-   * The opened passport (round A, corrected).
-   *
-   * WHAT IS HELD IS THE IDENTITY, NOT THE ROW. The first version held the whole
-   * BranchStatus captured at click, and that froze the document: the cards
-   * re-render from every poll, so Patrick's card flashed red for four running
-   * sub-agents while the passport he opened from it still read "none running".
-   * A view that shows live numbers has to READ them live - the prax monitor
-   * this app already ships is exactly that discipline, and the passport was
-   * quietly not following it.
-   *
-   * The row is looked up from the current poll on every render (see
-   * `passportBranch` below). The snapshot taken at click is kept only as the
-   * fallback for a branch that LEAVES the list while its passport is open -
-   * a project switch, a roster tab change - because a document that empties
-   * itself mid-read is worse than one showing its last known good state.
-   */
+  /** The opened passport holds the IDENTITY, not the row: the row is re-read live each render (`passportBranch`).
+   *  `held` is only the fallback for a branch that leaves the list while open. */
   const [passportOf, setPassportOf] = useState<{
     name: string;
     project: string;
@@ -189,15 +145,12 @@ export default function App() {
     [],
   );
 
-  // BAUD's own settings (m11 phase 6): the header gear. `null` means the read
-  // has not landed yet - the app runs on defaults until it does, and the
-  // startup agent waits for it rather than firing on a guess.
+  // null until the read lands: the startup agent waits for it rather than firing on a guess.
   const [baudSettings, setBaudSettings] = useState<BaudSettings | null>(null);
   const [interfaceOpen, setInterfaceOpen] = useState(false);
   const prefs = interfacePrefs(baudSettings);
 
-  // Per project - the settings file lives under the seated root, so a switch
-  // re-reads it. A failed read settles on `{}`: defaults, and nothing hangs.
+  // A failed read settles on `{}`, so nothing waits forever on it.
   const loadSettings = useCallback(() => {
     baudSettingsRead()
       .then(setBaudSettings)
@@ -217,8 +170,6 @@ export default function App() {
         if (!existing) {
           return [...current, { path, name, branch, kind: "file" as const, line: line ?? undefined }];
         }
-        // Re-opening with a NEW line moves the open tab there; without one,
-        // the tab just comes forward as it is.
         return line == null
           ? current
           : current.map((tab) => (tab.path === path ? { ...tab, line } : tab));
@@ -228,9 +179,7 @@ export default function App() {
     [],
   );
 
-  // A ctrl+clicked path in the terminal arrives resolved and absolute; the
-  // tab's branch label is whichever branch's directory contains it (deepest
-  // wins - branch trees nest), or the seated project outside any branch.
+  // Deepest containing branch wins: branch trees nest.
   const openFromTerminal = useCallback(
     (path: string, line: number | null) => {
       const name = path.split("/").pop() ?? path;
@@ -267,11 +216,7 @@ export default function App() {
     setActiveTab((current) => (current === path ? TERMINAL_TAB : current));
   }, []);
 
-  // A header monitor toggle (m9): green while its pane lives, off when it
-  // does not - and "lives" is literally "the tab exists", so a pane killed
-  // by its corner button or a monitor that dies on its own resets the
-  // toggle through the same closeFile door. No second state to drift.
-  // Opening half only - the closing half is closeFile, same as every tab.
+  // A toggle's "live" is "the tab exists", so every close resets it through closeFile; no second state.
   const openMonitor = useCallback(
     (spec: MonitorSpec) => {
       setFileTabs((current) => {
@@ -292,9 +237,6 @@ export default function App() {
     [],
   );
 
-  // The card's help button (m9 phase 4): a tier-1 inquiry terminal - real
-  // shell, real keyboard, seated in the branch with the help already run.
-  // Same door semantics as watch: re-click brings the open one forward.
   const helpBranch = useCallback((branch: BranchStatus) => {
     const id = `help:${branch.name}`;
     setFileTabs((current) => {
@@ -314,10 +256,7 @@ export default function App() {
     setActiveTab(id);
   }, []);
 
-  // The terminal buttons: a plain working shell in a tab, nothing typed.
-  // Keyed by directory rather than name, so the project shell and a branch
-  // shell can never collide on one tab and a re-click brings the open one
-  // forward - doors, not toggles, same as watch and help.
+  // Keyed by directory, so the project shell and a branch shell never collide on one tab.
   const openShell = useCallback((dir: string, label: string) => {
     const id = `shell:${dir}`;
     setFileTabs((current) => {
@@ -335,13 +274,7 @@ export default function App() {
     [openShell],
   );
 
-  // The card's watch button (m9 phase 3): this branch's activity alone.
-  // Re-clicking an open one brings its tab forward - cards are doors, not
-  // toggles; closing stays with the tab's own ✕ and the pane's corner.
-  // Own `watch:` namespace: the prax CARD's scoped pane and the header's
-  // mission-control pane are different panes and must never share a tab.
-  // (Quirk, accepted: prax maps the `commons` target to the social feed,
-  // so the commons card's watch shows the feed, not technical logs.)
+  // Own `watch:` namespace: the prax card's scoped pane and mission control must never share a tab.
   const monitorBranch = useCallback(
     (branch: BranchStatus) => {
       openMonitor({
@@ -354,61 +287,19 @@ export default function App() {
     [openMonitor],
   );
 
-  // The launch buttons since m6: a window into the branch's ROOM. Switching
-  // cards detaches the old room (it keeps running) and attaches the next.
-  // The claude command line is staged for rooms that can take it - freshly
-  // created, or sitting at a prompt with no live claude (`typeIfAttached`);
-  // an attach onto a live claude types nothing, because the "input" would
-  // land in claude's message box. Resume aims where the seat actually is:
-  // `--resume <id>` whenever the backend serves one — the dispatch-written
-  // session pointer first, else the only-headless-history fallback — and
-  // `-c` only when no id exists but interactive history does. The id door
-  // outranks `-c` because `-c` can never enter a dispatched session
-  // (FPLAN-0448). KNOWN GAP, deliberate: a FRESH launch here creates a
-  // session the pointer never learns about, so the next resume aims at the
-  // pointer, not at it. Closing that means minting an id and writing the
-  // pointer file from this side — pointer WRITES stay with dispatch and the
-  // boot shim until the sweeper plan settles who else may hold the pen.
-  // Single-quoted so odd paths survive
-  // the shell. `command claude` skips the bashrc boot shim (@hooks
-  // session_boot): its continue/new menu is redundant here - the button
-  // press already made that choice.
-  //
-  // This line is the TERMINAL SLOT (Patrick's ruling 2026-08-14): BAUD is
-  // terminal-agnostic, and everything Claude-specific about a launch lives
-  // here and nowhere deeper. AIPass does the work, BAUD is the face, and the
-  // terminal is a component wired into it - claude today, codex or a native
-  // AIPass terminal tomorrow, selected the way a model is selected. Nothing
-  // below this callback may assume which terminal it is.
-  //
-  // Deliberately NOT here: `--remote-control`. Remote Control is a
-  // Claude-native convenience like attach - real, usable when present, and
-  // never load-bearing. Wiring it into the door would make the fleet depend on
-  // one terminal's feature set, which is the dependency the slot exists to
-  // prevent. (Built and reverted the same sitting on Patrick's ruling; the
-  // verified findings live in FPLAN-0412 Phase 0.)
+  // THE TERMINAL SLOT: everything Claude-specific about a launch lives here; nothing below may assume the terminal.
+  // `--resume <id>` outranks `-c`, which can never enter a dispatched session. A fresh launch is unknown to the
+  // session pointer, and pointer writes stay with dispatch. `command claude` skips the bashrc boot shim's menu.
+  // `--remote-control` stays out: the fleet must not depend on one terminal's feature set.
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
-    // DISPATCHED MEANS WORKING, AND RESUME THERE IS TAKEOVER (FPLAN-0449).
-    // Two claudes on one session id migrate the session's background-task
-    // state to the newer PID: the dispatch's tasks are stopped out from
-    // under it and the job dies mid-run, unreplied - measured live
-    // 2026-08-20 (DPLAN-0310, the OSPREY intercept). The presence gate
-    // blocks the newer seat's PROMPTS but cannot block that migration, so
-    // the door itself must step aside: a resume onto a working branch opens
-    // the read-only watch pane instead. Belt to the card's braces - the
-    // card already swaps its resume button for "working", but the startup
-    // agent calls launch() directly through cardMode and must hit the same
-    // wall. Fresh stays a door: a new session id steals nothing. And an
-    // INTERACTIVE branch is exempt: that launch is an attach to the
-    // existing room, which starts no second claude.
+    // Resume onto a dispatched session is takeover: a second claude steals its background tasks and the job dies.
+    // The card guards this too, but the startup agent calls launch() directly. Interactive means attach, so exempt.
     if (mode === "resume" && branch.dispatched && !branch.interactive) {
       monitorBranch(branch);
       return;
     }
-    // A seat exists from here on - the startup agent stands down (m11 p6).
     seatedRef.current = true;
-    // The operator opening this card is the one door that revives an ended
-    // room (Patrick ruling 2026-08-12) - clicking it IS the resume.
+    // Opening the card is the one door that revives an ended room.
     clearRoomEnded(snapshotRef.current?.project ?? "", branch.name);
     const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
     const resume =
@@ -422,31 +313,16 @@ export default function App() {
     terminalRef.current?.launch({
       room: branch.name,
       cwd: branch.path,
-      // The card's own project, not the seat's: a roster card is often from
-      // somewhere else, and the room name carries its project.
+      // The card's own project, not the seat's: a roster card is often from elsewhere.
       project: branch.project,
       command: `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
       typeIfAttached: !branch.interactive,
     });
-    // A launch is a statement of intent: bring the terminal forward.
     setActiveTab(TERMINAL_TAB);
   }, [monitorBranch]);
 
-  // The startup agent (m11 phase 6): ONCE per app run, as soon as the first
-  // snapshot and the settings have both landed, BAUD opens the seat the
-  // operator named - through `launch`, the very door a card click uses, with
-  // the card's own attach/resume/fresh judgment. The attempt is marked spent
-  // whatever the outcome, so a later snapshot can never re-fire it, and an
-  // operator who already picked a card outranks the preference. A named agent
-  // with no card here is a quiet console line: a missing branch is not a fault
-  // worth a FAULT banner over.
-  //
-  // The shot is spent in sessionStorage, not a ref (m12): a ref is re-armed by
-  // every hot reload, and a re-armed startup agent RESURRECTS the room the
-  // operator just ended - the exact bug Patrick caught at 18:27. Two guards,
-  // because they answer different questions: the shot says "BAUD already
-  // opened this run", the ended mark says "this agent stays dead until I open
-  // its card myself".
+  // The startup agent fires ONCE per run, spent whatever the outcome. The shot lives in sessionStorage, not a ref:
+  // a hot reload re-arms a ref and would resurrect a room the operator just ended.
   useEffect(() => {
     if (!snapshot || !baudSettings || startupSpent()) return;
     spendStartup();
@@ -465,23 +341,15 @@ export default function App() {
     launch(branch, cardMode(branch));
   }, [snapshot, baudSettings, prefs.startupAgent, launch]);
 
-  // Deliver file paths INTO the chat box (m8). The rule itself - quote only
-  // when needed, wrap in spaces, never submit - moved to `deliver.ts` when the
-  // phone's photo lane needed the same delivery: a quoting rule with shell
-  // semantics must exist once or it drifts. Used by the camera button and the
-  // drop handler alike.
+  // The quoting rule lives once in deliver.ts, shared with the phone's photo lane.
   const deliverPaths = useCallback((paths: string[]) => {
     const text = deliveryText(paths);
     if (!text) return;
     const typed = terminalRef.current?.typeText(text) ?? false;
-    // The delivery's whole point is the chat box - bring it forward.
     if (typed) setActiveTab(TERMINAL_TAB);
   }, []);
 
-  // Drag-drop (m8): dropped files become their paths in the chat box - the
-  // same thing dropping onto a real terminal does. The webview intercepts
-  // the drop (so the navigation fence never sees a file:// load) and hands
-  // us real filesystem paths.
+  // The webview intercepts the drop, so the navigation fence never sees a file:// load.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let mounted = true;
@@ -515,10 +383,7 @@ export default function App() {
     }
   }, []);
 
-  // The terminal ended a room (m12). tmux has confirmed the kill, so record
-  // the intent where a hot reload cannot forget it: nothing in BAUD reopens
-  // this agent until the operator clicks its card. Then re-poll, because the
-  // fleet just changed and a dead room should not linger on a card for 5s.
+  // Recorded where a hot reload cannot forget it; nothing reopens this agent until its card is clicked.
   const roomWasEnded = useCallback(
     (branch: string) => {
       markRoomEnded(snapshotRef.current?.project ?? "", branch);
@@ -532,9 +397,6 @@ export default function App() {
     const alive = () => mounted;
 
     void poll(alive);
-    // The snapshot poll is frontend-driven (one interval, one command), so
-    // the interface setting reaches it directly - a new cadence rebuilds the
-    // timer and takes effect on the spot.
     const timer = window.setInterval(() => void poll(alive), prefs.pollMs);
 
     return () => {
@@ -543,21 +405,14 @@ export default function App() {
     };
   }, [poll, prefs.pollMs]);
 
-  // A project switch moves the fence, so the reading room empties: old tabs
-  // and the docked tree point where the backend now rightly refuses to read.
-  // The terminal stays untouched - an attached room keeps running (rooms
-  // doctrine: only "end room" kills), and the scratch shell is the
-  // operator's own business. Then poll immediately so the new fleet appears
-  // without waiting out the 5s tick.
+  // A project switch moves the fence, so old tabs would be refused. The terminal stays: only "end room" kills.
   const reseat = useCallback(() => {
     setFileTabs([]);
     setTreeBranch(null);
     setActiveTab(TERMINAL_TAB);
-    // A panel pointed at a branch of the old project has nothing to write to.
     setSettingsAgent(null);
     setInterfaceOpen(false);
-    // Interface settings live under the seated root - the new project has
-    // its own file, and possibly its own answers.
+    // Interface settings live under the seated root.
     loadSettings();
     void poll(() => true);
   }, [poll, loadSettings]);
@@ -569,10 +424,7 @@ export default function App() {
   const unread = branches.reduce((total, branch) => total + branch.new_mail, 0);
   const plans = branches.reduce((total, branch) => total + branch.active_plans, 0);
 
-  // The roster tabs. `current` is the seated project's own strip, unchanged;
-  // the other two sweep every project so two managers in two projects sit one
-  // click apart without the project chip moving. Polled only while a roster
-  // tab is open - a census-wide sweep that nobody is looking at is waste.
+  // The census-wide sweep polls only while a roster tab is open.
   const [roster, setRoster] = useState<BranchStatus[]>([]);
   const [stripTab, setStripTab] = useState<StripTab>("current");
   useEffect(() => {
@@ -600,19 +452,8 @@ export default function App() {
       ? branches
       : roster.filter((branch) => (stripTab === "live" ? branch.interactive : branch.dispatched));
 
-  /**
-   * The opened passport's row, re-read from the LIVE lists every render.
-   *
-   * Both lists are searched because a passport can be opened from either: the
-   * seated project's own poll, or the roster sweep behind the live and
-   * dispatched tabs. The seated snapshot is preferred where a branch appears
-   * in both - it is the fresher of the two, polling at the card cadence while
-   * the roster only ticks when a roster tab is open.
-   *
-   * Identity is name AND project. A room name carries its project scope, and
-   * matching on the name alone would show one project's numbers under another
-   * project's passport - the same class of mistake as key learning #22.
-   */
+  /** The passport's row, re-read live: seated snapshot first (fresher), then roster. Identity is name AND project,
+   *  or one project's numbers would show under another's passport. */
   const passportBranch = passportOf
     ? (branches.find(
         (branch) => branch.name === passportOf.name && branch.project === passportOf.project,
@@ -623,11 +464,7 @@ export default function App() {
       passportOf.held)
     : null;
 
-  // Whole-project uncommitted count. Not a sum of the cards: those ask
-  // `diff HEAD` about their own subtree and cannot see files git has never
-  // seen, so a new module counts here and nowhere else. Its own slow tick at
-  // the cards' cadence - one subprocess a tick is real work - and it re-reads
-  // when the operator seats the view in another project.
+  // Not a sum of the cards: their `diff HEAD` cannot see untracked files, so a new module counts only here.
   const [projectChanges, setProjectChanges] = useState<number | null>(null);
   const seatedRoot = snapshot?.root ?? null;
   useEffect(() => {
@@ -650,8 +487,6 @@ export default function App() {
     };
   }, [seatedRoot]);
 
-  // Root resolution failure comes back inside the payload; a broken IPC call
-  // comes back as a thrown error. Both are shown, never swallowed.
   const failure = transportError ?? snapshot?.error ?? null;
 
   const pollStatus = transportError
@@ -677,10 +512,7 @@ export default function App() {
             <Total label="plans" value={plans} />
             <Total label="changes" value={projectChanges ?? "—"} />
           </div>
-          {/* A working shell at the seated project's root - the global one.
-              Follows the project chip: reseat, and the next click opens the
-              new root. Disabled until a snapshot names that root, because a
-              shell that guesses where it is would be worse than none. */}
+          {/* Disabled until a snapshot names the root: a shell that guesses where it is is worse than none. */}
           <button
             type="button"
             className="baud-tool-btn"
@@ -696,24 +528,13 @@ export default function App() {
           >
             ❯_
           </button>
-          {/* THE TWO MONITOR TOGGLES MOVED (round A). They lived here and the
-              top bar has no room; they now open from a MANAGER's passport,
-              which is where an operator looks for what a manager runs. Same
-              openMonitor/closeFile doors, same tab ids - relocated, not
-              reimplemented, so a monitor opened from a passport and one opened
-              from the old bar are the same tab. */}
           <Camera onCaptured={(path) => deliverPaths([path])} />
-          {/* The bell, wired (m10): desktop toasts are retired - ai_mail's
-              notification feed lands here instead. Its cadence, retention and
-              chime come from BAUD's own settings (m11 phase 6). */}
           <Bell
             project={snapshot?.project ?? null}
             pollMs={prefs.pollMs}
             maxEvents={prefs.bellMax}
             sound={prefs.bellSound}
           />
-          {/* BAUD's gear, sibling to the cards' (m11 phase 6): this one is
-              about the interface itself, not any one agent. */}
           <button
             type="button"
             className="baud-tool-btn"
@@ -746,9 +567,6 @@ export default function App() {
         </div>
       ) : null}
 
-      {/* Names the strip for what a card actually is: one agent's passport,
-          and which passports are on show. Always rendered, so the region is
-          labelled while the first snapshot is still in flight. */}
       <div className="baud-section-head">
         <span className="baud-section-label">Agent Passports</span>
         <span className="baud-section-tabs" role="tablist" aria-label="which passports">
@@ -800,10 +618,7 @@ export default function App() {
         <AgentSettings agent={settingsAgent} onClose={closeSettings} />
       ) : null}
 
-      {/* The opened passport. The monitor toggles are handed in ONLY for a
-          manager-class passport, and their live state is still derived from
-          the open tabs - so a monitor opened here and closed from the tab bar
-          leaves the toggle honest, exactly as it did in the header. */}
+      {/* Monitor toggles only for a manager; their live state derives from the open tabs. */}
       {passportBranch ? (
         <PassportView
           branch={passportBranch}
@@ -825,10 +640,6 @@ export default function App() {
         />
       ) : null}
 
-      {/* The gear's own state and wiring are unchanged - only what it opens
-          moved: one dialog with an interface section and a memory section,
-          rather than the interface panel with @memory's dials bolted under
-          it. */}
       {interfaceOpen ? (
         <SettingsDialog
           agents={branches.map((branch) => branch.name)}
@@ -939,8 +750,7 @@ function Total({
   tone,
 }: {
   label: string;
-  /** A string carries the honest unknown ("—") when a read failed; a zero
-   *  there would be a claim the tree is clean when we simply do not know. */
+  /** A string carries the honest unknown ("—"): a zero would claim a clean tree. */
   value: number | string;
   tone?: "live" | "alert";
 }) {

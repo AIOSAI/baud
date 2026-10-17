@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { screenshotCapture } from "../host";
 
-/**
- * The camera button (m8): one click opens the compositor's own screenshot
- * picker (region / window / full screen - the portal's interactive mode),
- * and the saved capture's PATH is handed to the chat box. Claude Code reads
- * images by path, so delivering the path IS delivering the screenshot - the
- * operator just presses Enter.
- *
- * The capture is slow by design (the operator is inside the picker), so the
- * button goes quiet while a request is out rather than stacking portals.
- */
+/** The camera button: the system picker's saved path goes to the chat box (Claude Code reads images by path). */
 
 interface CameraProps {
   /** Deliver the saved capture's path toward the chat box. */
@@ -28,8 +19,7 @@ export default function Camera({ onCaptured }: CameraProps) {
     screenshotCapture()
       .then((path) => onCaptured(path))
       .catch((err) => {
-        // A cancelled picker lands here too - worth showing, never worth
-        // an alarm. The title carries it until the next attempt.
+        // A cancelled picker lands here too: shown in the title, never an alarm. Busy stops portals stacking.
         setFailure(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setBusy(false));

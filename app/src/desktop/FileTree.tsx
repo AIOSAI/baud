@@ -11,11 +11,8 @@ interface FileTreeProps {
 }
 
 /**
- * The drawer a card's `files` button opens: that branch's directory as a
- * lazily-loaded tree. Reading only - every click either expands a directory
- * (one `list_dir` call, cached) or opens a file in a viewer tab. The backend
- * fences both commands to the AIPass root, so this component never needs to
- * police paths itself.
+ * The files drawer: a branch's directory as a lazily-loaded, read-only tree.
+ * The backend fences `list_dir` and file reads to the AIPass root, so no path policing here.
  */
 export default function FileTree({ branch, onOpen, onClose }: FileTreeProps) {
   return (

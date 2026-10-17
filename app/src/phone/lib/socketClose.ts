@@ -1,74 +1,40 @@
-/**
- * WHAT A CLOSED SOCKET MEANS - for the room and the watch alike.
- *
- * The room lane read every close but two the same way: "detached, still
- * running", and the reconnect ladder started again. Three closes are not that,
- * and the reviewer traced each to the screen (B#4-B#6):
- *
- *  - 4000 "room ended" (C-C). @api's pump closes with it when the tmux session
- *    ended under the socket - from the desk, or a shell that exited. The room
- *    is GONE, and the attach is `new-session -A`, so reattaching would build a
- *    fresh empty room under the same name and call it the old one.
- *  - 1008 and 1011, sent AFTER accept so the sentence reaches the screen: the
- *    caller's fixable refusal and the host's. Asking again on a timer gets the
- *    same answer louder.
- *  - everything else (1000, 1001, 1005, 1006): a detach, a pocket, a dropped
- *    link. The room is fine, and the ladder is the right answer.
- *
- * So the first two are FINAL - no ladder - and each says what it is. PURE, so
- * the decisions are pinned by `socketClose.test.ts` with no socket, no xterm
- * and no react; `TerminalSheet.tsx` and `MonitorSheet.tsx` only act on them.
- */
+/** What a closed socket means, for room and watch: 4000 (ended) and 1008/1011 (refused) are final, the rest retry.
+ * Reattaching after 4000 would build a fresh empty room under the old name. Reference: docs/phone/room-delivery.md */
 
-/** @api's close code for "the room ended first" (C-C). Private-use range, so
- *  no proxy or framework rewrites it on the way to `CloseEvent.code`. */
+/** @api's "the room ended first" code; private-use range, so no proxy rewrites it. */
 export const ROOM_ENDED_CODE = 4000;
 
-/** The three readings of a close. */
 export type CloseKind = "ended" | "refused" | "dropped";
 
-/** What a close code is. */
 export function closeKind(code: number): CloseKind {
   if (code === ROOM_ENDED_CODE) return "ended";
   if (code === 1008 || code === 1011) return "refused";
   return "dropped";
 }
 
-/** Does this close stop the reconnect ladder? Null is "no close yet". */
 export function closeIsFinal(kind: CloseKind | null): boolean {
   return kind === "ended" || kind === "refused";
 }
 
-/**
- * The error line after a close (B#4).
- *
- * A token refused at the handshake never reaches `onopen`: the browser reports
- * 1006, `onerror` has already written the one sentence that can be said about
- * it, and the close's own sentence is null. Overwriting with that null is how
- * "the token was rejected" became "the room did not answer". So a close with
- * nothing to say, on a socket that never opened, keeps what was there.
- */
+/** The error line after a close: a silent close before open keeps what `onerror` wrote (a refusal closes 1006). */
 export function errorAfterClose(previous: string | null, said: string | null, reachedOpen: boolean): string | null {
   if (said === null && !reachedOpen) return previous;
   return said;
 }
 
-/** The room's status line after a close. `watchdog` is the phone's own
- *  sentence when its liveness check was the one that let go. */
+/** The room's status line after a close; `watchdog` is the liveness check's own sentence. */
 export function roomStatusAfterClose(kind: CloseKind, watchdog: string | null): string {
   if (kind === "ended") return "ended - this room is gone";
   if (kind === "refused") return "refused - the host would not open this room";
   return watchdog ?? "detached - the room and whatever runs in it are still there";
 }
 
-/** What a watch is called on its overlay and its button: mission control has
- *  no name (it is the target-less monitor), every other watch is its branch. */
+/** A watch's name on its overlay: the target-less monitor is mission control. */
 export function watchLabel(name: string): string {
   return name ? name : "mission control";
 }
 
-/** The dead overlay's words. `retry` null means no button (an ended room is
- *  reopened from its card, never from here); `ladder` null means no line. */
+/** The dead overlay's words; `retry` null means no button (an ended room reopens from its card). */
 export interface DeadFace {
   word: string;
   why: string;
@@ -76,16 +42,7 @@ export interface DeadFace {
   ladder: string | null;
 }
 
-/**
- * The overlay a sheet draws over its stale frame, or null for none. The
- * caller has already ruled out a live socket and a read-token refusal.
- *
- * THE ROOM keeps its old gate for a plain drop: hidden while it is still
- * getting in for the first time and a retry is armed, and otherwise shown.
- * THE WATCH shows nothing until a socket has actually CLOSED (B#9): `closed`
- * null there is the first connect, and a "rewatch" button over a watch that is
- * still connecting reads as a failure that has not happened.
- */
+/** The overlay over a stale frame, or null; a watch shows nothing until a socket has closed (null is its first connect). */
 export function deadFace({
   lane,
   label,

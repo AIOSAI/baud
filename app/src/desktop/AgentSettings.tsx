@@ -9,29 +9,8 @@ import type {
 } from "../types";
 
 /**
- * One agent's settings (m11 phase 2): the gear on a card opens this, and it
- * patches claude's own `<branch>/.claude/settings.local.json` through the
- * backend's surgical door - three keys touched, every other key the operator
- * keeps in that file handed back untouched.
- *
- * A centered overlay rather than a Bell-style anchored shade: the fleet strip
- * scrolls sideways with `overflow-y: hidden`, so a panel hung under a card
- * would be clipped at the strip's edge and would ride away with the scroll.
- * The scrim is the click-away surface (Escape closes too), and because a scrim
- * always covers the fleet, two panels can never be open at once.
- *
- * DIRTY TRACKING is the whole reason the patch is three-state. A field is sent
- * only when the operator's value differs from WHAT THE FILE SAYS - and an
- * absent key reads as absent, never as the value claude would have picked.
- *
- * That distinction is the m15 fix (Patrick, 2026-08-13). Every dial used to
- * baseline an absent key against a guessed default - `?? true`, `?? 350_000` -
- * so a silent file opened showing "on, 350k", matched the operator's intent
- * exactly, produced no diff, and disabled save. The dial could be READ but
- * never STAMPED. Worse, the guess was wrong: claude's real threshold follows
- * the model, so an opus-1m seat showing "350k" was compacting near 1M, which
- * is to say never. Absent is now its own position on all three dials, and
- * choosing a value from it is always a genuine change.
+ * One agent's claude settings, opened from a card's gear: absent keys stay absent, never a guessed default.
+ * Reference: docs/desktop/settings.md
  */
 
 /** Where the slider STARTS when the file is silent. Not a claimed default -
@@ -63,18 +42,12 @@ function message(err: unknown): string {
 interface AgentSettingsProps {
   /** Branch name - the backend resolves it inside the seated fleet itself. */
   agent: string;
-  /**
-   * The close button's glyph. Absent is the desk's `✕`. The phone hands in
-   * `×`, its one close glyph across the face (DPLAN-0414 wave 6, item 10) -
-   * carried as data so this panel stays one component on both faces and the
-   * desk renders exactly as it did.
-   */
+  /** The close glyph: data, so the phone can hand in `×` and this stays one component on both faces. */
   closeGlyph?: string;
   onClose: () => void;
 }
 
 export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: AgentSettingsProps) {
-  // What the file says right now; null until the read lands (or if it failed).
   const [base, setBase] = useState<Settings | null>(null);
   // null is "the key is absent" on every dial - a position, not a placeholder.
   const [model, setModel] = useState("");
@@ -107,37 +80,14 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
       });
   }, [agent]);
 
-  /* ------------------------------------------------------ memory limits --
-   * This agent's ROLLOVER limits: how many sessions, learnings and
-   * observations its memory keeps before the oldest roll off into @memory's
-   * vectors. Read off the same shared config the global panel renders, and
-   * resolved exactly the way @memory documents it - per FILE KEY, not per
-   * entry type: once a branch has a block for a group, the default block for
-   * that group is never consulted for it again.
-   *
-   * A number here is written through @memory's verb, never by BAUD touching
-   * the file. This panel is shared with the phone, so both go through the one
-   * host door and the phone's transport refuses it with a reason of its own.
-   */
+  // Rollover limits are written only through @memory's verb, never by BAUD touching the file.
   const [memory, setMemory] = useState<MemoryConfig | null>(null);
   const [memoryError, setMemoryError] = useState<string | null>(null);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [savingLimit, setSavingLimit] = useState<string | null>(null);
 
-  /**
-   * ONE EDGE THIS RESOLUTION DOES NOT COVER, stated rather than hidden.
-   * @memory documents resolution as per FILE KEY: once a branch has a block
-   * for a group, that group's defaults are never consulted for it again. The
-   * lookup below is per (group, key) pair, so a branch carrying a PARTIAL
-   * group block - some keys set, others absent - could be shown a default
-   * here that the engine would not actually apply.
-   *
-   * It cannot happen today: every branch is at the defaults and the push
-   * writes whole groups. It is left as a comment and not as clever code
-   * because the real fix is a read that @memory itself resolves - its `config
-   * get @branch` already prints exactly this, and the day it can answer in
-   * JSON this function becomes a call instead of a rule BAUD re-derives.
-   */
+  /** Resolves per (group, key), but @memory resolves per group block: a partial block would show a wrong default.
+   *  Unreachable while pushes write whole groups; the fix is @memory answering `config get @branch` in JSON. */
   const adoptMemory = (next: MemoryConfig) => {
     setMemory(next);
     const mine = next.per_branch.find((entry) => entry.branch === agent);
@@ -179,8 +129,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
     setMemoryError(null);
     memoryConfigSet(agent, dial.key, next)
       .then((fresh) => {
-        // The file re-read after the verb ran - the ONLY honest proof the
-        // number moved, because @memory's refusals exit zero.
+        // The re-read is the only proof the number moved: @memory's refusals exit zero.
         if (alive.current) adoptMemory(fresh);
       })
       .catch((err) => {
@@ -212,15 +161,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
     setContextWindow(next.auto_compact_window);
   }
 
-  /**
-   * Auto-compact and its threshold move together, because "on" without a
-   * threshold is the exact trap this fix exists to close: the key lands, the
-   * cutoff stays claude's, and the operator reads a number the file never
-   * carried. Turning it on therefore stamps the threshold on screen as well -
-   * disclosed as a second pending change, never silently. Inherit hands both
-   * keys back; off leaves the stored threshold alone, since a parked value is
-   * what the file says and this panel does not edit what it was not asked to.
-   */
+  /** "On" also stamps a threshold: without one the operator would read a number the file never carried. */
   function chooseEnabled(next: boolean | null) {
     setEnabled(next);
     if (next === true && contextWindow === null) setContextWindow(DEFAULT_WINDOW);
@@ -232,8 +173,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
   const wasEnabled = base?.auto_compact_enabled ?? null;
   const wasWindow = base?.auto_compact_window ?? null;
 
-  // Only genuine differences reach the wire, and null on any field means
-  // REMOVE the key - the one vocabulary all three dials now share.
+  // null on any field means REMOVE the key.
   const patch: AgentSettingsPatch = {};
   if (base) {
     if (model !== wasModel) patch.model = model === "" ? null : model;
@@ -242,9 +182,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
   }
   const pending = Object.keys(patch).length;
 
-  // A model the file already carries that this panel does not offer stays
-  // listed verbatim - dropping it would render as Inherit and lie about the
-  // file, and one careless save would then delete a key nobody meant to touch.
+  // An unlisted model on file stays listed: rendering it as Inherit would let one save delete the key.
   const options = MODELS.some((option) => option.value === wasModel)
     ? MODELS
     : [...MODELS, { value: wasModel, label: wasModel }];
@@ -256,7 +194,6 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
     agentSettingsWrite(agent, patch)
       .then((next) => {
         if (!alive.current) return;
-        // What came back is what is on disk - adopting it clears dirty.
         adopt(next);
         setSaved(true);
       })
@@ -304,8 +241,6 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
           </select>
         </label>
 
-        {/* A select, not the old switch: a switch has two positions and this
-            dial has three. "Absent" is the one the switch could not say. */}
         <label className="baud-settings-row">
           <span className="baud-settings-label">auto-compact</span>
           <select
@@ -353,11 +288,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
           </span>
         </label>
 
-        {/* ROLLOVER LIMITS, live (round A). Each dial commits on blur through
-            @memory's own verb - not with the panel's save button, because the
-            save button writes claude's settings file and these numbers live in
-            @memory's shared config. One button doing both would make a model
-            change quietly rewrite this agent's memory. */}
+        {/* Limits commit on blur, not with save: save writes claude's file, these live in @memory's config. */}
         <div className="baud-settings-row baud-settings-row-head">
           <span className="baud-settings-label">memory limits</span>
           <span className="baud-settings-hint">
@@ -386,9 +317,6 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
                   }
                   onBlur={() => commitLimit(dial)}
                 />
-                {/* Which number this IS - inherited or this agent's own. An
-                    operator changing a limit needs to know whether they are
-                    about to create an override or move one. */}
                 <span className="baud-settings-hint">
                   {savingLimit === dial.key
                     ? "saving…"
@@ -416,8 +344,6 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
         ) : null}
 
         <footer className="baud-settings-foot">
-          {/* A fresh edit outranks the fading "saved" - the note always
-              describes what the save button would do right now. */}
           <span
             className={`baud-settings-note ${saved && pending === 0 ? "baud-settings-note-saved" : ""}`}
           >

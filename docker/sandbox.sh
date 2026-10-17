@@ -54,9 +54,7 @@ if [ -n "$REBUILD" ] || ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     docker build -t "$IMAGE" "$HERE"
 fi
 
-# A stamped copy of the local install.sh: BAUD_TAG is the newest release (the
-# face comes from it), AIPASS_VERSION is 'local' (the CLI and the home come from
-# the clone of /src/aipass). The unstamped source refuses to run by design.
+# install.sh refuses to run unstamped: BAUD_TAG is the newest release, AIPASS_VERSION 'local' (the clone).
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/baud-sandbox.XXXXXX")
 TAG=$(curl -fsSL https://api.github.com/repos/AIOSAI/baud/releases/latest 2>/dev/null \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)

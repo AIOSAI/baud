@@ -1,16 +1,4 @@
-/**
- * The tokens as data (FPLAN-0412 phase 1).
- *
- * The desktop face never imports this - it reads the generated CSS custom
- * properties, which is what a stylesheet wants. This export exists for the
- * face that CANNOT read a stylesheet: a React Native phone app, where the same
- * palette has to arrive as a JS object.
- *
- * It is a reservation, not speculation: one export over the source that
- * already exists, so the phone stage inherits the palette instead of copying
- * it. Patrick's framing - build the skeleton, make reservations for what's
- * coming.
- */
+/** The tokens as a JS object, for a face that cannot read the generated stylesheet; the desktop uses the CSS. */
 
 import source from "./tokens.json";
 

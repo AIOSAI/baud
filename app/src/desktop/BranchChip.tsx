@@ -23,53 +23,24 @@ interface BranchChipProps {
   onOpenDiff: (branch: BranchStatus) => void;
   /** Operator clicked the terminal glyph: open a plain shell in this branch. */
   onShell: (branch: BranchStatus) => void;
-  /**
-   * This card is from a project the view is NOT seated in - a roster card.
-   * Every fenced door (files, diff, figures, settings) reads under the seat's
-   * root and would simply refuse here, so a foreign card shows what it knows
-   * and offers only the doors that genuinely work from where we stand.
-   */
+  /** A roster card from an unseated project: fenced doors (files, diff, figures, settings) would refuse, so they are withdrawn. */
   foreign: boolean;
   /** Operator clicked watch: open this branch's scoped monitor pane. */
   onMonitor: (branch: BranchStatus) => void;
   /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
-  /** Operator clicked the gear: open this branch's settings panel (m11). */
+  /** Operator clicked the gear: open this branch's settings panel. */
   onSettings: (branch: BranchStatus) => void;
-  /**
-   * Operator clicked the avatar: open this agent's passport (round A).
-   *
-   * The avatar and not the whole card, deliberately - a card is already a
-   * dense field of doors, and a click-anywhere card turns every miss into a
-   * navigation. The avatar is new, it is the agent's face, and pressing a
-   * face to see who someone is needs no legend.
-   */
+  /** Operator clicked the avatar: open this agent's passport. Not the whole card, which would turn every miss into a navigation. */
   onOpenPassport: (branch: BranchStatus) => void;
-  /**
-   * Render the card as a report and nothing else - no doors at all
-   * (FPLAN-0413 phase 3).
-   *
-   * `foreign` already withdraws the doors that would refuse at the fence; this
-   * withdraws the rest, because a face can be able to READ everything and DO
-   * nothing. That is the phone today: it mirrors the fleet over HTTP and has no
-   * verb lane until phase 6 clears.
-   *
-   * THE VERB REGISTER LANDS HERE. When the ruling arrives, the buttons this
-   * flag suppresses are the ones that come back - remote-capable, one at a
-   * time, each gated on its own. Deliberately not designed yet; marked so the
-   * next reader knows where it goes rather than inventing a second place.
-   */
+  /** Render the card as a report with no doors, for a face that can read but not act (the phone).
+   *  Remote-capable verbs, when they come, return through the buttons this flag suppresses. */
   readOnly?: boolean;
 }
 
 /**
- * One citizen, one card: lamp, name, state badge, every quick_status figure,
- * the summary line, and how fresh the dashboard is. The card IS the report -
- * nothing hides in a tooltip anymore.
- *
- * The lamp tells dispatched from interactive apart: a dispatched agent pulses
- * (the machine is churning), an interactive session burns steady (someone is
- * at the wheel), and a branch with neither sits dim.
+ * One branch's card on the fleet strip: lamp, badges, figures and doors.
+ * Reference: docs/desktop/window-and-cards.md
  */
 export default function BranchChip({
   branch,
@@ -87,13 +58,9 @@ export default function BranchChip({
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
-  // Uncommitted-changes count, straight from local git on its own slow tick.
-  // Zero (or a dir that isn't a repo) simply shows no badge.
   const [changes, setChanges] = useState<GitChanges | null>(null);
   useEffect(() => {
-    // A foreign path fails the fence by design - asking every 15 seconds
-    // would be a guaranteed rejection on a loop. A read-only face has no
-    // local git at all, and the count already rides the card.
+    // A foreign path always fails the fence, and a read-only face has no local git.
     if (foreign || readOnly) return;
     let mounted = true;
     const refresh = () => {
@@ -113,8 +80,6 @@ export default function BranchChip({
     };
   }, [branch.path, foreign, readOnly]);
 
-  // Every number on the card is a door: clicking it opens the file the
-  // number came from, in the reading room.
   const peek = (relative: string, name: string) => () =>
     onOpenFile(`${branch.path}/${relative}`, name, branch.name);
   const peekInbox = peek(".ai_mail.local/inbox.json", "inbox.json");
@@ -136,8 +101,6 @@ export default function BranchChip({
       ? "baud-lamp-interactive"
       : "baud-lamp-dim";
 
-  // Room (m6): a parked tmux session with nothing live inside still deserves
-  // a quiet tag - there is a scrollback and a shell waiting behind the card.
   const badge = branch.dispatched
     ? "dispatched"
     : branch.interactive
@@ -151,37 +114,22 @@ export default function BranchChip({
       ? "baud-badge-live"
       : "baud-badge-room";
 
-  // The agent is alive in a session BAUD never created (m12) - the boot
-  // shim's `aipass-<branch>`, a telegram wake. Say so on the badge rather
-  // than let the card imply BAUD owns it: the doors below reach it, and the
-  // operator should know exactly what they will attach to and end.
+  // A session BAUD never created (boot shim, telegram wake): the doors still reach it, so the badge says whose it is.
   const badgeTitle = branch.outside_room
     ? `alive in tmux session '${branch.outside_room}' - a session BAUD did not create; attach and end room reach it anyway`
     : undefined;
 
-  // One live session for this branch, whoever made it: BAUD's own room, or
-  // the outside one. Either way the door is attach - never a second claude
-  // in the same branch.
+  // Any live session, BAUD's or outside, means attach: never a second claude in the same branch.
   const attached = (branch.has_room || branch.outside_room !== null) && branch.interactive;
 
-  // Two ways back into a conversation: `-c` for interactive history, and
-  // `--resume <id>` for a branch whose only transcripts are headless dispatch
-  // runs. Either way the operator gets a resume button.
+  // `-c` covers interactive history; `--resume <id>` covers a branch with only headless dispatch transcripts.
   const canResume = branch.has_history || branch.resume_id !== null;
 
   return (
     <article className={chipClass}>
       <header className="baud-chip-head">
         <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
-        {/* THE AGENT'S FACE, and the door to its passport (round A). Initials,
-            because a fleet of seventeen is scanned by shape before it is read
-            by name - the phone's wheel has been doing this for weeks and this
-            is the same idea, brought back to the desk.
-            Manager centre is BLUE-family on Patrick's ruling (explicitly not
-            red): red is the fleet's alarm colour and ownership is not an
-            alarm. The sub-agent flash IS red-family, because work happening
-            inside a session you cannot see is exactly the thing worth a
-            glance. */}
+        {/* Manager stays blue-family, never red: red is the alarm colour and ownership is not an alarm. */}
         <button
           type="button"
           className={`baud-chip-avatar ${branch.manager ? "baud-chip-avatar-manager" : ""} ${
@@ -197,10 +145,6 @@ export default function BranchChip({
           {branch.name.slice(0, 2).toUpperCase()}
         </button>
         <h2 className="baud-chip-name">{branch.name}</h2>
-        {/* Manager class: the project's first agent and its owner, the only
-            one holding git write, the feedback channel and watchdog. Rare by
-            construction (one per project), so a bare mark carries it and the
-            title does the teaching. */}
         {branch.manager ? (
           <span
             className="baud-chip-manager"
@@ -215,9 +159,7 @@ export default function BranchChip({
             {branch.outside_room ? <span className="baud-badge-outside">⧉</span> : null}
           </span>
         ) : null}
-        {/* Sub-agents are invisible to the process table (they run inside the
-            parent claude) - this count comes from the session transcript:
-            spawn calls still waiting on their results. */}
+        {/* Sub-agents never reach the process table; this count is the transcript's unanswered spawn calls. */}
         {branch.subagents > 0 ? (
           <span
             className="baud-badge baud-badge-subagents"
@@ -226,12 +168,6 @@ export default function BranchChip({
             {branch.subagents} sub
           </span>
         ) : null}
-        {/* Tier-1 (m9 phase 4): a real terminal seated in this branch with
-            the agent's help already run - keyboard ON, the operator keeps
-            investigating (Patrick ruling: blocking it defeats the point). */}
-        {/* Which tree this passport is from. Only on roster cards - on the
-            seated project's own strip it would be the same word on every
-            card, and the chip above already says it. */}
         {foreign ? (
           <span className="baud-chip-project" title={`seated elsewhere: this agent lives in ${branch.project}`}>
             {branch.project}
@@ -247,9 +183,6 @@ export default function BranchChip({
             ?
           </button>
         ) : null}
-        {/* m11: this branch's own settings - model, auto-compact, context
-            threshold. The panel writes claude's settings.local.json, so it
-            only exists for branches that are actually citizens. */}
         {branch.is_citizen && !foreign && !readOnly ? (
           <button
             type="button"
@@ -275,13 +208,7 @@ export default function BranchChip({
         ) : null}
       </header>
 
-      {/* No summary line: the dashboard's summary string is generated from
-          the same counts the figures below already show - it was the same
-          info twice (Patrick-caught 2026-08-09). Dashboard opens via plans. */}
-      {/* On a roster card the figures still READ true - the roster scan
-          gathered them - but they are not doors: every one opens a file
-          under the seat's fence, which would refuse. Numbers without a
-          click, rather than a click that always fails. */}
+      {/* No summary line: the dashboard's summary repeats these counts. */}
       <div className="baud-chip-figures">
         <Figure
           label="mail"
@@ -296,8 +223,6 @@ export default function BranchChip({
           onClick={foreign ? null : peekDashboard}
         />
         <Figure label="todos" value={branch.todo_count} onClick={foreign ? null : peekTodos} />
-        {/* Permanent spot (Patrick ruling 2026-08-09): a dim zero when the
-            tree is clean, amber the moment anything is uncommitted. */}
         {foreign ? null : (
           <button
             type="button"
@@ -321,9 +246,6 @@ export default function BranchChip({
         </span>
         {branch.is_citizen && !readOnly ? (
           <span className="baud-chip-buttons">
-            {/* files and watch read under the seat's fence - on a roster
-                card they would refuse, so the card does not offer them. The
-                launch door and the shell below both work from anywhere. */}
             {foreign ? null : (
               <button
                 type="button"
@@ -334,9 +256,6 @@ export default function BranchChip({
                 files
               </button>
             )}
-            {/* Tier-0, scoped (m9): this branch's prax activity alone, in a
-                read-only pane. A window, never a seat - same doctrine as the
-                header lights, one card wide. */}
             {foreign ? null : (
               <button
                 type="button"
@@ -347,9 +266,6 @@ export default function BranchChip({
                 watch
               </button>
             )}
-            {/* A plain working shell seated in this branch. Not a seat for
-                the agent and not the branch's room - just a prompt already
-                cd'd where the operator was about to cd anyway. */}
             <button
               type="button"
               className="baud-chip-launch baud-chip-launch-quiet baud-chip-shell"
@@ -359,11 +275,6 @@ export default function BranchChip({
               ❯_
             </button>
             {attached ? (
-              /* A live session in the room: every door is the same door -
-                 attach and pick up mid-scroll. No command gets typed. Since
-                 m12 that includes a session BAUD did not create - otherwise
-                 this card offered "resume" and started a SECOND claude in a
-                 branch that already had one. */
               <button
                 type="button"
                 className="baud-chip-launch"
@@ -378,15 +289,8 @@ export default function BranchChip({
               </button>
             ) : (
               <>
-                {/* A dispatched agent is WORKING in its session, headless. A
-                    resume there is takeover, not spectate: the second claude
-                    steals the session's background-task state and the job
-                    dies mid-run, unreplied — measured live 2026-08-20
-                    (DPLAN-0310, the OSPREY intercept; the presence gate
-                    blocks prompts but cannot block that migration). So the
-                    resume door steps aside and the same click spectates via
-                    the watch pane. Fresh stays: a new session id steals
-                    nothing. */}
+                {/* Resuming a dispatched session steals its background-task state and kills the job, so
+                    the click watches instead. Fresh stays: a new session id steals nothing. */}
                 {canResume && branch.dispatched ? (
                   <button
                     type="button"

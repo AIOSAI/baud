@@ -1,36 +1,6 @@
 /**
- * The feed, full height (FPLAN-0413 phase 3b).
- *
- * The desktop's bell is a shade that drops out of a header - right for a mouse
- * and a wide window, wrong for a thumb. Same events, own screen.
- *
- * CURSOR DISCIPLINE, KEPT. First contact asks with `since: null` and the server
- * answers with the most recent window rather than the whole file. Every poll
- * after that sends the cursor it was given back. The server re-delivers the
- * boundary event on purpose - at-least-once, because a dropped alert is worse
- * than a duplicate - so events are merged on their timestamp rather than
- * appended blindly.
- *
- * AND THE GAP IS SHOWN. When the feed was trimmed past what this screen had
- * seen, the server says `gap: true` and names why. That has to reach the
- * operator: a window that silently lost events looks exactly like a quiet
- * night, and those are the opposite thing.
- *
- * CLEAR IS THE OPERATOR'S, AND IT IS DISPLAY ONLY (Patrick, 08-17: "notification
- * has no clear button"). The desktop bell's model exactly: a cleared-up-to
- * timestamp, held by the face, and everything at or older than it stops
- * rendering. ONE KEY FOR THE WHOLE MACHINE, not one per project as the desktop
- * bell keys it (DPLAN-0414 A#4): this feed takes no project, so a clear here
- * clears it whichever project is seated (lib/feedMarks.ts). The feed file is never touched - BAUD is a reader and
- * the feed's only writer is ai_mail, so there is no host call here to make. The
- * cursor lives one level up in PhoneApp beside the unread marker, because the
- * BADGE has to obey it too: a badge counting three events over a screen that
- * shows none is the phone telling two stories about one feed.
- *
- * The button is ABSENT rather than disabled when there is nothing listed. That
- * is this face's own rule (`baud-phone-verb-refused`: "a disabled button on
- * touch has no hover, no title and no answer"), and it is the desktop bell's
- * shape as well - clear appears when there is something to clear.
+ * The feed, full height: cursor polling, the server's gap shown, and a display-only clear.
+ * Reference: docs/phone/settings-nav.md
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -46,30 +16,11 @@ import { whileVisible } from "./lib/whileVisible";
 
 interface FeedScreenProps {
   pollMs: number;
-  /**
-   * How far this project's feed has been CLEARED - an ISO timestamp, or "" for
-   * never. Everything at or older than it is gone from this screen and from the
-   * badge; nothing is gone from the file.
-   */
+  /** ISO timestamp, or "" for never: at or older is hidden here and from the badge, never from the file. */
   clearedUpTo: string;
-  /** Clear: the newest timestamp currently ON SCREEN, handed up to be kept. */
   onClear: (upTo: string) => void;
   onClose: () => void;
-  /**
-   * Open the message a mail row announces (DPLAN-0414 A#2, contract C-A).
-   *
-   * The owner, on the bell: "rly annoying, I click a sent email, it completely
-   * cut off". The row's body is @ai_mail's preview - subject and the first 100
-   * characters - and it stays that size, because this feed is read whole on
-   * every poll and is the wrong store for whole letters. So the row becomes a
-   * DOOR instead: a mail event carrying `mail_id` and `recipient` opens that
-   * message, full text, in the inbox screen. A row without both keys (wake,
-   * dispatch, any mail line written before C-A) is the plain row it was.
-   *
-   * `project` rides when the event carries it (C-A as amended): the inbox is
-   * then read under that project directly. Undefined on older lines, and the
-   * caller falls back to finding the recipient's card.
-   */
+  /** Open the mail a row announces (rows with `mail_id` and `recipient`); `project` when the event carries it. */
   onOpenMail: (recipient: string, mailId: string, project?: string) => void;
 }
 
@@ -91,35 +42,18 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
     }
   }, []);
 
-  /* GATED, THE LAST LANE ON THIS FACE (DPLAN-0305 rider). This one is
-     screen-scoped - it stops existing when the screen closes - so it was not
-     among the four app-lifetime pollers gated first. It is still the only lane
-     that can tick behind a locked phone: leave this screen open, put the phone
-     in a pocket, and it asks the host for a window every ten seconds until the
-     battery says otherwise.
-
-     The wake tick matters more here than anywhere else on the face. This is the
-     screen whose whole job is to be current, and a feed frozen at the moment
-     the phone was pocketed is worse than a slow one - so coming back reads
-     immediately, then resumes the cadence. */
+  /* Screen-scoped but still gated: a pocketed phone must not poll, and the wake tick reads at once. */
   useEffect(() => whileVisible(() => void poll(), pollMs), [poll, pollMs]);
 
-  // The push hook, wired to its own inert implementation. It does nothing today
-  // and is called anyway, so the day phase 7 lands the call site already exists
-  // and the dedupe question lands with it rather than after it.
+  // Inert today; wired so the push dedupe lands at an existing call site.
   useEffect(() => {
     events.slice(0, 1).forEach(onPushedEvent);
   }, [events]);
 
-  /* ISO timestamps compare as strings, the same way the merge sorts them and
-     the same way the desktop bell filters - no Date parsing to disagree with
-     the feed's own ordering. The list is newest first, so what survives the
-     cursor is a head, not a tail. */
+  /* ISO timestamps compare as strings, as the merge and the desktop bell do; no Date parsing to disagree. */
   const visible = clearedUpTo ? events.filter((event) => event.ts > clearedUpTo) : events;
 
-  /* The newest thing the operator can actually SEE, never the newest thing this
-     screen holds: a poll landing between the render and the tap must not be
-     cleared by a tap that never saw it. */
+  /* The newest VISIBLE event: a poll landing before the tap must not be cleared unseen. */
   const clear = () => {
     if (visible.length === 0) return;
     onClear(visible[0].ts);
@@ -146,8 +80,6 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
 
       {error ? <p className="baud-phone-error">{error}</p> : null}
       {gap ? <p className="baud-phone-gap">gap — {gap}</p> : null}
-      {/* Two silences, and they are not the same news: a feed that has said
-          nothing yet, and one the operator emptied themselves. */}
       {!error && visible.length === 0 ? (
         <p className="baud-phone-empty">
           {clearedUpTo && events.length > 0
@@ -169,10 +101,7 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
               </li>
             );
           }
-          /* THE SAME ROW, AS A BUTTON. The grid lives on the button so the row
-             looks exactly like its neighbours; the body is a `span` because a
-             `<p>` may not sit inside a button, and a grid item is a block
-             either way. The `›` says it opens. */
+          /* A `span` body, not `<p>`: a `<p>` may not sit inside a button. */
           return (
             <li key={`${event.ts}/${event.title}`}>
               <button
@@ -194,12 +123,7 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
   );
 }
 
-/* The merge moved to `feed.ts` (DPLAN-0305) so the header's badge could take
-   the same rule. It was module-private here while this screen was the only
-   cursor-keeping reader; it stopped being that the day the badge got a cursor,
-   and one feed folded two ways is how a badge and a list start disagreeing. */
 
-/** Only kinds with a real colour get one; anything else stays plain. */
 function kindClass(kind: string): string {
   return /^[a-z_]+$/.test(kind) ? kind : "other";
 }

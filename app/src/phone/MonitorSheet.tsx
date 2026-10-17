@@ -1,22 +1,6 @@
 /**
- * The phone's watch: a tier-0 monitor pane in the stage (desktop m9, ported).
- *
- * LIVE OUTPUT, NO KEYBOARD. The desktop holds the no-stdin line twice - xterm's
- * `disableStdin` in the pane and `pty_write`'s refusal in the backend, "the one
- * that counts". This sheet holds the same line the same way: `disableStdin`
- * here, and @api's read-only session underneath, whose `write` refuses with a
- * sentence and closes the socket. A window, not a seat.
- *
- * NOT TMUX-BACKED, deliberately - the opposite call from the shell lane, for
- * the opposite reason. A shell holds work, so it must survive its client; a
- * watch holds nothing, so when this sheet unmounts the observer dies and
- * nothing was lost. Reopening the door starts a fresh `drone @prax monitor run`
- * exactly as the desktop's toggle does on re-click.
- *
- * Rides the read scope: watching is observation, and observation is what the
- * read token IS - the same split that keeps every /v1 read off the operate
- * scope. The socket is the room lane's own (`kind=watch`), so auth, close
- * sentences and the resize control frame are all inherited, not reimplemented.
+ * The phone's watch: a read-only monitor pane in the stage. Reference: docs/phone/monitor.md
+ * No stdin twice over: `disableStdin` here, and @api's read-only session refuses writes.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -39,16 +23,10 @@ import {
 } from "./TerminalSheet";
 import { type CloseKind, closeIsFinal, closeKind, deadFace, errorAfterClose, watchLabel } from "./lib/socketClose";
 
-/** The watch opens at the terminal sheet's OLD default - a monitor is read at
- *  a glance, not worked in, so it keeps the legible 10 rather than following
- *  the terminal's fully-zoomed-out 7. The zoom chips travel the same range as
- *  the terminal's, imported so the two faces cannot drift apart. */
+/** A monitor is read at a glance, so it opens at the legible 10, not the terminal's 7. */
 const FONT_SIZE = 10;
 
-/** The room lane's close-code contract, unchanged: 1008 is fixable and the
- *  caller's, 1011 is the host's. Anything else is a plain disconnect - and
- *  4000 (C-C, the watched process ended first) is said by the overlay, "the
- *  watch ended", not by the error line. */
+/** 1008 is the caller's, 1011 the host's; 4000 (the watched process ended) is the overlay's to say. */
 function closeSentence(event: CloseEvent): string | null {
   if (event.code === 1008) return event.reason || "the watch refused this request";
   if (event.code === 1011) return event.reason || "the host could not open the watch";
@@ -56,86 +34,48 @@ function closeSentence(event: CloseEvent): string | null {
 }
 
 interface MonitorSheetProps {
-  /** Whose activity to watch - the card the door was pressed on. */
   branch: BranchStatus;
 }
 
 export default function MonitorSheet({ branch }: MonitorSheetProps) {
-  /** Frozen at mount for the same reason TerminalSheet freezes its card: the
-   *  poll hands down new objects every ten seconds, and a watch re-spawning
-   *  per poll would be the exact per-poll leak the room lane killed. */
+  /** Frozen at mount: a watch re-spawned per poll would be the per-poll leak the room lane killed. */
   const watching = useRef(branch).current;
   const host = useRef<HTMLDivElement | null>(null);
-  /** Where xterm actually opens - kept free of React children so xterm's own
-   *  appended element and React's reconciliation never manage one parent. */
+  /** xterm's own mount, kept free of React children so React and xterm never manage one parent. */
   const mount = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
-  /** Bumped by the rewatch button and the reconnect ladder - the effect's
-   *  re-run door. */
   const [attempt, setAttempt] = useState(0);
-  /**
-   * THE ROOM'S DEAD-SOCKET LANE, brought over (DPLAN-0414 B#9, B#10). A dropped
-   * watch used to keep its last frame at full brightness with only a small
-   * button above it, and that button showed during every first connect too.
-   * Now a watch says it is dead the way the room does - the dimmed frame and a
-   * sentence, from `deadFace` - and climbs the room's own ladder back. A watch
-   * holds no state, so a reconnect costs nothing but a fresh observer.
-   *
-   * `opened`: has this sheet ever been watching. `closed`: how the last socket
-   * closed, null until one has - the overlay and its rewatch button show only
-   * after a close, never while still connecting. "ended" (4000) and
-   * "refused" (1008/1011) are final, as in the room: no ladder.
-   */
+  // `closed` stays null until a socket has closed, so the overlay never shows while
+  // still connecting; "ended" and "refused" are final, with no ladder.
   const [opened, setOpened] = useState(false);
   const [closed, setClosed] = useState<CloseKind | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
-  /** Consecutive tries with no frame - the rung. A ref, as in the room: the
-   *  ladder reads it, and reading it must not re-run the socket effect. */
+  /** Consecutive tries with no frame. A ref: reading it must not re-run the socket effect. */
   const retries = useRef(0);
-  /** The socket in flight, for the ladder's "a handshake is not a reason to
-   *  start a second one" check. */
   const socketRef = useRef<WebSocket | null>(null);
-  /** A hand on the button: the ladder starts again from its first rung. */
   const rewatchNow = () => {
     retries.current = 0;
     setAttempt((n) => n + 1);
   };
-  /** Fullscreen and zoom - TerminalSheet's view controls, ported (Patrick,
-   *  2026-08-24: "on watch there is no zoom or full screen"). Only the VIEW
-   *  half comes over: the byte-writing chips stay off a watch by ruling -
-   *  watch, prax and commons are no-keyboard by design. */
+  /** View controls only: no chip that writes a byte comes over to a watch. */
   const [full, setFull] = useState(false);
   const [font, setFont] = useState(FONT_SIZE);
-  /** Select-and-copy, TerminalSheet's lane ported (Patrick, 2026-08-24: "I
-   *  need copy in watch and prax that quite important") - a monitor is where
-   *  errors are READ, so its text has to be liftable. Same forged shift-drag,
-   *  same synchronous execCommand copy; what does NOT come over is anything
-   *  that writes a byte to the watch. */
   const [selecting, setSelecting] = useState(false);
-  /** The armed flag as the touch listeners see it - they are bound once per
-   *  watch and must not be torn down and rebuilt to learn about a chip. */
+  /** The armed flag for touch listeners bound once per watch. */
   const selectingRef = useRef(false);
   selectingRef.current = selecting;
   const [selText, setSelText] = useState("");
   const [copyNote, setCopyNote] = useState<string | null>(null);
-  /** `dragging` gates the forged mouse events and holds the ResizeObserver's
-   *  fit (a fit mid-drag drops the selection - TerminalSheet's proven killer);
-   *  `heldFit` is the receipt that says one is owed on lift. */
+  /** `dragging` holds the ResizeObserver's fit (a fit mid-drag drops the selection); `heldFit` owes one on lift. */
   const drag = useRef({ dragging: false, heldFit: false });
-  /** What the NEXT effect run creates its xterm at - a ref, not the state,
-   *  so zooming never enters the effect's dependencies. A font in the deps
-   *  would tear down the socket per press: a remount hiding inside a font
-   *  change, the exact bug TerminalSheet's zoom comment warns about. */
+  /** A ref, not state: a font in the effect's deps would tear down the socket per press. */
   const fontNow = useRef(FONT_SIZE);
-  /** The live instance's doors, for zoom() below - set by the effect. */
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const resizeRef = useRef<(() => void) | null>(null);
 
-  /** TerminalSheet's zoom(), same order and for the same reason: set the
-   *  size, re-measure, then TELL the watch process - skipping the last step
-   *  leaves a client rendering a geometry it never declared. */
+  /** Set the size, re-measure, then tell the watch - or the client renders a geometry it never declared. */
   function zoom(step: number) {
     const next = Math.min(MAX_FONT, Math.max(MIN_FONT, font + step));
     if (next === font) return;
@@ -148,19 +88,14 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     try {
       fit.fit();
     } catch {
-      // The sheet is closing and the element is gone. Not a failure.
       return;
     }
     resizeRef.current?.();
   }
 
   /**
-   * TerminalSheet's copy lane, verbatim: EVERY STEP RUNS SYNCHRONOUSLY INSIDE
-   * THE TAP. `navigator.clipboard` does not exist here - the host serves plain
-   * http on a tailnet IP, not a secure context - so the lane is the legacy
-   * `execCommand`, spent the instant the handler yields. The scratch field is
-   * readOnly with inputMode none so focusing it cannot summon a keyboard over
-   * the thing the operator just selected.
+   * Every step runs synchronously inside the tap: plain http is not a secure context, so
+   * the lane is `execCommand`. The scratch field is readOnly with inputMode none: no keyboard.
    */
   function copySelection() {
     const text = termRef.current?.getSelection() ?? "";
@@ -172,8 +107,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     scratch.value = text;
     scratch.readOnly = true;
     scratch.inputMode = "none";
-    // Off-screen, but NOT hidden: display:none makes the field unselectable
-    // and the copy silently copies nothing.
+    // Off-screen, NOT hidden: display:none makes the field unselectable and copies nothing.
     scratch.style.position = "fixed";
     scratch.style.top = "0";
     scratch.style.left = "0";
@@ -199,12 +133,8 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
   useEffect(() => {
     const screen = host.current;
     if (!screen || !mount.current) return;
-    /** The gesture surface - the xterm-only mount, NOT the screen div. The
-     *  screen also holds the corner buttons, and an armed selection branch
-     *  preventDefaults every touch it sees: listeners on the screen would eat
-     *  the very taps that disarm and zoom. On the mount the buttons are
-     *  SIBLINGS (TerminalSheet's exact layout - its handlers ride its
-     *  xterm-only host div), so their taps never pass through here at all. */
+    // Gestures bind to the xterm-only mount, not the screen: an armed selection
+    // preventDefaults every touch, and the corner buttons are the mount's siblings.
     const surface = mount.current;
     setError(null);
 
@@ -212,8 +142,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       convertEol: false,
       fontSize: fontNow.current,
       fontFamily: '"JetBrains Mono", "IBM Plex Mono", ui-monospace, "DejaVu Sans Mono", monospace',
-      // No cursor and no keyboard - the pane-side half of tier-0. The half
-      // that counts is @api's read-only session refusing the bytes.
       cursorBlink: false,
       disableStdin: true,
       scrollback: 2_000,
@@ -226,14 +154,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     termRef.current = xterm;
     fitRef.current = fit;
 
-    /**
-     * A finger pan IS the scroll gesture on a phone (TerminalSheet's pan
-     * handler, ported). Simpler here: this watch has no room to forward a
-     * wheel event to, so a pan always takes TerminalSheet's mouse-lane-off
-     * branch - xterm's own local scrollback, which is real here (`scrollback:
-     * 2_000` above) rather than a fallback for a room with no mouse. No
-     * `cellUnder` targeting either - there is no pane to aim at.
-     */
+    // A finger pan scrolls xterm's own scrollback; there is no room to forward a wheel to.
     let panFrom: number | null = null;
     let panRest = 0;
     const cellHeight = () => {
@@ -241,21 +162,8 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       const measured = rows && xterm.rows ? rows.clientHeight / xterm.rows : 0;
       return measured > 0 ? measured : 14;
     };
-    /* THE FORGED DRAG, TerminalSheet's rules kept - preventDefault on
-     * touchstart so the browser synthesises no mouse events of its own;
-     * mousedown AT THE TERMINAL ELEMENT; mousemove and mouseup AT DOCUMENT,
-     * where SelectionService binds them for the gesture - with ONE fork
-     * TerminalSheet never needed: shift ONLY WHEN AN APPLICATION OWNS THE
-     * MOUSE. Shift is xterm's FORCE-selection key, and force only STARTS a
-     * selection while SelectionService is disabled (mouse tracking active -
-     * every tmux room, which is why TerminalSheet's unconditional shift
-     * works there). With tracking off - this watch's whole life, a raw pty
-     * under `drone @prax monitor run`, no tmux - the service stays ENABLED,
-     * and an enabled service reads shift+mousedown as EXTEND the current
-     * selection: `_handleIncrementalClick`, a literal no-op when nothing is
-     * selected yet. Unconditional shift here meant every drag extended
-     * nothing - the "armed but selects nothing" bug. Same fork, same door,
-     * as TerminalSheet's own wheel(): `modes.mouseTrackingMode`. */
+    // Forged drag, TerminalSheet's rules, with one fork: shift ONLY when an application
+    // owns the mouse. With tracking off, shift+mousedown extends a selection that does not exist.
     const forge = (
       target: EventTarget,
       type: "mousedown" | "mousemove" | "mouseup",
@@ -277,8 +185,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
         }),
       );
     };
-    /* Only touches React state when the reading actually CHANGED - a drag
-     * fires touchmove tens of times a second. */
     const readSelection = () => {
       const text = xterm.getSelection();
       setSelText((was) => (was === text ? was : text));
@@ -289,8 +195,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
         if (!touch) return;
         event.preventDefault();
         const p = drag.current;
-        /* A SECOND mousedown CLEARS THE SELECTION - SelectionService starts a
-         * new range on every one. A stray second finger is swallowed. */
+        // A second mousedown would clear the selection, so a stray second finger is swallowed.
         if (p.dragging) {
           readSelection();
           return;
@@ -322,7 +227,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       // Keep the remainder - dropping it makes a slow drag scroll nothing.
       panRest = travelled - notches * perNotch;
       panFrom = event.touches[0].clientY;
-      // Finger DOWN uncovers what came before, which is a wheel UP.
       xterm.scrollLines((notches > 0 ? -Math.abs(notches) : Math.abs(notches)) * LINES_PER_NOTCH);
       event.preventDefault();
     };
@@ -330,8 +234,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       if (selectingRef.current) {
         const p = drag.current;
         if (!p.dragging) return;
-        // changedTouches, not touches - the lifted finger is no longer in
-        // `touches`, and a mouseup at 0,0 would collapse the range.
+        // changedTouches: the lifted finger is gone from `touches`, and a mouseup at 0,0 collapses the range.
         const touch = event.changedTouches[0];
         if (touch) {
           event.preventDefault();
@@ -339,7 +242,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
         }
         p.dragging = false;
         readSelection();
-        // A fit held back during the drag is paid now.
         if (p.heldFit) {
           p.heldFit = false;
           try {
@@ -354,12 +256,8 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       panFrom = null;
       panRest = 0;
     };
-    /* Firefox Android fires the synthetic click despite the preventDefaulted
-     * touchstart (Bugzilla 1016480), at the ORIGINAL touch target - stopped in
-     * capture before xterm can act on it. And contextmenu preventDefault is
-     * the documented lane for suppressing its long-press over
-     * user-select:none content (Bugzilla 1481923): a slow careful drag IS a
-     * long press to the browser. */
+    // Firefox Android fires the synthetic click despite the preventDefault (Bugzilla 1016480),
+    // and a slow drag is a long press to it (Bugzilla 1481923).
     const swallowClick = (event: MouseEvent) => {
       if (!selectingRef.current) return;
       event.preventDefault();
@@ -388,12 +286,10 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     // Bytes, not Blobs - decoding here would break UTF-8 split across chunks.
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
-    /** Per socket, as in the room: did it reach open (B#4), and has it carried
-     *  a frame - the proof the watch is there, and what resets the rung. */
+    /** Per socket: did it reach open, and has it carried a frame (which resets the rung). */
     let reachedOpen = false;
     let heard = false;
 
-    /** The one control verb on the wire, same as every lane on this socket. */
     const sendResize = () => {
       if (socket.readyState !== WebSocket.OPEN) return;
       const { cols, rows } = xterm;
@@ -409,7 +305,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       setOpened(true);
       setClosed(null);
       setError(null);
-      // First frame is the size - the monitor draws at 80x24 until told.
+      // The monitor draws at 80x24 until told its size.
       sendResize();
     };
     socket.onmessage = (event) => {
@@ -432,8 +328,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
     };
 
     const observer = new ResizeObserver(() => {
-      // A fit mid-drag drops the selection (TerminalSheet's proven killer),
-      // so one owed during a drag is held and paid on lift.
       if (drag.current.dragging) {
         drag.current.heldFit = true;
         return;
@@ -455,20 +349,14 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
       fitRef.current = null;
       resizeRef.current = null;
       socketRef.current = null;
-      // Close FIRST, then dispose - the close is what ends the observer
-      // process on the host, and it must go out while the socket exists.
+      // Close FIRST, then dispose: the close is what ends the observer process on the host.
       socket.onclose = null;
       socket.close();
       xterm.dispose();
     };
   }, [watching, attempt]);
 
-  /**
-   * THE ROOM'S RECONNECT LADDER, for a watch (B#10): the same rungs, the same
-   * stop after six, the same "a handshake in flight is not a try", the same
-   * nothing-in-a-pocket. It arms only after a CLOSE, so the first connect is
-   * the socket effect's alone, and never after a final one.
-   */
+  /** The room's reconnect ladder, armed only after a non-final close. */
   useEffect(() => {
     if (live || closed === null || closeIsFinal(closed)) {
       setReconnecting(false);
@@ -522,16 +410,8 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
   return (
     <section className={`baud-phone-term ${full ? "baud-phone-term-full" : ""}`}>
       {error ? <p className="baud-phone-error">{error}</p> : null}
-      {/* xterm opens into the inner host div; the buttons overlay the screen's
-          corner. The screen is position:relative (phone.css), so the absolute
-          classes the terminal sheet already owns land the same way here. */}
       <div ref={host} className="baud-phone-term-screen">
         <div ref={mount} className="baud-phone-term-host" />
-        {/* THE ROOM'S DEAD OVERLAY, on the watch (B#9, B#10): the last frame
-            dimmed under it, the sentence, and the rewatch button - "rewatch
-            mission control" for the target-less monitor, "rewatch <name>"
-            otherwise. Shown only after a close (`deadFace` returns nothing
-            before one), so a watch still connecting never wears it. */}
         {dead ? (
           <div className="baud-phone-term-dead">
             <p className="baud-phone-term-dead-word">{dead.word}</p>
@@ -544,9 +424,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
             {dead.ladder ? <p className="baud-phone-term-dead-why">{dead.ladder}</p> : null}
           </div>
         ) : null}
-        {/* Fullscreen: only a class on the section - the watch, its xterm and
-            its socket are the same objects before and after, which is the
-            entire requirement (TerminalSheet's toggle, verbatim). */}
+        {/* Fullscreen is only a class: the xterm and its socket must be the same objects after. */}
         <button
           type="button"
           className="baud-phone-term-full-toggle"
@@ -575,8 +453,6 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
               {step < 0 ? "A−" : "A+"}
             </button>
           ))}
-          {/* The select toggle, TerminalSheet's I-beam: while armed the watch
-              takes no pan - drags select locally instead. */}
           <button
             type="button"
             className={`baud-phone-term-viewbtn ${selecting ? "baud-phone-term-viewbtn-armed" : ""}`}
@@ -612,11 +488,7 @@ export default function MonitorSheet({ branch }: MonitorSheetProps) {
           </button>
         </div>
       </div>
-      {/* Copy and clear, shown only while the sel chip is armed - the only
-          time either one means anything. Same row the terminal sheet uses,
-          and OUTSIDE the screen div for the same reason it is in the belt
-          there: the screen clips its overflow, a control row must not be
-          inside the thing it controls. */}
+      {/* Outside the screen div: the screen clips its overflow. */}
       {selecting ? (
         <div className="baud-phone-term-selrow">
           {copyNote ? <p className="baud-phone-term-selnote">{copyNote}</p> : null}

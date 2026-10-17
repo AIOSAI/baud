@@ -1,22 +1,6 @@
 /**
- * THE REPOSITORY'S RECENT COMMITS - a plain list, no graph.
- *
- * A branch's story is a straight line at 46 columns, which is what a phone
- * actually has; a graph on this screen would spend a third of the width drawing
- * the one thing the operator can already see by reading downwards.
- *
- * TWO SHORT ROWS, NOT THE MOCK'S FOUR FIELDS, and the divergence is upstream
- * and deliberate. The log lane routes through drone's `--oneline` door, so a
- * row carries an abbreviated object name and a subject and NOTHING else - no
- * author, no date. The mock drew both because a design can; showing them here
- * would mean fifty subprocesses each dragging a whole patch to decorate a list.
- * They are one tap away on the commit itself, where one read answers for one
- * commit, and that is where they stay until the log door carries more.
- *
- * ALWAYS THE WHOLE REPOSITORY. The branch names WHICH tree, never which
- * history: drone's log door runs from the repository root with no pathspec.
- * Saying "commits for devpulse" here would be a straight lie about what was
- * measured, so the screen says the repository and means it.
+ * The repository's recent commits, a plain list: two short rows because the log door is `--oneline`, and always the whole repository because it runs with no pathspec.
+ * Reference: docs/phone/files-git.md
  */
 
 import { useEffect, useState } from "react";
@@ -24,15 +8,7 @@ import { useEffect, useState } from "react";
 import { gitLog } from "../../host";
 import type { GitCommitRow } from "../../types";
 
-/**
- * How many commits to ask for.
- *
- * The lane serves 1 to 50 and REFUSES anything outside that rather than
- * clamping - so this number is a decision, not a hopeful maximum. Twenty is
- * about a screen and a half of scrolling on a phone and covers a working week
- * in this fleet; asking for fifty would mean most of the list exists to be
- * scrolled past.
- */
+/** The lane refuses anything outside 1..50 rather than clamping; twenty is about a working week here. */
 const COMMIT_LIMIT = 20;
 
 interface GitCommitsScreenProps {
@@ -91,11 +67,7 @@ export default function GitCommitsScreen({ branch, project, onOpenCommit, onBack
             onClick={() => onOpenCommit(commit.sha)}
           >
             <span className="baud-git-sha">{commit.sha}</span>
-            {/* CLAMPED, NOT ELLIPSED TO ONE LINE. A commit subject in this fleet
-                is a sentence, and one line of it at this width is the word
-                "feat(fleet):" and nothing else - which tells the operator
-                which commit it is not. Two lines is where a subject starts
-                being recognisable; the whole message is one tap away. */}
+            {/* Clamped to two lines: one line of a fleet subject is just "feat(fleet):". */}
             <span className="baud-git-subject">{commit.subject}</span>
           </button>
         ))}

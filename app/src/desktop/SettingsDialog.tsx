@@ -5,28 +5,7 @@ import MemorySettings from "./MemorySettings";
 
 import type { BaudSettings } from "../types";
 
-/**
- * THE DESK'S SETTINGS DIALOG - what the header gear opens, and nothing more.
- *
- * WHY IT EXISTS. The gear used to open the interface panel directly, and the
- * memory dials rode along at the bottom of it. That put @memory's fleet-wide
- * config behind a door labelled "interface", which is the look and feel of this
- * face: two owners' files under one word (Patrick's ruling, and the reason for
- * this round). Memory needed a placement of its own, and a second gear in the
- * header is how an app ends up with two places called settings - so the gear
- * opens ONE dialog and the sections sit inside it.
- *
- * IT OWNS NAVIGATION AND CHROME, NEVER A CONTROL. Both leaves are the same
- * components the phone mounts: `InterfaceControls` writes BAUD's own settings
- * file, `MemorySettings` writes @memory's, and each keeps its own save because
- * one button writing two owners' files is exactly what the split is against.
- * Adding a section here is a row in `SECTIONS` and a leaf below - the same
- * shape the phone's settings screen took, for the same reason.
- *
- * THE PHONE'S HOME IS A LIST OF DOORS AND THIS IS A ROW OF TABS, deliberately:
- * a thumb navigates a screen at a time, a pointer does not need to, and two
- * sections would make a whole screen of navigation to reach either one.
- */
+/** The header gear's dialog: navigation and chrome only; each leaf keeps its own save, one per owner's file. */
 
 type SectionId = "interface" | "memory";
 
@@ -68,9 +47,7 @@ export default function SettingsDialog({
 }: SettingsDialogProps) {
   const [section, setSection] = useState<SectionId>("interface");
 
-  // Escape closes, as it did when the gear opened the interface panel bare.
-  // It does NOT step back to the first tab: both sections are on screen at
-  // once here, so there is no level to climb out of.
+  // Escape closes; it does not step back a tab, both sections share the screen.
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -87,9 +64,6 @@ export default function SettingsDialog({
         aria-label="BAUD settings"
         onPointerDown={(event) => event.stopPropagation()}
       >
-        {/* The title stays put while the tabs move - the section is named by
-            the tab that is lit, and a heading repeating it would say the same
-            word twice on a 340px panel. */}
         <header className="baud-settings-head">
           <span className="baud-settings-title">BAUD · settings</span>
           <button
@@ -118,11 +92,7 @@ export default function SettingsDialog({
           ))}
         </nav>
 
-        {/* MOUNTED, NOT HIDDEN: the leaf that is off is unmounted, so switching
-            tabs re-reads its file on the way back in. Both panels read on mount
-            precisely because another window or a shell may have written the
-            file since, and a leaf kept alive behind a tab would quietly turn
-            that discipline off. */}
+        {/* Unmounted, not hidden: each leaf re-reads its file on mount, since another writer may have changed it. */}
         {section === "interface" ? (
           <InterfaceControls agents={agents} settings={settings} onSaved={onSaved} />
         ) : (

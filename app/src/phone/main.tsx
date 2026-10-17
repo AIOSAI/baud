@@ -1,14 +1,4 @@
-/**
- * The phone face's entry point (FPLAN-0413 phases 2-4).
- *
- * A second vite entry, not a second app: it mounts the same components against
- * the HTTP transport. The desktop's `main.tsx` is untouched and stays bound to
- * tauri - which is the property that makes this safe to ship half-built.
- *
- * The token gate lives here rather than inside the shell so that the shell can
- * assume it is connected. One place decides "are we in", everything below it
- * gets to be simple.
- */
+/** The phone face's entry: a second vite entry mounting the same components on the HTTP transport, behind the door. */
 
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
@@ -17,22 +7,11 @@ import PhoneApp from "./PhoneApp";
 import TokenDoor from "./TokenDoor";
 import { type Arrival, PAIR_EXPIRED, addressWithoutFragment, arrive, isPairLink, pairCodeFrom } from "./lib/pairing";
 import { readToken, redeemPairing, verifyToken, writeToken } from "../host/transport.http";
-// Tokens first - the phone is coloured by the same custom properties as the
-// desktop, which is why it looks like BAUD without one line of new palette.
 import "../tokens/tokens.generated.css";
 import "../theme.css";
 import "./phone.css";
 
-/**
- * THE PAIR LINK, read once, before the first paint (DPLAN-0406). The machine's
- * QR opens `/#pair=<code>`; the code leaves the address bar and the history row
- * here, before React mounts, so no screen, reload or back button shows it again.
- *
- * STILL THE ONLY `replaceState`, and still true since the face learned the
- * phone's own Back (DPLAN-0414 wave 6, `lib/systemBack.ts`): the one guard entry
- * that lib pushes carries no URL, so it inherits the cleaned address this line
- * leaves, and a Back through it lands here - never on the `#pair=` link.
- */
+/** The only `replaceState`: `#pair=` leaves before React mounts, and systemBack's URL-less guard inherits it. */
 function takePairCode(): string | null {
   const { hash, pathname, search } = window.location;
   if (!isPairLink(hash)) return null;
@@ -40,102 +19,43 @@ function takePairCode(): string | null {
   return pairCodeFrom(hash);
 }
 
-/**
- * The redeem, started at module load and never again. A code is ONE USE, and
- * StrictMode runs every effect twice in development: a redeem inside an effect
- * would spend the code on the first run and show "expired" on the second.
- * One promise, made here, that the effect below only listens to.
- */
+/** Redeemed at module load: a code is one use, and StrictMode's double effect would spend it, then show "expired". */
 const PAIR_CODE = takePairCode();
 const PAIRING: Promise<Arrival> | null = PAIR_CODE
   ? arrive(PAIR_CODE, { readToken, writeToken, verifyToken, redeemPairing })
   : null;
 
-/**
- * THE DEPLOY RECORD STAYS IN THE BUNDLE (FPLAN-0446; DPLAN-0414 A#1).
- *
- * The About screen's tree row is gone at the owner's word, and it was the only
- * source that named `__BAUD_TREE__`. Vite's `define` substitutes where source
- * names it, so with no reader the `baud-tree` string would vanish from the
- * served bundle and the deploy check's grep would come back empty. One line
- * here keeps it: a side effect (so tree-shaking cannot drop it) that no screen
- * draws. In dev the define does not exist and the guard skips it.
- */
+/** Keeps `__BAUD_TREE__` in the bundle for the deploy check's grep: with no reader, vite's define drops it. */
 declare const __BAUD_TREE__: string | undefined;
 if (typeof __BAUD_TREE__ === "string") document.documentElement.dataset.baudTree = __BAUD_TREE__;
 
 function Face() {
-  // A token in storage means "connected" optimistically; the first poll
-  // proves it, and a 401 sends us straight back to the door. A pair link in
-  // flight decides first: until it answers, no poll may run on a token it is
-  // about to replace.
+  // A stored token is connected until a 401; a pair link in flight decides first, as it may replace the token.
   const [connected, setConnected] = useState(() => PAIRING === null && readToken() !== null);
   const [pairing, setPairing] = useState(PAIRING !== null);
-  /** How a pair link ended when it did not open the face; the door says it. */
   const [arrival, setArrival] = useState<Arrival | null>(null);
   const [label, setLabel] = useState("");
-  // The token's scope decides whether verbs fire or explain themselves. It is
-  // the SERVER's answer from /v1/whoami, never a guess from the client - and
-  // "read" until proven otherwise, so a face that failed to ask stays safe.
+  // The server's whoami answer, never a client guess; "read" until proven, so a face that failed to ask stays safe.
   const [scope, setScope] = useState<string>("read");
-  /**
-   * HAS THE SERVER ANSWERED YET - a different question from `scope`, and the
-   * startup agent is what proved they are different (DPLAN-0302).
-   *
-   * `scope` above is "read" in three unrelated situations: a genuinely
-   * read-scoped token, an answer that failed, and THE FIRST FRAME OF EVERY
-   * RETURNING ARRIVAL, before whoami has been asked. Everything downstream is
-   * happy with that conflation, because for a verb chip all three mean the same
-   * safe thing - refuse and say why. The startup seat is the one consumer that
-   * has to tell them apart: it takes its ONE look and is done, so reading a
-   * not-yet-answered "read" would spend the shot on a question nobody asked.
-   *
-   * It is not a theoretical race and it does not merely happen sometimes - it
-   * happens EVERY TIME. Child effects run before the parent's, so PhoneApp asks
-   * for the settings and the fleet before this effect asks whoami; and
-   * `/v1/fleet` is an `async def` that shells out to `baud --snapshot` without
-   * awaiting (server.py:661-668), so it holds the event loop for the whole read
-   * and whoami cannot be answered until it lets go. The fleet ALWAYS lands
-   * first. Gating the seat on `scope` alone would have made Patrick's own case -
-   * refresh, operate token, devpulse named - refuse itself on every load, and
-   * the round would have shipped looking correct.
-   */
+  /** Whether whoami has answered: `scope` is "read" on every first frame and the fleet read always lands first
+   *  (it holds the server's event loop), so the startup seat would spend its one look on an unasked question. */
   const [scopeKnown, setScopeKnown] = useState(false);
 
-  /**
-   * The RETURNING operator, which is the normal case - the token persists, so
-   * most arrivals skip the door entirely and land straight on the fleet. They
-   * never pass through `onOpen`, so without this the scope would sit at its
-   * safe default and an operate token would show every verb refused, on a face
-   * that had never once asked the server what it was holding. Ask on mount.
-   */
+  /** A returning operator skips the door and `onOpen`, so whoami is asked on mount. */
   useEffect(() => {
     const stored = readToken();
-    // Not while the door is up: a pair link in flight owns the token store
-    // until it answers, and a signed-out face has nothing to ask about.
     if (!stored || !connected) return;
     void verifyToken(stored)
       .then((who) => {
         setLabel(who.label ?? "");
         setScope(who.scope ?? "read");
       })
-      // A failure here is NOT a sign-out: the fleet poll is the thing that
-      // knows the difference between "token refused" and "nothing answered",
-      // and it already sends a 401 back to the door. Staying read-scoped is the
-      // safe end of a question we could not get an answer to.
+      // Not a sign-out: the fleet poll tells refused from unanswered, and it already sends a 401 to the door.
       .catch(() => setScope("read"))
-      // ANSWERED, either way. A refusal we settled on is still a settled
-      // question - "read, because we could not get an answer" is exactly what
-      // the line above decided, and the seat is entitled to act on it. What it
-      // must never act on is silence, which is why this rides the outcome
-      // rather than the call.
+      // Answered either way: the seat may act on a settled "read", never on silence.
       .finally(() => setScopeKnown(true));
   }, [connected]);
 
-  /**
-   * The pair link's answer. Opened means the face signs itself in exactly as a
-   * door that proved a paste does; anything else is carried to the door.
-   */
   useEffect(() => {
     if (!PAIRING) return;
     let live = true;
@@ -179,8 +99,6 @@ function Face() {
         onOpen={(who, granted) => {
           setLabel(who);
           setScope(granted);
-          // The door got here by asking whoami itself, so this arrival knows
-          // its scope before the fleet has been read once.
           setScopeKnown(true);
           setConnected(true);
         }}
@@ -195,7 +113,6 @@ function Face() {
       scopeKnown={scopeKnown}
       onSignOut={() => {
         writeToken(null);
-        // A sign-out is a fresh door: the pair link's old answer is not news.
         setArrival(null);
         setConnected(false);
       }}
