@@ -3782,6 +3782,65 @@ body {
   margin: 1em 0;
 }
 
+.baud-phone-md img {
+  max-width: 100%;
+  height: auto;
+}
+
+.baud-phone-md details {
+  margin: 0 0 0.8em;
+  padding: 4px 8px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+}
+
+.baud-phone-md summary {
+  color: var(--baud-green);
+}
+
+.baud-phone-md kbd {
+  font-family: var(--baud-mono);
+  font-size: 0.68rem;
+  padding: 0 3px;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: 3px;
+}
+
+.baud-phone-md-alert {
+  margin: 0 0 0.8em;
+  padding-left: 8px;
+  border-left: 2px solid var(--baud-blue);
+}
+
+.baud-phone-md .baud-phone-md-alert-title {
+  margin-bottom: 0.3em;
+  color: var(--baud-blue);
+}
+
+.baud-phone-md-alert-tip {
+  border-left-color: var(--baud-green);
+}
+
+.baud-phone-md-alert-tip .baud-phone-md-alert-title {
+  color: var(--baud-green);
+}
+
+.baud-phone-md-alert-warning {
+  border-left-color: var(--baud-amber);
+}
+
+.baud-phone-md-alert-warning .baud-phone-md-alert-title {
+  color: var(--baud-amber);
+}
+
+.baud-phone-md-alert-caution {
+  border-left-color: var(--baud-red);
+}
+
+.baud-phone-md-alert-caution .baud-phone-md-alert-title {
+  color: var(--baud-red);
+}
+
 /* Reasons said, not hovered: touch never shows a title. */
 
 .baud-agent-why {

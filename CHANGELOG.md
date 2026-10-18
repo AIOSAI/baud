@@ -51,6 +51,7 @@ and every change that lands adds its line there in the same sitting.
 - **Phone: the Backup card picks up runs started elsewhere (DPLAN-0414).** While nothing runs, the sheet re-reads the store every 10 s while it is open and on screen, so a run from a terminal or the daemon shows its bar and its Stop.
 - **Phone: a running backup's progress line counts failed files (DPLAN-0414)**, ending "· N failed" when any have failed.
 - **Phone: the end-room dialog says the tap is the confirmation (DPLAN-0414).** Over plain http no fingerprint is asked, and the answer line says "verified by this device" only after a real fingerprint or face check.
+- **Phone: a `.md` file opens raw, with a `preview` button beside `copy path`.** The button draws the document and reads `raw` to switch back. The preview adds `<details>` blocks, GitHub alerts and inline images with absolute `http(s)` addresses, and `dompurify` 3.4.17 now cleans every render, raw HTML in the file included, so a file's script, handlers and styles never run or show.
 - **Desktop: ashpd 0.13.** The screenshot portal is its own cargo feature in 0.13, so the `gui` build enables `screenshot` beside `tokio`. The capture call is unchanged.
 - **Build: vite 8, with `@vitejs/plugin-react` 6 and vitest 5.0.5.** plugin-react 6 is the line that accepts vite 8; both configs build both faces unchanged.
 

@@ -21,11 +21,13 @@ interface ReaderProps {
   target: ReadTarget;
   /** A caller's designed render; null is the renderer declining, and the raw text is then the render. */
   render?: (content: string) => ReactNode | null;
+  /** A second face of the text behind a header switch; raw stays the default. */
+  preview?: (content: string) => ReactNode;
   backLabel?: string;
   onClose: () => void;
 }
 
-export default function Reader({ target, render, backLabel = "back", onClose }: ReaderProps) {
+export default function Reader({ target, render, preview, backLabel = "back", onClose }: ReaderProps) {
   const [text, setText] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,10 +35,12 @@ export default function Reader({ target, render, backLabel = "back", onClose }: 
   const [copied, setCopied] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
   const [byHand, setByHand] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     setText(null);
+    setPreviewing(false);
     setError(null);
     setFloor("");
     setCopied(false);
@@ -99,6 +103,16 @@ export default function Reader({ target, render, backLabel = "back", onClose }: 
             {copied ? "copied" : "copy path"}
           </button>
         ) : null}
+        {preview && text ? (
+          <button
+            type="button"
+            className={`baud-phone-copyhead ${previewing ? "baud-phone-copy-done" : ""}`}
+            aria-pressed={previewing}
+            onClick={() => setPreviewing((on) => !on)}
+          >
+            {previewing ? "raw" : "preview"}
+          </button>
+        ) : null}
       </header>
 
       {said ? <p className="baud-phone-said">{said}</p> : null}
@@ -111,7 +125,9 @@ export default function Reader({ target, render, backLabel = "back", onClose }: 
       {text === "" ? (
         <p className="baud-phone-empty">{target.kind === "diff" ? "this diff is empty" : "this file is empty"}</p>
       ) : null}
-      {text ? (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>) : null}
+      {text ? (
+        previewing && preview ? preview(text) : (render?.(text) ?? <pre className="baud-phone-text">{text}</pre>)
+      ) : null}
     </section>
   );
 }
