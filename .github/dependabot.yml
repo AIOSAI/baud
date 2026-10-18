@@ -1,13 +1,14 @@
 # Dependency updates, kept quiet: weekly, and each ecosystem's minor and patch
 # bumps grouped into one pull request. A major version still arrives on its own,
 # because a major is a change to read. At most three open pull requests per
-# ecosystem.
+# ecosystem, all against dev, where every pull request lands.
 version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/app"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "deps"
@@ -19,6 +20,7 @@ updates:
     directory: "/app/src-tauri"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "deps"
@@ -32,6 +34,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
