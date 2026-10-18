@@ -62,11 +62,12 @@ export const listDir = (path: string) => call<DirEntryInfo[]>("list_dir", { path
 
 /* Empty `project`/`root` stay off the payload so the desktop's `invoke` is unchanged; absent `root` means branch. */
 
-export const listDirWindow = (path: string, project = "", root = "") =>
+export const listDirWindow = (path: string, project = "", root = "", offset = 0) =>
   call<DirWindow>("list_dir_window", {
     path,
     ...(project ? { project } : {}),
     ...(root ? { root } : {}),
+    ...(offset > 0 ? { offset } : {}),
   });
 
 export const readFileText = (path: string, project = "", root = "") =>

@@ -1,11 +1,12 @@
 /** The FILES app, phone-shaped: one directory level at a time. Reference: docs/phone/files-git.md */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { gitChangeRows, listDirWindow } from "../host";
 import { HostError } from "../host/transport.http";
 import type { DirEntryInfo } from "../types";
 import { NO_FLOOR, copyShown, copyThrough, machinePath } from "./lib/copyPath";
+import { type DirListing, countLine, firstPage, moreLabel, nextOffset, withPage } from "./lib/dirPages";
 import { chipOf, type GitChip } from "./lib/gitStatus";
 import { useSystemBack } from "./lib/systemBack";
 import { CopyByHand } from "./Reader";
@@ -45,8 +46,9 @@ export default function FilesScreen({
   onClose,
 }: FilesScreenProps) {
   const [dir, setDir] = useState(() => (at !== undefined && isAtOrUnder(at, start) ? at : start));
-  const [entries, setEntries] = useState<DirEntryInfo[] | null>(null);
-  const [truncated, setTruncated] = useState(false);
+  const [listing, setListing] = useState<DirListing | null>(null);
+  const [paging, setPaging] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Keyed by branch-local path, the space `entry.path` is spelled in. null: not answered.
   const [changed, setChanged] = useState<ReadonlyMap<string, GitChip> | null>(null);
@@ -56,18 +58,24 @@ export default function FilesScreen({
   // when the level changes, so it cannot land on a same-named file elsewhere.
   const [copied, setCopied] = useState<string | null>(null);
 
+  const where = dir ? `${branch}/${dir}` : branch;
+  // A page that lands after the level changed belongs to the old level.
+  const level = useRef("");
+  level.current = `${project}\u0000${root}\u0000${where}`;
+
   useEffect(() => {
     let mounted = true;
-    setEntries(null);
+    setListing(null);
+    setPaging(false);
+    setPageError(null);
     setError(null);
     setSaid(null);
     setCopied(null);
     setFloor("");
-    listDirWindow(dir ? `${branch}/${dir}` : branch, project, root)
+    listDirWindow(where, project, root)
       .then((got) => {
         if (!mounted) return;
-        setEntries(got.entries);
-        setTruncated(got.truncated);
+        setListing(firstPage(got));
         setFloor(got.floor ?? "");
       })
       .catch((cause) => {
@@ -77,7 +85,7 @@ export default function FilesScreen({
     return () => {
       mounted = false;
     };
-  }, [branch, project, root, dir]);
+  }, [where, project, root]);
 
   // One fetch per screen: `dir` is deliberately absent, the change set belongs to the
   // branch. A refusal is quiet - the listing stays true without git.
@@ -111,10 +119,30 @@ export default function FilesScreen({
     };
   }, [branch, project, root]);
 
-  const rows = useMemo(
-    () => buildRows(entries, changed, dir, truncated),
-    [entries, changed, dir, truncated],
-  );
+  const entries = listing?.entries ?? null;
+  const more = listing?.more ?? false;
+  const rows = useMemo(() => buildRows(entries, changed, dir, more), [entries, changed, dir, more]);
+  const offset = listing ? nextOffset(listing) : null;
+  const count = listing ? countLine(listing) : null;
+
+  const showMore = () => {
+    if (offset === null || paging) return;
+    const asked = level.current;
+    setPaging(true);
+    setPageError(null);
+    listDirWindow(where, project, root, offset)
+      .then((got) => {
+        if (level.current !== asked) return;
+        setListing((held) => (held ? withPage(held, got) : held));
+      })
+      .catch((cause) => {
+        if (level.current !== asked) return;
+        setPageError(cause instanceof HostError ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (level.current === asked) setPaging(false);
+      });
+  };
 
   const up = () => {
     if (dir === start) {
@@ -169,11 +197,7 @@ export default function FilesScreen({
 
       {error ? <p className="baud-phone-error">{error}</p> : null}
       {!error && entries === null ? <p className="baud-phone-empty">listing…</p> : null}
-      {truncated ? (
-        <p className="baud-phone-truncated">
-          long directory - the server dropped the tail of this level
-        </p>
-      ) : null}
+      {count ? <p className="baud-phone-files-quiet">{count}</p> : null}
 
       {entries !== null ? (
         <div className="baud-phone-files">
@@ -251,6 +275,12 @@ export default function FilesScreen({
               </div>
             ),
           )}
+          {pageError ? <p className="baud-phone-error">{pageError}</p> : null}
+          {offset !== null && listing ? (
+            <button type="button" className="baud-phone-files-more" onClick={showMore}>
+              {paging ? "listing…" : moreLabel(listing)}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -275,7 +305,7 @@ function buildRows(
   entries: DirEntryInfo[] | null,
   changed: ReadonlyMap<string, GitChip> | null,
   dir: string,
-  truncated: boolean,
+  more: boolean,
 ): FileRow[] {
   if (entries === null) return [];
 
@@ -286,8 +316,8 @@ function buildRows(
     inside: entry.is_dir && changed !== null && holdsChange(changed, entry.path),
   }));
 
-  // No gone rows off a truncated listing: the file may sit in the dropped tail.
-  if (changed === null || truncated) return rows;
+  // No gone rows off a partial listing: the file may sit in a page not yet asked for.
+  if (changed === null || more) return rows;
 
   const prefix = dir ? `${dir}/` : "";
   const listed = new Set(entries.map((entry) => entry.path));

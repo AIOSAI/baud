@@ -4005,6 +4005,16 @@ body {
   font-size: 0.66rem;
 }
 
+.baud-phone-files-more {
+  background: none;
+  border: none;
+  color: var(--baud-blue);
+  font-family: inherit;
+  font-size: 0.78rem;
+  text-align: left;
+  padding: 12px 6px;
+}
+
 .baud-git-fileblock .baud-git-said {
   padding: 6px 2px 8px;
 }

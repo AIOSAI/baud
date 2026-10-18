@@ -52,10 +52,11 @@ export interface DirEntryInfo {
   is_dir: boolean;
 }
 
-/** One directory level; `path` is relative to the branch root and `truncated` says the server dropped the tail. */
+/** One page of a directory level: `truncated` says more remain after it; `total` (absent on an older server) counts the level. */
 export interface DirWindow {
   entries: DirEntryInfo[];
   truncated: boolean;
+  total?: number;
   /** The resolved root's absolute path (@api's `floor`). Absent on an older server, so copy refuses rather than pass a relative path. */
   floor?: string;
 }

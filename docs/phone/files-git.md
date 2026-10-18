@@ -127,6 +127,16 @@ key that is omitted unless a caller names one. Absent means the branch meaning
 these routes have always had, character for character. `/v1/dir` echoes `root`
 back in its answer.
 
+**A long level pages, it never errors.** `/v1/dir` answers one page (400
+entries) with `truncated` true while more remain. A host that also answers
+`total` is asked for the next page with `offset`, the count of entries already
+held: a quiet line reads *400 of 1059 shown* and a `show more (659 left)` row
+closes the list. Pages append by path, so a file is never listed twice, and a
+page that brings nothing new ends the paging. A host without `total` cannot
+page, so the line says *the first 400 shown - this host does not list further*
+and no button is drawn. Deleted-file rows wait for the whole level, since a
+missing name may sit in a page not yet asked for.
+
 Every root names its first component, including the ones that name nothing:
 `home` and `aipass` stand in for themselves. That is not decoration — `branch`
 is a **required** query field (`422` without it), and an empty first component

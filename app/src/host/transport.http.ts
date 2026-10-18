@@ -123,11 +123,12 @@ const ROUTES: Record<string, Route> = {
     path: "/v1/dir",
     query: (args) => {
       const split = splitBranchFile(String(args.path ?? ""));
-      return { branch: split.branch, dir: split.file, root: args.root as string };
+      return { branch: split.branch, dir: split.file, root: args.root as string, offset: args.offset as number | undefined };
     },
     unwrap: (body) => ({
       entries: body?.entries ?? [],
       truncated: Boolean(body?.truncated),
+      total: typeof body?.total === "number" ? body.total : undefined,
       floor: floorOf(body),
     }),
   },
