@@ -1,8 +1,8 @@
 {
-  "aipass_version": "2.8.4",
-  "stamped_at": "2026-09-10T00:39:21.173846+00:00",
+  "aipass_version": "2.8.21",
+  "stamped_at": "2026-10-19T07:33:42.147794+00:00",
   "files": {
-    ".aipass/hooks.json": "0325868845a1e1e9e341532c9c929291739d50e42bd6a35bc7e44df3d821ea15",
+    ".aipass/hooks.json": "d31d51b61db8f244250487d1ecc751a16fe3df0665ff054555b7d623680e3361",
     ".claude/commands/prep.md": "0a10a43dd326107a82f2371a1065f4fec15fe840a31e2c6ff872a66bd3cada03",
     ".claude/settings.json": "176b5b9dc3b5a351ac4918957b96d1d3a5e225f3bd6743d4e7d15c4ff666dbb9",
     ".claude/settings.local.json": "b9ab26157651326767a2426375257917324da1bc251f6fb5c45fcdb9ff2ed41b",
