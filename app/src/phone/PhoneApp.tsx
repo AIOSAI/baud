@@ -706,13 +706,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
                     project: pane.project,
                     root: pane.root,
                   }}
-                  render={
-                    pane.document === "certificate"
-                      ? renderCertificate
-                      : isMarkdownRef(pane.ref ?? "")
-                        ? renderMarkdown
-                        : undefined
-                  }
+                  render={pane.document === "certificate" ? renderCertificate : undefined}
+                  preview={isMarkdownRef(pane.ref ?? "") ? renderMarkdown : undefined}
                   backLabel={pane.from ? "folder" : "back"}
                   onClose={() => {
                     const from = pane.from;
@@ -991,7 +986,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       {reading ? (
         <Reader
           target={reading}
-          render={isMarkdownRef(reading.ref) ? renderMarkdown : undefined}
+          preview={isMarkdownRef(reading.ref) ? renderMarkdown : undefined}
           backLabel={backTo}
           onClose={closeReading}
         />

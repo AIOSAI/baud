@@ -121,11 +121,20 @@ inbox is read directly; an event without it finds the recipient in the seated
 census first, then the roster. A message the inbox no longer holds says so in one
 line. Rows without the keys stay plain.
 
-**Markdown is drawn.** A `.md` file — the README behind the card's name first —
-goes through the Reader's `render` door to `marked` (18.1.1, pinned; about 14 KB
-gzipped). Raw HTML in the file is shown as text, only absolute `http(s):` and
-`mailto:` links are live and they open in a new tab, and images are drawn as
-links rather than fetched. An empty file says *this file is empty*.
+**Markdown has a preview.** A `.md` file opens raw, the way it sits on disk. A
+`preview` button in the Reader's header, beside `copy path`, switches the pane to
+the drawn document and reads `raw` to switch back; every new file opens raw
+again. The preview is the Reader's `preview` door: `marked` (18.1.1, pinned)
+draws headings, lists, tables, fenced code, links, `<details>` blocks and GitHub
+alerts (`> [!NOTE]`, `TIP`, `IMPORTANT`, `WARNING`, `CAUTION`), then `dompurify`
+(3.4.17, pinned) cleans the whole result, raw HTML in the file included. Its
+allowlist keeps document tags only: no script, no event handler, no `style`, no
+iframe or form. Only `http(s):` and `mailto:` addresses survive, so a relative
+link or image keeps its words and loses its address; a link opens in a new tab,
+a class the renderer did not write is dropped, and a checkbox cannot be ticked.
+An image with an absolute `http(s)` address is drawn inline and fetched from its
+host; a relative image path shows its alt text. The phone page carries no CSP, so
+that allowlist is the wall. An empty file says *this file is empty*.
 
 **Settings › About** shows the version and bundle rows.
 

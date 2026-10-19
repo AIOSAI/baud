@@ -137,7 +137,7 @@ export default function GitApp({
           kind: "file",
           project,
         }}
-        render={isMarkdownRef(view.path) ? renderMarkdown : undefined}
+        preview={isMarkdownRef(view.path) ? renderMarkdown : undefined}
         onClose={back}
       />
     );
