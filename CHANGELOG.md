@@ -12,6 +12,8 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-18
+
 ### Added
 
 - **Phone: a Backup card on the apps wheel (DPLAN-0411).** `BKP` sits after git and files. Its sheet reads the seated project's store (when each lane last ran, with file counts, and the Drive sync setting, plus store sizes on request) and offers four presses: Snapshot now, Versioned now, Full backup and Sync to Drive. Each press runs through the host API's backup door and shows the command's own summary when it ends. Sync to Drive, and Full backup with Drive on, ask once before sending. The desktop refuses the three backup calls by name.
@@ -29,6 +31,7 @@ and every change that lands adds its line there in the same sitting.
 
 ### Changed
 
+- **Installs pin AIPass 2.8.21.** `AIPASS_VERSION` moves from 2.8.17 to 2.8.21, the release whose host API pages `/v1/dir` with `offset` and `total`, which the phone's Files screen asks for.
 - **Phone: the TODOS tile opens the memory screen on its todos tab (DPLAN-0414)** instead of the raw memory file. The memory door still opens on sessions.
 - **Phone: README and other `.md` files read as formatted documents (DPLAN-0414).** Headings, lists, code blocks, tables and links are drawn; links open in a new tab; raw HTML in a file shows as text. This adds the `marked` package (18.1.1, pinned).
 - **Phone: an empty file says "this file is empty"** instead of showing a blank screen.
@@ -243,7 +246,10 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/AIOSAI/baud/compare/v0.3.7...v0.4.0
+[0.3.7]: https://github.com/AIOSAI/baud/compare/v0.3.6...v0.3.7
+[0.3.6]: https://github.com/AIOSAI/baud/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/AIOSAI/baud/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/AIOSAI/baud/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/AIOSAI/baud/compare/v0.3.2...v0.3.3
