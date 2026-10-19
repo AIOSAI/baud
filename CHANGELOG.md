@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Added
+
+- **Phone: an untracked file or folder opens from the wheel's git app.** At repo grain a `??` file opens in the Reader and a `??` folder opens the files door there, through the files root `/v1/git-changes` now names (the AIPass repo, or the seated project's). A nested tree no root holds keeps its words under the row.
+
 ## [0.4.0] — 2026-10-18
 
 ### Added

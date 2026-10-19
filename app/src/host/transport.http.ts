@@ -191,6 +191,10 @@ const ROUTES: Record<string, Route> = {
       rows: Array.isArray(body?.rows)
         ? body.rows.map((row: any) => ({ path: String(row?.path ?? ""), status: String(row?.status ?? "") }))
         : [],
+      root:
+        typeof body?.root?.kind === "string"
+          ? { kind: body.root.kind, name: typeof body.root.name === "string" ? body.root.name : null }
+          : null,
     }),
   },
   git_file_diff: {

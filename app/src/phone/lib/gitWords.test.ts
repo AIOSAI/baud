@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { GitRemote } from "../../types";
+import type { GitRemote, GitRoot } from "../../types";
 import {
   FLEET_NOT_LANDED,
   NO_AGENT_HERE,
   messageBody,
   noAgentLine,
   noRemote,
+  rootAddress,
   rowOpen,
 } from "./gitWords";
+
+const AIPASS_ROOT: GitRoot = { kind: "aipass", name: null };
+const BAUD_ROOT: GitRoot = { kind: "project", name: "BAUD" };
 
 describe("rowOpen", () => {
   it("opens a tracked row's diff, at either grain", () => {
@@ -32,6 +36,37 @@ describe("rowOpen", () => {
 
   it("keeps a tracked directory-shaped path on the diff lane", () => {
     expect(rowOpen("odd/", " M", "branch")).toBe("diff");
+  });
+
+  it("reads an untracked file and browses an untracked directory at repo grain under a named root", () => {
+    for (const root of [AIPASS_ROOT, BAUD_ROOT]) {
+      expect(rowOpen("src/aipass/api/new.md", "??", "repo", root)).toBe("read");
+      expect(rowOpen("src/aipass/api/drafts/", "??", "repo", root)).toBe("browse");
+    }
+  });
+
+  it("keeps the words at repo grain when no root holds the tree", () => {
+    expect(rowOpen("vendor/x/new.md", "??", "repo", null)).toBe("file");
+    expect(rowOpen("vendor/x/drafts/", "??", "repo", null)).toBe("dir");
+  });
+
+  it("ignores a root at branch grain, where the path is branch-local", () => {
+    expect(rowOpen("drafts/", "??", "branch", BAUD_ROOT)).toBe("dir");
+    expect(rowOpen("notes/new.md", "??", "branch", BAUD_ROOT)).toBe("read");
+  });
+
+  it("keeps a tracked row on the diff lane under a root", () => {
+    expect(rowOpen("src/x.py", " M", "repo", AIPASS_ROOT)).toBe("diff");
+  });
+});
+
+describe("rootAddress", () => {
+  it("lets the nameless aipass root name itself", () => {
+    expect(rootAddress(AIPASS_ROOT)).toEqual({ word: "aipass", root: "aipass" });
+  });
+
+  it("puts a project's census name first", () => {
+    expect(rootAddress(BAUD_ROOT)).toEqual({ word: "BAUD", root: "project" });
   });
 });
 
