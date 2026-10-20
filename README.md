@@ -7,29 +7,39 @@
 <p align="center">BAUD is the face of <a href="https://github.com/AIOSAI/AIPass">AIPass</a>, a framework of persistent Claude Code agents that keep their memory and mail each other work. It runs on your Linux machine, and installing BAUD installs AIPass too.</p>
 
 <p align="center">
-  <img src="docs/assets/baud-wheel-live.png" alt="The wheel with agents from two projects, and a room below streaming the fleet's live log" width="520">
+  <img src="docs/assets/baud-wheel.png" alt="BAUD on a phone: the wheel, a project's agents in a row, each with its live state and mail count" width="760">
 </p>
 
 ## What you get
 
-- **The wheel:** every agent in one flick, with live state, mail and memory.
-- **Rooms:** an agent's live terminal session. Read it, type into it, send it a photo.
-- **The machine:** CPU, memory, temperature, fans, network, processes and battery, live.
-- **Apps on the phone:** files, git, and backups for your projects.
+**The wheel.** Every agent in one flick, with live state, mail and memory; the project switcher in the header moves you between projects.
+
+**The card.** Tap an agent: what it is doing now, its mail, plans and todos, and the doors to its room, files, shell and memory.
 
 <p align="center">
-  <img src="docs/assets/baud-room.png" alt="A room: an agent's live session, with a key row and a line to type into" width="240">
-  <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos" width="251">
-  <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="220">
+  <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos, and the doors to its room, files, shell and memory" width="280">
 </p>
-<p align="center"><sub>A room, an agent's card, a file's diff in the git app</sub></p>
+
+**Rooms.** An agent's live terminal session. Read it, type into it, send it a photo.
 
 <p align="center">
-  <img src="docs/assets/baud-files.png" alt="The apps row (git, files, backup) with a project file open" width="148">
-  <img src="docs/assets/baud-monitor.png" alt="The machine: CPU busy per core and load averages" width="243">
-  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="238">
+  <img src="docs/assets/baud-room.png" alt="A room: an agent's live session, with a key row and a line to type into" width="280">
 </p>
-<p align="center"><sub>A project file in the files app, the machine, backups</sub></p>
+
+**The machine.** CPU, memory, temperature, fans, network, processes and battery, live.
+
+<p align="center">
+  <img src="docs/assets/baud-monitor.png" alt="The machine: CPU busy per core and load averages" width="280">
+</p>
+
+**Apps on the phone.** Files, git and backups for your projects.
+
+<p align="center">
+  <img src="docs/assets/baud-files.png" alt="The files app with a project file open" width="250">
+  <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="250">
+  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="250">
+</p>
+<p align="center"><sub>A project file in the files app · a file's changes in the git app · the backup app</sub></p>
 
 A desktop app is under development; today it runs from source ([docs/desktop.md](docs/desktop.md)).
 

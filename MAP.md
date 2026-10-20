@@ -152,7 +152,7 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `CONTRIBUTING.md` | How to contribute: fork, branch off `dev`, PR against `dev`, and the checks CI runs. |
 | `CHANGELOG.md` | Keep a Changelog shape: what each release changed, and the Unreleased lines waiting for the next. Every row that lands adds its line. |
 | `SECURITY.md` | The security model (your machine, your tailnet, per-device tokens, what a token reaches) and how to report. Dated; it moves after the scheduled security session. |
-| `docs/assets/` | The README's phone screenshots: the wheel hero, the six-screen strip, and two spares (settings, git changes). |
+| `docs/assets/` | The README's phone screenshots: the wheel hero, one picture beside each part of What you get (card, room, machine, the three apps), and three spares (the wheel over a live log, settings, git changes). |
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/architecture.md` | How BAUD reads the fleet, the three rules everything else follows from, the type seam, and the Rust backend's files. |
 | `docs/desktop.md` | The desktop window's index: running it, the face's files, the camera, the command surface, the layout, and the table of the pages below. |

@@ -14,7 +14,7 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
-- **The README explains before it installs, with screenshots.** What BAUD is and that it installs AIPass come first, then the wheel and a strip of six phone screens (room, git diff, monitor, backup, files, agent card) from `docs/assets/`. Tailscale is named as needing an account, the desktop app as under development and run from source, and Android as the tested phone. The machine readings no longer list disks, which the monitor has no card for. Written by Vera Studio on the owner's ask.
+- **The README explains before it installs, with screenshots.** What BAUD is and that it installs AIPass come first, then the wheel as the hero, and each part of What you get (the card, rooms, the machine, the files, git and backup apps) carries its own phone screenshot from `docs/assets/`. Tailscale is named as needing an account, the desktop app as under development and run from source, and Android as the tested phone. The machine readings no longer list disks, which the monitor has no card for. Written by Vera Studio on the owner's ask.
 - **Phone: an untracked file or folder opens from the wheel's git app.** At repo grain a `??` file opens in the Reader and a `??` folder opens the files door there, through the files root `/v1/git-changes` now names (the AIPass repo, or the seated project's). A nested tree no root holds keeps its words under the row.
 
 ## [0.4.0] — 2026-10-18
