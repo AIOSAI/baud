@@ -12,6 +12,8 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-19
+
 ### Added
 
 - **The README explains before it installs, with screenshots.** What BAUD is and that it installs AIPass come first, then the wheel as the hero, and each part of What you get (the card, rooms, the machine, the files, git and backup apps) carries its own phone screenshot from `docs/assets/`. Tailscale is named as needing an account, the desktop app as under development and run from source, and Android as the tested phone. The machine readings no longer list disks, which the monitor has no card for. Written by Vera Studio on the owner's ask.
@@ -259,7 +261,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/AIOSAI/baud/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AIOSAI/baud/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/AIOSAI/baud/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/AIOSAI/baud/compare/v0.3.5...v0.3.6
