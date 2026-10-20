@@ -23,13 +23,16 @@
 **Rooms.** An agent's live terminal session. Read it, type into it, send it a photo.
 
 <p align="center">
-  <img src="docs/assets/baud-room.png" alt="A room: an agent's live session, with a key row and a line to type into" width="280">
+  <img src="docs/assets/baud-room.png" alt="A room under the wheel: an agent's live session, with a key row and a line to type into" width="280">
 </p>
 
 **The machine.** CPU, memory, temperature, fans, network, processes and battery, live.
 
 <p align="center">
-  <img src="docs/assets/baud-monitor.png" alt="The machine: CPU busy per core and load averages" width="280">
+  <img src="docs/assets/baud-monitor-wheel.png" alt="The wheel's monitor page: CPU, memory, temperature, fan and network tiles, live" width="760">
+</p>
+<p align="center">
+  <img src="docs/assets/baud-monitor.png" alt="The CPU tile opened: busy per core and load averages" width="280">
 </p>
 
 **Apps on the phone.** Files, git and backups for your projects.
