@@ -7,7 +7,7 @@
 <p align="center">BAUD is the face of <a href="https://github.com/AIOSAI/AIPass">AIPass</a>, a framework of persistent Claude Code agents that keep their memory and mail each other work. It runs on your Linux machine, and installing BAUD installs AIPass too.</p>
 
 <p align="center">
-  <img src="docs/assets/baud-wheel-live.png" alt="The wheel with agents from two projects, and a room below streaming the fleet's live log" width="300">
+  <img src="docs/assets/baud-wheel-live.png" alt="The wheel with agents from two projects, and a room below streaming the fleet's live log" width="520">
 </p>
 
 ## What you get
@@ -18,13 +18,18 @@
 - **Apps on the phone:** files, git, and backups for your projects.
 
 <p align="center">
-  <img src="docs/assets/baud-room.png" alt="A room: an agent's live session, with a key row and a line to type into" width="180">
-  <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="180">
-  <img src="docs/assets/baud-monitor.png" alt="The machine: CPU busy per core and load averages" width="180">
-  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="180">
-  <img src="docs/assets/baud-files.png" alt="The apps row (git, files, backup) with a project file open" width="180">
-  <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos" width="180">
+  <img src="docs/assets/baud-room.png" alt="A room: an agent's live session, with a key row and a line to type into" width="240">
+  <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos" width="251">
+  <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="220">
 </p>
+<p align="center"><sub>A room, an agent's card, a file's diff in the git app</sub></p>
+
+<p align="center">
+  <img src="docs/assets/baud-files.png" alt="The apps row (git, files, backup) with a project file open" width="148">
+  <img src="docs/assets/baud-monitor.png" alt="The machine: CPU busy per core and load averages" width="243">
+  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="238">
+</p>
+<p align="center"><sub>A project file in the files app, the machine, backups</sub></p>
 
 A desktop app is under development; today it runs from source ([docs/desktop.md](docs/desktop.md)).
 
