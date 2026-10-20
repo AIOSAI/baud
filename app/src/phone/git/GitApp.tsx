@@ -4,9 +4,10 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { gitRemote } from "../../host";
-import type { GitRemote } from "../../types";
+import type { GitRemote, GitRoot } from "../../types";
+import FilesScreen from "../FilesScreen";
 import { isMarkdownRef } from "../lib/markdown";
-import { NO_REMOTE, noAgentLine, noRemote } from "../lib/gitWords";
+import { NO_REMOTE, noAgentLine, noRemote, rootAddress } from "../lib/gitWords";
 import { splitPath } from "../lib/gitStatus";
 import { useSystemBack } from "../lib/systemBack";
 import { renderMarkdown } from "../Markdown";
@@ -35,8 +36,10 @@ export type GitView =
   | { kind: "commit"; ref: string }
   /** `ref` is "" for the working tree, or the commit the file is read from. */
   | { kind: "diff"; path: string; ref: string }
-  /** An untracked file, read through the files lane since git has no patch for it; branch grain only. */
-  | { kind: "file"; path: string };
+  /** An untracked file, read through the files lane since git has no patch for it: branch-local, or under `root`. */
+  | { kind: "file"; path: string; root?: GitRoot }
+  /** An untracked directory at repo grain, browsed in the files door under `root`. */
+  | { kind: "folder"; path: string; root: GitRoot };
 
 interface GitAppProps {
   /** At repo grain an address for the tree; at branch grain the subject named on the title. */
@@ -122,20 +125,40 @@ export default function GitApp({
         grain={grain}
         backLabel={changesBack}
         onOpenFile={(path) => push({ kind: "diff", path, ref: "" })}
-        onReadFile={(path) => push({ kind: "file", path })}
+        onReadFile={(path, root) => push(root ? { kind: "file", path, root } : { kind: "file", path })}
+        onBrowse={(path, root) => push({ kind: "folder", path, root })}
         onBack={back}
       />
     );
   }
 
+  if (view.kind === "folder") {
+    const at = rootAddress(view.root);
+    return (
+      <FilesScreen
+        branch={at.word}
+        project=""
+        root={at.root}
+        at={view.path.replace(/\/+$/, "")}
+        onOpenFile={(ref) => push({ kind: "file", path: ref.slice(at.word.length + 1), root: view.root })}
+        backLabel="changes"
+        onClose={back}
+      />
+    );
+  }
+
   if (view.kind === "file") {
+    const at = view.root ? rootAddress(view.root) : null;
+    const word = at ? at.word : branch;
     return (
       <Reader
         target={{
-          ref: `${branch}/${view.path}`,
-          title: `${branch} · ${splitPath(view.path).name}`,
+          ref: `${word}/${view.path}`,
+          title: `${word} · ${splitPath(view.path).name}`,
           kind: "file",
-          project,
+          // A root is not inside a project: the fence refuses `project` beside one.
+          project: at ? "" : project,
+          root: at?.root,
         }}
         preview={isMarkdownRef(view.path) ? renderMarkdown : undefined}
         onClose={back}

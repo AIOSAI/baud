@@ -97,6 +97,13 @@ export interface GitChangeRows {
   count: number;
   untracked: number;
   rows: GitRow[];
+  /** Repo grain only: the files root the paths are relative to (`name` null for `aipass`); null is a tree no root holds. */
+  root?: GitRoot | null;
+}
+
+export interface GitRoot {
+  kind: string;
+  name: string | null;
 }
 
 /** `status` is git's two-column code, raw: trimming it merges different answers. `phone/gitStatus.ts` is its one reader. */

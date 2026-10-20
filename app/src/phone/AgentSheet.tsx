@@ -123,10 +123,10 @@ export default function AgentSheet({
   const away =
     branch.project && seatedProject && branch.project !== seatedProject ? branch.project : null;
 
-  // Only settings is fenced across projects: its route takes no project, so on a
-  // foreign card it would open (and edit) the seated project's same-named agent.
+  // Only settings is fenced across projects: its memory dials write by branch name alone, so on a
+  // foreign card they would edit the seated project's same-named agent.
   const settingsElsewhere = away
-    ? `${branch.name}'s settings live in ${away}, and this door names no project — it would open the seated project's ${branch.name}. Switch to ${away} first.`
+    ? `${branch.name}'s settings live in ${away}, and this sheet's memory dials name no project — they would edit the seated project's ${branch.name}. Switch to ${away} first.`
     : null;
   const refusal = scopeRefusal(scope);
   const state = branch.dispatched ? "dispatched" : branch.interactive ? "interactive" : "idle";
@@ -208,7 +208,7 @@ export default function AgentSheet({
           >
             <span className="baud-agent-chip-face">?</span>
           </button>
-          {/* The one fenced door: its route takes no project. Inline SVG, the same paths as
+          {/* The one fenced door: its memory dials name no project. Inline SVG, the same paths as
               the phone header's gear, not the emoji. */}
           <button
             type="button"
@@ -260,7 +260,7 @@ export default function AgentSheet({
         {away ? (
           <p className="baud-agent-away">
             {branch.name} lives in {away} — read it, watch it, attach it from here. Only the{" "}
-            <b>settings</b> gear, top right, stays behind: that door names no project.
+            <b>settings</b> gear, top right, stays behind: its memory dials name no project.
           </p>
         ) : null}
 

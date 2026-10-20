@@ -187,11 +187,11 @@ export const backupCancel = (project: string, lane: BackupLane) =>
 /* Not `call`s, but both transports export them and the vite alias picks one, keeping http out of the desktop. */
 export { openRoomSocket, uploadImage } from "./transport";
 
-export const agentSettingsRead = (agent: string) =>
-  call<AgentSettings>("agent_settings_read", { agent });
+export const agentSettingsRead = (agent: string, project = "") =>
+  call<AgentSettings>("agent_settings_read", project ? { agent, project } : { agent });
 
-export const agentSettingsWrite = (agent: string, patch: AgentSettingsPatch) =>
-  call<AgentSettings>("agent_settings_write", { agent, patch });
+export const agentSettingsWrite = (agent: string, patch: AgentSettingsPatch, project = "") =>
+  call<AgentSettings>("agent_settings_write", project ? { agent, patch, project } : { agent, patch });
 
 export const baudSettingsRead = () => call<BaudSettings>("baud_settings_read");
 

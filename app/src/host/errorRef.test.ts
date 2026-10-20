@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { withRef } from "./errorRef";
+import { agentSettingsRead, agentSettingsWrite } from "./index";
 import { call } from "./transport.http";
+
+vi.mock("./transport", () => import("./transport.http"));
 
 const SENTENCE = "This read was refused; the reason is in this host's log";
 
@@ -61,5 +64,44 @@ describe("a refusal through the transport", () => {
       code: "not_found",
       message: "Unknown branch: 'baud'",
     });
+  });
+});
+
+/* The settings sheet opens from any card, and an agent outside the seat is
+   unknown to the seat's registry: the card's project must reach the host. */
+describe("agent settings on the wire", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function recorded() {
+    const fetch = vi.fn(async (_url: string, _init: RequestInit) => new Response(JSON.stringify({}), { status: 200 }));
+    vi.stubGlobal("window", { localStorage: { getItem: () => "stub-token" } });
+    vi.stubGlobal("fetch", fetch);
+    return fetch;
+  }
+
+  it("reads a foreign agent's settings with its project on the query", async () => {
+    const fetch = recorded();
+    await agentSettingsRead("vera", "VERA-STUDIO");
+    expect(fetch.mock.calls[0][0]).toBe("/v1/agent-settings?branch=vera&project=VERA-STUDIO");
+  });
+
+  it("writes a foreign agent's settings with its project in the body", async () => {
+    const fetch = recorded();
+    const patch = { auto_compact_enabled: false, model: null };
+    await agentSettingsWrite("vera", patch, "VERA-STUDIO");
+    const init = fetch.mock.calls[0][1];
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ branch: "vera", patch, project: "VERA-STUDIO" });
+  });
+
+  it("sends no project for a seat agent, on the read or the write", async () => {
+    const fetch = recorded();
+    await agentSettingsRead("devpulse");
+    await agentSettingsWrite("devpulse", { model: null });
+    expect(fetch.mock.calls[0][0]).toBe("/v1/agent-settings?branch=devpulse");
+    expect(fetch.mock.calls[1][0]).toBe("/v1/agent-settings");
+    expect(JSON.parse(String(fetch.mock.calls[1][1].body))).toEqual({ branch: "devpulse", patch: { model: null } });
   });
 });

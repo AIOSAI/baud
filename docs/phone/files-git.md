@@ -283,10 +283,13 @@ refusal without a ref (the fence's named refusals) reads plain.
 has never seen. In the card's GIT tile (branch grain) a U file opens in the Reader
 on the git app's own stack, so `‹ back` returns to the list. A collapsed new
 `dir/` answers under its row: "new directory — nothing to diff; browse it from the
-files door". In the wheel's git app (repo grain) a U file answers under its row,
-"new file — nothing to diff; read it from the files door": its path is relative
-to the repository, and no root the phone can name is sure to be that repository's
-top. A second tap closes the answer.
+files door". At repo grain the paths are relative to the repository, and
+`/v1/git-changes` names the files root that repository is: `aipass` for the
+server's own repo, `project` with the census name for a project's. Through it a
+U file opens in the Reader and a U `dir/` opens the files door at that folder,
+both addressed `<name or kind>/<path>` with `root` and no `project`. A nested
+tree no root holds answers `root: null`, and its rows keep the words ("new file —
+nothing to diff; read it from the files door"). A second tap closes an answer.
 
 **A commit prints its subject once.** @api's `message` is the whole message, so
 the block under the subject holds the message without its first line and the

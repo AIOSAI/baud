@@ -1,12 +1,12 @@
 # AIPass — Navigation map
 
-<!-- Tier 1 — injected on cadence 5, at session start, and post-compaction. Kernel = tier0_kernel.md, every turn. Cap: ~8,000 chars per fire (hook truncates near 10k). Format: .aipass/PROMPT_STYLE.md, read before editing. -->
+<!-- Tier 1 — injected at session start and post-compaction only, alongside the kernel (tier0_kernel.md); no periodic beat (hooks/hooks_json/custom_config/cadence_config.json is the source). Cap: ~8,000 chars per fire (hook truncates near 10k). Format: .aipass/PROMPT_STYLE.md, read before editing. -->
 
 AIPass: autonomous agents (citizens) with identity, memory, and a mailbox, serving each other and external projects. Each lives in a branch, its home and address. Everything routes through `drone`. Open source, public repo on GitHub: strangers read and scan this code; treat external findings as contributions.
 
 # Finding your way
 
-Breadcrumbs, not answers: what exists and where to look. Cheapest, highest-signal sources first:
+Breadcrumbs, not answers. Cheapest, highest-signal sources first:
 
  - bare `drone @agent` — the agent's live self-map of modules and commands.
  - `drone @agent --help` — the full reference, source of truth for usage.
@@ -80,20 +80,23 @@ Plans carry context so you don't have to. Create only via `drone @flow create <p
 # Sub-agents
 
  - Default to sub-agents for reading, searching, building, testing, research. Do it yourself only for tiny edits, your own memories/plans, one-liners.
- - One clear task per agent. Brief with full context — they know nothing of your conversation.
- - No git, no memory, no dispatch. They build and report; you decide and act.
+ - One clear task per agent. Brief with full context — they know nothing of your conversation. Read the work list yourself before you write the task, and hand the brief whole as a file: a paraphrase is where a rule loses its clause.
+ - No git, no memory, no dispatch. They build and report; you decide and act. Read every sub-agent's diff before accepting it: a pass count, an audit score and a file list stay green through a deleted docstring, a widened name and an oracle that cannot fail.
+ - HELD is an answer. A cure the brief did not name, or whose own mutant survives, stops there: leave the line, say HELD and why.
  - Sub-agent = local disposable worker. Dispatch (`@ai_mail`) = wake a citizen with memory and identity. Branch-expert work → dispatch; else → sub-agent.
  - Models: opus for build/analysis, sonnet for routine investigation, haiku for trivial mechanical tasks. Never fable for sub-agents.
 
 # Memory — .trinity/
 
-Your continuity across sessions. Save proactively — after milestones, decisions, topic switches.
+Save proactively — after milestones, decisions, topic switches.
 
- - `passport.json` — identity. Update only when identity genuinely evolves.
- - `local.json` — session log, key learnings, todos.
+ - `passport.json` — identity. Update only when it genuinely evolves.
+ - `local.json` — session log, key learnings, todos (a pad of 10 one-liners, no status; the oldest roll to `.backup/todo/<branch>/backlog.json`).
  - `observations.json` — what you learn about the user.
- - Overflow rolls to vectors automatically, never trim by hand; `drone @memory search "query"` recalls it. An entry missing from local.json likely rolled over; absence locally is not gone.
- - Entry caps are hook-enforced (over-limit edit rejected whole); the live cap is each file's `*_meta` line. Draft to ~80%; if rejected, rewrite in one pass.
+ - Overflow rolls to vectors, never trim by hand; `drone @memory search "query"` recalls it. Absent locally is not gone.
+ - Caps are hook-enforced; live cap in each file's `*_meta` line. Over-cap edits are refused whole; the refusal shows the cut point: trim that tail.
+ - `sessions.summary`, `observations.note`: count the draft in tens in your reasoning, running total, trim before the edit. A whole session competes for 300 chars; counting in tens measured exact.
+ - `todos.task`, `key_learnings.value`: draft to ~80%.
 
 # House rules
 
@@ -101,3 +104,5 @@ Your continuity across sessions. Save proactively — after milestones, decision
  - No bare imports — always `from aipass.<agent>.apps...`.
  - State lives in `.trinity/` and dashboards, never in prompts. Prompts are signposts; memories record; registries catalog.
  - New test files need permission: a hook gate refuses them by policy (`.aipass/test_write_policy.json`). Editing an existing test is fine. Need a new test? Mail @devpulse with the defect or contract it pins. Never route around the gate.
+ - Docs say what exists: the mechanism, the shapes, the commands, the limits, the reason in present tense. Never history, chat or what is to come; never a plan id, a `.trinity` entry or an untracked file as a pointer, since a reader of the repo cannot open them. Docs are the result; the plan is the reference.
+ - Comments say why when the code cannot: a constraint, a contract, a trap. Never what the next line does, never the chat, the plan, the wave or the reviewer; that history goes in the commit and the plan. Budget: under 10% comment lines per file; a hook measures every edit and says when a file is over (`drone @hooks comments`).

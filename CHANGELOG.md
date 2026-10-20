@@ -12,6 +12,21 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-19
+
+### Added
+
+- **The README explains before it installs, with screenshots.** What BAUD is and that it installs AIPass come first, then the wheel as the hero, and each part of What you get (the card, rooms, the machine, the files, git and backup apps) carries its own phone screenshot from `docs/assets/`. Tailscale is named as needing an account, the desktop app as under development and run from source, and Android as the tested phone. The machine readings no longer list disks, which the monitor has no card for. Written by Vera Studio on the owner's ask.
+- **Phone: an untracked file or folder opens from the wheel's git app.** At repo grain a `??` file opens in the Reader and a `??` folder opens the files door there, through the files root `/v1/git-changes` now names (the AIPass repo, or the seated project's). A nested tree no root holds keeps its words under the row.
+
+### Security
+
+- **Desktop: a watch target may not start with `-`.** The monitor pane's target is one argv word for `drone @prax monitor run`, and its charset fence admitted a leading dash, so `--relay` would have reached prax as an option and switched on its Telegram relay. The fence now refuses an option-shaped target, matching the host API's own refusal.
+
+### Fixed
+
+- **Agent settings name the card's project.** The settings sheet sends the agent's project with its branch, on the read's query and in the write's body, so an agent of another project (vera under VERA-STUDIO) opens and saves instead of answering "Unknown branch". A card with no project sends none, which the host reads as the seat, and the desktop's calls are unchanged. The gear stays fenced on a card from outside the seat, because the sheet's memory dials still name no project.
+
 ## [0.4.0] — 2026-10-18
 
 ### Added
@@ -246,7 +261,8 @@ The first release: the fleet window, a Tauri 2 desktop app for Linux, built over
 - **The help door** on the aipass card asks aipass's own binary.
 - **Path-resolution tests** build their own fixture tree, so they pass on a bare CI runner.
 
-[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/AIOSAI/baud/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/AIOSAI/baud/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/AIOSAI/baud/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/AIOSAI/baud/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/AIOSAI/baud/compare/v0.3.5...v0.3.6

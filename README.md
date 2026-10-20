@@ -1,39 +1,73 @@
-# BAUD
+<h1 align="center">BAUD</h1>
 
-```sh
-curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
-```
+<p align="center"><strong>Your AI agents, on your phone, served from your own machine.</strong></p>
 
-**Your AI agents, on your phone, served from your own machine.** BAUD is the face of a fleet of persistent Claude Code agents running on your Linux box: you see who is working, open their rooms, type into them, and watch the machine, all from your phone's browser. Persistent AI by default.
+<p align="center">See which of your Claude Code agents are working, open their live sessions, type into them, and check on the machine itself (CPU, memory, temperature), from your phone's browser. No account with us, no cloud, no telemetry.</p>
+
+<p align="center">BAUD is the face of <a href="https://github.com/AIOSAI/AIPass">AIPass</a>, a framework of persistent Claude Code agents that keep their memory and mail each other work. It runs on your Linux machine, and installing BAUD installs AIPass too.</p>
+
+<p align="center">
+  <img src="docs/assets/baud-wheel.png" alt="BAUD on a phone: the wheel, a project's agents in a row, each with its live state and mail count" width="760">
+</p>
 
 ## What you get
 
-- **The wheel:** every agent in one flick, with live state, mail and memory.
-- **Rooms:** an agent's live terminal session; read it, type into it, send it a photo.
-- **The machine:** CPU, memory, disks, temperature, fans, network, processes and battery, live.
+**The wheel.** Every agent in one flick, with live state, mail and memory; the project switcher in the header moves you between projects.
 
-## How it works
+**The card.** Tap an agent: what it is doing now, its mail, plans and todos, and the doors to its room, files, shell and memory.
 
-Your machine serves the phone face over your own [Tailscale](https://tailscale.com) network. You scan a QR the machine shows, once, and the phone signs itself in. Nothing passes through our servers, because there are none: no account, no cloud, no telemetry.
+<p align="center">
+  <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos, and the doors to its room, files, shell and memory" width="280">
+</p>
+
+**Rooms.** An agent's live terminal session. Read it, type into it, send it a photo.
+
+<p align="center">
+  <img src="docs/assets/baud-room.png" alt="A room under the wheel: an agent's live session, with a key row and a line to type into" width="280">
+</p>
+
+**The machine.** CPU, memory, temperature, fans, network, processes and battery, live.
+
+<p align="center">
+  <img src="docs/assets/baud-monitor-wheel.png" alt="The wheel's monitor page: CPU, memory, temperature, fan and network tiles, live" width="760">
+</p>
+<p align="center">
+  <img src="docs/assets/baud-monitor.png" alt="The CPU tile opened: busy per core and load averages" width="280">
+</p>
+
+**Apps on the phone.** Files, git and backups for your projects.
+
+<p align="center">
+  <img src="docs/assets/baud-files.png" alt="The files app with a project file open" width="250">
+  <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="250">
+  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="250">
+</p>
+<p align="center"><sub>A project file in the files app · a file's changes in the git app · the backup app</sub></p>
+
+A desktop app is under development; today it runs from source ([docs/desktop.md](docs/desktop.md)).
 
 ## What it needs
 
-- Linux on x86_64.
+- **Linux on x86_64** for the machine.
+- **[Tailscale](https://tailscale.com) on the machine and on the phone.** The phone reaches your machine over your own tailnet, so you need a Tailscale account.
+- **[Claude Code](https://claude.com/claude-code)**, signed in to your Anthropic account.
 - git, tmux, curl and Python 3.10 or newer.
-- [Claude Code](https://claude.com/claude-code), signed in to your Anthropic account.
-- Tailscale on the machine and on the phone.
 
 The installer checks each one and offers to install whatever is missing, one at a time, asking first. It names `sudo` wherever it needs it.
 
 ## Install
 
-The line at the top installs into `~/AIPass`. To put AIPass under another folder, name the parent:
+```sh
+curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
+```
+
+The script prints what the machine has, installs what is missing after one Enter, installs the `aipass` CLI from PyPI, and runs `aipass install`. That clones AIPass into `~/AIPass` and lands this release's phone face. It never overwrites an existing `AIPass` folder. To install under another folder, name the parent:
 
 ```sh
 curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh -s -- ~/Projects
 ```
 
-The careful path is to read the script and check its sum before running it:
+The careful path: read the script and check its sum first.
 
 ```sh
 curl -fsSLO https://github.com/AIOSAI/baud/releases/latest/download/install.sh
@@ -42,11 +76,11 @@ sha256sum -c --ignore-missing SHA256SUMS.txt
 sh install.sh
 ```
 
-The script prints what the machine has, lists what is missing and installs all of it after one Enter, installs the `aipass` CLI from PyPI, and runs `aipass install`. That step clones AIPass and lands this release's phone face. The script never overwrites an existing `AIPass` folder, and [docs/uninstall.md](docs/uninstall.md) says how to undo everything it did.
+[docs/uninstall.md](docs/uninstall.md) says how to undo everything it did.
 
 ## First run on your phone
 
-The installer ends by asking you to press Enter when your phone's camera is ready, then shows a QR code. Point your phone's camera at it, tap the link, and the phone signs itself in. The code works once, for five minutes; `drone @api host-api pair phone --scope operate` makes a fresh one. The step-by-step guide for Android is [docs/phone-setup-android.md](docs/phone-setup-android.md).
+The installer ends by asking you to press Enter when your phone's camera is ready, then shows a QR code. Point the camera at it, tap the link, and the phone signs itself in. The code works once, for five minutes; `drone @api host-api pair phone --scope operate` makes a fresh one. Step by step for Android: [docs/phone-setup-android.md](docs/phone-setup-android.md). BAUD is tested on Android; iPhone has not been tested yet.
 
 ## Security
 
@@ -54,36 +88,17 @@ A token is the access right. A `read` token sees what your machine can read; an 
 
 ## Status
 
-Pre-release, `0.x`. Linux only, and the surface still moves. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
-
-## Built with AIPass
-
-Most of what runs is [AIPass](https://github.com/AIOSAI/AIPass): the agents' identities, memory, mail, the plans and the host API that serves this face. BAUD is the face.
+Pre-release, `0.x`. Linux only, and the surface still moves. Changes are listed in [CHANGELOG.md](CHANGELOG.md). Dev logs and BAUD posts: [r/AIPass](https://reddit.com/r/AIPass).
 
 ## Docs
 
-- [The phone face](docs/phone.md): the index for the phone face, and why each screen works the way it does.
-  - [The wheel](docs/phone/wheel.md): the fleet rail, the header, the verbs and the `GIT` tile.
-  - [The card](docs/phone/card.md): the expanded agent card and the passport.
-  - [The room](docs/phone/room.md): the terminal sheet.
-  - [Room input](docs/phone/room-input.md): typing and the keyboard.
-  - [Room delivery](docs/phone/room-delivery.md): links, photos, and a room that drops.
-  - [Files and git](docs/phone/files-git.md): the FILES app and the git app.
-  - [Backup](docs/phone/backup.md): the backup app.
-  - [Monitor](docs/phone/monitor.md): the monitor row and what is running.
-  - [Settings and navigation](docs/phone/settings-nav.md): the feed, settings, Back and tabs.
-  - [Files](docs/phone/files.md): where each file of the phone face lives.
-- [The desktop window](docs/desktop.md): BAUD's Tauri app for the machine itself.
-  - [The window and cards](docs/desktop/window-and-cards.md): the header, the cards, the opened passport.
-  - [Rooms](docs/desktop/rooms.md): rooms and the seat, the terminal, the workbench, the bell.
-  - [Settings](docs/desktop/settings.md): the card gear, the header gear, the memory dials.
+- [The phone face](docs/phone.md): the index, and why each screen works the way it does.
+  - [The wheel](docs/phone/wheel.md) · [The card](docs/phone/card.md) · [The room](docs/phone/room.md) · [Room input](docs/phone/room-input.md) · [Room delivery](docs/phone/room-delivery.md)
+  - [Files and git](docs/phone/files-git.md) · [Backup](docs/phone/backup.md) · [Monitor](docs/phone/monitor.md) · [Settings and navigation](docs/phone/settings-nav.md) · [Files](docs/phone/files.md)
+- [The desktop window](docs/desktop.md) (under development): [window and cards](docs/desktop/window-and-cards.md) · [rooms](docs/desktop/rooms.md) · [settings](docs/desktop/settings.md)
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
-- [Architecture](docs/architecture.md): how BAUD reads the fleet, and its three rules.
-- [Development](docs/development.md): building, the palette, the host seam, and the checks.
-- [The install sandbox](docs/sandbox.md): the installer tested in minutes — a saved Docker image, the local script, the local checkout by `git clone`.
-- [Releases](docs/releases.md): versions, and what a release carries.
-- [CHANGELOG.md](CHANGELOG.md): what changed, release by release.
-- [MAP.md](MAP.md): where every file lives.
+- [Architecture](docs/architecture.md) · [Development](docs/development.md) · [The install sandbox](docs/sandbox.md) · [Releases](docs/releases.md)
+- [CHANGELOG.md](CHANGELOG.md) · [MAP.md](MAP.md): where every file lives.
 
 ## Contributing
 

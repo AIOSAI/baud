@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { gitChangeRows } from "../../host";
-import type { GitRow } from "../../types";
+import type { GitRoot, GitRow } from "../../types";
 import type { GitGrain } from "./GitApp";
 import GitFileRow from "./GitFileRow";
 import { splitPath } from "../lib/gitStatus";
@@ -28,8 +28,10 @@ interface GitChangesScreenProps {
   backLabel: string;
   /** A path at THIS grain, ready to hand straight back to the diff lane. */
   onOpenFile: (path: string) => void;
-  /** An untracked file at branch grain, to read rather than diff; the path is branch-local. */
-  onReadFile: (path: string) => void;
+  /** An untracked file, to read rather than diff: branch-local with no root, else relative to `root`. */
+  onReadFile: (path: string, root: GitRoot | null) => void;
+  /** An untracked directory at repo grain, opened in the files door under `root`. */
+  onBrowse: (path: string, root: GitRoot) => void;
   onBack: () => void;
 }
 
@@ -40,9 +42,10 @@ export default function GitChangesScreen({
   backLabel,
   onOpenFile,
   onReadFile,
+  onBrowse,
   onBack,
 }: GitChangesScreenProps) {
-  const [answer, setAnswer] = useState<{ rows: GitRow[]; untracked: number } | null>(null);
+  const [answer, setAnswer] = useState<{ rows: GitRow[]; untracked: number; root: GitRoot | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rows = answer?.rows ?? null;
   /** Which untracked row has an answer under it; a second tap closes it. */
@@ -55,7 +58,7 @@ export default function GitChangesScreen({
     /* Branch grain is the server default and the transport drops an empty value, so it travels as "". */
     gitChangeRows(branch, project, grain === "repo" ? "repo" : "")
       .then((got) => {
-        if (mounted) setAnswer({ rows: got.rows, untracked: got.untracked });
+        if (mounted) setAnswer({ rows: got.rows, untracked: got.untracked, root: got.root ?? null });
       })
       .catch((cause) => {
         if (mounted) setError(cause instanceof Error ? cause.message : String(cause));
@@ -67,15 +70,21 @@ export default function GitChangesScreen({
 
   const groups = useMemo(() => groupRows(rows ?? [], grain), [rows, grain]);
 
-  /** Untracked files cannot be diffed: at branch grain they open in the Reader, otherwise they answer under the row. */
+  const root = answer?.root ?? null;
+
+  /** Untracked rows cannot be diffed: they open through a root when there is one, otherwise they answer under the row. */
   const open = (row: GitRow) => {
-    const how = rowOpen(row.path, row.status, grain);
+    const how = rowOpen(row.path, row.status, grain, root);
     if (how === "diff") {
       onOpenFile(row.path);
       return;
     }
     if (how === "read") {
-      onReadFile(row.path);
+      onReadFile(row.path, grain === "repo" ? root : null);
+      return;
+    }
+    if (how === "browse" && root) {
+      onBrowse(row.path, root);
       return;
     }
     const text = how === "dir" ? UNTRACKED_DIR_ANSWER : UNTRACKED_FILE_ANSWER;
