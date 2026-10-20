@@ -222,7 +222,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const [trail, setTrail] = useState<Stop[]>([]);
   const seatedRef = useRef(false);
   const [startupNote, setStartupNote] = useState<string | null>(null);
-  const [settingsAgent, setSettingsAgent] = useState<string | null>(null);
+  const [settingsAgent, setSettingsAgent] = useState<{ name: string; project: string } | null>(null);
   const [interfaceOpen, setInterfaceOpen] = useState(false);
   /** BAUD's settings document; live config, read every render so a save reaches an attached room. */
   const [baudSettings, setBaudSettings] = useState<BaudSettings | null>(null);
@@ -832,7 +832,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           }}
           onSettings={() => {
             leaveCard();
-            setSettingsAgent(expandedCard.name);
+            setSettingsAgent({ name: expandedCard.name, project: expandedCard.project });
           }}
           onMemory={() => {
             leaveCard();
@@ -889,7 +889,12 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
 
       {/* The desktop's own settings panel, through the same /v1 routes, so both faces write one file. */}
       {settingsAgent ? (
-        <AgentSettings agent={settingsAgent} closeGlyph="×" onClose={closeAgentSettings} />
+        <AgentSettings
+          agent={settingsAgent.name}
+          project={settingsAgent.project}
+          closeGlyph="×"
+          onClose={closeAgentSettings}
+        />
       ) : null}
       {interfaceOpen ? (
         <PhoneSettings

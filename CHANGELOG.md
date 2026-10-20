@@ -17,6 +17,10 @@ and every change that lands adds its line there in the same sitting.
 - **The README explains before it installs, with screenshots.** What BAUD is and that it installs AIPass come first, then the wheel as the hero, and each part of What you get (the card, rooms, the machine, the files, git and backup apps) carries its own phone screenshot from `docs/assets/`. Tailscale is named as needing an account, the desktop app as under development and run from source, and Android as the tested phone. The machine readings no longer list disks, which the monitor has no card for. Written by Vera Studio on the owner's ask.
 - **Phone: an untracked file or folder opens from the wheel's git app.** At repo grain a `??` file opens in the Reader and a `??` folder opens the files door there, through the files root `/v1/git-changes` now names (the AIPass repo, or the seated project's). A nested tree no root holds keeps its words under the row.
 
+### Fixed
+
+- **Agent settings name the card's project.** The settings sheet sends the agent's project with its branch, on the read's query and in the write's body, so an agent of another project (vera under VERA-STUDIO) opens and saves instead of answering "Unknown branch". A card with no project sends none, which the host reads as the seat, and the desktop's calls are unchanged. The gear stays fenced on a card from outside the seat, because the sheet's memory dials still name no project.
+
 ## [0.4.0] — 2026-10-18
 
 ### Added

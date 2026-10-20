@@ -293,7 +293,8 @@ const ROUTES: Record<string, Route> = {
   agent_settings_write: {
     path: "/v1/agent-settings",
     method: "POST",
-    body: (args) => ({ branch: args.agent, patch: args.patch }),
+    // The host takes the write's project in the body; `call` lifts it onto the query for the read only.
+    body: (args) => ({ branch: args.agent, patch: args.patch, project: args.project }),
   },
   baud_settings_read: {
     path: "/v1/baud-settings",

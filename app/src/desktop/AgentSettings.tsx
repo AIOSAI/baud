@@ -40,14 +40,16 @@ function message(err: unknown): string {
 }
 
 interface AgentSettingsProps {
-  /** Branch name - the backend resolves it inside the seated fleet itself. */
+  /** Branch name - the backend resolves it under `project`, or the seated fleet when that is empty. */
   agent: string;
+  /** The card's project: an agent outside the seat is unknown to the seat's registry. */
+  project?: string;
   /** The close glyph: data, so the phone can hand in `×` and this stays one component on both faces. */
   closeGlyph?: string;
   onClose: () => void;
 }
 
-export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: AgentSettingsProps) {
+export default function AgentSettings({ agent, project = "", closeGlyph = "✕", onClose }: AgentSettingsProps) {
   const [base, setBase] = useState<Settings | null>(null);
   // null is "the key is absent" on every dial - a position, not a placeholder.
   const [model, setModel] = useState("");
@@ -69,7 +71,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
   // Mounting IS opening: every open re-reads, so the panel never shows a
   // stale picture of a file claude or the operator changed underneath it.
   useEffect(() => {
-    agentSettingsRead(agent)
+    agentSettingsRead(agent, project)
       .then((next) => {
         if (!alive.current) return;
         adopt(next);
@@ -78,7 +80,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
       .catch((err) => {
         if (alive.current) setReadError(message(err));
       });
-  }, [agent]);
+  }, [agent, project]);
 
   // Rollover limits are written only through @memory's verb, never by BAUD touching the file.
   const [memory, setMemory] = useState<MemoryConfig | null>(null);
@@ -191,7 +193,7 @@ export default function AgentSettings({ agent, closeGlyph = "✕", onClose }: Ag
     if (pending === 0 || saving) return;
     setSaving(true);
     setWriteError(null);
-    agentSettingsWrite(agent, patch)
+    agentSettingsWrite(agent, patch, project)
       .then((next) => {
         if (!alive.current) return;
         adopt(next);

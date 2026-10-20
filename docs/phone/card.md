@@ -28,7 +28,7 @@ friction. Exactly one door on the expanded card refuses a foreign agent:
 | README, the four stat tiles, `files`, `passport` | **free** | the read routes take `project` |
 | `resume` / `fresh`, `shell`, `wake`, `end room` | **free** | one terminal, any agent |
 | `watch` | **free** | @prax scopes itself — see below |
-| `settings` | fenced | its route takes a branch and **no** project |
+| `settings` | fenced | the sheet's memory dials name a branch and **no** project |
 
 None of the fences is arbitrary. A **read** that names no project resolves under
 the seat, so a read aimed at a foreign agent could find a same-named local one
@@ -48,8 +48,10 @@ time they change it.
 not fail loudly: it would open — and let the operator *edit* — a same-named
 **local** agent's claude config while the header named the foreign one. A door
 that refuses is visible; a door that succeeds against the wrong target is found
-later, somewhere else, as damage. It stays shut while that route takes no
-project.
+later, somewhere else, as damage. The settings route itself takes `project`
+(the read on the query, the write in the body), so the claude settings resolve
+to the card's own agent; the sheet's memory dials do not, and the gear stays
+shut on a foreign card while they name no project.
 
 **A mounted pane never consults the poll again.** Nothing changes the terminal's
 agent except the operator's hands. A pane that re-resolved its card by *name*,
