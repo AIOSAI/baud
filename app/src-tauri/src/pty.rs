@@ -585,8 +585,10 @@ fn stream_session(
 /// Charset fence for a monitor target: a branch list (`seedgo,cli`) or the
 /// `commons` feed keyword. Anything outside it is refused - the frontend
 /// picks targets off the fleet snapshot, it never composes command lines.
+/// The target is one argv word, so a leading `-` would be read as prax's own option.
 fn valid_monitor_target(target: &str) -> bool {
     !target.is_empty()
+        && !target.starts_with('-')
         && target.chars().all(|ch| {
             ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '_' | '-' | ',')
         })
@@ -776,6 +778,9 @@ mod tests {
         assert!(!valid_monitor_target("SEEDGO"));
         assert!(!valid_monitor_target("../etc"));
         assert!(!valid_monitor_target("run --relay"));
+        // One argv word: a leading dash would reach prax as its own option.
+        assert!(!valid_monitor_target("--relay"));
+        assert!(!valid_monitor_target("-h"));
     }
 
     #[test]
