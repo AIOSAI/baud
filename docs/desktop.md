@@ -144,7 +144,8 @@ projects/baud/
 │   ├── src/                    React + TypeScript frontend
 │   │   ├── desktop/            the desktop face — App.tsx (window shell, tabs, launch,
 │   │   │                       startup agent), main.tsx, and the components:
-│   │   │                       cards, terminal, panes, panels, header tools
+│   │   │                       cards, app cards, terminal, panes, panels, header tools,
+│   │   │                       and the workbench tabs that host the phone's screens
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC or the relay, picked by route.ts ·
 │   │   │                       transport.http.ts = /v1 over fetch, and the one parser
