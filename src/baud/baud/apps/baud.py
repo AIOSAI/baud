@@ -18,8 +18,8 @@ if PROJECT_ROOT not in sys.path:
 
 os.environ.setdefault("AIPASS_BRANCH_NAME", "baud")
 
-from aipass.cli.apps.modules import console  # noqa: E402
-from aipass.prax import logger  # noqa: E402
+from aipass.cli.apps.modules import console
+from aipass.prax import logger
 
 MODULES_DIR = Path(__file__).parent / "modules"
 

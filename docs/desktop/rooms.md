@@ -161,7 +161,8 @@ tab.
 
 ai_mail appends every notification event — mail delivered, agent waking,
 dispatch finished — to `<project root>/.aipass/notifications.jsonl`, one JSON
-object per line (`ts`, `kind`, `title`, `body`, `source`). There are no desktop
+object per line (`ts`, `kind`, `title`, `body`, `source`, and on a mail line
+`mail_id`, `recipient` and `project`). There are no desktop
 toasts: ai_mail's notifier writes this feed and has no D-Bus or notify-send
 path.
 
@@ -171,10 +172,14 @@ the bell down), and returns at most 200 events; the bell then keeps as many as
 the interface settings say. A missing feed is a quiet bell, not an error.
 
 Nothing clears itself. The badge stays until the operator clicks **clear**,
-which wipes the lot in one click. Clearing is local — a cleared-up-to timestamp
-in `localStorage`, keyed per project — so the feed file is never written by
-BAUD, and two BAUD windows never fight over read flags. Rows click to expand
-from their two-line preview to the whole event.
+which wipes the lot in one click. Clearing is local — one cleared-up-to
+timestamp in `localStorage` for the machine, as the phone's bell keeps, so a
+clear holds across a reseat; an older per-project mark for the seated project is
+adopted once — so the feed file is never written by BAUD, and two BAUD windows
+never fight over read flags. A mail row carrying both `mail_id` and `recipient`
+opens that message in the recipient's inbox screen, in a workbench tab, under
+the line's own project (the seat for a line that names none). Every other row
+clicks to expand from its two-line preview to the whole event.
 
 The chime, when enabled, is synthesized with the Web Audio API — two short sine
 notes — because the CSP allows no external assets and a sound file shipped

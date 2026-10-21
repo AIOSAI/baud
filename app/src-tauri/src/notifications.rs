@@ -33,6 +33,14 @@ pub struct NotificationEvent {
     pub body: String,
     #[serde(default)]
     pub source: String,
+    /// A mail line's address, top-level from @ai_mail's `extra`; the bell opens the message only when
+    /// both `mail_id` and `recipient` are set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mail_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipient: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 fn default_kind() -> String {
@@ -131,6 +139,28 @@ mod tests {
         // Missing kind/body/source default rather than killing the line.
         assert_eq!(events[2].kind, "system");
         assert_eq!(events[2].body, "");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_mail_line_keeps_its_address_and_a_lean_line_sends_none() {
+        let root = feed_dir("address");
+        write_feed(
+            &root,
+            &[
+                r#"{"mail_id":"bda4b06f","recipient":"api","project":"aipass","ts":"2026-10-21T02:44:49","kind":"mail","title":"DEVPULSE -> API","source":"devpulse"}"#,
+                r#"{"ts":"2026-10-21T02:45:00","title":"lean writer line"}"#,
+            ],
+        );
+
+        let events = read_feed(&root);
+        assert_eq!(events[0].mail_id.as_deref(), Some("bda4b06f"));
+        assert_eq!(events[0].recipient.as_deref(), Some("api"));
+        assert_eq!(events[0].project.as_deref(), Some("aipass"));
+        let wire = serde_json::to_value(&events[1]).expect("serializes");
+        assert!(wire.get("mail_id").is_none(), "an absent address stays off the wire: {wire}");
+        assert!(wire.get("recipient").is_none());
+        assert!(wire.get("project").is_none());
         let _ = fs::remove_dir_all(&root);
     }
 

@@ -49,13 +49,13 @@ desktop-only, and since 2026-08-18 the directory says so.
 |---|---|
 | `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
 | `FleetStrip.tsx` | The fleet, as a strip of cards, with the four app cards after them. |
-| `BranchChip.tsx` | One agent's card: status, counts, doors. |
+| `BranchChip.tsx` · `CardScreens.tsx` · `cardDoors.ts` | One agent's card: status, counts, doors; the designed screens its doors open in tabs; which screen each door opens and the fenced gear's words. |
 | `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; the strip's app card list. |
 | `PhoneTab.tsx` · `PhonePane.tsx` · `phoneView.ts` | The seam: a workbench tab that hosts a phone screen, the box it mounts in, and what each such tab shows and is keyed by. |
 | `FileTree.tsx` · `FileView.tsx` · `DiffView.tsx` | Browse, read, diff. |
 | `PassportView.tsx` | An agent's identity and memory, read. |
 | `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
-| `Bell.tsx` | The notification shade and its unread marker. |
+| `Bell.tsx` · `bellMarks.ts` | The notification shade and its unread marker; the machine-wide cleared mark and the mail row's door. |
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
 | `ProjectSwitch.tsx` · `Camera.tsx` · `Zoom.tsx` | Seat picker; capture; scale. |
 

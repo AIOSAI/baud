@@ -3,6 +3,8 @@ import { notificationsRead } from "../host";
 
 import { relativeAge } from "../age";
 import type { NotificationEvent } from "../types";
+import { bellMailView, readCleared, writeCleared } from "./bellMarks";
+import type { PhoneView } from "./phoneView";
 
 /** The notification bell: reads ai_mail's feed, cleared only by the operator, locally. Reference: docs/desktop/rooms.md */
 
@@ -56,7 +58,7 @@ function chime() {
 }
 
 interface BellProps {
-  /** Seated project name - scopes the cleared-up-to marker. */
+  /** Seated project name - the feed's project, and the mail door's project for a line that names none. */
   project: string | null;
   /** Feed poll cadence, from BAUD's interface settings. */
   pollMs: number;
@@ -64,17 +66,15 @@ interface BellProps {
   maxEvents: number;
   /** Chime when a poll brings events newer than the last batch. */
   sound: boolean;
+  /** A mail row was clicked: open its message in the recipient's inbox tab. */
+  onOpenMail: (view: PhoneView) => void;
 }
 
-function clearedKey(project: string | null): string {
-  return `baud-bell-cleared:${project ?? "project"}`;
-}
-
-export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
+export default function Bell({ project, pollMs, maxEvents, sound, onOpenMail }: BellProps) {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [open, setOpen] = useState(false);
   const [clearedUpTo, setClearedUpTo] = useState<string>(() =>
-    window.localStorage.getItem(clearedKey(project)) ?? "",
+    readCleared(window.localStorage, project),
   );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -86,9 +86,9 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
   // lands, and that first list is history, not news - it never chimes.
   const newestRef = useRef<string | null>(null);
 
-  // Reseating swaps the feed AND the marker - each project keeps its own.
+  // Reseating swaps the feed; the mark is the machine's, re-read in case the new seat has an old one to lift.
   useEffect(() => {
-    setClearedUpTo(window.localStorage.getItem(clearedKey(project)) ?? "");
+    setClearedUpTo(readCleared(window.localStorage, project));
     setEvents([]);
     setExpanded(new Set());
     setOpen(false);
@@ -148,7 +148,7 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
     const newest = events.length > 0 ? events[events.length - 1].ts : "";
     if (!newest) return;
     setClearedUpTo(newest);
-    window.localStorage.setItem(clearedKey(project), newest);
+    writeCleared(window.localStorage, newest);
     setExpanded(new Set());
   };
 
@@ -220,12 +220,26 @@ export default function Bell({ project, pollMs, maxEvents, sound }: BellProps) {
             [...visible].reverse().map((event, index) => {
               const id = `${event.ts}-${index}`;
               const isOpen = expanded.has(id);
+              const mail = bellMailView(event, project);
               return (
                 <article
                   className={`baud-bell-row ${isOpen ? "baud-bell-row-open" : ""}`}
                   key={id}
-                  title={isOpen ? "click to collapse" : "click to read the whole thing"}
-                  onClick={() => toggleExpand(id)}
+                  title={
+                    mail
+                      ? `open this message in ${mail.branch}'s inbox`
+                      : isOpen
+                        ? "click to collapse"
+                        : "click to read the whole thing"
+                  }
+                  onClick={() => {
+                    if (!mail) {
+                      toggleExpand(id);
+                      return;
+                    }
+                    setOpen(false);
+                    onOpenMail(mail);
+                  }}
                 >
                   <span
                     className={`baud-bell-kind ${KIND_TONES[event.kind] ?? ""}`}

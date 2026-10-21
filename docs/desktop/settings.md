@@ -137,6 +137,15 @@ open because a shell or another window may have flipped it, and nothing about it
 is mirrored into `baud.settings.json` where it would drift. The flag lives in
 the temp directory, so it resets on reboot; that is the flag's design, not ours.
 
+Under the interface rows, two more that store nothing:
+
+- **phone · pair a phone** closes the dialog and opens a terminal tab at the
+  project root already running `drone @api host-api pair phone --scope operate`,
+  the help-terminal pattern: keyboard on, the command draws its own one-use QR
+  (five minutes), and `exit` closes the tab. The button waits, disabled, until
+  the seat's root is read.
+- **about** shows `BAUD <version>`, the app's own version as Tauri reports it.
+
 ### The memory dials — @memory's config, edited from here
 
 A **memory** section of its own — the desktop gear's second tab, and the phone's

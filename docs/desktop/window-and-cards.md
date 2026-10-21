@@ -57,6 +57,12 @@ than weakening it. Reseating empties the reading room (its tabs point where the
 fence now refuses to read), closes any open settings panel, re-reads BAUD's
 settings from the new root, and re-polls immediately. The terminal is untouched.
 
+The menu's last row, `+ new project`, opens the phone's new-project sheet: a
+name, a template (`empty` or `python`), create. The host makes the project; the
+window then seats it by the census name the host returns, never the typed name,
+and opens the new manager's card door, which for a newborn is `fresh`. A seat
+that fails after the project was made says so in the fault banner.
+
 ## Cards
 
 One citizen, one card, under the strip's own heading — **Agent Passports**,

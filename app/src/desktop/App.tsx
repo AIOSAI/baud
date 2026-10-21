@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges } from "../host";
+import { agentRoster, baudSettingsRead, fleetSnapshot, gitProjectChanges, projectSwitch } from "../host";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { deliveryText } from "../deliver";
 
@@ -18,7 +18,9 @@ import PassportView from "./PassportView";
 import PhoneTab from "./PhoneTab";
 import { phoneTabKey, phoneTabLabel, type PhoneView } from "./phoneView";
 import ProjectSwitch from "./ProjectSwitch";
-import SettingsDialog from "./SettingsDialog";
+import SettingsDialog, { PAIR_COMMAND } from "./SettingsDialog";
+import NewProjectSheet from "../phone/NewProjectSheet";
+import { bornCard, bornSeat } from "../phone/lib/newProject";
 import Terminal, { type TerminalHandle } from "./Terminal";
 import Zoom from "./Zoom";
 import { relativeAge } from "../age";
@@ -29,7 +31,7 @@ import {
   spendStartup,
   startupSpent,
 } from "../intent";
-import type { BaudSettings, BranchStatus, FleetSnapshot } from "../types";
+import type { BaudSettings, BranchStatus, FleetSnapshot, NewProjectResult } from "../types";
 
 /** BranchChip's door judgment, mirrored so the startup agent opens exactly what a card click would. */
 function cardMode(branch: BranchStatus): LaunchMode {
@@ -285,6 +287,19 @@ export default function App() {
     setActiveTab(id);
   }, []);
 
+  // The help-terminal pattern: keyboard on, the command draws its own QR, `exit` closes the tab.
+  const openPairing = useCallback((dir: string) => {
+    const id = "pair:phone";
+    setFileTabs((current) => {
+      if (current.some((tab) => tab.path === id)) return current;
+      return [
+        ...current,
+        { path: id, name: "pair", branch: "phone", kind: "inquiry" as const, dir, command: PAIR_COMMAND },
+      ];
+    });
+    setActiveTab(id);
+  }, []);
+
   const shellBranch = useCallback(
     (branch: BranchStatus) => openShell(branch.path, branch.name),
     [openShell],
@@ -433,6 +448,26 @@ export default function App() {
     void poll(() => true);
   }, [poll, loadSettings]);
 
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  // The census name, never the typed one; then the newborn manager's door, which is `fresh` with no history.
+  const onProjectBorn = useCallback(
+    async (result: NewProjectResult) => {
+      setNewProjectOpen(false);
+      try {
+        await projectSwitch(bornSeat(result));
+      } catch (err) {
+        setTransportError(
+          `created ${result.project}, but could not seat it: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return;
+      }
+      reseat();
+      const card = bornCard(result);
+      launch(card, cardMode(card));
+    },
+    [reseat, launch],
+  );
+
   const branches = snapshot?.branches ?? [];
   const citizens = branches.filter((branch) => branch.is_citizen).length;
   const dispatched = branches.filter((branch) => branch.dispatched).length;
@@ -516,7 +551,11 @@ export default function App() {
       <header className="baud-header">
         <div className="baud-header-brand">
           <span className="baud-wordmark">BAUD</span>
-          <ProjectSwitch project={snapshot?.project ?? null} onSwitched={reseat} />
+          <ProjectSwitch
+            project={snapshot?.project ?? null}
+            onSwitched={reseat}
+            onNewProject={() => setNewProjectOpen(true)}
+          />
         </div>
 
         <div className="baud-header-side">
@@ -550,6 +589,7 @@ export default function App() {
             pollMs={prefs.pollMs}
             maxEvents={prefs.bellMax}
             sound={prefs.bellSound}
+            onOpenMail={openPhone}
           />
           <button
             type="button"
@@ -662,8 +702,20 @@ export default function App() {
           agents={branches.map((branch) => branch.name)}
           settings={baudSettings ?? {}}
           onSaved={setBaudSettings}
+          onPairPhone={
+            seatedRoot
+              ? () => {
+                  setInterfaceOpen(false);
+                  openPairing(seatedRoot);
+                }
+              : null
+          }
           onClose={() => setInterfaceOpen(false)}
         />
+      ) : null}
+
+      {newProjectOpen ? (
+        <NewProjectSheet onClose={() => setNewProjectOpen(false)} onCreated={(result) => void onProjectBorn(result)} />
       ) : null}
 
       <main className="baud-stage">

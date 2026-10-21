@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 
 import { InterfaceControls } from "./InterfaceSettings";
 import MemorySettings from "./MemorySettings";
@@ -36,13 +37,19 @@ interface SettingsDialogProps {
   settings: BaudSettings;
   /** A save landed: the whole document, exactly as the backend wrote it. */
   onSaved: (settings: BaudSettings) => void;
+  /** Opens a terminal tab already running the pairing command; null until the seat's root is read. */
+  onPairPhone: (() => void) | null;
   onClose: () => void;
 }
+
+/** The pairing door is a help-style terminal: the QR is drawn by the command itself, nothing new on screen. */
+export const PAIR_COMMAND = "drone @api host-api pair phone --scope operate";
 
 export default function SettingsDialog({
   agents,
   settings,
   onSaved,
+  onPairPhone,
   onClose,
 }: SettingsDialogProps) {
   const [section, setSection] = useState<SectionId>("interface");
@@ -94,12 +101,61 @@ export default function SettingsDialog({
 
         {/* Unmounted, not hidden: each leaf re-reads its file on mount, since another writer may have changed it. */}
         {section === "interface" ? (
-          <InterfaceControls agents={agents} settings={settings} onSaved={onSaved} />
+          <>
+            <InterfaceControls agents={agents} settings={settings} onSaved={onSaved} />
+            <PairAndAbout onPairPhone={onPairPhone} />
+          </>
         ) : (
           <div className="baud-settings-leaf">
             <MemorySettings />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function PairAndAbout({ onPairPhone }: { onPairPhone: (() => void) | null }) {
+  const [version, setVersion] = useState<string | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    getVersion()
+      .then((next) => {
+        if (mounted) setVersion(next);
+      })
+      .catch((cause) => {
+        if (mounted) setVersionError(String(cause?.message ?? cause));
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return (
+    <div className="baud-settings-extra">
+      <div className="baud-settings-row">
+        <span className="baud-settings-label">phone</span>
+        <button
+          type="button"
+          className="baud-settings-save"
+          title={
+            onPairPhone
+              ? `open a terminal running '${PAIR_COMMAND}' - point the phone's camera at its QR; type exit to close`
+              : "waiting for the project root…"
+          }
+          disabled={onPairPhone === null}
+          onClick={() => onPairPhone?.()}
+        >
+          pair a phone
+        </button>
+        <span className="baud-settings-hint">one-use QR, five minutes</span>
+      </div>
+      <div className="baud-settings-row">
+        <span className="baud-settings-label">about</span>
+        <span className="baud-settings-state">
+          {version ? `BAUD ${version}` : versionError ? `version unreadable: ${versionError}` : "…"}
+        </span>
       </div>
     </div>
   );
