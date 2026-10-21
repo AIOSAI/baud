@@ -79,18 +79,24 @@ costs one `/proc` pass and one tmux round-trip for all projects — the same two
 storms a single snapshot already pays — and only polls while a roster tab is
 open.
 
-**A roster card from another project is a smaller card, deliberately.** Every
-fenced door — `files`, `watch`, the gear, `?`, the `⎇ git` figure and the
-click-through on every other figure — reads under the seated project's root
-and would simply refuse from elsewhere, so a foreign card does not offer them.
-Its figures still read true (the sweep gathered them); they are numbers rather
-than doors. What it keeps is what genuinely works from anywhere: the launch
-door and `❯_`. An amber project tag names its tree.
+**A roster card from another project opens its reads, as the phone's card
+does.** Every figure opens the same designed screen it opens on a seated card,
+with the card's own project named on the read, so a same-named agent in the
+seated project is never read in its place. `files` opens the phone's files
+screen in a tab rather than the docked tree, because the tree reads under the
+seated root. The `⎇ git` count asks for the branch by name and project over the
+host relay; a count that cannot be had shows `n/a` (hover says why), never `0`,
+which would read as clean. `watch`, `?`, `❯_` and the launch door work from
+anywhere: @prax scopes a watch by itself, and a help or plain shell opens in
+the branch's own directory. An amber project tag names its tree.
 
-**The full card is a seat indicator.** Whichever card is wearing all its doors
-is the project you are seated in. Making the fenced commands project-scoped
-would fill every card in and cost that signal, so it stays this way on purpose,
-not for want of the wiring.
+**Only the gear stays fenced.** The settings panel's memory dials write by
+branch name alone, so on a foreign card they would edit the seated project's
+same-named agent. The gear is drawn dashed and disabled, and a line under the
+card's head says so in words — *`<name>` lives in `<project>`: read it, watch
+it, attach it from here. Only the settings gear stays behind: its memory dials
+name no project.* — because a tooltip on a disabled button is not a reason
+anyone sees.
 
 - **Lamp** — amber pulse: dispatched (`.ai_mail.local/.dispatch.lock` names a live pid).
   Steady green: interactive (a live claude with no `-p`/`--print` has its cwd
@@ -140,15 +146,22 @@ not for want of the wiring.
   number is honest about what the files say, not about what is still breathing.
 - **`?`** — opens a help terminal for this branch (see [Help terminals](rooms.md#the-workbench)).
 - **Gear** — opens this branch's settings panel (see [Settings](settings.md)).
-- **Figures** — every number is a door. `mail` and `open` are counted live from
-  `.ai_mail.local/inbox.json` and open it; `plans` comes from
-  `DASHBOARD.local.json` and opens it; `todos` comes from the dashboard too but
-  opens `.trinity/local.json`; `⎇ git` is a count of uncommitted files and opens
-  the diff tab. The dashboard's summary line is deliberately not on the card —
-  it restated the same figures.
+  Fenced on a roster card from another project (see above).
+- **Figures** — every number is a door to the phone's designed screen for it,
+  opened in a workbench tab (one tab per agent and door; a re-click brings it
+  forward). `mail` and `open` are counted live from `.ai_mail.local/inbox.json`
+  and open the inbox screen, newest first, a message opening to its full text;
+  `plans` comes from `DASHBOARD.local.json` and opens the plans screen; `todos`
+  comes from the dashboard too and opens the memory screen on its todos tab;
+  `⎇ git` is a count of uncommitted tracked files and opens the git app on this
+  branch's changes. Each screen's `‹ card` at its floor closes the tab. The raw
+  files stay one `files` click away. The dashboard's summary line is
+  deliberately not on the card — it restated the same figures.
 - **Age** — `updated <age>`, from the dashboard's `last_updated`, styled stale
   when it gets old.
-- **Buttons** — `files` docks the branch's file tree. `❯_` opens a plain
+- **Buttons** — `files` docks the branch's file tree on a seated card, and
+  opens the files screen in a tab on a roster card; a file picked there opens
+  in the same tab, and its `‹ folder` returns to the folder. `❯_` opens a plain
   working shell in a tab, already seated in the branch directory — the same
   door the header's `❯_` opens at the project root. `watch` opens a read-only
   monitor pane scoped to this branch. Then the launch door: a branch with a live

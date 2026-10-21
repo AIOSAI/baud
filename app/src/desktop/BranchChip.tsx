@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { gitChanges } from "../host";
 
 import { relativeAge } from "../age";
+import { awayNote, type CardDoor, cardDoorView, gearFence } from "./cardDoors";
 import { helpCommand } from "./InquiryPane";
 import type { BranchStatus, GitChanges } from "../types";
 import type { PhoneView } from "./phoneView";
@@ -18,13 +19,13 @@ interface BranchChipProps {
   onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
   /** Operator clicked files: open this branch's directory tree. */
   onFiles: (branch: BranchStatus) => void;
-  /** Operator clicked a figure or the summary: open the file behind it. */
+  /** Unused: the figures open designed screens through `onOpenPhone`. */
   onOpenFile: (path: string, name: string, branch: string) => void;
-  /** Operator clicked the changes badge: open this branch's diff tab. */
+  /** Unused: the git figure opens the git app through `onOpenPhone`. */
   onOpenDiff: (branch: BranchStatus) => void;
   /** Operator clicked the terminal glyph: open a plain shell in this branch. */
   onShell: (branch: BranchStatus) => void;
-  /** A roster card from an unseated project: fenced doors (files, diff, figures, settings) would refuse, so they are withdrawn. */
+  /** A roster card from an unseated project: its reads name its own project; only the settings gear is fenced. */
   foreign: boolean;
   /** Operator clicked watch: open this branch's scoped monitor pane. */
   onMonitor: (branch: BranchStatus) => void;
@@ -49,30 +50,35 @@ export default function BranchChip({
   branch,
   onLaunch,
   onFiles,
-  onOpenFile,
-  onOpenDiff,
   onMonitor,
   onShell,
   onHelp,
   onSettings,
   onOpenPassport,
+  onOpenPhone,
   foreign,
   readOnly = false,
 }: BranchChipProps) {
   const age = relativeAge(branch.last_updated);
 
   const [changes, setChanges] = useState<GitChanges | null>(null);
+  const [gitWhy, setGitWhy] = useState<string | null>(null);
   useEffect(() => {
-    // A foreign path always fails the fence, and a read-only face has no local git.
-    if (foreign || readOnly) return;
+    // A read-only face has no local git.
+    if (readOnly) return;
     let mounted = true;
     const refresh = () => {
-      gitChanges(branch.path)
+      // A foreign path fails the seat's fence, so a roster card asks by name over the relay, project named.
+      (foreign ? gitChanges(branch.name, branch.project) : gitChanges(branch.path))
         .then((next) => {
-          if (mounted) setChanges(next);
+          if (!mounted) return;
+          setChanges(next);
+          setGitWhy(null);
         })
-        .catch(() => {
-          if (mounted) setChanges(null);
+        .catch((cause) => {
+          if (!mounted) return;
+          setChanges(null);
+          setGitWhy(String(cause?.message ?? cause));
         });
     };
     refresh();
@@ -81,13 +87,11 @@ export default function BranchChip({
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [branch.path, foreign, readOnly]);
+  }, [branch.path, branch.name, branch.project, foreign, readOnly]);
 
-  const peek = (relative: string, name: string) => () =>
-    onOpenFile(`${branch.path}/${relative}`, name, branch.name);
-  const peekInbox = peek(".ai_mail.local/inbox.json", "inbox.json");
-  const peekTodos = peek(".trinity/local.json", "local.json");
-  const peekDashboard = peek("DASHBOARD.local.json", "DASHBOARD.local.json");
+  const door = (which: CardDoor) => () => onOpenPhone(cardDoorView(which, branch));
+  // A roster card's unanswered relay must not paint as 0, which reads as clean; the seated card keeps its 0.
+  const gitFigure = changes ? String(changes.count) : foreign ? (gitWhy ? "n/a" : "—") : "0";
 
   const chipClass = [
     "baud-chip",
@@ -176,7 +180,7 @@ export default function BranchChip({
             {branch.project}
           </span>
         ) : null}
-        {branch.is_citizen && !foreign && !readOnly ? (
+        {branch.is_citizen && !readOnly ? (
           <button
             type="button"
             className="baud-chip-help"
@@ -186,11 +190,16 @@ export default function BranchChip({
             ?
           </button>
         ) : null}
-        {branch.is_citizen && !foreign && !readOnly ? (
+        {branch.is_citizen && !readOnly ? (
           <button
             type="button"
             className="baud-chip-gear"
-            title={`${branch.name}'s settings - model, auto-compact, context threshold`}
+            disabled={foreign}
+            title={
+              foreign
+                ? gearFence(branch.name, branch.project)
+                : `${branch.name}'s settings - model, auto-compact, context threshold`
+            }
             onClick={() => onSettings(branch)}
           >
             <svg
@@ -211,36 +220,37 @@ export default function BranchChip({
         ) : null}
       </header>
 
+      {foreign && branch.is_citizen && !readOnly ? (
+        <p className="baud-chip-away">{awayNote(branch.name, branch.project)}</p>
+      ) : null}
+
       {/* No summary line: the dashboard's summary repeats these counts. */}
       <div className="baud-chip-figures">
         <Figure
           label="mail"
           value={branch.new_mail}
           alert={branch.new_mail > 0}
-          onClick={foreign ? null : peekInbox}
+          screen="inbox screen"
+          onClick={door("inbox")}
         />
-        <Figure label="open" value={branch.opened_mail} onClick={foreign ? null : peekInbox} />
-        <Figure
-          label="plans"
-          value={branch.active_plans}
-          onClick={foreign ? null : peekDashboard}
-        />
-        <Figure label="todos" value={branch.todo_count} onClick={foreign ? null : peekTodos} />
-        {foreign ? null : (
-          <button
-            type="button"
-            className={`baud-figure ${(changes?.count ?? 0) > 0 ? "baud-figure-git" : ""}`}
-            title={
-              (changes?.count ?? 0) > 0
-                ? `${changes?.count} uncommitted file(s) - open the diff`
-                : "no uncommitted changes - open the (empty) diff"
-            }
-            onClick={() => onOpenDiff(branch)}
-          >
-            <span className="baud-figure-value">{changes?.count ?? 0}</span>
-            <span className="baud-figure-label">⎇ git</span>
-          </button>
-        )}
+        <Figure label="open" value={branch.opened_mail} screen="inbox screen" onClick={door("inbox")} />
+        <Figure label="plans" value={branch.active_plans} screen="plans screen" onClick={door("plans")} />
+        <Figure label="todos" value={branch.todo_count} screen="memory screen, on todos" onClick={door("todos")} />
+        <button
+          type="button"
+          className={`baud-figure ${(changes?.count ?? 0) > 0 ? "baud-figure-git" : ""}`}
+          title={
+            foreign && gitWhy
+              ? `git count n/a - ${gitWhy}; open the git app`
+              : (changes?.count ?? 0) > 0
+                ? `${changes?.count} uncommitted file(s) - open the git app on them`
+                : "no uncommitted changes - open the git app"
+          }
+          onClick={door("git")}
+        >
+          <span className="baud-figure-value">{gitFigure}</span>
+          <span className="baud-figure-label">⎇ git</span>
+        </button>
       </div>
 
       <footer className="baud-chip-foot">
@@ -249,26 +259,25 @@ export default function BranchChip({
         </span>
         {branch.is_citizen && !readOnly ? (
           <span className="baud-chip-buttons">
-            {foreign ? null : (
-              <button
-                type="button"
-                className="baud-chip-launch baud-chip-launch-quiet"
-                title={`browse ${branch.path}`}
-                onClick={() => onFiles(branch)}
-              >
-                files
-              </button>
-            )}
-            {foreign ? null : (
-              <button
-                type="button"
-                className="baud-chip-launch baud-chip-launch-quiet"
-                title={`watch ${branch.name}'s live activity - read-only monitor pane`}
-                onClick={() => onMonitor(branch)}
-              >
-                watch
-              </button>
-            )}
+            {/* The tree reads under the seat, so a roster card browses through the files screen instead. */}
+            <button
+              type="button"
+              className="baud-chip-launch baud-chip-launch-quiet"
+              title={
+                foreign ? `browse ${branch.name}'s files in ${branch.project} - read only` : `browse ${branch.path}`
+              }
+              onClick={foreign ? door("files") : () => onFiles(branch)}
+            >
+              files
+            </button>
+            <button
+              type="button"
+              className="baud-chip-launch baud-chip-launch-quiet"
+              title={`watch ${branch.name}'s live activity - read-only monitor pane`}
+              onClick={() => onMonitor(branch)}
+            >
+              watch
+            </button>
             <button
               type="button"
               className="baud-chip-launch baud-chip-launch-quiet baud-chip-shell"
@@ -338,30 +347,19 @@ function Figure({
   label,
   value,
   alert,
+  screen,
   onClick,
 }: {
   label: string;
   value: number;
   alert?: boolean;
-  /** null on a roster card: the number is true, but its file is out of fence. */
-  onClick: (() => void) | null;
+  /** The designed screen the click opens, named on the title. */
+  screen: string;
+  onClick: () => void;
 }) {
   const className = `baud-figure ${alert ? "baud-figure-alert" : ""}`;
-  if (!onClick) {
-    return (
-      <span className={`${className} baud-figure-flat`} title={`${label}, read from another project`}>
-        <span className="baud-figure-value">{value}</span>
-        <span className="baud-figure-label">{label}</span>
-      </span>
-    );
-  }
   return (
-    <button
-      type="button"
-      className={className}
-      title={`open the file behind '${label}'`}
-      onClick={onClick}
-    >
+    <button type="button" className={className} title={`open the ${screen}`} onClick={onClick}>
       <span className="baud-figure-value">{value}</span>
       <span className="baud-figure-label">{label}</span>
     </button>
