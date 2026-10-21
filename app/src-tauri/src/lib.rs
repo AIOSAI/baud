@@ -92,12 +92,14 @@ use tauri::Manager;
 // does the rest: a child module can already read this file's private items, so
 // only what LEFT needed a visibility prefix.
 //
-// `memory`, `notifications`, `pty`, `reads`, `screenshot` and `settings` serve
-// the window alone - its dials, bell, terminal, reading room and capture - so
-// they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
+// `host_relay`, `memory`, `notifications`, `pty`, `reads`, `screenshot` and
+// `settings` serve the window alone - its relay, dials, bell, terminal, reading
+// room and capture - so they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
 // `sessions` are the reader, which the desktop binary and baud-cli share.
 mod cli;
 mod fleet;
+#[cfg(feature = "gui")]
+mod host_relay;
 #[cfg(feature = "gui")]
 mod memory;
 #[cfg(feature = "gui")]
@@ -458,7 +460,8 @@ pub fn run() {
             memory::memory_config_write,
             memory::memory_config_set,
             memory::memory_config_set_default,
-            memory::memory_config_push
+            memory::memory_config_push,
+            host_relay::host_api_call
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session

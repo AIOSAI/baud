@@ -21,7 +21,8 @@ Everything below is under `app/` unless it says otherwise.
 | File | What it is |
 |---|---|
 | `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
-| `src/host/transport.ts` | The desktop's answer: `invoke` into Rust. |
+| `src/host/transport.ts` | The desktop's answer: `invoke` into Rust, or the phone's wire request through the Rust relay `host_api_call`. |
+| `src/host/route.ts` | `routeOf`: which door a desktop call takes, by its shape. Pure, plus `route.test.ts`, which also checks the IPC list against `lib.rs`'s registry. |
 | `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
 | `src/host/errorRef.ts` | The envelope's `ref` on the end of a refusal's message, "… (ref a1b2c3d4e5f6)", so every refusal on the phone has something to grep. Pure, plus `errorRef.test.ts`, which also drives the transport's refusal path with `fetch` stubbed. |
 | `vite.config.phone.ts` | **The whole port**, one alias: `./transport` → `transport.http.ts`. |
@@ -56,7 +57,8 @@ Everything below is under `app/` unless it says otherwise.
 ## The seam — how a face asks for anything
 
 ```
-a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (desktop)
+a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (desktop, desktop-shaped calls)
+                                                         →  invoke host_api_call → /v1  (desktop, every other call)
                                                          →  fetch   (phone, via the vite alias)
 ```
 
@@ -66,14 +68,12 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
 - `src/host/transport.http.ts` — a **38-row route table** over **31 distinct
   `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
   that renames the wire's fields to the seam's. Also `HostError`, the token
-  store, the room socket and the image upload.
-- **Two refusal tables, and they are the map of what each face cannot do:**
-  - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
-    phone does not.
-  - `NOT_ON_THIS_FACE` in `transport.ts` (15 rows) — verbs the phone has and the
-    desktop does not.
-  - A verb with no route is refused **by name with a reason**, never bound to
-    the nearest plausible path.
+  store, the room socket and the image upload. `callWith(sender, ...)` is the
+  one parser; the phone's sender is `fetch`, the desktop's is the relay.
+- **`NOT_YET` in `transport.http.ts` (12 rows) is the map of what the phone
+  cannot do:** verbs the desktop has and the phone does not, refused **by name
+  with a reason**, never bound to the nearest plausible path. The desktop
+  refuses only `openRoomSocket` and `uploadImage`, by nature.
 
 
 ## Host lanes — the phone's backend, and it is **not in this repo**

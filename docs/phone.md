@@ -24,14 +24,12 @@ the rows of `transport.http.ts`, and, after `npm run build:phone` in `app/`,
 built bundle contains — the table's distinct routes plus the socket and the
 upload.
 
-**The refusal table points both ways.** `transport.http.ts` refuses the verbs a
-phone cannot perform *by name*; `transport.ts` carries the mirror image,
-`NOT_ON_THIS_FACE` — the git app's five reads have no Rust command behind them
-and should not have one, because the desk sits three feet from the repository
-with the operator's own git in a terminal. Without the table those names would
-reach `invoke` and come back as tauri's *command not found*, which reads as a
-broken build rather than as a face that was never meant to have them. It is
-deliberately **not** applied to the older phone-only verbs.
+**The refusal table points one way.** `transport.http.ts` refuses the verbs a
+phone cannot perform *by name* (`NOT_YET`). The desktop serves every phone verb:
+`transport.ts` sends any call that is not desktop-shaped through the Rust relay
+`host_api_call` to the same `/v1` routes, and `callWith` parses the answer for
+both faces. The desktop refuses only the room socket and the image upload, by
+nature.
 
 The seam is command-shaped and `/v1` is REST-shaped, so `transport.http.ts` holds
 a table from command name to route, and holds it alone. Verbs the phone cannot

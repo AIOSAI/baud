@@ -82,7 +82,7 @@ the compiler will not tell you.
 
 | File | One line |
 |---|---|
-| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 29 commands; `run()` builds only with the `gui` feature) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
+| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 30 commands; `run()` builds only with the `gui` feature) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
 | `cli.rs` (628) | `baud --snapshot` and the rest of the headless surface. Every outcome serializes in full even when it failed, and the exit code agrees with the payload. |
 | `rooms.rs` (515) | tmux sessions: the name sanitizer, the pane scan, kill, capture, and the send door that types but cannot submit. |
 | `sessions.rs` (397) | Who is actually awake — `/proc` for the processes, transcripts for what they are doing, and the subagent count. |
@@ -94,6 +94,7 @@ the compiler will not tell you.
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
 | `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
+| `host_relay.rs` | `host_api_call`, the relay to @api's host API: the bind from its config store, the `baud-desktop` token receipt (minted once when absent), the `/v1/` fence. The token never reaches the page. |
 | `main.rs` (6) | Calls `lib.rs::run()`. The desktop app, so it builds only with the `gui` feature. |
 | `bin/baud_cli.rs` (27) | `baud-cli`: hands its arguments to `run_headless` and exits with its code; with no verb it prints the six and exits 2. Built `--no-default-features`, it links no GTK. |
 

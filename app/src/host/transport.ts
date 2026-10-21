@@ -3,33 +3,22 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-/** Phone-only verbs, refused by name so they never fail as a broken-looking "command not found". */
-const NOT_ON_THIS_FACE: Record<string, string> = {
-  git_change_rows: "the desktop reads its own working tree - this is the phone's git app",
-  git_file_diff: "the desktop reads its own working tree - this is the phone's git app",
-  git_log: "the desktop reads its own working tree - this is the phone's git app",
-  git_commit: "the desktop reads its own working tree - this is the phone's git app",
-  git_remote: "the desktop opens the forge from a terminal beside the repository - this is the phone's git app",
-  git_change_count:
-    "the desktop counts through git_changes, which its own Rust command already answers - a second name for one number would be a second answer waiting to disagree",
-  list_roots: "the desktop browses the project it is seated in - the roots roster is the phone's fence",
-  machine_vitals:
-    "the desktop sits on the machine it would be reading - the monitor layer is the phone's glance from across the room",
-  machine_processes:
-    "the desktop sits on the machine it would be reading - the process list is the phone's glance from across the room",
-  lock_state:
-    "the desktop is the screen whose lock it would be reading - the lock chip is the phone's answer to 'did I lock it'",
-  backup_run: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
-  backup_job: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
-  backup_status: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
-  backup_cancel: "the desktop runs `drone @backup` in its own terminal - the backup card is the phone's door",
-  verb_new_project: "the desktop runs `aipass new` in its own terminal - the + new project row is the phone's door",
+import { routeOf } from "./route";
+import { callWith, HostError, type Sender } from "./transport.http";
+
+/** The phone's wire request, carried by the window's Rust relay so the token never enters the page. */
+const relaySender: Sender = async (request) => {
+  try {
+    return await invoke<{ status: number; body: string }>("host_api_call", { request });
+  } catch (cause) {
+    // The relay's Err is a call that never reached an answer: the fence, the config, the mint, the network.
+    throw new HostError(0, "unreachable", String(cause));
+  }
 };
 
 /** A typed host call. The only `invoke` in the application. */
 export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  const refusal = NOT_ON_THIS_FACE[command];
-  if (refusal) return Promise.reject(new Error(`${command} is not served on this face: ${refusal}`));
+  if (routeOf(command, args) === "http") return callWith<T>(relaySender, command, args);
   return invoke<T>(command, args);
 }
 

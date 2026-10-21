@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { withRef } from "./errorRef";
 import { agentSettingsRead, agentSettingsWrite } from "./index";
-import { call } from "./transport.http";
+import { call, callWith, type WireRequest } from "./transport.http";
 
 vi.mock("./transport", () => import("./transport.http"));
 
@@ -103,5 +103,50 @@ describe("agent settings on the wire", () => {
     expect(fetch.mock.calls[0][0]).toBe("/v1/agent-settings?branch=devpulse");
     expect(fetch.mock.calls[1][0]).toBe("/v1/agent-settings");
     expect(JSON.parse(String(fetch.mock.calls[1][1].body))).toEqual({ branch: "devpulse", patch: { model: null } });
+  });
+});
+
+/* The desktop hands the same wire request to its Rust relay and gets the status
+   and raw body back: one parse, so a sender swap changes nothing a screen sees. */
+describe("a call through an injected sender", () => {
+  function sender(status: number, body: string) {
+    const seen: WireRequest[] = [];
+    const send = async (request: WireRequest) => {
+      seen.push(request);
+      return { status, body };
+    };
+    return { send, seen };
+  }
+
+  it("builds the phone's request: route path, blanks dropped, project on the query", async () => {
+    const { send, seen } = sender(200, JSON.stringify({ commits: [] }));
+    await callWith(send, "git_log", { branch: "devpulse", project: "BAUD", limit: 20 });
+    expect(seen[0]).toEqual({
+      method: "GET",
+      path: "/v1/git-log",
+      query: { branch: "devpulse", project: "BAUD", limit: "20" },
+      body: null,
+    });
+  });
+
+  it("parses an answer and a refusal exactly as the fetch sender does", async () => {
+    await expect(callWith(sender(200, JSON.stringify({ a: 1 })).send, "machine_vitals")).resolves.toEqual({ a: 1 });
+    await expect(callWith(sender(204, "").send, "machine_vitals")).resolves.toBeUndefined();
+    await expect(
+      callWith(sender(401, JSON.stringify({ error: { code: "unauthorized", message: "revoked" } })).send, "machine_vitals"),
+    ).rejects.toMatchObject({ name: "HostError", status: 401, unauthorized: true, message: "revoked" });
+    await expect(callWith(sender(502, "not json").send, "machine_vitals")).rejects.toMatchObject({
+      status: 502,
+      message: "HTTP 502",
+    });
+  });
+
+  it("sends a POST's body and refuses a desktop-only verb before any send", async () => {
+    const { send, seen } = sender(200, "{}");
+    await callWith(send, "verb_lock");
+    expect(seen[0].method).toBe("POST");
+    expect(seen[0].body).toEqual({});
+    await expect(callWith(send, "pty_create", {})).rejects.toMatchObject({ status: 501, code: "not_on_the_phone" });
+    expect(seen).toHaveLength(1);
   });
 });

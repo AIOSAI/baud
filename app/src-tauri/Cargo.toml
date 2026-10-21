@@ -43,6 +43,7 @@ gui = [
     "dep:tauri-plugin-opener",
     "dep:portable-pty",
     "dep:ashpd",
+    "dep:reqwest",
 ]
 
 [build-dependencies]
@@ -62,6 +63,9 @@ chrono = "0.4"
 # control, and $TERM behaviour all depend on it.
 portable-pty = { version = "0.9", optional = true }
 tauri-plugin-opener = { version = "2.5.4", optional = true }
+# The relay to the host-api (host_relay.rs). Tauri already builds reqwest; plain
+# http to the operator's own bind needs no TLS, so no default features.
+reqwest = { version = "0.13", default-features = false, optional = true }
 
 # Unix teardown signals the shell's whole process group, not just the shell
 # PID - orphaned children are the classic terminal-emulator leak.

@@ -72,7 +72,7 @@ targets the command returns an honest error.
 ## The command surface
 
 `invoke_handler` in `app/src-tauri/src/lib.rs` is the canonical inventory —
-29 commands, and nothing reaches the backend that is not on this list:
+30 commands, and nothing reaches the backend that is not on this list:
 
 ```
 fleet_snapshot  agent_roster  list_projects  project_switch
@@ -86,7 +86,37 @@ baud_settings_read  baud_settings_write
 hooks_sound_get  hooks_sound_set
 memory_config_read  memory_config_write
 memory_config_set  memory_config_set_default  memory_config_push
+host_api_call
 ```
+
+`host_api_call` is the relay to @api's host API, the server the phone uses
+(`host_relay.rs`). The window reaches every lane the phone has through it: the
+git, backup, machine and roots lanes, new projects, and any read that names a
+project. The page hands the relay the phone's own wire request (`GET` or `POST`,
+a path under `/v1/`, a query, a body) and gets the status and the raw body back.
+`transport.http.ts` then parses it exactly as it parses the phone's `fetch`, so
+a refusal is the same `HostError` on both faces. Anything outside the fence is an
+error that names the rule.
+
+The relay reads the bind from @api's config store
+(`~/.secrets/aipass/host_api/config.json`, `host` and `port`; `127.0.0.1:8787`
+when absent) and the token from the receipt `~/.secrets/aipass/host_api/baud-desktop.token`.
+When that receipt is missing, the relay runs
+`drone @api host-api issue-token baud-desktop --scope operate` once, in the
+operator's login shell, and reads the new receipt. The token stays in the Rust
+process; the page never holds it, and the CSP and the capability grant are
+unchanged. A 401 is never re-minted: it comes back with the receipt's path and
+the cure (`drone @api host-api revoke-token <id>`, then remove the receipt).
+
+`transport.ts` picks the door per call with `routeOf` (`host/route.ts`), by the
+call's shape rather than its name. The seat, the pty, the rooms and the caps
+writer always take IPC. Any other Rust command takes IPC only when the call is
+desktop-shaped, with no `project`, no `root`, and a path that is absent or
+absolute. Everything else goes over the relay. The Rust readers canonicalize a
+path against the process and take no project, so a phone screen's
+`<branch>/<file>` plus `project` would miss over IPC. Only `openRoomSocket` and
+`uploadImage` stay refused on the desktop, by nature: rooms ride the pty, and
+the desktop's files are already on this machine.
 
 The registry lives in `lib.rs` while the command functions live in lanes beside
 it, deliberately: one list of what a face may invoke is worth more than tidiness
@@ -113,7 +143,8 @@ projects/baud/
 │   │   │                       startup agent), main.tsx, and the 17 components:
 │   │   │                       cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
-│   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
+│   │   │                       transport.ts = tauri IPC or the relay, picked by route.ts ·
+│   │   │                       transport.http.ts = /v1 over fetch, and the one parser
 │   │   ├── phone/              the wheel face — main.tsx, PhoneApp.tsx (the shell) and 15 screens:
 │   │   │                       token door, fleet wheel, expanded agent card, passport sheet, certificate,
 │   │   │                       files, roots, memory, machine vitals, agent monitor, reader, feed,
@@ -142,6 +173,7 @@ projects/baud/
 │   │   ├── settings.rs         the two config writers and the hooks flag
 │   │   ├── memory.rs           @memory's dials, read and surgically written
 │   │   ├── screenshot.rs       the XDG portal client
+│   │   ├── host_relay.rs       the relay to the host API: bind, token receipt, /v1 fence
 │   │   ├── main.rs             thin binary entry — the desktop app, gui feature on
 │   │   └── bin/baud_cli.rs     baud-cli — the six headless verbs, no window, no GTK
 │   ├── src-tauri/capabilities/ the permission grant

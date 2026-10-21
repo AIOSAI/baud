@@ -254,6 +254,7 @@ dependencies = [
  "chrono",
  "libc",
  "portable-pty",
+ "reqwest",
  "serde",
  "serde_json",
  "tauri",

@@ -173,7 +173,7 @@ fn next_session_id() -> String {
 }
 
 /// The user's shell, or a sane fallback. Never guesses beyond that.
-fn user_shell() -> String {
+pub(crate) fn user_shell() -> String {
     match std::env::var("SHELL") {
         Ok(shell) if !shell.trim().is_empty() => shell,
         _ => FALLBACK_SHELL.to_string(),

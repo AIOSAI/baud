@@ -12,6 +12,10 @@ and every change that lands adds its line there in the same sitting.
 
 ## [Unreleased]
 
+### Added
+
+- **Desktop: every phone lane through one Rust relay.** `host_api_call` (`host_relay.rs`) forwards a fenced `/v1` request (GET or POST, path under `/v1/`) to the host API at the bind in @api's config store, with a `baud-desktop` operate token it mints once into a receipt and keeps out of the page. `transport.ts` picks the door per call with `routeOf`, by the call's shape: desktop-shaped calls stay on IPC; a call naming a project or root, a relative path, or a phone-only verb goes over the relay. `transport.http.ts` keeps one parser (`callWith`) behind an injectable sender. The CSP, the capability grant and the phone bundle are unchanged. The desktop's refusal table is gone except the room socket and the image upload.
+
 ## [0.5.0] — 2026-10-19
 
 ### Added

@@ -37,6 +37,13 @@ today, what a token can reach, and how to report a problem.
   address. **Whoever scans or photographs the screen inside those five minutes
   can pair**, so run it when you are ready to scan, and do not share a screenshot
   of it. This is the path that keeps a token out of chats and email.
+- **The desktop app holds one operate token of its own, in its Rust process.**
+  To reach the phone's lanes it relays requests to the host API. Its token is
+  the receipt `~/.secrets/aipass/host_api/baud-desktop.token`, minted once by
+  `drone @api host-api issue-token baud-desktop --scope operate` when the
+  receipt is missing. The window's page never sees the token, and the desktop
+  still opens no port. `revoke-token` revokes it like any other; remove the
+  receipt afterwards and the next call mints a fresh one.
 - **There are two scopes.** A `read` token can see the fleet, the feed, files,
   git, the machine's vitals and watch rooms. An `operate` token can also act: it
   runs verbs, uploads photos and opens a real terminal on the machine as your

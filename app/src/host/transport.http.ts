@@ -441,58 +441,100 @@ function fleetMemoryConfig(body: any): unknown {
   };
 }
 
-function queryString(query: Query): string {
-  const parts = Object.entries(query)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+function queryString(query: Record<string, string>): string {
+  const parts = Object.entries(query).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
-/** A typed host call. The only `fetch` in the application. */
-export async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+/** What a face sends: a fenced `/v1` request, its query already stringified and emptied of blanks. */
+export interface WireRequest {
+  method: "GET" | "POST";
+  path: string;
+  query: Record<string, string>;
+  body: Record<string, unknown> | null;
+}
+
+/** What a face hands back: the status and the raw body, parsed once by `callWith` for every face. */
+export interface WireResponse {
+  status: number;
+  body: string;
+}
+
+export type Sender = (request: WireRequest) => Promise<WireResponse>;
+
+/** The phone's sender: `fetch` with the pasted token. */
+const fetchSender: Sender = async (request) => {
+  const token = readToken();
+  if (!token) throw new HostError(401, "no_token", "no token - paste one to connect");
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  if (request.body !== null) headers["Content-Type"] = "application/json";
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${request.path}${queryString(request.query)}`, {
+      method: request.method,
+      headers,
+      body: request.body === null ? undefined : JSON.stringify(request.body),
+    });
+  } catch (cause) {
+    // A network failure is not a rejected token: re-paste versus check the server.
+    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
+  }
+  return { status: response.status, body: await response.text().catch(() => "") };
+};
+
+/** Seam verb and args -> the wire request, or the designed refusal. */
+export function wireRequest(command: string, args?: Record<string, unknown>): WireRequest {
   const refusal = NOT_YET[command];
   if (refusal) throw new HostError(501, "not_on_the_phone", `${command}: ${refusal}`);
 
   const route = ROUTES[command];
   if (!route) throw new HostError(501, "unrouted", `${command} has no /v1 route - the seam grew and this table did not`);
 
-  const token = readToken();
-  if (!token) throw new HostError(401, "no_token", "no token - paste one to connect");
-
-  const query = route.query ? route.query(args ?? {}) : {};
+  const query: Query = route.query ? route.query(args ?? {}) : {};
   const project = (args?.project as string) ?? "";
   if (project) query.project = project;
 
   const method = route.method ?? "GET";
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/json",
+  const sent: Record<string, string> = {};
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") sent[key] = String(value);
+  }
+  return {
+    method,
+    path: route.path,
+    query: sent,
+    body: method === "POST" ? (route.body ? route.body(args ?? {}) : {}) : null,
   };
-  let payload: string | undefined;
-  if (method === "POST") {
-    headers["Content-Type"] = "application/json";
-    payload = JSON.stringify(route.body ? route.body(args ?? {}) : {});
-  }
+}
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${route.path}${queryString(query)}`, {
-      method,
-      headers,
-      body: payload,
-    });
-  } catch (cause) {
-    // A network failure is not a rejected token: re-paste versus check the server.
-    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
-  }
+/** A typed host call through any sender: one parse, so `HostError` means the same on every face. */
+export async function callWith<T>(send: Sender, command: string, args?: Record<string, unknown>): Promise<T> {
+  const request = wireRequest(command, args);
+  const response = await send(request);
 
   if (response.status === 204) return undefined as T;
 
-  const body = await response.json().catch(() => null);
+  let body: any = null;
+  try {
+    body = JSON.parse(response.body);
+  } catch {
+    body = null;
+  }
 
-  if (!response.ok) throw errorFrom(body, response.status);
+  if (response.status < 200 || response.status > 299) throw errorFrom(body, response.status);
 
+  const route = ROUTES[command];
   return (route.unwrap ? route.unwrap(body) : body) as T;
+}
+
+/** A typed host call. The only `fetch` in the application. */
+export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return callWith<T>(fetchSender, command, args);
 }
 
 export async function verifyToken(token: string): Promise<{ id: string; label: string; scope: string }> {
