@@ -819,6 +819,26 @@ body {
   margin-left: 5px;
 }
 
+/* Card doors: a roster card's gear is fenced, dashed like the phone's, and
+   the line under the head says why in words a tooltip never shows. */
+.baud-chip-gear:disabled {
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.baud-chip-gear:disabled:hover {
+  color: var(--baud-ink-faint);
+  border-color: var(--baud-line);
+}
+
+.baud-chip-away {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--baud-ink-dim);
+}
+
 .baud-chip-foot {
   display: flex;
   align-items: center;
@@ -2097,4 +2117,150 @@ button.baud-tab {
   border-radius: 999px;
   color: var(--baud-ink-faint);
   font-size: 0.58rem;
+}
+
+/* ------------------------------------------------------------- app cards
+   GIT, FILES, BACKUP, MACHINE after the agents. The phone's app accent and
+   no lamp, so an app never reads as an agent with a session.
+   ------------------------------------------------------------------------ */
+
+.baud-strip-apps {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid var(--baud-line);
+}
+
+.baud-strip-apps-head {
+  margin: 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-appcard {
+  flex: none;
+  width: 78px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 6px;
+  border: 1px dashed var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-panel);
+  color: var(--baud-apps);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.baud-appcard:hover:not(:disabled),
+.baud-appcard:focus-visible {
+  border-style: solid;
+  border-color: var(--baud-apps);
+  box-shadow: 0 0 10px var(--baud-glow-apps);
+}
+
+.baud-appcard:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.baud-appcard-glyph {
+  width: 22px;
+  height: 22px;
+}
+
+.baud-appcard-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--baud-ink);
+}
+
+/* The machine tab: the sheet fills the body, the lock line sits under it. */
+.baud-appscreen-machine {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.baud-appscreen-machine-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.baud-appscreen-lock {
+  flex: none;
+  margin: 0;
+  padding: 6px var(--baud-pad);
+  border-top: 1px solid var(--baud-line);
+  background: var(--baud-bg-panel);
+  color: var(--baud-ink-dim);
+  font-family: var(--baud-mono);
+  font-size: 0.7rem;
+}
+
+.baud-appscreen-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--baud-gap);
+  padding: var(--baud-pad);
+}
+
+.baud-appscreen-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.baud-appscreen-tile:hover,
+.baud-appscreen-tile:focus-visible {
+  border-color: var(--baud-apps);
+}
+
+.baud-appscreen-tile-mark {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--baud-apps);
+}
+
+.baud-appscreen-tile-value {
+  font-size: 1.2rem;
+}
+
+.baud-appscreen-tile-value small {
+  margin-left: 2px;
+  font-size: 0.65rem;
+  color: var(--baud-ink-dim);
+}
+
+.baud-appscreen-tile-absent {
+  color: var(--baud-ink-faint);
+}
+
+.baud-appscreen-tile-name {
+  font-size: 0.65rem;
+  color: var(--baud-ink-faint);
 }

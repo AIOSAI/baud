@@ -1,3 +1,4 @@
+import { APP_CARDS, type AppScreen, appCardTitle, appCardView } from "./appCards";
 import BranchChip, { type LaunchMode } from "./BranchChip";
 import type { PhoneView } from "./phoneView";
 import type { BranchStatus } from "../types";
@@ -51,16 +52,9 @@ export default function FleetStrip({
   onOpenPhone,
   seatedProject,
 }: FleetStripProps) {
-  if (branches.length === 0) {
-    return (
-      <div className="baud-strip baud-strip-empty">
-        <p className="baud-empty">No branches found under src/aipass.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="baud-strip">
+    <div className={`baud-strip ${branches.length === 0 ? "baud-strip-empty" : ""}`}>
+      {branches.length === 0 ? <p className="baud-empty">No branches found under src/aipass.</p> : null}
       {sortForDisplay(branches).map((branch) => (
         <BranchChip
           key={branch.name}
@@ -78,6 +72,76 @@ export default function FleetStrip({
           foreign={seatedProject !== null && branch.project !== seatedProject}
         />
       ))}
+      <AppCards seatedProject={seatedProject} onOpenPhone={onOpenPhone} />
     </div>
+  );
+}
+
+/** The four apps after the agents: a glyph and a name, no lamp, since an app has no session to light. */
+function AppCards({
+  seatedProject,
+  onOpenPhone,
+}: {
+  seatedProject: string | null;
+  onOpenPhone: (view: PhoneView) => void;
+}) {
+  return (
+    <section className="baud-strip-apps" aria-label="Apps">
+      <h2 className="baud-strip-apps-head">Apps</h2>
+      {APP_CARDS.map((card) => {
+        const view = appCardView(card.screen, seatedProject);
+        return (
+          <button
+            key={card.screen}
+            type="button"
+            className="baud-appcard"
+            disabled={view === null}
+            title={appCardTitle(card, seatedProject)}
+            onClick={() => {
+              if (view) onOpenPhone(view);
+            }}
+          >
+            <AppGlyph screen={card.screen} />
+            <span className="baud-appcard-name">{card.name}</span>
+          </button>
+        );
+      })}
+    </section>
+  );
+}
+
+function AppGlyph({ screen }: { screen: AppScreen }) {
+  return (
+    <svg
+      className="baud-appcard-glyph"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {screen === "git" ? (
+        <>
+          <circle cx="6" cy="5" r="2.2" />
+          <circle cx="6" cy="19" r="2.2" />
+          <circle cx="18" cy="9" r="2.2" />
+          <path d="M6 7.2v9.6M18 11.2c0 4-6 3-11 6" />
+        </>
+      ) : screen === "files" ? (
+        <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z" />
+      ) : screen === "backup" ? (
+        <>
+          <ellipse cx="12" cy="6" rx="7.5" ry="2.8" />
+          <path d="M4.5 6v12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8" />
+        </>
+      ) : (
+        <>
+          <rect x="7" y="7" width="10" height="10" rx="1.5" />
+          <path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4" />
+        </>
+      )}
+    </svg>
   );
 }

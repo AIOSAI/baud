@@ -35,20 +35,23 @@ Each part of the window has its own page under `docs/desktop/`.
 | [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the cards and their doors; what a launch types; the opened passport |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
+| [apps](desktop/apps.md) | the strip's app cards, GIT, FILES, BACKUP and MACHINE, each the phone's own screen in a workbench tab |
 
-## The desktop face — `src/desktop/` (19 files)
+## The desktop face — `src/desktop/`
 
 Paths in this section are under `app/`.
 
 One window, panes inside it. `main.tsx` mounts, and `App.tsx` (929 lines) is the
-shell that owns the rest. The other 17 files are the panes themselves — they are
+shell that owns the rest. The other files are the panes themselves — they are
 desktop-only, and since 2026-08-18 the directory says so.
 
 | File | One line |
 |---|---|
 | `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
-| `FleetStrip.tsx` | The fleet, as a strip of cards. |
+| `FleetStrip.tsx` | The fleet, as a strip of cards, with the four app cards after them. |
 | `BranchChip.tsx` | One agent's card: status, counts, doors. |
+| `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; the strip's app card list. |
+| `PhoneTab.tsx` · `PhonePane.tsx` · `phoneView.ts` | The seam: a workbench tab that hosts a phone screen, the box it mounts in, and what each such tab shows and is keyed by. |
 | `FileTree.tsx` · `FileView.tsx` · `DiffView.tsx` | Browse, read, diff. |
 | `PassportView.tsx` | An agent's identity and memory, read. |
 | `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
@@ -140,7 +143,7 @@ projects/baud/
 ├── app/                        the desktop application
 │   ├── src/                    React + TypeScript frontend
 │   │   ├── desktop/            the desktop face — App.tsx (window shell, tabs, launch,
-│   │   │                       startup agent), main.tsx, and the 17 components:
+│   │   │                       startup agent), main.tsx, and the components:
 │   │   │                       cards, terminal, panes, panels, header tools
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC or the relay, picked by route.ts ·

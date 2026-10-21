@@ -46,7 +46,7 @@ Everything below is under `app/` unless it says otherwise.
 
 | Piece | Where | The detail |
 |---|---|---|
-| The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop-19-files) |
+| The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop) |
 | The phone face | `src/phone/` | [its files, on their own page](docs/phone/files.md) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
 | The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |
@@ -159,6 +159,7 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/desktop/window-and-cards.md` | The window, the cards and their doors, the opened passport. |
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
 | `docs/desktop/settings.md` | The card gear, the header gear, the memory dials. |
+| `docs/desktop/apps.md` | The strip's app cards, GIT, FILES, BACKUP and MACHINE, each the phone's screen in a workbench tab. |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
 | `docs/phone.md` | The phone face's index: what the phone is, the transport and its refusal table, the token rule, project-named reads, serving, the checks, the visibility gate, and the table of the pages below. |
