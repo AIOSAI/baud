@@ -1,12 +1,12 @@
 {
-  "aipass_version": "2.8.21",
-  "stamped_at": "2026-10-19T07:33:42.147794+00:00",
+  "aipass_version": "2.8.23",
+  "stamped_at": "2026-10-21T20:03:40.971226+00:00",
   "files": {
     ".aipass/hooks.json": "d31d51b61db8f244250487d1ecc751a16fe3df0665ff054555b7d623680e3361",
+    ".aipass/tier0_kernel.md": "99a8e091a7d71490587c61921735014b880671e99218c1b22e9091537d01c574",
     ".claude/commands/prep.md": "0a10a43dd326107a82f2371a1065f4fec15fe840a31e2c6ff872a66bd3cada03",
     ".claude/settings.json": "176b5b9dc3b5a351ac4918957b96d1d3a5e225f3bd6743d4e7d15c4ff666dbb9",
-    ".claude/settings.local.json": "b9ab26157651326767a2426375257917324da1bc251f6fb5c45fcdb9ff2ed41b",
-    "AGENTS.md": "745ab6e3dc8a6c246c31b765e9ced86f17aaa6919a21387f4d68621df89918e3",
-    "CLAUDE.md": "5c1210317b6d24d9d57831660a4187f1d3a408efdd214622b8e0ef61e94534ad"
+    ".claude/settings.local.json": "b3cb43ebbf11adba0eeb2d34dc51edee36affec222dfd08252762a762ededde8",
+    "AGENTS.md": "5c1210317b6d24d9d57831660a4187f1d3a408efdd214622b8e0ef61e94534ad"
   }
 }
