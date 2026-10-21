@@ -15,6 +15,8 @@ import FileView from "./FileView";
 import InquiryPane, { helpCommand } from "./InquiryPane";
 import MonitorPane from "./MonitorPane";
 import PassportView from "./PassportView";
+import PhoneTab from "./PhoneTab";
+import { phoneTabKey, phoneTabLabel, type PhoneView } from "./phoneView";
 import ProjectSwitch from "./ProjectSwitch";
 import SettingsDialog from "./SettingsDialog";
 import Terminal, { type TerminalHandle } from "./Terminal";
@@ -40,7 +42,7 @@ interface FileTab {
   path: string;
   name: string;
   branch: string;
-  kind: "file" | "diff" | "monitor" | "inquiry";
+  kind: "file" | "diff" | "monitor" | "inquiry" | "phone";
   /** The branch directory a diff tab reads or an inquiry shell opens in. */
   dir?: string;
   /** What an inquiry shell types on open - absent is a bare prompt. */
@@ -49,6 +51,8 @@ interface FileTab {
   line?: number;
   /** What a monitor tab watches - null is prax mission control. */
   target?: string | null;
+  /** The phone screen a `phone` tab hosts. */
+  view?: PhoneView;
 }
 
 /** Which passports the strip shows: the seated fleet, or census-wide `live` / `dispatched` filters. */
@@ -207,6 +211,18 @@ export default function App() {
               dir: branch.path,
             },
           ],
+    );
+    setActiveTab(id);
+  }, []);
+
+  // Re-opening an open key fronts it with the newer view, so a mail row can retarget an open inbox.
+  const openPhone = useCallback((view: PhoneView) => {
+    const id = phoneTabKey(view);
+    const { branch, name } = phoneTabLabel(view);
+    setFileTabs((current) =>
+      current.some((tab) => tab.path === id)
+        ? current.map((tab) => (tab.path === id ? { ...tab, view } : tab))
+        : [...current, { path: id, name, branch, kind: "phone" as const, view }],
     );
     setActiveTab(id);
   }, []);
@@ -611,6 +627,7 @@ export default function App() {
           onHelp={helpBranch}
           onSettings={openSettings}
           onOpenPassport={openPassport}
+          onOpenPhone={openPhone}
         />
       )}
 
@@ -709,7 +726,12 @@ export default function App() {
               key={tab.path}
               className={`baud-pane ${activeTab === tab.path ? "" : "baud-pane-hidden"}`}
             >
-              {tab.kind === "diff" ? (
+              {tab.kind === "phone" ? (
+                // Only the front tab mounts: GitApp's document-level Escape must not close a tab behind a dialog.
+                activeTab === tab.path && tab.view ? (
+                  <PhoneTab view={tab.view} onOpen={openPhone} onClose={() => closeFile(tab.path)} />
+                ) : null
+              ) : tab.kind === "diff" ? (
                 <DiffView dir={tab.dir ?? ""} active={activeTab === tab.path} />
               ) : tab.kind === "monitor" ? (
                 <MonitorPane

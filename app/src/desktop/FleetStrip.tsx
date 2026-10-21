@@ -1,4 +1,5 @@
 import BranchChip, { type LaunchMode } from "./BranchChip";
+import type { PhoneView } from "./phoneView";
 import type { BranchStatus } from "../types";
 
 interface FleetStripProps {
@@ -19,6 +20,8 @@ interface FleetStripProps {
   onSettings: (branch: BranchStatus) => void;
   /** Operator clicked the avatar: open this agent's passport. */
   onOpenPassport: (branch: BranchStatus) => void;
+  /** Opens or fronts a phone-screen tab: an app, or a card's designed read. */
+  onOpenPhone: (view: PhoneView) => void;
 }
 
 /** Dispatched first, then interactive, then alphabetical. */
@@ -45,6 +48,7 @@ export default function FleetStrip({
   onHelp,
   onSettings,
   onOpenPassport,
+  onOpenPhone,
   seatedProject,
 }: FleetStripProps) {
   if (branches.length === 0) {
@@ -70,6 +74,7 @@ export default function FleetStrip({
           onHelp={onHelp}
           onSettings={onSettings}
           onOpenPassport={onOpenPassport}
+          onOpenPhone={onOpenPhone}
           foreign={seatedProject !== null && branch.project !== seatedProject}
         />
       ))}

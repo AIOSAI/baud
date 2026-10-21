@@ -4,6 +4,7 @@ import { gitChanges } from "../host";
 import { relativeAge } from "../age";
 import { helpCommand } from "./InquiryPane";
 import type { BranchStatus, GitChanges } from "../types";
+import type { PhoneView } from "./phoneView";
 
 export type LaunchMode = "resume" | "fresh";
 
@@ -33,6 +34,8 @@ interface BranchChipProps {
   onSettings: (branch: BranchStatus) => void;
   /** Operator clicked the avatar: open this agent's passport. Not the whole card, which would turn every miss into a navigation. */
   onOpenPassport: (branch: BranchStatus) => void;
+  /** Opens or fronts a phone-screen tab for one of this card's designed reads. */
+  onOpenPhone: (view: PhoneView) => void;
   /** Render the card as a report with no doors, for a face that can read but not act (the phone).
    *  Remote-capable verbs, when they come, return through the buttons this flag suppresses. */
   readOnly?: boolean;
