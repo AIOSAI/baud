@@ -23,6 +23,7 @@ import {
   outcomeView,
   progressHead,
   progressLine,
+  remainingText,
   runningJobs,
   runningVerbs,
   unregisteredLine,
@@ -305,13 +306,13 @@ describe("barFraction", () => {
 });
 
 describe("progressLine", () => {
-  it("says files, bytes of the planned bytes, and the time since the start", () => {
-    expect(progressLine(entry(), NOW)).toBe("1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s");
+  it("says files, bytes of the planned bytes, and the time left at the rate so far", () => {
+    expect(progressLine(entry(), NOW)).toBe("1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left");
   });
 
   it("drops the of-part when the lane does not know its planned bytes", () => {
     expect(progressLine(entry({ progress: progress({ bytes_total: null }) }), NOW)).toBe(
-      "1,204 / 15,414 files · 310 MB · 2m 10s",
+      "1,204 / 15,414 files · 310 MB · 25m 34s left",
     );
   });
 
@@ -325,13 +326,13 @@ describe("progressLine", () => {
 
   it("ends with the failed count when files have failed", () => {
     expect(progressLine(entry({ progress: progress({ failed: 1203 }) }), NOW)).toBe(
-      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s · 1,203 failed",
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left · 1,203 failed",
     );
   });
 
   it("says one failed file", () => {
     expect(progressLine(entry({ progress: progress({ failed: 1 }) }), NOW)).toBe(
-      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s · 1 failed",
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left · 1 failed",
     );
   });
 
@@ -343,8 +344,30 @@ describe("progressLine", () => {
 
   it("says nothing of failures at zero or below", () => {
     expect(progressLine(entry({ progress: progress({ failed: -1 }) }), NOW)).toBe(
-      "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s",
+      "1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left",
     );
+  });
+
+  it("shows the time so far until the first file gives a rate", () => {
+    expect(progressLine(entry({ progress: progress({ done: 0 }) }), NOW)).toBe(
+      "0 / 15,414 files · 310 MB of 2.9 GB · 2m 10s",
+    );
+  });
+});
+
+describe("remainingText", () => {
+  it("scales the time so far by the files still to go: 130s for 1,204 of 15,414 is 25m 34s more", () => {
+    expect(remainingText(entry(), NOW)).toBe("25m 34s left");
+  });
+
+  it("says 0s left when every file is done", () => {
+    expect(remainingText(entry({ progress: progress({ done: 15414 }) }), NOW)).toBe("0s left");
+  });
+
+  it("is null before the first file, without a total, or when the start does not parse", () => {
+    expect(remainingText(entry({ progress: progress({ done: 0 }) }), NOW)).toBe(null);
+    expect(remainingText(entry({ progress: null }), NOW)).toBe(null);
+    expect(remainingText(entry({ started_at: "" }), NOW)).toBe(null);
   });
 });
 

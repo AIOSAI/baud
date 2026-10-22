@@ -126,15 +126,31 @@ export function backupBytes(bytes: number): string {
   return `${(mb / 1024).toFixed(1)} GB`;
 }
 
-/** "45s", "2m 10s", "1h 5m"; null for an unparseable instant, 0s for a clock behind the server's. */
-export function elapsedText(startedAt: string, now: number = Date.now()): string | null {
-  const start = Date.parse(startedAt);
-  if (Number.isNaN(start)) return null;
-  const seconds = Math.max(0, Math.floor((now - start) / 1000));
+function durationText(seconds: number): string {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function elapsedSeconds(startedAt: string, now: number): number | null {
+  const start = Date.parse(startedAt);
+  return Number.isNaN(start) ? null : Math.max(0, (now - start) / 1000);
+}
+
+/** "45s", "2m 10s", "1h 5m"; null for an unparseable instant, 0s for a clock behind the server's. */
+export function elapsedText(startedAt: string, now: number = Date.now()): string | null {
+  const seconds = elapsedSeconds(startedAt, now);
+  return seconds === null ? null : durationText(Math.floor(seconds));
+}
+
+/** "25m 34s left": the time so far scaled by the files still to go. Null before the first file lands or without a start. */
+export function remainingText(entry: Pick<BackupRunning, "started_at" | "progress">, now: number = Date.now()): string | null {
+  const progress = entry.progress;
+  const seconds = elapsedSeconds(entry.started_at, now);
+  if (!progress || progress.done <= 0 || seconds === null) return null;
+  const left = Math.max(0, progress.total - progress.done);
+  return `${durationText(Math.round((seconds * left) / progress.done))} left`;
 }
 
 export function barFraction(progress: BackupProgress | null): number | null {
@@ -153,7 +169,7 @@ export function progressHead(entry: Pick<BackupRunning, "verb" | "lane" | "progr
   return entry.progress ? `${head} · ${count(entry.progress.done)} / ${count(entry.progress.total)}` : head;
 }
 
-/** "1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s", or "scanning…" before the lane has a total. */
+/** "1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left", or "scanning…" before the lane has a total. */
 export function progressLine(entry: Pick<BackupRunning, "started_at" | "progress">, now: number = Date.now()): string {
   const progress = entry.progress;
   if (!progress) return "scanning…";
@@ -162,8 +178,8 @@ export function progressLine(entry: Pick<BackupRunning, "started_at" | "progress
       ? backupBytes(progress.bytes_done)
       : `${backupBytes(progress.bytes_done)} of ${backupBytes(progress.bytes_total)}`;
   const parts = [`${count(progress.done)} / ${count(progress.total)} files`, bytes];
-  const elapsed = elapsedText(entry.started_at, now);
-  if (elapsed) parts.push(elapsed);
+  const time = remainingText(entry, now) ?? elapsedText(entry.started_at, now);
+  if (time) parts.push(time);
   if (progress.failed > 0) parts.push(`${count(progress.failed)} failed`);
   return parts.join(" · ");
 }

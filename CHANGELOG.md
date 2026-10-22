@@ -21,6 +21,10 @@ and every change that lands adds its line there in the same sitting.
 - **Desktop: pair a phone and About in the header gear.** `pair a phone` opens a terminal tab already running `drone @api host-api pair phone --scope operate`, which draws its own QR; `about` shows the app's version.
 - **Desktop: a bell mail row opens its message.** A row carrying `mail_id` and `recipient` opens the recipient's inbox screen on that message in a tab. The bell's cleared mark is one machine-wide key, adopting the seated project's old per-project mark once. The Rust feed reader keeps the three address fields it used to drop.
 
+### Changed
+
+- **Phone: the backup card's running line says the time left, not the time so far.** `remainingText` (`backupView.ts`) scales the seconds since the start by the files still to go, `1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left`; before the first file lands the line keeps the elapsed time, since there is no rate yet. The owner, reading a six-hour Drive rebuild on the card (2026-10-22): the counter should say how long is left to complete, not how long has passed. By devpulse; `backupView.test.ts` pins the arithmetic, the fallback and the nulls.
+
 ## [0.5.0] — 2026-10-19
 
 ### Added
