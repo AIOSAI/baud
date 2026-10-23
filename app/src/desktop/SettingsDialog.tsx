@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 
 import { InterfaceControls } from "./InterfaceSettings";
+import HostApiSettings from "./HostApiSettings";
 import MemorySettings from "./MemorySettings";
 
 import type { BaudSettings } from "../types";
 
 /** The header gear's dialog: navigation and chrome only; each leaf keeps its own save, one per owner's file. */
 
-type SectionId = "interface" | "memory";
+type SectionId = "interface" | "memory" | "host";
 
 interface Section {
   id: SectionId;
@@ -27,6 +28,11 @@ const SECTIONS: readonly Section[] = [
     id: "memory",
     label: "memory",
     summary: "@memory's fleet-wide config: rollover defaults, entry caps, per-agent overrides",
+  },
+  {
+    id: "host",
+    label: "host API",
+    summary: "where this machine's relay reaches the host API, and which token it sends",
   },
 ];
 
@@ -105,9 +111,13 @@ export default function SettingsDialog({
             <InterfaceControls agents={agents} settings={settings} onSaved={onSaved} />
             <PairAndAbout onPairPhone={onPairPhone} />
           </>
-        ) : (
+        ) : section === "memory" ? (
           <div className="baud-settings-leaf">
             <MemorySettings />
+          </div>
+        ) : (
+          <div className="baud-settings-leaf">
+            <HostApiSettings />
           </div>
         )}
       </div>

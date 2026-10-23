@@ -31,6 +31,8 @@ export const IPC_COMMANDS: ReadonlySet<string> = new Set([
   "memory_config_set",
   "memory_config_set_default",
   "memory_config_push",
+  "host_relay_settings_read",
+  "host_relay_settings_write",
 ]);
 
 /** Commands with no `/v1` route: the seat, the pty, the rooms, the caps. Their `project` is Rust's own argument. */
@@ -47,6 +49,8 @@ const IPC_ONLY: ReadonlySet<string> = new Set([
   "pty_kill",
   "monitor_create",
   "memory_config_write",
+  "host_relay_settings_read",
+  "host_relay_settings_write",
 ]);
 
 function isAbsolute(path: string): boolean {

@@ -1097,6 +1097,19 @@ body {
   cursor: pointer;
 }
 
+.baud-settings-text {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.baud-settings-text:disabled,
 .baud-settings-select:disabled {
   opacity: 0.45;
   cursor: default;

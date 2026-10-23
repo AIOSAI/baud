@@ -43,7 +43,10 @@ today, what a token can reach, and how to report a problem.
   `drone @api host-api issue-token baud-desktop --scope operate` when the
   receipt is missing. The window's page never sees the token, and the desktop
   still opens no port. `revoke-token` revokes it like any other; remove the
-  receipt afterwards and the next call mints a fresh one.
+  receipt afterwards and the next call mints a fresh one. A desktop on a second
+  machine names the host's address and a receipt path in its settings; that
+  receipt is issued on the host and copied over by hand, and the desktop never
+  mints one for it.
 - **There are two scopes.** A `read` token can see the fleet, the feed, files,
   git, the machine's vitals and watch rooms. An `operate` token can also act: it
   runs verbs, uploads photos and opens a real terminal on the machine as your

@@ -1,6 +1,6 @@
 # Settings
 
-This page covers the desktop's settings: the card gear that edits one agent's claude settings, the header gear for BAUD's own interface, and the memory dials over @memory's config.
+This page covers the desktop's settings: the card gear that edits one agent's claude settings, the header gear for BAUD's own interface, the memory dials over @memory's config, and the host API tab for the relay.
 
 ← [the desktop window](../desktop.md)
 
@@ -209,3 +209,21 @@ moving one dial rewrites 2 of its 364 lines. One is the number. The other is
 literal UTF-8 — the same decoded string, spelled differently. Both writers
 build serde_json with `preserve_order`, which is what keeps the rest of the file
 in place.
+
+### The host API tab — where the relay reaches the server
+
+The gear's third tab writes this machine's `host_relay.json` in the app's config
+dir (`~/.config/ai.aipass.baud/` on Linux), never a project's file: the address
+belongs to the machine, not to the seat. A blank row clears its key on save.
+
+| Row | Key | Blank means |
+| --- | --- | --- |
+| address | `url` — `http://host:port`, nothing more (no https: the relay is built without TLS) | ask `drone @api host-api config` on this machine |
+| token receipt | `token_path` — absolute path to a receipt file | this machine's `baud-desktop` receipt, minted on the first call |
+
+A desktop on the machine that serves the host API leaves both blank. A desktop
+on a second machine types the server's tailnet address and the path of a
+receipt issued on the server (`drone @api host-api issue-token <label> --scope
+operate`) and copied over. The relay never mints a typed path. A save refuses a
+malformed address or a relative path and leaves the file as it was; it takes
+effect on the next relay call.

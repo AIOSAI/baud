@@ -94,7 +94,7 @@ the compiler will not tell you.
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
 | `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
-| `host_relay.rs` | `host_api_call`, the relay to @api's host API: the bind from its config store, the `baud-desktop` token receipt (minted once when absent), the `/v1/` fence. The token never reaches the page. |
+| `host_relay.rs` | `host_api_call`, the relay to @api's host API: the address and token path from this machine's `host_relay.json` (`host_relay_settings_read`/`_write`), else the bind from `drone @api host-api config` and the `baud-desktop` token receipt (minted once when absent), the `/v1/` fence. The token never reaches the page. |
 | `main.rs` (6) | Calls `lib.rs::run()`. The desktop app, so it builds only with the `gui` feature. |
 | `bin/baud_cli.rs` (27) | `baud-cli`: hands its arguments to `run_headless` and exits with its code; with no verb it prints the six and exits 2. Built `--no-default-features`, it links no GTK. |
 

@@ -158,7 +158,7 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/desktop.md` | The desktop window's index: running it, the face's files, the camera, the command surface, the layout, and the table of the pages below. |
 | `docs/desktop/window-and-cards.md` | The window, the cards and their doors, the opened passport. |
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
-| `docs/desktop/settings.md` | The card gear, the header gear, the memory dials. |
+| `docs/desktop/settings.md` | The card gear, the header gear, the memory dials, the host API tab. |
 | `docs/desktop/apps.md` | The strip's app cards, GIT, FILES, BACKUP and MACHINE, each the phone's screen in a workbench tab. |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |

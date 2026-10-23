@@ -28,6 +28,7 @@ import type {
   NewProjectResult,
   NotificationEvent,
   ProjectListing,
+  RelaySettings,
   RootEntry,
   SpawnResult,
   VerbResult,
@@ -200,6 +201,11 @@ export const baudSettingsWrite = (patch: unknown) => call<BaudSettings>("baud_se
 export const hooksSoundGet = () => call<boolean>("hooks_sound_get");
 
 export const hooksSoundSet = (active: boolean) => call<boolean>("hooks_sound_set", { active });
+
+export const hostRelaySettingsRead = () => call<RelaySettings>("host_relay_settings_read");
+
+export const hostRelaySettingsWrite = (settings: RelaySettings) =>
+  call<RelaySettings>("host_relay_settings_write", { settings });
 
 export const memoryConfigRead = () => call<MemoryConfig>("memory_config_read");
 

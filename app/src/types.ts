@@ -256,6 +256,12 @@ export interface BaudSettings {
   terminal_scroll_percent?: number;
 }
 
+/** Mirrors `RelaySettings` in src-tauri/src/host_relay.rs: this machine's relay settings. Null asks @api / uses the default receipt. */
+export interface RelaySettings {
+  url: string | null;
+  token_path: string | null;
+}
+
 /** Mirrors `EntryLimit` in src-tauri/src/memory.rs. */
 export interface EntryLimit {
   key: string;

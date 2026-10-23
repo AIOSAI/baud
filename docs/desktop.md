@@ -101,12 +101,18 @@ a path under `/v1/`, a query, a body) and gets the status and the raw body back.
 a refusal is the same `HostError` on both faces. Anything outside the fence is an
 error that names the rule.
 
-The relay reads the bind from @api's config store
-(`~/.secrets/aipass/host_api/config.json`, `host` and `port`; `127.0.0.1:8787`
-when absent) and the token from the receipt `~/.secrets/aipass/host_api/baud-desktop.token`.
-When that receipt is missing, the relay runs
+The relay takes the address and the token path from this machine's
+`host_relay.json` in the app's config dir, typed in the gear's **host API** tab
+(`docs/desktop/settings.md`). With no address typed, it asks
+`drone @api host-api config` in the operator's login shell, keeps the answer for
+the process, and asks again after a call that could not connect; it never reads
+@api's store. With no token path typed, the token is the receipt
+`~/.secrets/aipass/host_api/baud-desktop.token`. When that receipt is missing, the relay runs
 `drone @api host-api issue-token baud-desktop --scope operate` once, in the
-operator's login shell, and reads the new receipt. The token stays in the Rust
+operator's login shell, and reads the new receipt. A typed token path is never
+minted: its token belongs to the server named in the address, so a missing file
+is an error that says to copy that host's receipt there. Both drone lines are
+killed after 30 seconds. The token stays in the Rust
 process; the page never holds it, and the CSP and the capability grant are
 unchanged. A 401 is never re-minted: it comes back with the receipt's path and
 the cure (`drone @api host-api revoke-token <id>`, then remove the receipt).

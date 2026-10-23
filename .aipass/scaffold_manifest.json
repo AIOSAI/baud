@@ -1,6 +1,6 @@
 {
-  "aipass_version": "2.8.23",
-  "stamped_at": "2026-10-21T20:03:40.971226+00:00",
+  "aipass_version": "2.8.24",
+  "stamped_at": "2026-10-23T02:27:55.850536+00:00",
   "files": {
     ".aipass/hooks.json": "d31d51b61db8f244250487d1ecc751a16fe3df0665ff054555b7d623680e3361",
     ".aipass/tier0_kernel.md": "99a8e091a7d71490587c61921735014b880671e99218c1b22e9091537d01c574",

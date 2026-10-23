@@ -461,6 +461,8 @@ pub fn run() {
             memory::memory_config_set,
             memory::memory_config_set_default,
             memory::memory_config_push,
+            host_relay::host_relay_settings_read,
+            host_relay::host_relay_settings_write,
             host_relay::host_api_call
         ])
         // Closing the window takes the pty processes with it: a plain shell
