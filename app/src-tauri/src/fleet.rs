@@ -156,6 +156,25 @@ pub(crate) fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
         .to_string();
 }
 
+/// The card's provider, history flag and resume id. A live session names the
+/// provider, since a pointer is history; else the pointer's, else claude. The
+/// pointer's id is the resume door only while its provider is the card's:
+/// `claude --resume` on a Codex thread fails the launch. A codex card has no
+/// transcript scan, so `claude_history` runs only for claude.
+pub(crate) fn resume_door(
+    live: Option<&'static str>,
+    pointer: Option<(&'static str, String)>,
+    claude_history: impl FnOnce() -> (bool, Option<String>),
+) -> (&'static str, bool, Option<String>) {
+    let provider = live.or(pointer.as_ref().map(|(provider, _)| *provider)).unwrap_or("claude");
+    let pointed = pointer.filter(|(from, _)| *from == provider).map(|(_, id)| id);
+    if provider == "codex" {
+        return (provider, false, pointed);
+    }
+    let (has_history, scanned) = claude_history();
+    (provider, has_history, pointed.or(scanned))
+}
+
 /// Inspect a single branch directory. Never fails - worst case it reports a
 /// bare directory with all-default fields.
 pub(crate) fn read_branch(
@@ -192,24 +211,15 @@ pub(crate) fn read_branch(
     // every wake) outranks the transcript-scan guess — the scan's `-c` door
     // can never enter a dispatched session. No pointer → the old guess, so a
     // branch that predates the pointer resumes exactly as before.
-    let pointer = session_pointer(&canonical);
     let live_provider = sessions
         .iter()
         .find(|session| session.cwd.starts_with(&canonical))
         .map(|session| session.provider);
-    status.provider = pointer
-        .as_ref()
-        .map(|(provider, _)| *provider)
-        .or(live_provider)
-        .unwrap_or("claude")
-        .to_string();
-    if status.provider == "codex" {
-        status.resume_id = pointer.map(|(_, id)| id);
-    } else {
-        let (has_history, resume_id) = claude_history(&canonical);
-        status.has_history = has_history;
-        status.resume_id = pointer.map(|(_, id)| id).or(resume_id);
-    }
+    let (provider, has_history, resume_id) =
+        resume_door(live_provider, session_pointer(&canonical), || claude_history(&canonical));
+    status.provider = provider.to_string();
+    status.has_history = has_history;
+    status.resume_id = resume_id;
     status.subagents = subagent_count(&canonical);
 
     // Named once and used twice: the badge asks whether this session exists,

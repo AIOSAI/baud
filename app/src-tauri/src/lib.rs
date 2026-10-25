@@ -1105,6 +1105,28 @@ mod tests {
     }
 
     #[test]
+    fn a_live_session_names_the_provider_over_the_pointer() {
+        let codex_pointer = || Some(("codex", "thread-1".to_string()));
+        let scanned = || (true, Some("claude-old".to_string()));
+        // canary back on Claude with a codex pointer left over: claude, and the
+        // codex thread is never handed to `claude --resume`.
+        assert_eq!(resume_door(Some("claude"), codex_pointer(), scanned), ("claude", true, Some("claude-old".into())));
+        assert_eq!(resume_door(None, codex_pointer(), scanned), ("codex", false, Some("thread-1".into())));
+        assert_eq!(resume_door(Some("codex"), codex_pointer(), scanned), ("codex", false, Some("thread-1".into())));
+        assert_eq!(resume_door(Some("codex"), None, scanned), ("codex", false, None));
+    }
+
+    #[test]
+    fn a_claude_pointer_outranks_the_transcript_scan() {
+        let pointer = || Some(("claude", "pointed".to_string()));
+        let scanned = || (true, Some("scanned".to_string()));
+        assert_eq!(resume_door(None, pointer(), scanned), ("claude", true, Some("pointed".into())));
+        assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("pointed".into())));
+        assert_eq!(resume_door(None, None, scanned), ("claude", true, Some("scanned".into())));
+        assert_eq!(resume_door(None, None, || (false, None)), ("claude", false, None));
+    }
+
+    #[test]
     fn a_codex_pane_is_an_agent_pane() {
         let scan = parse_panes("canary-switch\tcodex\t/r/src/aipass/canary\nshell\tbash\t/r\n");
         assert_eq!(scan.agent_panes, vec![("canary-switch".to_string(), PathBuf::from("/r/src/aipass/canary"))]);
