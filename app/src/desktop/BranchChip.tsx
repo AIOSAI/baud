@@ -166,6 +166,7 @@ export default function BranchChip({
             {branch.outside_room ? <span className="baud-badge-outside">⧉</span> : null}
           </span>
         ) : null}
+        {(branch.provider ?? "claude") !== "claude" ? <span className="baud-chip-project">{branch.provider}</span> : null}
         {/* Sub-agents never reach the process table; this count is the transcript's unanswered spawn calls. */}
         {branch.subagents > 0 ? (
           <span

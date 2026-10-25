@@ -43,13 +43,13 @@ pub fn room_name(scope: Option<&str>, branch_name: &str) -> String {
     }
 }
 
-/// The command name tmux reports for a pane running a claude session. An
-/// install that shows up as something else (a node shim, a wrapper script)
-/// simply never matches - that costs a card its outside-room tag, which is
-/// the same place we stood before m12. A LOOSER test would be worse: BAUD
-/// would treat the operator's own shell session as an agent's room and type
-/// into it.
-pub(crate) const CLAUDE_PANE_COMMAND: &str = "claude";
+/// The command names tmux reports for a pane running an agent session, claude
+/// or codex. An install that shows up as something else (a node shim, a
+/// wrapper script) simply never matches - that costs a card its outside-room
+/// tag, which is the same place we stood before m12. A LOOSER test would be
+/// worse: BAUD would treat the operator's own shell session as an agent's room
+/// and type into it.
+pub(crate) const AGENT_PANE_COMMANDS: [&str; 2] = ["claude", "codex"];
 
 /// What one tmux round-trip tells the snapshot.
 #[derive(Debug, Default)]
@@ -177,7 +177,7 @@ pub(crate) fn parse_panes(text: &str) -> RoomScan {
             continue;
         }
         scan.names.insert(name.to_string());
-        if command.trim() == CLAUDE_PANE_COMMAND && !path.trim().is_empty() {
+        if AGENT_PANE_COMMANDS.contains(&command.trim()) && !path.trim().is_empty() {
             scan.agent_panes
                 .push((name.to_string(), PathBuf::from(path.trim())));
         }

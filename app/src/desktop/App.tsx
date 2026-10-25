@@ -21,6 +21,7 @@ import ProjectSwitch from "./ProjectSwitch";
 import SettingsDialog, { PAIR_COMMAND } from "./SettingsDialog";
 import NewProjectSheet from "../phone/NewProjectSheet";
 import { bornCard, bornSeat } from "../phone/lib/newProject";
+import { agentCommand } from "../phone/lib/rooms";
 import Terminal, { type TerminalHandle } from "./Terminal";
 import Zoom from "./Zoom";
 import { relativeAge } from "../age";
@@ -333,20 +334,12 @@ export default function App() {
     // Opening the card is the one door that revives an ended room.
     clearRoomEnded(snapshotRef.current?.project ?? "", branch.name);
     const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
-    const resume =
-      mode !== "resume"
-        ? ""
-        : branch.resume_id
-          ? ` --resume ${quote(branch.resume_id)}`
-          : branch.has_history
-            ? " -c"
-            : "";
     terminalRef.current?.launch({
       room: branch.name,
       cwd: branch.path,
       // The card's own project, not the seat's: a roster card is often from elsewhere.
       project: branch.project,
-      command: `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`,
+      command: `cd ${quote(branch.path)} && ${agentCommand(branch, mode === "resume")}`,
       typeIfAttached: !branch.interactive,
     });
     setActiveTab(TERMINAL_TAB);

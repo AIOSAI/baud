@@ -129,7 +129,7 @@ export default function AgentSheet({
     ? `${branch.name}'s settings live in ${away}, and this sheet's memory dials name no project — they would edit the seated project's ${branch.name}. Switch to ${away} first.`
     : null;
   const refusal = scopeRefusal(scope);
-  const state = branch.dispatched ? "dispatched" : branch.interactive ? "interactive" : "idle";
+  const state = `${branch.dispatched ? "dispatched" : branch.interactive ? "interactive" : "idle"} · ${branch.provider ?? "claude"}`;
   const kind = branch.manager ? "manager" : branch.is_citizen ? "citizen" : "branch";
 
   const stats: ReadonlyArray<{

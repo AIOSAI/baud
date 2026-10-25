@@ -183,7 +183,12 @@ without `.trinity/passport.json` gets a card, but no doors.
 
 ```
 cd '<branch dir>' && command claude --permission-mode bypassPermissions [-c | --resume <id>]
+cd '<branch dir>' && command codex --dangerously-bypass-approvals-and-sandbox [resume <id>]
 ```
+
+The card's `provider` picks the line, and a codex card names its provider in
+plain text beside its badge. A codex branch resumes only through its session
+pointer: BAUD scans no Codex transcripts, so with no pointer it starts fresh.
 
 `command claude` skips the `~/.bashrc` boot shim — which intercepts `claude` and
 `claude --permission-mode …` inside a `.trinity` directory and routes them

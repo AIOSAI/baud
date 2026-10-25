@@ -192,9 +192,24 @@ pub(crate) fn read_branch(
     // every wake) outranks the transcript-scan guess — the scan's `-c` door
     // can never enter a dispatched session. No pointer → the old guess, so a
     // branch that predates the pointer resumes exactly as before.
-    let (has_history, resume_id) = claude_history(&canonical);
-    status.has_history = has_history;
-    status.resume_id = session_pointer(&canonical).or(resume_id);
+    let pointer = session_pointer(&canonical);
+    let live_provider = sessions
+        .iter()
+        .find(|session| session.cwd.starts_with(&canonical))
+        .map(|session| session.provider);
+    status.provider = pointer
+        .as_ref()
+        .map(|(provider, _)| *provider)
+        .or(live_provider)
+        .unwrap_or("claude")
+        .to_string();
+    if status.provider == "codex" {
+        status.resume_id = pointer.map(|(_, id)| id);
+    } else {
+        let (has_history, resume_id) = claude_history(&canonical);
+        status.has_history = has_history;
+        status.resume_id = pointer.map(|(_, id)| id).or(resume_id);
+    }
     status.subagents = subagent_count(&canonical);
 
     // Named once and used twice: the badge asks whether this session exists,

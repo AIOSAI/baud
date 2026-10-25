@@ -16,22 +16,29 @@ use crate::*;
 
 /// Classify a `/proc/<pid>/cmdline` buffer (NUL-separated argv).
 ///
-/// Returns `Some(headless)` when argv[0] is a claude binary, `None` otherwise.
-/// `headless` means `-p`/`--print` is present - the shape of every dispatched
-/// wake (`claude -p ...` / `claude -c -p ...`); an interactive session never
-/// carries it.
-pub(crate) fn classify_claude_cmdline(cmdline: &[u8]) -> Option<bool> {
+/// Returns `Some((provider, headless))` when argv[0] is a claude or codex
+/// binary, `None` otherwise. For claude, `headless` means `-p`/`--print` is
+/// present - the shape of every dispatched wake. For codex it means the `exec`
+/// subcommand (`e` is its alias); a prompt is one argv element, so a bare word
+/// match cannot be a sentence. Codex's own servers (`app-server`,
+/// `mcp-server`) outlive the session in its cwd and are no agent at all.
+pub(crate) fn classify_claude_cmdline(cmdline: &[u8]) -> Option<(&'static str, bool)> {
     let mut args = cmdline.split(|byte| *byte == 0).filter(|arg| !arg.is_empty());
 
     let argv0 = args.next()?;
     let argv0 = String::from_utf8_lossy(argv0);
     let binary = Path::new(argv0.as_ref()).file_name()?.to_string_lossy();
-    if binary != "claude" {
-        return None;
+    match binary.as_ref() {
+        "claude" => Some(("claude", args.any(|arg| arg == b"-p" || arg == b"--print"))),
+        "codex" => {
+            let args: Vec<&[u8]> = args.collect();
+            if args.iter().any(|arg| *arg == b"app-server" || *arg == b"mcp-server") {
+                return None;
+            }
+            Some(("codex", args.iter().any(|arg| *arg == b"exec" || *arg == b"e")))
+        }
+        _ => None,
     }
-
-    let headless = args.any(|arg| arg == b"-p" || arg == b"--print");
-    Some(headless)
 }
 
 /// One pass over the process table, collecting every live claude process and
@@ -58,8 +65,8 @@ pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
             Ok(contents) => contents,
             Err(_) => continue,
         };
-        let headless = match classify_claude_cmdline(&cmdline) {
-            Some(headless) => headless,
+        let (provider, headless) = match classify_claude_cmdline(&cmdline) {
+            Some(found) => found,
             None => continue,
         };
         let cwd = match fs::read_link(proc_dir.join("cwd")) {
@@ -67,7 +74,7 @@ pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
             Err(_) => continue,
         };
 
-        sessions.push(ClaudeSession { cwd, headless });
+        sessions.push(ClaudeSession { cwd, headless, provider });
     }
 
     sessions
@@ -189,7 +196,11 @@ pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
 /// on a missing id fails the launch outright). Anything less is `None` and
 /// the caller falls back to the transcript scan — same fail-quiet rule as
 /// the rest of the card.
-pub(crate) fn session_pointer(branch_dir: &Path) -> Option<String> {
+///
+/// Returns `(provider, session_id)`. The pointer's `provider` is "claude" when
+/// absent; "codex" checks for the thread's rollout file under
+/// `~/.codex/sessions/YYYY/MM/DD/` instead; any other provider is refused.
+pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String)> {
     let home = match std::env::var("HOME") {
         Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
         _ => return None,
@@ -198,10 +209,32 @@ pub(crate) fn session_pointer(branch_dir: &Path) -> Option<String> {
         .join(".claude")
         .join("projects")
         .join(transcript_dir_name(branch_dir));
-    session_pointer_in(branch_dir, &transcripts)
+    session_pointer_in(branch_dir, &transcripts, &home.join(".codex").join("sessions"))
 }
 
-pub(crate) fn session_pointer_in(branch_dir: &Path, transcripts: &Path) -> Option<String> {
+/// A Codex thread's transcript: `rollout-<stamp>-<thread_id>.jsonl` in any
+/// date dir three levels down.
+fn codex_rollout_exists(sessions: &Path, thread_id: &str) -> bool {
+    let suffix = format!("-{thread_id}.jsonl");
+    let dirs = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .map(|entries| entries.flatten().map(|entry| entry.path()).filter(|p| p.is_dir()).collect())
+            .unwrap_or_default()
+    };
+    dirs(sessions).iter().flat_map(|y| dirs(y)).flat_map(|m| dirs(&m)).any(|day| {
+        fs::read_dir(day).into_iter().flatten().flatten().any(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("rollout-") && name.ends_with(&suffix)
+        })
+    })
+}
+
+pub(crate) fn session_pointer_in(
+    branch_dir: &Path,
+    transcripts: &Path,
+    codex_sessions: &Path,
+) -> Option<(&'static str, String)> {
     let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("session.json")).ok()?;
     let pointer: Value = serde_json::from_str(&raw).ok()?;
     let session_id = pointer.get("session_id")?.as_str()?.trim().to_string();
@@ -214,10 +247,17 @@ pub(crate) fn session_pointer_in(branch_dir: &Path, transcripts: &Path) -> Optio
     if Path::new(pointer.get("cwd")?.as_str()?) != branch_dir {
         return None;
     }
-    if !transcripts.join(format!("{session_id}.jsonl")).is_file() {
-        return None;
-    }
-    Some(session_id)
+    let provider = match pointer.get("provider").and_then(Value::as_str) {
+        None | Some("claude") => "claude",
+        Some("codex") => "codex",
+        Some(_) => return None,
+    };
+    let exists = if provider == "codex" {
+        codex_rollout_exists(codex_sessions, &session_id)
+    } else {
+        transcripts.join(format!("{session_id}.jsonl")).is_file()
+    };
+    exists.then_some((provider, session_id))
 }
 
 /// Sub-agents are invisible to the process table: they run INSIDE the parent
@@ -449,13 +489,24 @@ mod tests {
     /// A branch dir and a transcript dir, isolated per test. The pointer file
     /// format is the FPLAN-0447 contract: session_pointer.py's write_pointer
     /// is the only production writer, these literals mirror its payload.
-    fn scratch(tag: &str) -> (PathBuf, PathBuf) {
+    fn scratch(tag: &str) -> (PathBuf, PathBuf, PathBuf) {
         let base = std::env::temp_dir().join(format!("baud-pointer-{tag}-{}", std::process::id()));
         let branch = base.join("branch");
         let transcripts = base.join("transcripts");
+        let codex = base.join("codex-sessions");
         fs::create_dir_all(branch.join(".ai_mail.local")).unwrap();
         fs::create_dir_all(&transcripts).unwrap();
-        (branch, transcripts)
+        fs::create_dir_all(&codex).unwrap();
+        (branch, transcripts, codex)
+    }
+
+    /// The pointer shape ai_mail writes for a Codex thread.
+    fn plant_codex_pointer(branch: &Path, thread_id: &str) {
+        let payload = format!(
+            r#"{{"session_id":"{thread_id}","provider":"codex","set_by":"wake","cwd":"{}"}}"#,
+            branch.display()
+        );
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
     }
 
     fn plant_pointer(branch: &Path, session_id: &str, cwd: &Path) {
@@ -468,53 +519,88 @@ mod tests {
 
     #[test]
     fn a_valid_pointer_names_its_session() {
-        let (branch, transcripts) = scratch("valid");
+        let (branch, transcripts, codex) = scratch("valid");
         plant_pointer(&branch, "aaaa-bbbb", &branch);
         fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
         assert_eq!(
-            session_pointer_in(&branch, &transcripts),
-            Some("aaaa-bbbb".to_string())
+            session_pointer_in(&branch, &transcripts, &codex),
+            Some(("claude", "aaaa-bbbb".to_string()))
         );
+    }
+
+    #[test]
+    fn a_codex_pointer_resolves_against_its_rollout_file() {
+        let (branch, transcripts, codex) = scratch("codex");
+        let thread = "019a1b2c-3d4e-7f00-8a9b-0c1d2e3f4a5b";
+        plant_codex_pointer(&branch, thread);
+        let day = codex.join("2026").join("10").join("25");
+        fs::create_dir_all(&day).unwrap();
+        fs::write(day.join(format!("rollout-2026-10-25T13-30-00-{thread}.jsonl")), "{}\n").unwrap();
+        assert_eq!(
+            session_pointer_in(&branch, &transcripts, &codex),
+            Some(("codex", thread.to_string()))
+        );
+    }
+
+    #[test]
+    fn a_codex_pointer_without_its_rollout_is_refused() {
+        // The Claude transcript dir holding the id is no proof for a Codex thread.
+        let (branch, transcripts, codex) = scratch("codexgone");
+        plant_codex_pointer(&branch, "aaaa-bbbb");
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        let day = codex.join("2026").join("10").join("25");
+        fs::create_dir_all(&day).unwrap();
+        fs::write(day.join("rollout-2026-10-25T13-30-00-other.jsonl"), "{}\n").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
+    }
+
+    #[test]
+    fn an_unknown_provider_is_refused() {
+        let (branch, transcripts, codex) = scratch("provider");
+        let payload = format!(r#"{{"session_id":"aaaa-bbbb","provider":"gemini","cwd":"{}"}}"#, branch.display());
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 
     #[test]
     fn a_pointer_for_another_directory_is_refused() {
         // A moved or copied branch inherits a pointer aimed at the ORIGINAL
         // directory's transcripts; resuming those grafts foreign memory.
-        let (branch, transcripts) = scratch("moved");
+        let (branch, transcripts, codex) = scratch("moved");
         plant_pointer(&branch, "aaaa-bbbb", Path::new("/somewhere/else"));
         fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 
     #[test]
     fn a_pointer_without_a_transcript_is_refused() {
         // `--resume <missing id>` fails the launch outright — the guess scan
         // costs nothing by comparison.
-        let (branch, transcripts) = scratch("gone");
+        let (branch, transcripts, codex) = scratch("gone");
         plant_pointer(&branch, "aaaa-bbbb", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 
     #[test]
     fn no_pointer_file_is_simply_none() {
-        let (branch, transcripts) = scratch("absent");
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        let (branch, transcripts, codex) = scratch("absent");
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 
     #[test]
     fn a_malformed_pointer_is_none_not_a_crash() {
-        let (branch, transcripts) = scratch("garbage");
+        let (branch, transcripts, codex) = scratch("garbage");
         fs::write(branch.join(".ai_mail.local").join("session.json"), "not json{").unwrap();
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 
     #[test]
     fn a_blank_or_traversing_id_is_refused() {
-        let (branch, transcripts) = scratch("fence");
+        let (branch, transcripts, codex) = scratch("fence");
         plant_pointer(&branch, "  ", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
         plant_pointer(&branch, "../../escape", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex), None);
     }
 }

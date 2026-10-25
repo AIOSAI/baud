@@ -22,24 +22,32 @@ export const canResume = (branch: BranchStatus): boolean =>
 /** The guard: type the command line only at a prompt, since bytes sent into a live claude become chat. */
 export const typeOnAttach = (branch: BranchStatus): boolean => !branch.interactive;
 
-/** The one command line a door types; mirrors App.tsx's slot, id-before-`-c` order included, and the two change together. */
+/** The agent CLI and its resume form, by the card's provider: id before `-c`; codex resumes by subcommand and has no `-c`. */
+export function agentCommand(branch: BranchStatus, resume: boolean): string {
+  if (branch.provider === "codex") {
+    const thread = resume && branch.resume_id ? ` resume ${quote(branch.resume_id)}` : "";
+    return `command codex --dangerously-bypass-approvals-and-sandbox${thread}`;
+  }
+  const flag = !resume
+    ? ""
+    : branch.resume_id
+      ? ` --resume ${quote(branch.resume_id)}`
+      : branch.has_history
+        ? " -c"
+        : "";
+  return `command claude --permission-mode bypassPermissions${flag}`;
+}
+
+/** The one command line a door types; App.tsx types the same `agentCommand`. */
 export function launchCommand(branch: BranchStatus, mode: LaunchMode): string {
-  // Dispatched resume stops the agent first: two claudes on one session id kill the job silently; `sleep 2` lets it release.
+  // Dispatched resume stops the agent first: two agents on one session id kill the job silently; `sleep 2` lets it release.
   if (mode === "resume" && branch.dispatched && branch.resume_id) {
     return (
       `cd ${quote(branch.path)} && drone @hooks sessions reclaim @${branch.name}` +
-      ` && sleep 2 && command claude --permission-mode bypassPermissions --resume ${quote(branch.resume_id)}`
+      ` && sleep 2 && ${agentCommand(branch, true)}`
     );
   }
-  const resume =
-    mode !== "resume"
-      ? ""
-      : branch.resume_id
-        ? ` --resume ${quote(branch.resume_id)}`
-        : branch.has_history
-          ? " -c"
-          : "";
-  return `cd ${quote(branch.path)} && command claude --permission-mode bypassPermissions${resume}`;
+  return `cd ${quote(branch.path)} && ${agentCommand(branch, mode === "resume")}`;
 }
 
 export interface RoomDoor {

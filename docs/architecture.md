@@ -38,12 +38,13 @@ Three sentences of doctrine, because everything else follows from them:
 | manager | that passport's `identity.citizen_class` reads `manager` |
 | roster tabs | the same per-project scan, run over every project in the census |
 | dispatched | `.ai_mail.local/.dispatch.lock` names a pid that is alive (the dispatch monitor; `/proc/<pid>` stat'ed directly) |
-| interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
+| interactive | `/proc` scan: argv[0] is `claude` with no `-p`/`--print`, or `codex` with no `exec` (its `app-server` and `mcp-server` are no agent), cwd inside the branch |
+| provider | `.ai_mail.local/session.json`'s `provider` when the pointer resolves (a codex thread needs `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl`), else the live session's in the branch, else `claude` |
 | resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
 | mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift |
 | plans / todos / age | the branch's `DASHBOARD.local.json` |
-| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` (which is what finds sessions BAUD did not create) |
+| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` or `codex` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory |
 | header `changes` total | the same binary, `status --porcelain -uall` at the seated project root — untracked files included |
 | projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |

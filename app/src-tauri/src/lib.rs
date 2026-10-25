@@ -154,13 +154,15 @@ const INBOX_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", "inbox.json"];
 /// BAUD's rooms from the operator's own tmux sessions.
 const ROOM_PREFIX: &str = "baud-";
 
-/// A live claude process found on the process table.
+/// A live agent process (claude or codex) found on the process table.
 ///
-/// `headless` is true for `claude -p`/`--print` runs - the shape every
-/// dispatched wake takes - and false for a human-driven interactive session.
+/// `headless` is true for `claude -p`/`--print` and `codex exec` runs - the
+/// shape every dispatched wake takes - and false for a human-driven
+/// interactive session.
 struct ClaudeSession {
     cwd: PathBuf,
     headless: bool,
+    provider: &'static str,
 }
 
 /// The per-branch status file that services keep up to date.
@@ -218,6 +220,11 @@ pub struct BranchStatus {
     /// interactive history exists (plain `-c` continues it) or there are no
     /// transcripts at all.
     pub resume_id: Option<String>,
+    /// The CLI the resume and launch doors start: "claude" or "codex". The
+    /// session pointer's provider when the pointer resolves, else the live
+    /// session's in this branch, else "claude". A codex branch with no pointer
+    /// has no history and no `resume_id`: BAUD scans no Codex transcripts.
+    pub provider: String,
     /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
     /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.
     ///
@@ -296,6 +303,7 @@ impl BranchStatus {
             interactive: false,
             has_history: false,
             resume_id: None,
+            provider: "claude".to_string(),
             room: String::new(),
             has_room: false,
             own_room_live: false,
@@ -1053,13 +1061,13 @@ mod tests {
             "--permission-mode",
             "bypassPermissions",
         ]);
-        assert_eq!(classify_claude_cmdline(&cmdline), Some(false));
+        assert_eq!(classify_claude_cmdline(&cmdline), Some(("claude", false)));
     }
 
     #[test]
     fn bare_and_continue_sessions_are_interactive() {
-        assert_eq!(classify_claude_cmdline(&argv(&["claude"])), Some(false));
-        assert_eq!(classify_claude_cmdline(&argv(&["claude", "-c"])), Some(false));
+        assert_eq!(classify_claude_cmdline(&argv(&["claude"])), Some(("claude", false)));
+        assert_eq!(classify_claude_cmdline(&argv(&["claude", "-c"])), Some(("claude", false)));
     }
 
     #[test]
@@ -1067,12 +1075,40 @@ mod tests {
         // The two exact shapes ai_mail's wake spawns: `-p` fresh, `-c -p` continue.
         let fresh = argv(&["claude", "-p", "do the work", "--output-format", "json"]);
         let cont = argv(&["claude", "-c", "-p", "do the work", "--output-format", "json"]);
-        assert_eq!(classify_claude_cmdline(&fresh), Some(true));
-        assert_eq!(classify_claude_cmdline(&cont), Some(true));
+        assert_eq!(classify_claude_cmdline(&fresh), Some(("claude", true)));
+        assert_eq!(classify_claude_cmdline(&cont), Some(("claude", true)));
         assert_eq!(
             classify_claude_cmdline(&argv(&["claude", "--print", "one-shot"])),
-            Some(true)
+            Some(("claude", true))
         );
+    }
+
+    #[test]
+    fn codex_sessions_are_agents_and_exec_is_headless() {
+        let room = argv(&["codex", "--sandbox", "danger-full-access", "Hi. You are canary, continuing a chat"]);
+        assert_eq!(classify_claude_cmdline(&room), Some(("codex", false)));
+        let resumed = argv(&["/home/op/.local/bin/codex", "--dangerously-bypass-approvals-and-sandbox", "resume", "0199-aaaa"]);
+        assert_eq!(classify_claude_cmdline(&resumed), Some(("codex", false)));
+        let dispatched = argv(&["codex", "--dangerously-bypass-approvals-and-sandbox", "exec", "do the work"]);
+        assert_eq!(classify_claude_cmdline(&dispatched), Some(("codex", true)));
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "e", "do the work"])), Some(("codex", true)));
+    }
+
+    #[test]
+    fn codex_servers_are_not_agents() {
+        // Codex's app-server daemon keeps the session's cwd after the chat ends.
+        let daemon = argv(&["/home/op/.codex/packages/bin/codex", "app-server", "--listen", "unix://"]);
+        assert_eq!(classify_claude_cmdline(&daemon), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "app-server", "daemon", "pid-update-loop"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "mcp-server"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["/x/bin/codex-code-mode-host"])), None);
+    }
+
+    #[test]
+    fn a_codex_pane_is_an_agent_pane() {
+        let scan = parse_panes("canary-switch\tcodex\t/r/src/aipass/canary\nshell\tbash\t/r\n");
+        assert_eq!(scan.agent_panes, vec![("canary-switch".to_string(), PathBuf::from("/r/src/aipass/canary"))]);
+        assert!(scan.holds_claude("canary-switch") && !scan.holds_claude("shell"));
     }
 
     #[test]
@@ -1717,10 +1753,10 @@ mod tests {
         ));
 
         let sessions = vec![
-            ClaudeSession { cwd: mine.clone(), headless: false },
+            ClaudeSession { cwd: mine.clone(), headless: false, provider: "claude" },
             // A dispatched wake in the other room: a claude pane, but no chat
             // box - typing a slash command into it would go nowhere.
-            ClaudeSession { cwd: theirs.clone(), headless: true },
+            ClaudeSession { cwd: theirs.clone(), headless: true, provider: "claude" },
         ];
 
         assert_eq!(
@@ -1731,7 +1767,7 @@ mod tests {
 
         // The same room, now seating a human-driven session: it qualifies, and
         // it qualifies without anyone asking which project BAUD is seated in.
-        let sessions = vec![ClaudeSession { cwd: theirs, headless: false }];
+        let sessions = vec![ClaudeSession { cwd: theirs, headless: false, provider: "claude" }];
         assert_eq!(scan.live_agent_sessions(&sessions), vec!["far-away".to_string()]);
 
         assert!(

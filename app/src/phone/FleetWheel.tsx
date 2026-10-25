@@ -504,7 +504,8 @@ export default function FleetWheel({
         })}
         {shown.map((branch) => {
           // The desktop lamp's precedence: dispatched outranks live, as in BranchChip.
-          const word = branch.dispatched ? "dispatched" : branch.interactive ? "live" : "idle";
+          const state = branch.dispatched ? "dispatched" : branch.interactive ? "live" : "idle";
+          const word = (branch.provider ?? "claude") === "claude" ? state : `${state} · ${branch.provider}`;
           const ref = cardRef(branch);
           const away = branch.project && branch.project !== seatedProject ? branch.project : null;
           /** Git adds nothing until known, so the sum can undercount but never invent. */
