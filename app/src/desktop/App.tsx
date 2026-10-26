@@ -21,7 +21,7 @@ import ProjectSwitch from "./ProjectSwitch";
 import SettingsDialog, { PAIR_COMMAND } from "./SettingsDialog";
 import NewProjectSheet from "../phone/NewProjectSheet";
 import { bornCard, bornSeat } from "../phone/lib/newProject";
-import { agentCommand } from "../phone/lib/rooms";
+import { agentCommand, codexSessions } from "../phone/lib/rooms";
 import Terminal, { type TerminalHandle } from "./Terminal";
 import Zoom from "./Zoom";
 import { relativeAge } from "../age";
@@ -764,6 +764,7 @@ export default function App() {
               onOpenFile={openFromTerminal}
               onRoomEnded={roomWasEnded}
               liveSessions={snapshot?.live_agent_sessions ?? []}
+              codexSessions={codexSessions(snapshot?.branches ?? [])}
             />
           </div>
           {fileTabs.map((tab) => (

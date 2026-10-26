@@ -1,4 +1,4 @@
-/** Tests for app/src/phone/lib/rooms.ts: the command line a door types, by provider and mode. */
+/** Tests for app/src/phone/lib/rooms.ts: the command line a door types, by provider and mode, and the ritual chips. */
 
 // Not tested here: roomDoors (one case, a newborn card's fresh door, in newProject.test.ts) and the
 // one-line guards isAttached, canResume and typeOnAttach (unpinned).
@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BranchStatus } from "../../types";
-import { agentCommand, launchCommand } from "./rooms";
+import { agentCommand, codexSessions, launchCommand, slashCommand } from "./rooms";
 
 const PATH = "/home/op/Projects/AIPass/src/aipass/canary";
 const THREAD = "01a1748b-7c02-78d0-bb32-8d5f593ce962";
@@ -104,5 +104,27 @@ describe("quoting", () => {
     expect(launchCommand(card({ provider: "codex", path: "/x/it's", resume_id: "a'b" }), "resume")).toBe(
       `cd '/x/it'\\''s' && command codex --dangerously-bypass-approvals-and-sandbox resume 'a'\\''b'`,
     );
+  });
+});
+
+describe("the ritual chips", () => {
+  it("type $memo and $prep in a codex room and keep /compact", () => {
+    expect(["/memo", "/prep", "/compact"].map((cmd) => slashCommand(cmd, "codex"))).toEqual(["$memo", "$prep", "/compact"]);
+  });
+
+  it("type the slash commands unchanged in a claude room or with no provider", () => {
+    for (const provider of ["claude", undefined] as const) {
+      expect(["/memo", "/prep", "/compact"].map((cmd) => slashCommand(cmd, provider))).toEqual(["/memo", "/prep", "/compact"]);
+    }
+  });
+
+  it("know a codex room by the session its doors act on, own room first", () => {
+    const branches = [
+      card({ name: "canary", provider: "codex", own_room_live: true, room: "baud-canary", outside_room: null }),
+      card({ name: "hooks", provider: "codex", room: "baud-hooks", outside_room: "canary-switch" }),
+      card({ name: "flow", provider: "claude", own_room_live: true, room: "baud-flow" }),
+      card({ name: "idle", provider: "codex", room: "baud-idle" }),
+    ];
+    expect(codexSessions(branches)).toEqual(["baud-canary", "canary-switch"]);
   });
 });

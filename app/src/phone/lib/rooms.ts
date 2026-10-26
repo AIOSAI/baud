@@ -38,6 +38,16 @@ export function agentCommand(branch: BranchStatus, resume: boolean): string {
   return `command claude --permission-mode bypassPermissions${flag}`;
 }
 
+/** A ritual chip's spelling in the room's CLI: Codex has no custom slash commands, its rituals are `$` skills. */
+export const slashCommand = (cmd: string, provider?: BranchStatus["provider"]): string =>
+  provider === "codex" && cmd !== "/compact" ? `$${cmd.slice(1)}` : cmd;
+
+export const codexSessions = (branches: BranchStatus[]): string[] =>
+  branches.flatMap((branch) => {
+    const session = branch.own_room_live ? branch.room : branch.outside_room;
+    return branch.provider === "codex" && session ? [session] : [];
+  });
+
 /** The one command line a door types; App.tsx types the same `agentCommand`. */
 export function launchCommand(branch: BranchStatus, mode: LaunchMode): string {
   // Dispatched resume stops the agent first: two agents on one session id kill the job silently; `sleep 2` lets it release.

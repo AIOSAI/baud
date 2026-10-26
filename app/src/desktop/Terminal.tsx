@@ -22,6 +22,8 @@ import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
 
+import { slashCommand } from "../phone/lib/rooms";
+
 /** A launch attaches a tmux client to the branch's room; the command is typed only where it lands at a prompt. */
 export interface LaunchSpec {
   /** Branch name - the backend derives the tmux session name from it. */
@@ -50,6 +52,8 @@ interface TerminalProps {
   /** Every tmux session holding a live claude, machine-wide: sessions, not seat branches, so a room in
    *  another project still gets its slash-command chips. */
   liveSessions: string[];
+  /** The live sessions whose card runs Codex, where the ritual chips type `$memo` and `$prep`. */
+  codexSessions: string[];
 }
 
 /** The memory rituals as one-click chips. /clear is left out on purpose: it discards a conversation. */
@@ -142,7 +146,7 @@ function describe(err: unknown): string {
  * Reference: docs/desktop/rooms.md
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { onOpenFile, onRoomEnded, liveSessions },
+  { onOpenFile, onRoomEnded, liveSessions, codexSessions },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -424,17 +428,20 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       {phase === "live" ? (
         <span className="baud-terminal-actions">
           {session && liveSessions.includes(session)
-            ? SLASH_COMMANDS.map(({ cmd, hint }) => (
-                <button
-                  key={cmd}
-                  type="button"
-                  className="baud-terminal-kill baud-terminal-cmd"
-                  title={hint}
-                  onClick={() => sendCommand(cmd)}
-                >
-                  {cmd}
-                </button>
-              ))
+            ? SLASH_COMMANDS.map(({ cmd, hint }) => {
+                const spelled = slashCommand(cmd, codexSessions.includes(session) ? "codex" : "claude");
+                return (
+                  <button
+                    key={cmd}
+                    type="button"
+                    className="baud-terminal-kill baud-terminal-cmd"
+                    title={hint}
+                    onClick={() => sendCommand(spelled)}
+                  >
+                    {spelled}
+                  </button>
+                );
+              })
             : null}
           {room ? (
             <>

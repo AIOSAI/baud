@@ -94,7 +94,11 @@ the corner buttons. One click types the command, waits 150ms for the slash
 palette to settle, then sends `\r` (a carriage return — claude's raw-mode input
 treats a linefeed as text). The hover text explains what each ritual is for.
 `/clear` is deliberately not a chip: the command that discards a conversation
-keeps its typing friction.
+keeps its typing friction. A room whose card runs Codex gets `$memo` and `$prep`
+instead, since Codex has no custom slash commands and its rituals are skills;
+`/compact` is a Codex built-in and stays. The card's provider decides, for the
+session its doors act on (`codexSessions` and `slashCommand` in
+`phone/lib/rooms.ts`).
 
 The question is asked of **the session, not the seat**, so the chips appear in
 a room attached from another project, which the seat's cards know nothing
