@@ -106,11 +106,26 @@ never binds them. Then the wrap is focusable (`tabIndex` 0) and:
 
 **One step per gesture.** A trackpad's inertia sends a stream of wheel events
 long after the fingers lift, and read one-for-one it would ride through the
-whole stack. A quiet gap longer than `WHEEL_REST_MS` (220 ms) starts a new
-gesture; every event inside one is swallowed after the first step. The listener
-is native and non-passive, because React's wheel listener is passive and the
-page must not scroll under the wheel. The mapping is data in
-`lib/wheelInput.ts` (`keyStep`, `wheelStep`), pinned by `wheelInput.test.ts`.
+whole stack. A quiet gap longer than the level's rest starts a new gesture; the
+gesture takes its one step once its summed turn reaches the level's delta, and
+every later event inside it is swallowed. A line-mode wheel's delta counts 16px
+a line. The listener is native and non-passive, because React's wheel listener
+is passive and the page must not scroll under the wheel.
+
+**The wheel speed** is the desktop gear's `wheel speed` row (see
+[settings](../desktop/settings.md)), read from `localStorage` key
+`baud-wheel-speed` on every turn, so a change applies at once. Absent or
+unknown is `normal`. Keys and drag are not governed.
+
+| Level | Rest | Delta |
+| --- | --- | --- |
+| slow | 500 ms | 60 px |
+| normal | 350 ms | 30 px |
+| fast | 220 ms | 0 px |
+
+A mouse notch is about 100px, so no level swallows a single notch. The mapping
+is data in `lib/wheelInput.ts` (`keyStep`, `wheelStep`, `WHEEL_SPEEDS`,
+`gateTurn`), pinned by `wheelInput.test.ts`.
 
 ### The header name is the refresh
 

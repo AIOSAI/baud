@@ -126,9 +126,9 @@ layer shows.
 
 **Opening a card.** A click on an off-centre card centres it and opens nothing;
 a click on the centred card opens it. An agent opens its passport (see *The
-opened passport*); an app opens its workbench tab — GIT, FILES and BACKUP their
-own, and every card on the monitor layer the MACHINE tab (see
-[the apps](apps.md)).
+opened passport*); FILES docks the file tree on the left at the project root
+and a second open closes it; GIT and BACKUP open their own workbench tab, and
+every card on the monitor layer the MACHINE tab (see [the apps](apps.md)).
 
 **Keys and the mouse wheel.** With a mouse or trackpad attached the wheel takes
 focus: `←`/`→` centre the previous or next card, `↑`/`↓` switch layer (down is

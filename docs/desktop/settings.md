@@ -107,6 +107,12 @@ a key, and it hands the whole document back as written.
 | bell keeps | `bell_max_events` | 200 (menu: 50/100/200, accepted range 1–500) |
 | bell chime | `bell_sound` | off |
 
+**Wheel speed** sits in the same panel, under `poll every`, but outside the
+file and the Save button: like the zoom it is this window's own feel, kept in
+`localStorage` (`baud-wheel-speed`: slow, normal or fast; absent is normal) and
+applied the moment the menu changes. The levels' rest and delta are in
+[the wheel](../phone/wheel.md#desktop-input).
+
 Absence and nonsense both fall back to the default — the file is
 operator-editable by hand, and the app must keep running rather than poll every
 0 ms. A stored value the menu does not offer stays listed instead of being

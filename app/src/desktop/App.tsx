@@ -10,7 +10,7 @@ import { appCardView } from "./appCards";
 import FleetWheel, { cardRef } from "../phone/FleetWheel";
 import { interfacePrefs } from "./InterfaceSettings";
 import PassportDoors, { GIT_POLL_MS, type LaunchMode } from "./PassportDoors";
-import FileTree from "./FileTree";
+import FileTree, { type TreeSeat } from "./FileTree";
 import FileView from "./FileView";
 import InquiryPane, { helpCommand } from "./InquiryPane";
 import MonitorPane from "./MonitorPane";
@@ -108,7 +108,7 @@ export default function App() {
   const seatedRef = useRef(false);
 
   // The terminal is ALWAYS mounted: switching tabs hides it, and claude keeps streaming underneath.
-  const [treeBranch, setTreeBranch] = useState<BranchStatus | null>(null);
+  const [treeSeat, setTreeSeat] = useState<TreeSeat | null>(null);
   const [fileTabs, setFileTabs] = useState<FileTab[]>([]);
   const [activeTab, setActiveTab] = useState<string>(TERMINAL_TAB);
 
@@ -147,8 +147,9 @@ export default function App() {
 
   useEffect(loadSettings, [loadSettings]);
 
-  const toggleTree = useCallback((branch: BranchStatus) => {
-    setTreeBranch((current) => (current?.name === branch.name ? null : branch));
+  // Keyed on the path: a project and its branch can share a name.
+  const toggleTree = useCallback((seat: TreeSeat) => {
+    setTreeSeat((current) => (current?.path === seat.path ? null : { name: seat.name, path: seat.path }));
   }, []);
 
   const openFile = useCallback(
@@ -394,7 +395,7 @@ export default function App() {
   // A project switch moves the fence, so old tabs would be refused. The terminal stays: only "end room" kills.
   const reseat = useCallback(() => {
     setFileTabs([]);
-    setTreeBranch(null);
+    setTreeSeat(null);
     setActiveTab(TERMINAL_TAB);
     setSettingsAgent(null);
     setInterfaceOpen(false);
@@ -483,11 +484,16 @@ export default function App() {
 
   const openApp = useCallback(
     (key: string) => {
+      // FILES seats the left tree at the project root, as a passport's files door does for a branch.
+      if (key === "files") {
+        if (snapshot?.root) toggleTree({ name: snapshot.project, path: snapshot.root });
+        return;
+      }
       // The wheel owns the monitor row's card list; every one of them is the machine tab here.
-      const view = appCardView(key.startsWith("mon-") ? "machine" : (key as "git" | "files" | "backup"), snapshot?.project ?? null);
+      const view = appCardView(key.startsWith("mon-") ? "machine" : (key as "git" | "backup"), snapshot?.project ?? null);
       if (view) openPhone(view);
     },
-    [snapshot?.project, openPhone],
+    [snapshot?.project, snapshot?.root, openPhone, toggleTree],
   );
 
   /** The passport's row, re-read live: seated snapshot first (fresher), then roster. Identity is name AND project,
@@ -717,11 +723,11 @@ export default function App() {
       ) : null}
 
       <main className="baud-stage">
-        {treeBranch ? (
+        {treeSeat ? (
           <FileTree
-            branch={treeBranch}
+            seat={treeSeat}
             onOpen={openFile}
-            onClose={() => setTreeBranch(null)}
+            onClose={() => setTreeSeat(null)}
           />
         ) : null}
 
