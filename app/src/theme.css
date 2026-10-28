@@ -1890,6 +1890,18 @@ button.baud-tab {
   }
 }
 
+/* The phone's agent card on the desktop: centred as the settings modals are,
+   and wide enough to read across a 1920 window. phone.css stays the phone's. */
+.baud-desk-card .baud-agent-scrim {
+  align-items: center;
+  padding-top: 0;
+}
+
+.baud-desk-card .baud-agent-card {
+  width: min(92vw, 460px);
+  max-height: 86vh;
+}
+
 /* The document. Rides the settings scrim - a passport is a modal glance, and
    the operator already knows escape closes one of these. */
 .baud-passport {

@@ -1,6 +1,6 @@
 # The window and cards
 
-This page covers the desktop window's frame and its cards: the header, footer, zoom and project switcher, the wheel and its round cards, the passport a card opens and the doors it carries, and what a launch button types.
+This page covers the desktop window's frame and its cards: the header, footer, zoom and project switcher, the wheel and its round cards, the agent card the wheel opens and its passport, and what a launch button types.
 
 ← [the desktop window](../desktop.md)
 
@@ -17,8 +17,8 @@ camera, the bell, BAUD's own settings gear, and the zoom chip.
 **`❯_` opens a working shell in a tab**, seated at the project root — the
 global one. It follows the project chip: reseat the view and the next click
 opens the new root, and it stays disabled until a snapshot names that root
-rather than guess. Every opened passport carries the same button seated in its
-own branch directory instead. These are plain shells with nothing typed into
+rather than guess. Every opened card's `shell` door opens the same kind of
+shell, seated in its own branch directory instead. These are plain shells with nothing typed into
 them — not rooms, not agent seats — and they are keyed by directory, so a
 re-click brings the open one forward and a project shell can never collide with
 a branch's.
@@ -60,7 +60,7 @@ settings from the new root, and re-polls immediately. The terminal is untouched.
 The menu's last row, `+ new project`, opens the phone's new-project sheet: a
 name, a template (`empty` or `python`), create. The host makes the project; the
 window then seats it by the census name the host returns, never the typed name,
-and launches the new manager through the same door its passport's launch button
+and launches the new manager through the same door its card's launch door
 uses, which for a newborn is `fresh`. A seat that fails after the project was
 made says so in the fault banner.
 
@@ -92,7 +92,7 @@ agent's initials; a dot gives its state (dispatched, live, idle — dispatched
 outranks live); one badge sums what is waiting (mail, opened mail, plans, todos
 and the git count); the name sits under the disc, and a card from another
 project names that project under the name. A fleet of seventeen is scanned by
-shape before it is read by name. Everything else lives in the opened passport,
+shape before it is read by name. Everything else lives in the opened card,
 because a rail of dense cards is a field of misclicks.
 
 - **Manager** — a disc ringed blue on citizens whose passport says
@@ -125,8 +125,8 @@ The monitor layer's machine faces (`useMachineVitals`) poll only while that
 layer shows.
 
 **Opening a card.** A click on an off-centre card centres it and opens nothing;
-a click on the centred card opens it. An agent opens its passport (see *The
-opened passport*); FILES docks the file tree on the left at the project root
+a click on the centred card opens it. An agent opens its card (see *The
+opened card*); FILES docks the file tree on the left at the project root
 and a second open closes it; GIT and BACKUP open their own workbench tab, and
 every card on the monitor layer the MACHINE tab (see [the apps](apps.md)).
 
@@ -150,98 +150,93 @@ is `calc(50% - 32px * var(--wheel-scale))`, half a card, because the phone's
 `50vw` measures the window, not the wrap, and would centre the snap off the
 notch. A focused wheel wears an outline in the layer's accent.
 
-## The opened passport
+## The opened card
 
-Opening an agent's card opens that agent as a **document**: issuer, document
-type, holder — `AIPASS`, `AGENT PASSPORT`, the name — then the doors, then the
-pages. It is a modal rather than a workbench tab, and the distinction is the
-reasoning: the workbench is where the operator *works*, holding a terminal and
-the files kept open beside it, while a passport is consulted and dismissed.
-Escape closes it, because the settings panels already taught that gesture.
+Opening an agent on the wheel opens the phone's agent card, `AgentSheet.tsx`,
+the same component the phone draws: one card, two faces. Every door, line and
+rule on it is described once, on [the phone's card page](../phone/card.md);
+this section covers what the desktop wires behind it.
 
-### The doors
+**It is a modal, not a workbench tab.** The workbench is where the operator
+*works*, holding a terminal and the files kept open beside it, while a card is
+consulted and dismissed. A click on the scrim closes it, and so does Escape,
+because the settings panels already taught that gesture. The card sits centred
+on the window, 460px wide (`min(92vw, 460px)`, up to 86% of the window's
+height) through the `.baud-desk-card` container in `theme.css`; the phone's own
+stylesheet is untouched.
 
-`PassportDoors.tsx` renders the agent's doors above the identity page. Every
-door opens something in the window behind the scrim, so pressing one closes the
-passport first.
+**Every door that opens something in the window closes the card first.**
 
-- **Badge** — `dispatched` (`.ai_mail.local/.dispatch.lock` names a live pid),
-  `live` (a live claude with no `-p`/`--print` has its cwd inside the branch),
-  or a quiet `room` when a tmux room exists with nothing live in it. A trailing
-  `⧉` means the live session is one BAUD did not create; hovering names it.
-- **Provider** — a codex agent names its provider in plain text beside the badge.
-- **Sub badge** — amber `N sub` while sub-agents are running inside the
-  branch's session: the number behind the wheel's red pulse.
-- **Project tag** — an agent from another project gets an amber tag naming its
-  tree, and the away note under the head (see below).
-- **`?`** — opens a help terminal for this branch (see [Help terminals](rooms.md#the-workbench)).
-- **Gear** — opens this branch's settings panel (see [Settings](settings.md)).
-  Fenced for an agent from another project (see below).
-- **Figures** — every number is a door to the phone's designed screen for it,
-  opened in a workbench tab (one tab per agent and door; a re-click brings it
-  forward). `mail` and `open` are counted live from `.ai_mail.local/inbox.json`
-  and open the inbox screen, newest first, a message opening to its full text;
-  `plans` comes from `DASHBOARD.local.json` and opens the plans screen; `todos`
-  comes from the dashboard too and opens the memory screen on its todos tab;
-  `⎇ git` is a count of uncommitted tracked files and opens the git app on this
-  branch's changes. Each screen's `‹ card` at its floor closes the tab. The raw
-  files stay one `files` click away. The dashboard's summary line is
-  deliberately not shown — it restates the same figures.
-- **Age** — `updated <age>`, from the dashboard's `last_updated`, styled stale
-  when it gets old.
-- **Buttons** — `files` docks the branch's file tree for a seated agent, and
-  opens the files screen in a tab for one from another project; a file picked
-  there opens in the same tab, and its `‹ folder` returns to the folder.
-  `watch` opens a read-only monitor pane scoped to this branch. `❯_` opens a
-  plain working shell in a tab, already seated in the branch directory — the
-  same door the header's `❯_` opens at the project root. Then the launch door:
-  a branch with a live interactive claude in a session — its own room, or one
-  BAUD did not create — shows a single `▸ attach`, never a second claude in the
-  same branch; otherwise `▸ resume` (when there is anything to resume) beside
-  `fresh`, or a single `▸ claude` when the branch has no transcripts at all. A
-  dispatched branch shows `⏳ working` in resume's place, and it opens the watch
-  pane: resuming a dispatched session steals its background-task state and
-  kills the job, while `fresh` starts a new session id and steals nothing.
+| Door | On the desktop |
+| --- | --- |
+| the name | the agent's `README.md`, by its absolute path, in a file tab |
+| `?` | a help terminal for this branch (see [Help terminals](rooms.md#the-workbench)) |
+| gear | this branch's settings panel (see [Settings](settings.md)), fenced for an agent from another project |
+| `MAIL`, `PLANS`, `TODOS`, `GIT` | the phone's designed screen in a workbench tab, one tab per agent and door: the inbox, the plans screen, the memory screen on its todos tab, the branch's git changes; each screen's `‹ card` at its floor closes the tab |
+| launch doors | the terminal (see *What a launch button types*) |
+| `‹ detach` | closes the terminal's client; the room keeps running |
+| `files` | docks the branch's file tree for a seated agent; for one from another project, the files screen in a tab, because the tree reads under the seated root |
+| `shell` | a plain working shell in a tab, seated in the branch directory, the same kind the header's `❯_` opens at the project root |
+| `watch` | a read-only monitor pane scoped to this branch |
+| `memory` | the memory screen in a tab |
+| `prax`, `commons` | a manager's two monitors, the same tabs as the header's traffic lights, so pressing one whose tab is open closes it |
+| `passport` | the phone's passport sheet (below) |
+| `wake`, `end room` | the host's verbs, over the relay |
 
-The `?`, the gear and the buttons render only for citizens — a directory
-without `.trinity/passport.json` gets a card, but no doors.
+**The room-below line and `‹ detach` follow the terminal.** The terminal
+reports the room its client is attached to, by name and project, while that
+client is live; the card shows `▸ this room is open in the terminal below` and
+offers `‹ detach` in place of the launch doors only when both match. Two
+projects can each hold a room for a same-named agent, so a name alone would
+claim the wrong one.
 
-**The git count polls only while a passport is open**, for that one agent,
-every 15 seconds (`GIT_POLL_MS`), which is not configurable — a git subprocess
-per tick is real work and uncommitted-file counts do not move second to second.
-For an agent from another project, a count still being asked shows `—` and one
-that cannot be had shows `n/a` (hover says why), never `0`, which would read as
-clean.
+**`end room` ends the room through the host**, as on the phone, with the same
+confirm. Where the window offers no platform authenticator, the fingerprint
+attempt falls through to the plain tap. When the
+host confirms the kill, the terminal's client closes if it holds this room, the
+room is marked ended under its own project so the startup agent leaves it
+closed, and the fleet is polled again; the card stays open to show the answer.
+The terminal's own `✕ end room` marks its room the same way, under the project
+its attach named.
 
-**An agent from another project opens its reads, as the phone's card does.**
-Every figure opens the same designed screen it opens for a seated agent, with
-the agent's own project named on the read, so a same-named agent in the seated
-project is never read in its place. `files` opens the phone's files screen in a
-tab rather than the docked tree, because the tree reads under the seated root.
-The `⎇ git` count asks for the branch by name and project over the host relay.
-`watch`, `?`, `❯_` and the launch door work from anywhere: @prax scopes a watch
-by itself, and a help or plain shell opens in the branch's own directory.
+**The card follows the poll.** Its row is looked up live on every render from
+the seated snapshot, falling back to the census roster, and matched on name
+*and* project. The open-time row is kept only for a branch that leaves both
+lists while open. The card fetches its own git count once per open.
 
-**Only the gear stays fenced.** The settings panel's memory dials write by
-branch name alone, so for a foreign agent they would edit the seated project's
-same-named agent. The gear is drawn dashed and disabled, and a line under the
-doors' head says so in words — *`<name>` lives in `<project>`: read it, watch
-it, attach it from here. Only the settings gear stays behind: its memory dials
-name no project.* — because a tooltip on a disabled button is not a reason
-anyone sees.
+### The passport
+
+The card's `passport` door opens the phone's passport sheet,
+`PassportSheet.tsx`: holder disc, name and class, role, purpose, traits, the
+issue date, the short passport and branch registration numbers (tap for the
+full id), principles, the `MANAGER` and `ADMIN GRANT` stamps, and the records
+door. It stands in for the card while open; its `×`, a scrim click or Escape
+returns to the card. It reads `<branch>/.trinity/passport.json` and the birth
+certificate by name and the card's project, which the desktop sends over the
+host relay, so a passport from another project reads its own agent's file.
+
+**The records door** opens the files screen in a tab, floored at the branch's
+`artifacts/`, where `birth_certificate.json` is drawn as the certificate it is
+rather than as text.
 
 ### What a launch button types
 
-One visible line, on the click:
+One visible line, on the click, built by `launchCommand` in
+`src/phone/lib/rooms.ts`, the same line the phone types:
 
 ```
 cd '<branch dir>' && command claude --permission-mode bypassPermissions [-c | --resume <id>]
 cd '<branch dir>' && command codex --dangerously-bypass-approvals-and-sandbox [resume <id>]
+cd '<branch dir>' && drone @hooks sessions reclaim @<branch> && sleep 2 && <the resume line>
 ```
 
 The agent's `provider` picks the line. A codex branch resumes only through its
 session pointer: BAUD scans no Codex transcripts, so with no pointer it starts
-fresh.
+fresh. The third line is `▸ resume ⚡` on a dispatched agent: resuming onto a
+working session would steal its background tasks and kill the job silently, so
+the door takes two presses inside four seconds and the line stops the job
+first. The startup agent never takes that door; a dispatched startup agent
+opens its watch pane instead.
 
 `command claude` skips the `~/.bashrc` boot shim — which intercepts `claude` and
 `claude --permission-mode …` inside a `.trinity` directory and routes them
@@ -262,41 +257,3 @@ Claude Code's Remote Control is a terminal-native convenience like attach — re
 worth using when it is there, never something the fleet depends on. It works
 without BAUD's help: `/remote-control` typed inside a session puts that session
 on the phone.
-
-### The pages
-
-**Identity** renders `.trinity/passport.json` as fields, never as the JSON it
-happens to be stored in: class, role, purpose, traits, with `created` shown as
-*Issued* and `registry_id` as the *passport number*. **Working memory** is four
-tabs over the agent's own files — Sessions, Key Learnings, Todos from
-`local.json`, Observations from `observations.json` — each entry a card with its
-number, date and text. They are ordered newest-first *by position, not by date*:
-these files are appended to, so a hand-typed date can be wrong in a way the
-order cannot. The four containers disagree about what they call their text
-(`summary`, `learning`, `note`, `task`), so one reader tries each name and an
-entry carrying none of them says so rather than rendering blank. A footer says
-what the page is: the recent end only, because the rest has rolled over into
-@memory's archive.
-
-**Sub-agents appear as a count and only ever a count** — no names exist in that
-lane and BAUD will not imply any.
-
-**A manager's passport carries the two global monitors** — prax mission control
-and the commons feed, because they belong to the agent that runs them. They
-use the same doors and tab ids as the header's traffic lights, so a monitor
-opened from a passport *is* that tab, and closing it from the tab bar leaves
-the toggle honest.
-
-Every page is read and nothing is owned: these are @spawn's and the agent's own
-files, and a read that fails prints the refusal in the file's own words rather
-than drawing an empty document that would read as an agent with nothing to say.
-A passport opened from another project's card is fenced like every other read
-and says so.
-
-**The document follows the poll.** Its row is looked up live on every render
-from the seated snapshot, falling back to the census roster, and matched on name
-*and* project — a room name carries its project scope, and eleven projects share
-a naming convention. The open-time row is kept only for a branch that leaves
-both lists mid-read. A passport frozen at open could show four running
-sub-agents on the wheel while its page read "none running"; a view that shows
-live numbers has to read them live — the doors included.

@@ -48,7 +48,7 @@ Everything below is under `app/` unless it says otherwise.
 |---|---|---|
 | The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop) |
 | The phone face | `src/phone/` | [its files, on their own page](docs/phone/files.md) |
-| The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the desktop's opened-card doors in `src/desktop/PassportDoors.tsx` | [the desktop's wheel and passport](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
+| The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the opened card, both faces, in `src/phone/AgentSheet.tsx` | [the desktop's wheel and card](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
 | The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |
 | The phone's backend | @api's host, not in this repo | [Host lanes](#host-lanes--the-phones-backend-and-it-is-not-in-this-repo), below |
@@ -157,7 +157,7 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/architecture.md` | How BAUD reads the fleet, the three rules everything else follows from, the type seam, and the Rust backend's files. |
 | `docs/desktop.md` | The desktop window's index: running it, the face's files, the camera, the command surface, the layout, and the table of the pages below. |
-| `docs/desktop/window-and-cards.md` | The window, the wheel and its round cards, the opened passport and its doors. |
+| `docs/desktop/window-and-cards.md` | The window, the wheel and its round cards, the opened card and its passport. |
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
 | `docs/desktop/settings.md` | The card gear, the header gear, the memory dials, the host API tab. |
 | `docs/desktop/apps.md` | The wheel's app and monitor cards, GIT, FILES, BACKUP and MACHINE, each the phone's screen in a workbench tab. |

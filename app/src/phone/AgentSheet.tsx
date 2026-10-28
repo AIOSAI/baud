@@ -243,7 +243,7 @@ export default function AgentSheet({
           {kind} · <span className={isAwake(branch) ? "baud-agent-awake" : ""}>{state}</span>
         </p>
         {/* Zero is stated, not hidden: a sheet silent at zero cannot be told from one that
-            does not report sub-agents, and the desktop passport says "none running". */}
+            does not report sub-agents. */}
         <p
           className={`baud-agent-subagents ${
             branch.subagents > 0 ? "baud-agent-subagents-live" : ""

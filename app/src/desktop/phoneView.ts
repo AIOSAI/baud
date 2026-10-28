@@ -15,7 +15,7 @@ export type CardView =
   | { screen: "plans"; branch: string; project: string }
   | { screen: "memory"; branch: string; project: string; initialTab?: MemoryTabId }
   | { screen: "branch-git"; branch: string; project: string }
-  | { screen: "branch-files"; branch: string; project: string };
+  | { screen: "branch-files"; branch: string; project: string; start?: string };
 
 export type PhoneView = AppView | CardView;
 

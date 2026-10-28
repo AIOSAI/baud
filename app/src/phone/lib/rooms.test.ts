@@ -1,12 +1,11 @@
 /** Tests for app/src/phone/lib/rooms.ts: the command line a door types, by provider and mode, and the ritual chips. */
 
-// Not tested here: roomDoors (one case, a newborn card's fresh door, in newProject.test.ts) and the
-// one-line guards isAttached, canResume and typeOnAttach (unpinned).
+// Not tested here: the one-line guards isAttached, canResume and typeOnAttach (unpinned).
 
 import { describe, expect, it } from "vitest";
 
 import type { BranchStatus } from "../../types";
-import { agentCommand, codexSessions, launchCommand, slashCommand } from "./rooms";
+import { agentCommand, codexSessions, launchCommand, roomDoors, slashCommand } from "./rooms";
 
 const PATH = "/home/op/Projects/AIPass/src/aipass/canary";
 const THREAD = "01a1748b-7c02-78d0-bb32-8d5f593ce962";
@@ -96,6 +95,20 @@ describe("a claude card's doors", () => {
     expect(agentCommand(card({ provider: undefined, resume_id: THREAD }), true)).toBe(
       `command claude --permission-mode bypassPermissions --resume '${THREAD}'`,
     );
+  });
+});
+
+describe("a dispatched card's doors, on both faces", () => {
+  it("offers the two-tap intercept with a resume id, never a watch-only door", () => {
+    const doors = roomDoors(card({ dispatched: true, resume_id: THREAD }));
+    expect(doors.map((door) => [door.label, door.mode, door.intercept ?? false])).toEqual([
+      ["▸ resume ⚡", "resume", true],
+      ["▸ fresh", "fresh", false],
+    ]);
+  });
+
+  it("offers only fresh without one", () => {
+    expect(roomDoors(card({ dispatched: true, has_history: true })).map((door) => door.label)).toEqual(["▸ fresh"]);
   });
 });
 

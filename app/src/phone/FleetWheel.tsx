@@ -585,7 +585,7 @@ export default function FleetWheel({
           );
         })}
         {shown.map((branch) => {
-          // The lamp precedence: dispatched outranks live, as in PassportDoors.
+          // The lamp precedence: dispatched outranks live, as on the card's state line.
           const state = branch.dispatched ? "dispatched" : branch.interactive ? "live" : "idle";
           const word = (branch.provider ?? "claude") === "claude" ? state : `${state} · ${branch.provider}`;
           const ref = cardRef(branch);

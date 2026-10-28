@@ -32,7 +32,7 @@ Each part of the window has its own page under `docs/desktop/`.
 
 | Page | What it covers |
 | --- | --- |
-| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened passport and its doors; what a launch types |
+| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened card and its passport; what a launch types |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
 | [apps](desktop/apps.md) | the wheel's app and monitor cards: FILES docks the tree at the project root; GIT, BACKUP and MACHINE are each the phone's own screen in a workbench tab |
@@ -49,11 +49,11 @@ desktop-only, and since 2026-08-18 the directory says so.
 |---|---|
 | `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
 | `../phone/FleetWheel.tsx` | The fleet: the phone's wheel, mounted under the header (see [the wheel](desktop/window-and-cards.md#the-wheel)). |
-| `PassportDoors.tsx` · `CardScreens.tsx` · `cardDoors.ts` | One agent's doors in its opened passport: badges, figures, launch, files, watch, shell, help, gear; the designed screens its doors open in tabs; which screen each door opens and the fenced gear's words. |
+| `../phone/AgentSheet.tsx` · `../phone/PassportSheet.tsx` | The opened card and its passport, the phone's own, mounted by `App.tsx` (see [the opened card](desktop/window-and-cards.md#the-opened-card)). |
+| `CardScreens.tsx` · `cardDoors.ts` | The designed screens a card's doors open in tabs; which screen each door opens, and whether the terminal holds the card's room. |
 | `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; which tab a wheel app card opens. |
 | `PhoneTab.tsx` · `PhonePane.tsx` · `phoneView.ts` | The seam: a workbench tab that hosts a phone screen, the box it mounts in, and what each such tab shows and is keyed by. |
 | `FileTree.tsx` · `FileView.tsx` | Browse, read. |
-| `PassportView.tsx` | An agent's identity and memory, read, with its doors above the pages. |
 | `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
 | `Bell.tsx` · `bellMarks.ts` | The notification shade and its unread marker; the machine-wide cleared mark and the mail row's door. |
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |

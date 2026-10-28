@@ -1,9 +1,8 @@
 /** Which door a card offers and what a door types, ported from the desktop's own rules. Reference: docs/phone/room.md */
 
-import type { LaunchMode } from "../../desktop/PassportDoors";
 import type { BranchStatus } from "../../types";
 
-export type { LaunchMode };
+export type LaunchMode = "resume" | "fresh";
 
 export { helpCommand } from "../../desktop/InquiryPane";
 
@@ -48,7 +47,7 @@ export const codexSessions = (branches: BranchStatus[]): string[] =>
     return branch.provider === "codex" && session ? [session] : [];
   });
 
-/** The one command line a door types; App.tsx types the same `agentCommand`. */
+/** The one command line a door types, on both faces. */
 export function launchCommand(branch: BranchStatus, mode: LaunchMode): string {
   // Dispatched resume stops the agent first: two agents on one session id kill the job silently; `sleep 2` lets it release.
   if (mode === "resume" && branch.dispatched && branch.resume_id) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { isCertificateOpen, renderCertificate } from "../phone/Certificate";
 import FilesScreen from "../phone/FilesScreen";
 import GitApp from "../phone/git/GitApp";
 import InboxScreen from "../phone/InboxScreen";
@@ -72,9 +73,10 @@ export default function CardScreens({ view, onClose }: CardScreensProps) {
     case "branch-files":
       return (
         <BranchFiles
-          key={`${view.project}/${view.branch}`}
+          key={`${view.project}/${view.branch}@${view.start ?? ""}`}
           branch={view.branch}
           project={view.project}
+          start={view.start ?? ""}
           onClose={onClose}
         />
       );
@@ -82,7 +84,18 @@ export default function CardScreens({ view, onClose }: CardScreensProps) {
 }
 
 /** The phone's browse → reader pair inside one tab: a file's `‹ folder` returns to the folder it was opened from. */
-function BranchFiles({ branch, project, onClose }: { branch: string; project: string; onClose: () => void }) {
+function BranchFiles({
+  branch,
+  project,
+  start,
+  onClose,
+}: {
+  branch: string;
+  project: string;
+  /** The browse's floor; the passport's records door floors it at `artifacts`, where the certificate is drawn. */
+  start: string;
+  onClose: () => void;
+}) {
   const [at, setAt] = useState<string | undefined>(undefined);
   const [reading, setReading] = useState<string | null>(null);
 
@@ -90,6 +103,7 @@ function BranchFiles({ branch, project, onClose }: { branch: string; project: st
     return (
       <Reader
         target={{ ref: reading, title: reading, kind: "file", project }}
+        render={isCertificateOpen(branch, start, reading) ? renderCertificate : undefined}
         preview={isMarkdownRef(reading) ? renderMarkdown : undefined}
         backLabel="folder"
         onClose={() => setReading(null)}
@@ -99,10 +113,10 @@ function BranchFiles({ branch, project, onClose }: { branch: string; project: st
   return (
     <FilesScreen
       /* The start directory is read once into state. */
-      key={`${project}/${branch}@${at ?? ""}`}
+      key={`${project}/${branch}/${start}@${at ?? ""}`}
       branch={branch}
       project={project}
-      start=""
+      start={start}
       at={at}
       backLabel={BACK}
       onOpenFile={(ref, _title, where) => {
