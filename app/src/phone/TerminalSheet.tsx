@@ -94,7 +94,7 @@ const CHIPS_LEFT: ReadonlyArray<ChipSpec> = [
     title: "escape - interrupt / back out. HOLD: esc esc (rewind in claude, backtrack in codex)",
     hold: { bytes: "\x1b\x1b", title: "esc esc" },
   },
-  { bytes: "\x09", label: "tab", title: "Tab - autocomplete (claude), queue a follow-up mid-turn (codex)" },
+  { bytes: "\x09", label: "tab", title: "Tab - autocomplete (claude), queue a follow-up mid-turn (codex), switch agent (opencode)" },
   { bytes: "\x1b[Z", label: "⇧⇥", title: "Shift+Tab - cycle modes, both claude and codex" },
 ];
 

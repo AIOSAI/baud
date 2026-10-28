@@ -159,8 +159,8 @@ pub(crate) fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
 /// The card's provider, history flag and resume id. A live session names the
 /// provider, since a pointer is history; else the pointer's, else claude. The
 /// pointer's id is the resume door only while its provider is the card's:
-/// `claude --resume` on a Codex thread fails the launch. A codex card has no
-/// transcript scan, so `claude_history` runs only for claude.
+/// `claude --resume` on a Codex thread fails the launch. A codex or opencode
+/// card has no transcript scan, so `claude_history` runs only for claude.
 pub(crate) fn resume_door(
     live: Option<&'static str>,
     pointer: Option<(&'static str, String)>,
@@ -168,7 +168,7 @@ pub(crate) fn resume_door(
 ) -> (&'static str, bool, Option<String>) {
     let provider = live.or(pointer.as_ref().map(|(provider, _)| *provider)).unwrap_or("claude");
     let pointed = pointer.filter(|(from, _)| *from == provider).map(|(_, id)| id);
-    if provider == "codex" {
+    if provider != "claude" {
         return (provider, false, pointed);
     }
     let (has_history, scanned) = claude_history();

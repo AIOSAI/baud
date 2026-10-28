@@ -38,13 +38,13 @@ Three sentences of doctrine, because everything else follows from them:
 | manager | that passport's `identity.citizen_class` reads `manager` |
 | roster (the wheel's live and dispatched layers) | the same per-project scan, run over every project in the census |
 | dispatched | `.ai_mail.local/.dispatch.lock` names a pid that is alive (the dispatch monitor; `/proc/<pid>` stat'ed directly) |
-| interactive | `/proc` scan: argv[0] is `claude` with no `-p`/`--print`, or `codex` with no `exec` (its `app-server` and `mcp-server` are no agent), cwd inside the branch |
-| provider | the live session's in the branch, else `.ai_mail.local/session.json`'s `provider` when the pointer resolves (a codex thread needs `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl`), else `claude`; the pointer's id is the resume id only while its provider is the card's |
+| interactive | `/proc` scan: argv[0] is `claude` with no `-p`/`--print`, `codex` with no `exec` (its `app-server` and `mcp-server` are no agent), or `opencode` with no `run` (its `serve`, the shared daemon and a seat's private server, is no agent), cwd inside the branch |
+| provider | the live session's in the branch, else `.ai_mail.local/session.json`'s `provider` when the pointer resolves (a codex thread needs `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl`; an opencode session needs its `session_v2` row in `~/.local/share/opencode/opencode.db`, opened read-only, with `directory` equal to the branch path), else `claude`; the pointer's id is the resume id only while its provider is the card's |
 | resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
 | mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift |
 | plans / todos / age | the branch's `DASHBOARD.local.json` |
-| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` or `codex` (which is what finds sessions BAUD did not create) |
+| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude`, `codex` or `opencode` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory |
 | header `changes` total | the same binary, `status --porcelain -uall` at the seated project root — untracked files included |
 | projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |

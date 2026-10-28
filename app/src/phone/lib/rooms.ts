@@ -21,8 +21,13 @@ export const canResume = (branch: BranchStatus): boolean =>
 /** The guard: type the command line only at a prompt, since bytes sent into a live claude become chat. */
 export const typeOnAttach = (branch: BranchStatus): boolean => !branch.interactive;
 
-/** The agent CLI and its resume form, by the card's provider: id before `-c`; codex resumes by subcommand and has no `-c`. */
+/** The agent CLI and its resume form, by the card's provider: id before `-c`; codex resumes by subcommand, opencode by `--session`. */
 export function agentCommand(branch: BranchStatus, resume: boolean): string {
+  if (branch.provider === "opencode") {
+    // A pane's shell is no login shell, so the installer's bin is not on PATH; `--standalone` keeps this pane's env off the shared server.
+    const session = resume && branch.resume_id ? ` --session ${quote(branch.resume_id)}` : "";
+    return `PATH="$HOME/.opencode/bin:$PATH" command opencode --standalone --auto${session}`;
+  }
   if (branch.provider === "codex") {
     const thread = resume && branch.resume_id ? ` resume ${quote(branch.resume_id)}` : "";
     return `command codex --dangerously-bypass-approvals-and-sandbox${thread}`;
@@ -37,15 +42,22 @@ export function agentCommand(branch: BranchStatus, resume: boolean): string {
   return `command claude --permission-mode bypassPermissions${flag}`;
 }
 
-/** A ritual chip's spelling in the room's CLI: Codex has no custom slash commands, its rituals are `$` skills. */
+/** A ritual chip's spelling in the room's CLI: Codex has no custom slash commands, its rituals are `$` skills; OpenCode spells Claude's. */
 export const slashCommand = (cmd: string, provider?: BranchStatus["provider"]): string =>
   provider === "codex" && cmd !== "/compact" ? `$${cmd.slice(1)}` : cmd;
 
-export const codexSessions = (branches: BranchStatus[]): string[] =>
-  branches.flatMap((branch) => {
-    const session = branch.own_room_live ? branch.room : branch.outside_room;
-    return branch.provider === "codex" && session ? [session] : [];
-  });
+/** The switch legs a room offers: the other two CLIs, each spelled as the room's CLI calls it. */
+export const switchLegs = (provider?: BranchStatus["provider"]): string[] =>
+  provider === "codex" ? ["$claude", "$opencode"] : provider === "opencode" ? ["/claude", "/codex"] : ["/codex", "/opencode"];
+
+/** The live session each non-claude card's doors act on, own room first, mapped to its CLI. */
+export const roomProviders = (branches: BranchStatus[]): Record<string, BranchStatus["provider"]> =>
+  Object.fromEntries(
+    branches.flatMap((branch) => {
+      const session = branch.own_room_live ? branch.room : branch.outside_room;
+      return branch.provider && branch.provider !== "claude" && session ? [[session, branch.provider]] : [];
+    }),
+  );
 
 /** The one command line a door types, on both faces. */
 export function launchCommand(branch: BranchStatus, mode: LaunchMode): string {

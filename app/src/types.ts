@@ -12,7 +12,7 @@ export interface BranchStatus {
   has_history: boolean;
   resume_id: string | null;
   /** The CLI the doors start: the pointer's provider, else the live session's, else "claude". An older baud-cli omits it. */
-  provider?: "claude" | "codex";
+  provider?: "claude" | "codex" | "opencode";
   /** The own room's name whether or not it exists. Read it, never rebuild it: `room_name` owns the rule. */
   room: string;
   has_room: boolean;

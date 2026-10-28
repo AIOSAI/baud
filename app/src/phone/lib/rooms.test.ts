@@ -5,10 +5,12 @@
 import { describe, expect, it } from "vitest";
 
 import type { BranchStatus } from "../../types";
-import { agentCommand, codexSessions, launchCommand, roomDoors, slashCommand } from "./rooms";
+import { agentCommand, launchCommand, roomDoors, roomProviders, slashCommand, switchLegs } from "./rooms";
 
 const PATH = "/home/op/Projects/AIPass/src/aipass/canary";
 const THREAD = "01a1748b-7c02-78d0-bb32-8d5f593ce962";
+const OC_SESSION = "ses_e7e3415cbffef1y2cc4IHRRmXX";
+const OPENCODE = `PATH="$HOME/.opencode/bin:$PATH" command opencode --standalone --auto`;
 
 function card(fields: Partial<BranchStatus>): BranchStatus {
   return {
@@ -61,6 +63,25 @@ describe("a codex card's doors", () => {
     expect(launchCommand(card({ provider: "codex", resume_id: THREAD, dispatched: true }), "resume")).toBe(
       `cd '${PATH}' && drone @hooks sessions reclaim @canary && sleep 2 && ` +
         `command codex --dangerously-bypass-approvals-and-sandbox resume '${THREAD}'`,
+    );
+  });
+});
+
+describe("an opencode card's doors", () => {
+  it("resumes its session by --session, on the installer's bin, standalone", () => {
+    expect(launchCommand(card({ provider: "opencode", resume_id: OC_SESSION }), "resume")).toBe(
+      `cd '${PATH}' && ${OPENCODE} --session '${OC_SESSION}'`,
+    );
+  });
+
+  it("starts fresh with no --session, and never with claude's -c", () => {
+    expect(launchCommand(card({ provider: "opencode", resume_id: OC_SESSION }), "fresh")).toBe(`cd '${PATH}' && ${OPENCODE}`);
+    expect(launchCommand(card({ provider: "opencode", has_history: true }), "resume")).toBe(`cd '${PATH}' && ${OPENCODE}`);
+  });
+
+  it("reclaims a dispatched session before resuming it", () => {
+    expect(launchCommand(card({ provider: "opencode", resume_id: OC_SESSION, dispatched: true }), "resume")).toBe(
+      `cd '${PATH}' && drone @hooks sessions reclaim @canary && sleep 2 && ${OPENCODE} --session '${OC_SESSION}'`,
     );
   });
 });
@@ -131,13 +152,27 @@ describe("the ritual chips", () => {
     }
   });
 
-  it("know a codex room by the session its doors act on, own room first", () => {
+  it("type the claude spelling in an opencode room, whose commands live in .opencode/commands", () => {
+    expect(["/memo", "/prep", "/compact"].map((cmd) => slashCommand(cmd, "opencode"))).toEqual(["/memo", "/prep", "/compact"]);
+  });
+
+  it("know a non-claude room by the session its doors act on, own room first", () => {
     const branches = [
       card({ name: "canary", provider: "codex", own_room_live: true, room: "baud-canary", outside_room: null }),
       card({ name: "hooks", provider: "codex", room: "baud-hooks", outside_room: "canary-switch" }),
       card({ name: "flow", provider: "claude", own_room_live: true, room: "baud-flow" }),
       card({ name: "idle", provider: "codex", room: "baud-idle" }),
+      card({ name: "seed", provider: "opencode", own_room_live: true, room: "baud-seed" }),
     ];
-    expect(codexSessions(branches)).toEqual(["baud-canary", "canary-switch"]);
+    expect(roomProviders(branches)).toEqual({ "baud-canary": "codex", "canary-switch": "codex", "baud-seed": "opencode" });
+  });
+});
+
+describe("the switch dropdown", () => {
+  it("offers the other two CLIs, spelled as the room's CLI calls them", () => {
+    expect(switchLegs("claude")).toEqual(["/codex", "/opencode"]);
+    expect(switchLegs(undefined)).toEqual(["/codex", "/opencode"]);
+    expect(switchLegs("codex")).toEqual(["$claude", "$opencode"]);
+    expect(switchLegs("opencode")).toEqual(["/claude", "/codex"]);
   });
 });
