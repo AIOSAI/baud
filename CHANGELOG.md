@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Desktop: markdown preview in file tabs.** A `.md` file tab carries the phone Reader's `preview` / `raw` toggle and renders through the phone's sanitized markdown (`renderMarkdown`), raw by default; the editor stays mounted behind the preview so a cited line is kept.
+
 - **Desktop: the terminal tab is named for its room.** The workbench's terminal tab reads the name of the room it holds, as the phone's pane tab does; with no live room it reads `terminal`.
 
 - **Desktop: the wordmark reloads the window.** Clicking `BAUD` in the header does a full `location.reload()`, as the phone's name does; the terminal closes its tmux client on `beforeunload` so the room keeps no unread client, and the new window attaches afresh.

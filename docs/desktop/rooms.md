@@ -129,6 +129,8 @@ of the room it holds, as the phone's pane tab does; with no live room (the
 scratch shell, or after `end room`) it reads `terminal`.
 
 **The reading room.** Ctrl+clicked paths open read-only CodeMirror panes; a
+`.md` pane carries the phone Reader's `preview` / `raw` toggle, rendering
+through the same sanitized markdown as the phone, raw by default. A
 passport's `files` door docks a lazily-loaded directory tree. A passport's
 figures open the phone's designed screens in tabs — the `⎇ git` figure the git
 app on that branch's changes, where a file row opens its diff — and a phone tab
