@@ -206,11 +206,11 @@ pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
 /// the caller falls back to the transcript scan — same fail-quiet rule as
 /// the rest of the card.
 ///
-/// Returns `(provider, session_id)`. The pointer's `provider` is "claude" when
+/// Returns `(provider, session_id, run record)`. The pointer's `provider` is "claude" when
 /// absent; "codex" checks for the thread's rollout file under
 /// `~/.codex/sessions/YYYY/MM/DD/` instead, "opencode" for its row in
 /// OpenCode's SQLite store; any other provider is refused.
-pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String)> {
+pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String, RunRecord)> {
     let home = match std::env::var("HOME") {
         Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
         _ => return None,
@@ -260,7 +260,7 @@ pub(crate) fn session_pointer_in(
     transcripts: &Path,
     codex_sessions: &Path,
     opencode_db: &Path,
-) -> Option<(&'static str, String)> {
+) -> Option<(&'static str, String, RunRecord)> {
     let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("session.json")).ok()?;
     let pointer: Value = serde_json::from_str(&raw).ok()?;
     let session_id = pointer.get("session_id")?.as_str()?.trim().to_string();
@@ -284,7 +284,41 @@ pub(crate) fn session_pointer_in(
         "opencode" => opencode_session_exists(opencode_db, &session_id, branch_dir),
         _ => transcripts.join(format!("{session_id}.jsonl")).is_file(),
     };
-    exists.then_some((provider, session_id))
+    if !exists {
+        return None;
+    }
+    let field = |key: &str, absent: &str| pointer.get(key).and_then(Value::as_str).unwrap_or(absent).to_string();
+    let run = RunRecord {
+        host_cli: pointer.get("host_cli").and_then(Value::as_str).map(str::to_string),
+        model_provider: field("model_provider", "pending"),
+        model_requested: field("model_requested", "cli_default"),
+        model_observed: field("model_observed", "pending"),
+        selection_source: field("selection_source", "unknown"),
+        observed_at: pointer.get("observed_at").and_then(Value::as_str).map(str::to_string),
+        receipt: grounding_receipt(branch_dir, &session_id),
+        session_id: session_id.clone(),
+    };
+    Some((provider, session_id, run))
+}
+
+/// The grounding hooks' receipt beside the pointer. A receipt for another
+/// session says nothing about this one, so it reads as no receipt.
+fn grounding_receipt(branch_dir: &Path, session_id: &str) -> Option<GroundingReceipt> {
+    let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("grounding.json")).ok()?;
+    let receipt: Value = serde_json::from_str(&raw).ok()?;
+    let current = receipt.get("current")?;
+    if current.get("session_id")?.as_str()? != session_id {
+        return None;
+    }
+    Some(GroundingReceipt {
+        status: current.get("status")?.as_str()?.to_string(),
+        generation: current.get("generation")?.as_i64()?,
+        missing: current
+            .get("missing")
+            .and_then(Value::as_array)
+            .map(|keys| keys.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default(),
+    })
 }
 
 /// Sub-agents are invisible to the process table: they run INSIDE the parent
@@ -563,13 +597,98 @@ mod tests {
         fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
     }
 
+    /// A resolving claude pointer carrying `fields` (the run record's keys,
+    /// as ai_mail writes them) beside the session id.
+    fn plant_run_pointer(tag: &str, fields: &str) -> RunRecord {
+        let (branch, transcripts, codex, opencode) = scratch(tag);
+        let payload = format!(r#"{{"session_id":"aaaa-bbbb","cwd":"{}"{fields}}}"#, branch.display());
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        session_pointer_in(&branch, &transcripts, &codex, &opencode).unwrap().2
+    }
+
+    /// The same, with `grounding.json` planted beside it first.
+    fn run_with_receipt(tag: &str, receipt: &str) -> Option<GroundingReceipt> {
+        let (branch, _, _, _) = scratch(tag);
+        fs::write(branch.join(".ai_mail.local").join("grounding.json"), receipt).unwrap();
+        plant_run_pointer(tag, "").receipt
+    }
+
+    fn receipt_row(session_id: &str, status: &str, generation: i64) -> String {
+        format!(
+            r#"{{"current":{{"session_id":"{session_id}","branch":"canary","generation":{generation},"status":"{status}","observation_boundary":"opencode_store","missing":["aipass-kernel"],"stale":[],"checked_at":"2026-10-28T13:56:35-0700"}},"history":[]}}"#
+        )
+    }
+
+    #[test]
+    fn an_old_pointer_without_the_run_record_reads_pending_not_an_error() {
+        let run = plant_run_pointer("runold", "");
+        assert_eq!(
+            run,
+            RunRecord {
+                session_id: "aaaa-bbbb".into(),
+                host_cli: None,
+                model_provider: "pending".into(),
+                model_requested: "cli_default".into(),
+                model_observed: "pending".into(),
+                selection_source: "unknown".into(),
+                observed_at: None,
+                receipt: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_new_pointer_carries_its_run_record_verbatim() {
+        let run = plant_run_pointer(
+            "runnew",
+            r#","host_cli":"opencode","model_provider":"openai","model_requested":"openai/gpt-6.1-sol","model_observed":"gpt-6.1-sol","selection_source":"flag","observed_at":"2026-10-28T13:48:44-07:00""#,
+        );
+        assert_eq!(run.host_cli.as_deref(), Some("opencode"));
+        assert_eq!(run.model_provider, "openai");
+        assert_eq!(run.model_requested, "openai/gpt-6.1-sol");
+        assert_eq!(run.model_observed, "gpt-6.1-sol");
+        assert_eq!(run.selection_source, "flag");
+        assert_eq!(run.observed_at.as_deref(), Some("2026-10-28T13:48:44-07:00"));
+    }
+
+    #[test]
+    fn a_pending_pointer_keeps_its_request_and_observes_nothing() {
+        let run = plant_run_pointer(
+            "runpending",
+            r#","host_cli":"claude","model_provider":"pending","model_requested":"opus","model_observed":"pending","selection_source":"flag","observed_at":null"#,
+        );
+        assert_eq!(run.model_requested, "opus");
+        assert_eq!(run.model_observed, "pending");
+        assert_eq!(run.model_provider, "pending");
+        assert_eq!(run.observed_at, None);
+    }
+
+    #[test]
+    fn each_receipt_status_reads_with_its_generation_and_missing_keys() {
+        for (generation, status) in (1..).zip(["verified", "ungrounded", "unverified", "pending"]) {
+            let receipt = run_with_receipt(&format!("receipt{status}"), &receipt_row("aaaa-bbbb", status, generation));
+            assert_eq!(
+                receipt,
+                Some(GroundingReceipt { status: status.into(), generation, missing: vec!["aipass-kernel".into()] })
+            );
+        }
+    }
+
+    #[test]
+    fn an_absent_garbled_or_foreign_receipt_is_no_receipt() {
+        assert_eq!(plant_run_pointer("receiptabsent", "").receipt, None);
+        assert_eq!(run_with_receipt("receiptgarbled", "not json{"), None);
+        assert_eq!(run_with_receipt("receiptforeign", &receipt_row("cccc-dddd", "verified", 1)), None);
+    }
+
     #[test]
     fn a_valid_pointer_names_its_session() {
         let (branch, transcripts, codex, opencode) = scratch("valid");
         plant_pointer(&branch, "aaaa-bbbb", &branch);
         fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
         assert_eq!(
-            session_pointer_in(&branch, &transcripts, &codex, &opencode),
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
             Some(("claude", "aaaa-bbbb".to_string()))
         );
     }
@@ -583,7 +702,7 @@ mod tests {
         fs::create_dir_all(&day).unwrap();
         fs::write(day.join(format!("rollout-2026-10-25T13-30-00-{thread}.jsonl")), "{}\n").unwrap();
         assert_eq!(
-            session_pointer_in(&branch, &transcripts, &codex, &opencode),
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
             Some(("codex", thread.to_string()))
         );
     }
@@ -607,7 +726,7 @@ mod tests {
         plant_opencode_pointer(&branch, id);
         plant_opencode_row(&opencode, id, &branch);
         assert_eq!(
-            session_pointer_in(&branch, &transcripts, &codex, &opencode),
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
             Some(("opencode", id.to_string()))
         );
     }
@@ -640,7 +759,7 @@ mod tests {
         let branch = PathBuf::from(std::env::var("BAUD_OPENCODE_PROOF_BRANCH").expect("a branch with an opencode pointer"));
         let found = session_pointer(&branch);
         println!("session_pointer({}) -> {found:?}", branch.display());
-        assert_eq!(found.map(|(provider, _)| provider), Some("opencode"));
+        assert_eq!(found.map(|(provider, _, _)| provider), Some("opencode"));
     }
 
     #[test]

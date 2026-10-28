@@ -50,6 +50,22 @@ export const slashCommand = (cmd: string, provider?: BranchStatus["provider"]): 
 export const switchLegs = (provider?: BranchStatus["provider"]): string[] =>
   provider === "codex" ? ["$claude", "$opencode"] : provider === "opencode" ? ["/claude", "/codex"] : ["/codex", "/opencode"];
 
+const HOSTS = { claude: "Claude", codex: "Codex", opencode: "OpenCode" } as const;
+
+/** The card's chip, `Host · model`: the observed model, else the requested one (or "default") with a trailing `?`, never styled as observed. */
+export function runChip(branch: BranchStatus): { text: string; pending: boolean; title: string } {
+  const provider = branch.provider ?? "claude";
+  const host = HOSTS[provider];
+  // A live process on another host makes the pointer history: its model is not this session's.
+  const run = branch.run && (!branch.run.host_cli || branch.run.host_cli === provider) ? branch.run : null;
+  if (run && run.model_observed !== "pending") {
+    return { text: `${host} · ${run.model_observed}`, pending: false, title: `${host}, running ${run.model_observed}` };
+  }
+  const asked = run && run.model_requested !== "cli_default" ? run.model_requested : "default";
+  const what = asked === "default" ? "the CLI's default model" : `requested ${asked}`;
+  return { text: `${host} · ${asked}?`, pending: true, title: `${host}, ${what} — not yet observed` };
+}
+
 /** The live session each non-claude card's doors act on, own room first, mapped to its CLI. */
 export const roomProviders = (branches: BranchStatus[]): Record<string, BranchStatus["provider"]> =>
   Object.fromEntries(

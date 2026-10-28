@@ -228,6 +228,11 @@ pub struct BranchStatus {
     /// opencode branch with no pointer has no history and no `resume_id`: BAUD
     /// scans only Claude transcripts.
     pub provider: String,
+    /// The resolved pointer's run record: which model the session asked for
+    /// and which one its runtime reported. `None` when no pointer resolves.
+    /// The host stays [`provider`](Self::provider): a live process names the
+    /// host, the pointer names the model.
+    pub run: Option<RunRecord>,
     /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
     /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.
     ///
@@ -293,6 +298,34 @@ pub struct BranchStatus {
     pub last_updated: String,
 }
 
+/// The run record ai_mail writes into the session pointer beside the session
+/// id. Older pointers lack the fields: absent reads as `pending` /
+/// `cli_default` / `unknown`, never as an error.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RunRecord {
+    pub session_id: String,
+    /// The CLI that wrote the pointer: "claude", "codex" or "opencode".
+    pub host_cli: Option<String>,
+    pub model_provider: String,
+    pub model_requested: String,
+    /// The runtime's own model id, or "pending" until it reports one.
+    pub model_observed: String,
+    pub selection_source: String,
+    pub observed_at: Option<String>,
+    /// `.ai_mail.local/grounding.json`'s current row, `None` when the file is
+    /// absent, unreadable or names another session ("no receipt").
+    pub receipt: Option<GroundingReceipt>,
+}
+
+/// The grounding receipt's current row, cut to what the card shows.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GroundingReceipt {
+    /// "verified", "ungrounded", "unverified" or "pending", verbatim.
+    pub status: String,
+    pub generation: i64,
+    pub missing: Vec<String>,
+}
+
 impl BranchStatus {
     fn new(name: String, project: String, path: String) -> Self {
         Self {
@@ -307,6 +340,7 @@ impl BranchStatus {
             has_history: false,
             resume_id: None,
             provider: "claude".to_string(),
+            run: None,
             room: String::new(),
             has_room: false,
             own_room_live: false,

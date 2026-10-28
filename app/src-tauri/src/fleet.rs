@@ -215,8 +215,11 @@ pub(crate) fn read_branch(
         .iter()
         .find(|session| session.cwd.starts_with(&canonical))
         .map(|session| session.provider);
+    let pointer = session_pointer(&canonical);
+    status.run = pointer.as_ref().map(|(_, _, run)| run.clone());
+    let pointer = pointer.map(|(provider, id, _)| (provider, id));
     let (provider, has_history, resume_id) =
-        resume_door(live_provider, session_pointer(&canonical), || claude_history(&canonical));
+        resume_door(live_provider, pointer, || claude_history(&canonical));
     status.provider = provider.to_string();
     status.has_history = has_history;
     status.resume_id = resume_id;
