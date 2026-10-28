@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { BranchStatus } from "../types";
-import { keyStep, WHEEL_REST_MS, type WheelStep, wheelStep } from "./lib/wheelInput";
+import {
+  gateTurn,
+  keyStep,
+  QUIET,
+  WHEEL_SPEED_KEY,
+  WHEEL_SPEEDS,
+  wheelSpeed,
+  type WheelStep,
+  wheelStep,
+} from "./lib/wheelInput";
 
 const SCALE_CENTER = 1.28;
 const SCALE_SPREAD = 0.38;
@@ -452,15 +461,19 @@ export default function FleetWheel({
   useEffect(() => {
     const box = wrap.current;
     if (!box || !finePointer) return;
-    let last = 0;
+    let gesture = QUIET;
     const turn = (event: WheelEvent) => {
       const step = wheelStep(event);
       if (!step) return;
       event.preventDefault();
-      const quiet = event.timeStamp - last > WHEEL_REST_MS;
-      last = event.timeStamp;
+      const gate = WHEEL_SPEEDS[wheelSpeed(window.localStorage.getItem(WHEEL_SPEED_KEY))];
+      // A line-mode wheel reports notches as lines; ~16px a line puts it on the pixel scale the gate is set in.
+      const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const delta = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) * scale;
+      const next = gateTurn(gesture, event.timeStamp, delta, gate);
+      gesture = next.gesture;
       // One step per gesture, so a flung trackpad cannot ride through the whole stack.
-      if (quiet) takeRef.current(step);
+      if (next.fire) takeRef.current(step);
     };
     box.addEventListener("wheel", turn, { passive: false });
     return () => box.removeEventListener("wheel", turn);

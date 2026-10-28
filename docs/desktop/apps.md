@@ -1,6 +1,6 @@
 # The apps
 
-This page covers the wheel's app and monitor cards, the four tabs they open (GIT, FILES, BACKUP and MACHINE), and how each tab hosts the phone's own screen.
+This page covers the wheel's app and monitor cards, the FILES tree they dock and the three tabs they open (GIT, BACKUP and MACHINE), and how each tab hosts the phone's own screen.
 
 ← [the desktop window](../desktop.md)
 
@@ -8,13 +8,18 @@ This page covers the wheel's app and monitor cards, the four tabs they open (GIT
 
 The wheel's `apps` layer carries the phone's three app cards, GIT, FILES and
 BACKUP; its `monitor` layer carries the seven machine cards, CPU to BAT, with
-their live faces. Each opens a workbench tab, as the centred card opens on the
-wheel (see [the wheel](window-and-cards.md#the-wheel)): GIT, FILES and BACKUP
-their own tab, and every monitor card the one MACHINE tab. A tab already open is
-fronted; there is one tab per app, whatever the seat. GIT, FILES and BACKUP
-carry the seated project by name, never an empty project, which the host would
-read as its own default seat, so until the seat is read an app card opens
-nothing. The GIT card's badge is the repository count, read through the seated
+their live faces. The centred card opens (see
+[the wheel](window-and-cards.md#the-wheel)):
+
+- **FILES** docks the file tree on the left, seated at the project root the
+  snapshot names, the same tree a passport's `files` door docks for a branch. A
+  folder expands in place, a file opens as a tab on the right, and opening FILES
+  again closes the tree. Until the snapshot names the root it opens nothing.
+- GIT and BACKUP open their own workbench tab, and every monitor card the one
+  MACHINE tab. A tab already open is fronted; there is one tab per app, whatever
+  the seat. GIT and BACKUP carry the seated project by name, never an empty
+  project, which the host would read as its own default seat, so until the seat
+  is read they open nothing. The GIT card's badge is the repository count, read through the seated
 project's manager.
 
 ## One tab, the phone's screen
@@ -29,11 +34,6 @@ same refusals.
   name, a file row's diff, the log and the remote. It is addressed by the seated
   project's manager card, as the phone's is, read from one fleet snapshot when
   the tab mounts; the changes count is the phone's own slow repo count.
-- **FILES** is the phone's roots (branch, project, aipass, home), the browse
-  under a picked root, and the reader, as one stack inside the tab. A file opens
-  in the reader, with a preview for markdown; the reader's `‹ folder` returns to
-  the folder it was opened from, the browse's `‹ roster` at its floor returns to
-  the roots, and the roots' `‹` closes the tab.
 - **BACKUP** is the backup app for the seated project, with the relay token's
   `operate` scope: the store, the last runs, the Drive setting, Snapshot now
   and its summary, a running lane's progress and Stop.
@@ -51,5 +51,5 @@ same refusals.
 - **The lock line has no lock verb.** The desktop is the screen being locked, so
   MACHINE reads the lock state and offers nothing to set it.
 - **Back words.** The screens keep the phone's own back words: the floors of
-  GIT, FILES and BACKUP say `‹ wheel` and close the tab, and the machine sheet's
+  GIT and BACKUP say `‹ wheel` and close the tab, and the machine sheet's
   `‹ wheel` returns to the tiles, whose own `‹ close` closes the tab.

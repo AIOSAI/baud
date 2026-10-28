@@ -35,7 +35,7 @@ Each part of the window has its own page under `docs/desktop/`.
 | [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened passport and its doors; what a launch types |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
-| [apps](desktop/apps.md) | the wheel's app and monitor cards, GIT, FILES, BACKUP and MACHINE, each the phone's own screen in a workbench tab |
+| [apps](desktop/apps.md) | the wheel's app and monitor cards: FILES docks the tree at the project root; GIT, BACKUP and MACHINE are each the phone's own screen in a workbench tab |
 
 ## The desktop face — `src/desktop/`
 

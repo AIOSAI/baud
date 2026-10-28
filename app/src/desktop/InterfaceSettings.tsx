@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { baudSettingsRead, baudSettingsWrite, hooksSoundGet, hooksSoundSet } from "../host";
 
+import { WHEEL_SPEED_KEY, WHEEL_SPEEDS, type WheelSpeed, wheelSpeed } from "../phone/lib/wheelInput";
 import type { BaudSettings } from "../types";
 
 /**
@@ -93,6 +94,8 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
   const [pollMs, setPollMs] = useState(opening.pollMs);
   const [bellMax, setBellMax] = useState(opening.bellMax);
   const [bellSound, setBellSound] = useState(opening.bellSound);
+  // Outside the save patch: the window's own feel, like the zoom, written and applied on the change.
+  const [speed, setSpeed] = useState<WheelSpeed>(() => wheelSpeed(window.localStorage.getItem(WHEEL_SPEED_KEY)));
 
   // Null until the live read lands: a toggle that guesses would flip the fleet.
   const [hooksActive, setHooksActive] = useState<boolean | null>(null);
@@ -229,6 +232,26 @@ export function InterfaceControls({ agents, settings, onSaved }: InterfaceContro
           {withCurrent(POLL_CHOICES, pollMs, seconds).map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="baud-settings-row">
+        <span className="baud-settings-label">wheel speed</span>
+        <select
+          className="baud-settings-select"
+          value={speed}
+          title="how far one mouse-wheel or trackpad turn moves the fleet wheel - applies now, this window only"
+          onChange={(event) => {
+            const next = wheelSpeed(event.target.value);
+            window.localStorage.setItem(WHEEL_SPEED_KEY, next);
+            setSpeed(next);
+          }}
+        >
+          {(Object.keys(WHEEL_SPEEDS) as WheelSpeed[]).map((level) => (
+            <option key={level} value={level}>
+              {level}
             </option>
           ))}
         </select>
