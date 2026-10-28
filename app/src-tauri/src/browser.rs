@@ -235,17 +235,20 @@ mod linux {
     }
 
     /// One tmux invocation, argv only: `remain-on-exit` keeps a crashed Chrome's last words readable as `stale`.
-    /// Headless: a headed window behind BAUD paints nothing, so the screencast freezes; headless paints always.
-    /// `agent` is `None` when Chrome's version could not be read: the launch goes on with headless Chrome's own.
-    pub(super) fn launch_argv(chrome: &str, profile: &Path, agent: Option<&str>) -> Vec<String> {
+    /// A headed window behind BAUD paints nothing, so the screencast freezes; headless paints always but the Claude
+    /// extension never pairs headless. With `xvfb` (its `xvfb-run` path) Chrome is headed on a display nothing covers.
+    /// `agent` is `None` when Chrome's version could not be read: the launch goes on with Chrome's own.
+    pub(super) fn launch_argv(chrome: &str, profile: &Path, agent: Option<&str>, xvfb: Option<&str>) -> Vec<String> {
         let exact = format!("={ROOM}:");
         let agent = agent.map(|agent| format!("--user-agent={agent}"));
         let (data, port) = (format!("--user-data-dir={}", profile.display()), format!("--remote-debugging-port={PORT}"));
-        let mut argv = vec![
-            "new-session", "-d", "-s", ROOM, "--", chrome, &data, &port,
-            "--headless=new", "--window-size=1280,800",
-            "--no-first-run", "--no-default-browser-check",
-        ];
+        let mut argv = vec!["new-session", "-d", "-s", ROOM, "--"];
+        match xvfb {
+            // Wayland is in the room's environment, so x11 must be named or Chrome ignores the virtual display.
+            Some(xvfb) => argv.extend([xvfb, "-a", "-s", "-screen 0 1280x800x24", chrome, &data, &port, "--ozone-platform=x11"]),
+            None => argv.extend([chrome, &data, &port, "--headless=new"]),
+        }
+        argv.extend(["--window-size=1280,800", "--no-first-run", "--no-default-browser-check"]);
         argv.extend(agent.as_deref());
         argv.extend([";", "set-option", "-t", &exact, "remain-on-exit", "on"]);
         argv.iter().map(|arg| arg.to_string()).collect()
@@ -549,11 +552,13 @@ mod linux {
         }
     }
 
-    fn chrome_binary() -> Option<PathBuf> {
+    fn on_path(names: &[&str]) -> Option<PathBuf> {
         let path = std::env::var_os("PATH")?;
-        ["google-chrome", "google-chrome-stable"]
-            .iter()
-            .find_map(|name| std::env::split_paths(&path).map(|dir| dir.join(name)).find(|bin| bin.is_file()))
+        names.iter().find_map(|name| std::env::split_paths(&path).map(|dir| dir.join(name)).find(|bin| bin.is_file()))
+    }
+
+    fn chrome_binary() -> Option<PathBuf> {
+        on_path(&["google-chrome", "google-chrome-stable"])
     }
 
     /// Chrome reads native-messaging manifests from its user-data-dir, so without this the extension cannot reach Claude Code.
@@ -582,8 +587,9 @@ mod linux {
         link_native_hosts(profile, hosts_source)?;
         let chrome = chrome_binary().ok_or("neither google-chrome nor google-chrome-stable is on PATH")?;
         let agent = chrome_major(&chrome_version(&chrome)).map(user_agent);
+        let xvfb = on_path(&["xvfb-run"]).map(|bin| bin.display().to_string());
         let out = Command::new("tmux")
-            .args(launch_argv(&chrome.display().to_string(), profile, agent.as_deref()))
+            .args(launch_argv(&chrome.display().to_string(), profile, agent.as_deref(), xvfb.as_deref()))
             .output()
             .map_err(|err| format!("could not run tmux: {err}"))?;
         if !out.status.success() {
@@ -692,7 +698,7 @@ mod linux {
 
         #[test]
         fn argv_carries_every_flag_as_its_own_word() {
-            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/home/op/.config/x y/chrome"), Some("A B/1"));
+            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/home/op/.config/x y/chrome"), Some("A B/1"), None);
             assert_eq!(&argv[..6], ["new-session", "-d", "-s", "baud-chrome", "--", "/usr/bin/google-chrome"]);
             assert!(argv.contains(&"--user-data-dir=/home/op/.config/x y/chrome".to_string()));
             assert!(argv.contains(&"--remote-debugging-port=9333".to_string()));
@@ -706,8 +712,20 @@ mod linux {
         }
 
         #[test]
+        fn with_xvfb_chrome_is_headed_on_x11_inside_xvfb_run() {
+            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/p"), None, Some("/usr/bin/xvfb-run"));
+            assert_eq!(
+                &argv[4..12],
+                ["--", "/usr/bin/xvfb-run", "-a", "-s", "-screen 0 1280x800x24", "/usr/bin/google-chrome", "--user-data-dir=/p", "--remote-debugging-port=9333"]
+            );
+            assert!(argv.contains(&"--ozone-platform=x11".to_string()));
+            assert!(argv.contains(&"--window-size=1280,800".to_string()));
+            assert!(!argv.iter().any(|arg| arg.starts_with("--headless")));
+        }
+
+        #[test]
         fn an_unread_version_launches_without_a_user_agent() {
-            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/p"), None);
+            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/p"), None, None);
             assert!(!argv.iter().any(|arg| arg.starts_with("--user-agent")));
             assert!(argv.ends_with(&["set-option", "-t", "=baud-chrome:", "remain-on-exit", "on"].map(String::from)));
         }
