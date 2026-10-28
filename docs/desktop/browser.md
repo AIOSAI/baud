@@ -35,14 +35,22 @@ Chrome runs in a detached tmux session named `baud-chrome`, started as one
 argv with no shell:
 
 ```
-tmux new-session -d -s baud-chrome -- <chrome> --user-data-dir=<profile> \
-  --remote-debugging-port=9333 --headless=new --window-size=1280,800 \
+tmux new-session -d -s baud-chrome -- xvfb-run -a -s "-screen 0 1280x800x24" \
+  <chrome> --user-data-dir=<profile> --remote-debugging-port=9333 \
+  --ozone-platform=x11 --window-size=1280,800 \
   --no-first-run --no-default-browser-check \
   "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<major>.0.0.0 Safari/537.36" \
   ; set-option -t =baud-chrome: remain-on-exit on
 ```
 
-`<chrome>` is `google-chrome` from `PATH`, else `google-chrome-stable`.
+`<chrome>` is `google-chrome` from `PATH`, else `google-chrome-stable`. With
+`xvfb-run` on `PATH` (the `xvfb` package) Chrome is headed on a virtual X
+display of its own: nothing on the real desktop can cover it, so it paints
+always, and the Claude extension pairs with Claude Code as a headed Chrome
+does. `--ozone-platform=x11` is required because the room inherits
+`WAYLAND_DISPLAY` and Chrome would otherwise open on the real desktop. Without
+`xvfb-run` the launch is `--headless=new` in place of the `xvfb-run` prefix and
+the ozone flag: the mirror works, but the extension never pairs headless.
 Headless Chrome names itself `HeadlessChrome/<major>.0.0.0` in its user agent,
 and sites with a bot wall refuse that; the launch passes the string a headed
 Chrome of the same version sends. `<major>` is read from `<chrome> --version`
@@ -50,9 +58,8 @@ Chrome of the same version sends. `<major>` is read from `<chrome> --version`
 to `<major>.0.0.0`, so the string is the headed one, not a different browser.
 When the version cannot be read, Chrome launches without the flag and the
 status line says so.
-Chrome runs headless: no window on the desktop, the BROWSER tab is the only
-face it has, and the page keeps painting whatever covers BAUD (the numbers
-under the live view say why).
+Either way there is no window on the desktop: the BROWSER tab is the only face
+BAUD's Chrome has (the numbers under the live view say why).
 `remain-on-exit` keeps a crashed Chrome's last lines in the pane. The port is
 fixed at 9333 and read only on `127.0.0.1`. Launches are serialized; a launch
 polls `/json/version` every 200 ms for up to ten seconds. The room is BAUD's
@@ -147,13 +154,13 @@ Input reaches the page only through the canvas:
   arrive: the window takes them in the capture phase.
 
 `visibility {visible: false}` replaces the canvas with `Chrome's window is
-hidden; frames stop until it is shown`; headless Chrome never sends it, the
-line is for a Chrome someone runs headed. Chrome's own UI (the extension's
+hidden; frames stop until it is shown`; on Xvfb and headless Chrome never sends
+it, the line is for a Chrome someone runs on the real desktop. Chrome's own UI (the extension's
 side panel, popups, native dialogs such as a file picker or a permission
 prompt) has no window to show in; the tab shows the page only, and a native
 prompt is invisible.
 
-### Measured on this desktop, the reason for headless
+### Measured on this desktop, the reason for Xvfb
 
 On GNOME Wayland, Chrome 156 with no ozone flag runs native Wayland. A
 headed window that GNOME opened behind the focused window sent at most the one
@@ -165,8 +172,15 @@ same placement gave 1 frame in 3 s of scrolling; raised on top it gave 28 a
 second, and minimised it reported `visible: false`. Frames come only while a
 headed Chrome's window is drawn on screen, and BAUD covers it. Headless at
 `--window-size=1280,800` gave 57 frames a second scrolling, 1280x713 CSS px,
-about 17 KB a frame. The image is capped at 1280 px wide, below a HiDPI
-screen's device pixels.
+about 17 KB a frame, but the Claude extension in a headless Chrome never opens
+its pairing socket to Claude Code's bridge (watched from its service worker:
+headed, a token refresh and the bridge WebSocket within two seconds of
+startup; headless, neither), so a headless BAUD Chrome is invisible to the
+Claude in Chrome tools. Headed on Xvfb (`xvfb-run`, 1280x800, no GPU) gave 55
+frames a second scrolling, 1279x712 CSS px, and pairs as any headed Chrome. A
+nested X server with a window on the real desktop (Xephyr) inherited the
+desktop's occlusion, 0 frames scrolling behind BAUD. The image is capped at
+1280 px wide, below a HiDPI screen's device pixels.
 
 ## Not yet there
 
