@@ -81,6 +81,12 @@ export function keyInputs(
   return text ? [down, { kind: "key", params: { type: "char", ...base, text, unmodifiedText: text } }] : [down];
 }
 
+/** The tab shown after `closed` goes: the one that slides into its place, else the one before it. */
+export function neighbourOf(ids: string[], closed: string): string | null {
+  const left = ids.filter((id) => id !== closed);
+  return left[Math.min(ids.indexOf(closed), left.length - 1)] ?? null;
+}
+
 /** A bare host gets https; anything already naming a scheme goes as typed. */
 export function urlOf(typed: string): string {
   const url = typed.trim();

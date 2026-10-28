@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { keyInputs, modifiersOf, mouseInput, pagePoint, urlOf, wheelInput } from "./browserInput";
+import { keyInputs, modifiersOf, mouseInput, neighbourOf, pagePoint, urlOf, wheelInput } from "./browserInput";
 
 const none = { altKey: false, ctrlKey: false, metaKey: false, shiftKey: false };
 
@@ -69,6 +69,15 @@ describe("keyInputs", () => {
     expect(keyInputs("up", key("a", "KeyA", 65))).toEqual([
       { kind: "key", params: expect.objectContaining({ type: "keyUp", key: "a", modifiers: 0 }) },
     ]);
+  });
+});
+
+describe("neighbourOf", () => {
+  it("shows the tab that slides into the closed one's place, else the one before, else none", () => {
+    expect(neighbourOf(["a", "b", "c"], "b")).toBe("c");
+    expect(neighbourOf(["a", "b", "c"], "a")).toBe("b");
+    expect(neighbourOf(["a", "b", "c"], "c")).toBe("b");
+    expect(neighbourOf(["a"], "a")).toBeNull();
   });
 });
 

@@ -116,6 +116,21 @@ pub fn browser_new_tab() -> Result<BrowserTarget, String> {
     linux::new_tab(linux::PORT)
 }
 
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub fn browser_history(view_id: String, step: i32) -> Result<(), String> {
+    let expression = linux::history_expression(step).ok_or("a history step of 0 goes nowhere")?;
+    // Only this fixed `history.go(-1|1)` ever goes through Runtime, never user text: the IPC surface stays the typed verb.
+    linux::view_send(&view_id, "Runtime.evaluate", serde_json::json!({ "expression": expression }))
+}
+
+/// Closes the page in Chrome; a view on it ends through `Inspector.detached`.
+#[cfg(target_os = "linux")]
+#[tauri::command(async)]
+pub fn browser_close_tab(target_id: String) -> Result<(), String> {
+    linux::close_tab(linux::PORT, &target_id)
+}
+
 #[cfg(not(target_os = "linux"))]
 const NOT_LINUX: &str = "BAUD's Chrome is Linux-only for now - the room, the profile path and the binary are Linux's";
 
@@ -170,6 +185,20 @@ pub fn browser_new_tab() -> Result<BrowserTarget, String> {
     Err(NOT_LINUX.into())
 }
 
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub fn browser_history(view_id: String, step: i32) -> Result<(), String> {
+    let _ = (view_id, step);
+    Err(NOT_LINUX.into())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command(async)]
+pub fn browser_close_tab(target_id: String) -> Result<(), String> {
+    let _ = target_id;
+    Err(NOT_LINUX.into())
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::{BrowserEvent, BrowserStatus, BrowserTarget};
@@ -207,19 +236,33 @@ mod linux {
 
     /// One tmux invocation, argv only: `remain-on-exit` keeps a crashed Chrome's last words readable as `stale`.
     /// Headless: a headed window behind BAUD paints nothing, so the screencast freezes; headless paints always.
-    pub(super) fn launch_argv(chrome: &str, profile: &Path) -> Vec<String> {
+    /// `agent` is `None` when Chrome's version could not be read: the launch goes on with headless Chrome's own.
+    pub(super) fn launch_argv(chrome: &str, profile: &Path, agent: Option<&str>) -> Vec<String> {
         let exact = format!("={ROOM}:");
-        [
-            "new-session", "-d", "-s", ROOM, "--", chrome,
-            &format!("--user-data-dir={}", profile.display()),
-            &format!("--remote-debugging-port={PORT}"),
+        let agent = agent.map(|agent| format!("--user-agent={agent}"));
+        let (data, port) = (format!("--user-data-dir={}", profile.display()), format!("--remote-debugging-port={PORT}"));
+        let mut argv = vec![
+            "new-session", "-d", "-s", ROOM, "--", chrome, &data, &port,
             "--headless=new", "--window-size=1280,800",
             "--no-first-run", "--no-default-browser-check",
-            ";", "set-option", "-t", &exact, "remain-on-exit", "on",
-        ]
-        .iter()
-        .map(|arg| arg.to_string())
-        .collect()
+        ];
+        argv.extend(agent.as_deref());
+        argv.extend([";", "set-option", "-t", &exact, "remain-on-exit", "on"]);
+        argv.iter().map(|arg| arg.to_string()).collect()
+    }
+
+    /// The major from `google-chrome --version`, e.g. `Google Chrome 156.0.8078.47`.
+    pub(super) fn chrome_major(version: &str) -> Option<u32> {
+        version.split_whitespace().find_map(|word| word.split_once('.')?.0.parse().ok())
+    }
+
+    /// A headed Chrome's own string: Chrome reduces its UA to `<major>.0.0.0` itself; headless says `HeadlessChrome`.
+    pub(super) fn user_agent(major: u32) -> String {
+        format!("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36")
+    }
+
+    fn chrome_version(chrome: &Path) -> String {
+        Command::new(chrome).arg("--version").output().map(|out| String::from_utf8_lossy(&out.stdout).into_owned()).unwrap_or_default()
     }
 
     pub(super) fn skipped(name: &std::ffi::OsStr) -> bool {
@@ -455,6 +498,21 @@ mod linux {
         serde_json::from_str::<Value>(&body).map(|item| target_of(&item)).map_err(|err| err.to_string())
     }
 
+    /// Steps clamp to their sign; 0 is refused rather than sent as a reload.
+    pub(super) fn history_expression(step: i32) -> Option<String> {
+        (step != 0).then(|| format!("history.go({})", step.signum()))
+    }
+
+    /// The id becomes part of a request line, so only Chrome's own id alphabet passes.
+    pub(super) fn close_tab(port: u16, target_id: &str) -> Result<(), String> {
+        if target_id.is_empty() || !target_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(format!("{target_id:?} is not a page id"));
+        }
+        devtools_at(port, "GET", &format!("/json/close/{target_id}"))
+            .map(|_| ())
+            .ok_or_else(|| format!("BAUD's Chrome did not close page {target_id}"))
+    }
+
     pub(super) fn native_hosts(profile: &Path) -> &'static str {
         let dir = profile.join("NativeMessagingHosts");
         if !dir.join(MANIFEST).exists() {
@@ -523,8 +581,9 @@ mod linux {
         std::fs::create_dir_all(profile).map_err(|err| format!("could not create {}: {err}", profile.display()))?;
         link_native_hosts(profile, hosts_source)?;
         let chrome = chrome_binary().ok_or("neither google-chrome nor google-chrome-stable is on PATH")?;
+        let agent = chrome_major(&chrome_version(&chrome)).map(user_agent);
         let out = Command::new("tmux")
-            .args(launch_argv(&chrome.display().to_string(), profile))
+            .args(launch_argv(&chrome.display().to_string(), profile, agent.as_deref()))
             .output()
             .map_err(|err| format!("could not run tmux: {err}"))?;
         if !out.status.success() {
@@ -534,7 +593,11 @@ mod linux {
         let started = Instant::now();
         while started.elapsed() < READY_WINDOW {
             if devtools_get("/json/version").is_some() {
-                return Ok(status(profile));
+                let mut up = status(profile);
+                if agent.is_none() {
+                    up.detail = "Chrome's version could not be read, so it runs with headless Chrome's own user agent".into();
+                }
+                return Ok(up);
             }
             std::thread::sleep(READY_STEP);
         }
@@ -629,7 +692,7 @@ mod linux {
 
         #[test]
         fn argv_carries_every_flag_as_its_own_word() {
-            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/home/op/.config/x y/chrome"));
+            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/home/op/.config/x y/chrome"), Some("A B/1"));
             assert_eq!(&argv[..6], ["new-session", "-d", "-s", "baud-chrome", "--", "/usr/bin/google-chrome"]);
             assert!(argv.contains(&"--user-data-dir=/home/op/.config/x y/chrome".to_string()));
             assert!(argv.contains(&"--remote-debugging-port=9333".to_string()));
@@ -637,8 +700,46 @@ mod linux {
             assert!(argv.contains(&"--window-size=1280,800".to_string()));
             assert!(argv.contains(&"--no-first-run".to_string()));
             assert!(argv.contains(&"--no-default-browser-check".to_string()));
+            assert!(argv.contains(&"--user-agent=A B/1".to_string()));
             assert!(argv.ends_with(&["set-option", "-t", "=baud-chrome:", "remain-on-exit", "on"].map(String::from)));
             assert!(!argv.iter().any(|arg| arg.contains("sh -c") || arg.contains('\'')));
+        }
+
+        #[test]
+        fn an_unread_version_launches_without_a_user_agent() {
+            let argv = launch_argv("/usr/bin/google-chrome", Path::new("/p"), None);
+            assert!(!argv.iter().any(|arg| arg.starts_with("--user-agent")));
+            assert!(argv.ends_with(&["set-option", "-t", "=baud-chrome:", "remain-on-exit", "on"].map(String::from)));
+        }
+
+        #[test]
+        fn the_user_agent_is_a_headed_chromes_for_the_installed_major() {
+            assert_eq!(chrome_major("Google Chrome 156.0.8078.47\n"), Some(156));
+            assert_eq!(chrome_major("Chromium 120.0.6099.71 snap"), Some(120));
+            assert_eq!(chrome_major(""), None);
+            assert_eq!(chrome_major("Google Chrome"), None);
+            assert_eq!(
+                user_agent(156),
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36"
+            );
+        }
+
+        #[test]
+        fn history_steps_clamp_to_one_and_zero_is_refused() {
+            assert_eq!(history_expression(-1).as_deref(), Some("history.go(-1)"));
+            assert_eq!(history_expression(-7).as_deref(), Some("history.go(-1)"));
+            assert_eq!(history_expression(1).as_deref(), Some("history.go(1)"));
+            assert_eq!(history_expression(i32::MAX).as_deref(), Some("history.go(1)"));
+            assert_eq!(history_expression(i32::MIN).as_deref(), Some("history.go(-1)"));
+            assert_eq!(history_expression(0), None);
+        }
+
+        #[test]
+        fn a_close_refuses_an_id_that_is_not_chromes_before_any_request() {
+            for bad in ["", "A B", "A/../version", "A\r\nHost: x", "A?x"] {
+                assert!(close_tab(1, bad).unwrap_err().contains("is not a page id"), "{bad:?}");
+            }
+            assert!(close_tab(1, "ABC123").unwrap_err().contains("did not close"));
         }
 
         #[test]

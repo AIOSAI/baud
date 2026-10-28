@@ -4087,14 +4087,22 @@ body {
   color: var(--baud-ink-dim);
 }
 
+/* The section never scrolls: the header, tab row and URL bar hold still and the page fits below them. */
+.baud-phone-reader.baud-browser {
+  overflow: hidden;
+}
+
 .baud-browser-view {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5);
 }
 
 .baud-browser-tabs {
+  flex: none;
   display: flex;
   gap: 6px;
   overflow-x: auto;
@@ -4115,12 +4123,70 @@ body {
   white-space: nowrap;
 }
 
+span.baud-browser-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 0;
+}
+
+.baud-browser-tab-name,
+.baud-browser-tab-x,
+.baud-browser-step {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.baud-browser-tab-name {
+  min-width: 0;
+  padding: 6px 0 6px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baud-browser-tab-x {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.baud-browser-tab-x:hover {
+  color: var(--baud-ink);
+  background: var(--baud-line);
+}
+
+.baud-browser-bar {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.baud-browser-step {
+  flex: none;
+  min-width: 34px;
+  border: 1px solid var(--baud-line);
+  border-radius: 10px;
+  background: var(--baud-bg-panel);
+  color: var(--baud-ink-dim);
+  font-size: 0.9rem;
+}
+
+.baud-browser-step:hover {
+  border-color: var(--baud-apps);
+  color: var(--baud-ink);
+}
+
 .baud-browser-tab-on {
   border-color: var(--baud-apps);
   color: var(--baud-ink);
 }
 
 .baud-browser-address {
+  flex: 1;
+  min-width: 0;
   background: var(--baud-bg-panel);
   border: 1px solid var(--baud-line);
   border-radius: 10px;
@@ -4135,15 +4201,29 @@ body {
   margin: 0;
 }
 
+.baud-browser-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* Bounded both ways with auto sizes, so the aspect holds and the whole page fits. */
 .baud-browser-canvas {
   display: block;
-  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
   border: 1px solid var(--baud-line);
   border-radius: 6px;
   background: var(--baud-bg-panel);
 }
 
+.baud-browser-tab-name:focus-visible,
+.baud-browser-tab-x:focus-visible,
+.baud-browser-step:focus-visible,
 .baud-browser-tab:focus-visible,
 .baud-browser-address:focus-visible,
 .baud-browser-canvas:focus-visible {
