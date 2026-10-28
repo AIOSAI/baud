@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Desktop: a BROWSER card and BAUD's own Chrome.** The wheel's apps layer carries BROWSER (mark `WEB`), which opens one machine-wide tab. `browser.rs` runs Chrome in a detached `baud-chrome` tmux room on `<BAUD config dir>/chrome` with remote debugging on `127.0.0.1:9333`, reads its state (`running`, `down`, `foreign`, `stale`) and its open pages, links Claude Code's native-messaging hosts into the profile, and copies `~/.config/google-chrome` in on `adopt my Chrome`, renaming any existing BAUD profile aside to `<profile>.before-adopt-<timestamp>` (refused while the room is open or any Chrome runs). The tab shows `launch` and `adopt my Chrome` when it is down and the pages when it runs, polled every five seconds while in front. The phone's card shows the host's `not_on_the_phone` refusal. Linux only. See `docs/desktop/browser.md`.
+
 - **Desktop: markdown preview in file tabs.** A `.md` file tab carries the phone Reader's `preview` / `raw` toggle and renders through the phone's sanitized markdown (`renderMarkdown`), raw by default; the editor stays mounted behind the preview so a cited line is kept.
 
 - **Desktop: the terminal tab is named for its room.** The workbench's terminal tab reads the name of the room it holds, as the phone's pane tab does; with no live room it reads `terminal`.

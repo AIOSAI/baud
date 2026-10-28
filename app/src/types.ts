@@ -476,6 +476,20 @@ export interface BackupStatus {
   running: BackupRunning[];
 }
 
+/** BAUD's own Chrome (browser.rs); IPC only. */
+export interface BrowserStatus {
+  /** `foreign`: the port answers with no BAUD room. `stale`: the room is open and the port silent. */
+  state: "running" | "down" | "foreign" | "stale";
+  port: number;
+  profile: string;
+  room_alive: boolean;
+  /** Pages only, never workers or extension backgrounds. */
+  targets: { id: string; title: string; url: string }[];
+  /** Whether Claude Code's native-messaging manifest is reachable from the profile. */
+  native_hosts: "linked" | "present" | "absent";
+  detail: string;
+}
+
 /** `POST /v1/backup/run` (202, state running) and `GET /v1/backup/job`. */
 export interface BackupJob {
   job: string;

@@ -132,6 +132,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
         name: "backup",
         kind: "door",
       },
+      { key: "browser", mark: "WEB", name: "browser", kind: "door" },
     ],
   },
   /** Last, so the looping stack puts the monitor one backward flick from the first layer; the sheet keys on these card keys. */

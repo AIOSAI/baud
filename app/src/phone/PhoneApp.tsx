@@ -10,6 +10,7 @@ import AgentSettings from "../desktop/AgentSettings";
 import { interfacePrefs } from "../desktop/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
 import BackupApp from "./backup/BackupApp";
+import BrowserScreen from "./BrowserScreen";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
 import FilesScreen from "./FilesScreen";
@@ -420,6 +421,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const appFaces = useMemo(() => machineFaces(machine), [machine]);
   const [gitOpen, setGitOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  /** The phone shows the host's refusal: BAUD's Chrome is the desktop's machine. */
+  const [browserOpen, setBrowserOpen] = useState(false);
   /** Whose branch-grain changes are open (the card's GIT tile); `ref` is the card to come back to. */
   const [gitOf, setGitOf] = useState<{ name: string; project: string; ref: string } | null>(null);
 
@@ -483,6 +486,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     reading !== null ||
     gitOpen ||
     backupOpen ||
+    browserOpen ||
     gitOf !== null ||
     feedOpen ||
     inboxOf !== null;
@@ -519,6 +523,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     walkBack();
   }, [walkBack]);
   const closeBackup = useCallback(() => setBackupOpen(false), []);
+  const closeBrowser = useCallback(() => setBrowserOpen(false), []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const closeNewProject = useCallback(() => setNewProjectOpen(false), []);
   const onProjectBorn = useCallback(
@@ -540,6 +545,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   useSystemBack(plansOf !== null ? closePlans : null);
   useSystemBack(reading !== null ? closeReading : null);
   useSystemBack(backupOpen ? closeBackup : null);
+  useSystemBack(browserOpen ? closeBrowser : null);
   useSystemBack(feedOpen ? closeFeed : null);
 
   const leaveCard = () => {
@@ -647,6 +653,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
           if (key === "backup") setBackupOpen(true);
+          if (key === "browser") setBrowserOpen(true);
           // Prefix-matched: the wheel owns the monitor card list.
           if (key.startsWith("mon-")) setMonitorCard(key);
         }}
@@ -1011,6 +1018,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
       {/* Keyed on the seat so a seat change never shows one project's runs under another's name. */}
+      {browserOpen ? <BrowserScreen onClose={closeBrowser} /> : null}
       {backupOpen ? (
         <BackupApp key={seat} project={seat} scope={scope} onClose={closeBackup} />
       ) : null}

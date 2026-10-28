@@ -9,6 +9,7 @@ describe("phoneTabKey", () => {
     expect(phoneTabKey({ screen: "files", project: "BAUD" })).toBe("app:files");
     expect(phoneTabKey({ screen: "backup", project: "BAUD" })).toBe("app:backup");
     expect(phoneTabKey({ screen: "machine" })).toBe("app:machine");
+    expect(phoneTabKey({ screen: "browser" })).toBe("app:browser");
   });
 
   it("keys a card door by door, project and agent", () => {
@@ -24,12 +25,14 @@ describe("phoneTabKey", () => {
 describe("phoneTabLabel", () => {
   it("names apps under app/ and doors under their agent", () => {
     expect(phoneTabLabel({ screen: "machine" })).toEqual({ branch: "app", name: "machine" });
+    expect(phoneTabLabel({ screen: "browser" })).toEqual({ branch: "app", name: "browser" });
     expect(phoneTabLabel({ screen: "plans", branch: "flow", project: "AIPASS" })).toEqual({ branch: "flow", name: "plans" });
     expect(phoneTabLabel({ screen: "branch-files", branch: "flow", project: "AIPASS" })).toEqual({ branch: "flow", name: "files" });
   });
 
   it("tells an app from a card door", () => {
     expect(isAppView({ screen: "backup", project: "BAUD" })).toBe(true);
+    expect(isAppView({ screen: "browser" })).toBe(true);
     expect(isAppView({ screen: "memory", branch: "flow", project: "AIPASS" })).toBe(false);
   });
 });

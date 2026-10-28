@@ -4018,3 +4018,103 @@ body {
 .baud-git-fileblock .baud-git-said {
   padding: 6px 2px 8px;
 }
+
+/* BAUD's Chrome: the backup app's panel and door shapes, the wheel's apps accent. */
+.baud-browser-accent {
+  color: var(--baud-apps);
+  font-weight: 600;
+}
+
+.baud-browser-line,
+.baud-browser-where,
+.baud-browser-hint,
+.baud-browser-said {
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.baud-browser-where,
+.baud-browser-hint,
+.baud-browser-said {
+  color: var(--baud-ink-dim);
+  font-size: 0.68rem;
+}
+
+.baud-browser-detail {
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  padding: 10px 13px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.68rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-browser-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-browser-doors .baud-browser-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.baud-browser-door {
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.baud-browser-door:hover:not(:disabled),
+.baud-browser-door:focus-visible {
+  border-color: var(--baud-apps);
+}
+
+.baud-browser-door:disabled {
+  color: var(--baud-ink-dim);
+}
+
+.baud-browser-pages {
+  list-style: none;
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  padding: 0;
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  background: var(--baud-bg-panel);
+}
+
+.baud-browser-page {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-browser-page:last-child {
+  border-bottom: none;
+}
+
+.baud-browser-title {
+  color: var(--baud-ink);
+  font-size: 0.76rem;
+}
+
+.baud-browser-url {
+  color: var(--baud-ink-dim);
+  font-size: 0.66rem;
+  overflow-wrap: anywhere;
+}

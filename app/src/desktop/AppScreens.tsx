@@ -1,10 +1,11 @@
-/** The strip's four apps, each the phone's own screen inside a workbench tab. Reference: docs/desktop/apps.md */
+/** The strip's apps, each the phone's own screen inside a workbench tab. Reference: docs/desktop/apps.md */
 
 import { useEffect, useMemo, useState } from "react";
 
 import { fleetSnapshot } from "../host";
 import type { FleetSnapshot } from "../types";
 import BackupApp from "../phone/backup/BackupApp";
+import BrowserScreen from "../phone/BrowserScreen";
 import { isCertificateOpen, renderCertificate } from "../phone/Certificate";
 import FilesScreen from "../phone/FilesScreen";
 import { openingCard } from "../phone/FleetWheel";
@@ -38,6 +39,8 @@ export default function AppScreens({ view, onClose }: AppScreensProps) {
       return <FilesTab onClose={onClose} />;
     case "machine":
       return <MachineTab onClose={onClose} />;
+    case "browser":
+      return <BrowserScreen onClose={onClose} />;
   }
 }
 

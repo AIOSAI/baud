@@ -92,10 +92,12 @@ use tauri::Manager;
 // does the rest: a child module can already read this file's private items, so
 // only what LEFT needed a visibility prefix.
 //
-// `host_relay`, `memory`, `notifications`, `pty`, `reads`, `screenshot` and
+// `browser`, `host_relay`, `memory`, `notifications`, `pty`, `reads`, `screenshot` and
 // `settings` serve the window alone - its relay, dials, bell, terminal, reading
-// room and capture - so they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
+// room, capture and Chrome - so they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
 // `sessions` are the reader, which the desktop binary and baud-cli share.
+#[cfg(feature = "gui")]
+mod browser;
 mod cli;
 mod fleet;
 #[cfg(feature = "gui")]
@@ -452,6 +454,9 @@ pub fn run() {
             reads::git_diff_text,
             rooms::room_kill,
             screenshot::screenshot_capture,
+            browser::browser_status,
+            browser::browser_launch,
+            browser::browser_adopt,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
