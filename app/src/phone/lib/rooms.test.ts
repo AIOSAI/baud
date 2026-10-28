@@ -59,11 +59,9 @@ describe("a codex card's doors", () => {
     );
   });
 
-  it("reclaims a dispatched session before resuming its thread", () => {
-    expect(launchCommand(card({ provider: "codex", resume_id: THREAD, dispatched: true }), "resume")).toBe(
-      `cd '${PATH}' && drone @hooks sessions reclaim @canary && sleep 2 && ` +
-        `command codex --dangerously-bypass-approvals-and-sandbox resume '${THREAD}'`,
-    );
+  it("offers a dispatched session fresh only: reclaim cannot stop codex", () => {
+    const doors = roomDoors(card({ provider: "codex", resume_id: THREAD, dispatched: true }));
+    expect(doors.map((door) => door.label)).toEqual(["▸ fresh"]);
   });
 });
 
@@ -79,10 +77,9 @@ describe("an opencode card's doors", () => {
     expect(launchCommand(card({ provider: "opencode", has_history: true }), "resume")).toBe(`cd '${PATH}' && ${OPENCODE}`);
   });
 
-  it("reclaims a dispatched session before resuming it", () => {
-    expect(launchCommand(card({ provider: "opencode", resume_id: OC_SESSION, dispatched: true }), "resume")).toBe(
-      `cd '${PATH}' && drone @hooks sessions reclaim @canary && sleep 2 && ${OPENCODE} --session '${OC_SESSION}'`,
-    );
+  it("offers a dispatched session fresh only: reclaim cannot stop opencode", () => {
+    const doors = roomDoors(card({ provider: "opencode", resume_id: OC_SESSION, dispatched: true }));
+    expect(doors.map((door) => door.label)).toEqual(["▸ fresh"]);
   });
 });
 

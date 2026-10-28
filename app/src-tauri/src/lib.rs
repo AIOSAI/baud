@@ -1203,6 +1203,18 @@ mod tests {
     }
 
     #[test]
+    fn an_interactive_session_names_the_provider_over_a_dispatch() {
+        let dir = PathBuf::from("/r/src/aipass/canary");
+        let sessions = [
+            ClaudeSession { cwd: dir.clone(), headless: true, provider: "codex" },
+            ClaudeSession { cwd: dir.clone(), headless: false, provider: "claude" },
+        ];
+        assert_eq!(live_provider(&sessions, &dir), Some("claude"));
+        assert_eq!(live_provider(&sessions[..1], &dir), Some("codex"));
+        assert_eq!(live_provider(&sessions, Path::new("/r/src/aipass/other")), None);
+    }
+
+    #[test]
     fn a_claude_pointer_outranks_the_transcript_scan() {
         let pointer = || Some(("claude", "pointed".to_string()));
         let scanned = || (true, Some("scanned".to_string()));

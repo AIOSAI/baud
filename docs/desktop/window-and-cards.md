@@ -245,7 +245,9 @@ since a pane's shell is not a login shell, and `--standalone` gives the seat its
 own server, so the pane's env reaches its hooks. The third line is `▸ resume ⚡` on a dispatched agent: resuming onto a
 working session would steal its background tasks and kill the job silently, so
 the door takes two presses inside four seconds and the line stops the job
-first. The startup agent never takes that door; a dispatched startup agent
+first. Only a Claude card offers it: `drone @hooks sessions reclaim` stops Claude
+processes only, so a dispatched Codex or OpenCode card offers `▸ fresh` alone.
+The startup agent never takes that door; a dispatched startup agent
 opens its watch pane instead.
 
 `command claude` skips the `~/.bashrc` boot shim — which intercepts `claude` and

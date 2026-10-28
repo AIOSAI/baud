@@ -142,17 +142,19 @@ pub(crate) fn is_interactive_transcript(path: &Path) -> bool {
 /// Any failure to look reads as "no history" - the launch button then simply
 /// starts fresh, which is always safe.
 pub(crate) fn claude_history(branch_dir: &Path) -> (bool, Option<String>) {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return (false, None),
-    };
+    match home_dir() {
+        Some(home) => claude_history_in(&transcripts_of(&home, branch_dir)),
+        None => (false, None),
+    }
+}
 
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME").ok().filter(|home| !home.trim().is_empty()).map(PathBuf::from)
+}
 
-    claude_history_in(&transcripts)
+/// `~/.claude/projects/<munged branch dir>`: where Claude keeps this branch's transcripts.
+fn transcripts_of(home: &Path, branch_dir: &Path) -> PathBuf {
+    home.join(".claude").join("projects").join(transcript_dir_name(branch_dir))
 }
 
 pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
@@ -211,14 +213,8 @@ pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
 /// `~/.codex/sessions/YYYY/MM/DD/` instead, "opencode" for its row in
 /// OpenCode's SQLite store; any other provider is refused.
 pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String, RunRecord)> {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return None,
-    };
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
+    let home = home_dir()?;
+    let transcripts = transcripts_of(&home, branch_dir);
     let opencode_db = home.join(".local").join("share").join("opencode").join("opencode.db");
     session_pointer_in(branch_dir, &transcripts, &home.join(".codex").join("sessions"), &opencode_db)
 }
@@ -227,9 +223,7 @@ pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String
 /// its `directory` must be this branch. Opened read-only (the store is
 /// OpenCode's, live under WAL); a missing db, table or row is just `false`.
 fn opencode_session_exists(db: &Path, session_id: &str, branch_dir: &Path) -> bool {
-    let path = db.display().to_string().replace('%', "%25").replace('?', "%3f").replace('#', "%23");
-    let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI;
-    let Ok(conn) = Connection::open_with_flags(format!("file:{path}?mode=ro"), flags) else {
+    let Ok(conn) = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY) else {
         return false;
     };
     let _ = conn.busy_timeout(std::time::Duration::from_millis(200));
@@ -481,15 +475,7 @@ pub(crate) fn any_jsonl_modified_within(dir: &Path, window_secs: u64) -> bool {
 /// across every recently-active transcript. Any failure to look reads as 0 -
 /// the card then simply shows no sub badge, which is always safe.
 pub(crate) fn subagent_count(branch_dir: &Path) -> u64 {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return 0,
-    };
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
-    subagent_count_in(&transcripts)
+    home_dir().map_or(0, |home| subagent_count_in(&transcripts_of(&home, branch_dir)))
 }
 
 pub(crate) fn subagent_count_in(transcripts: &Path) -> u64 {

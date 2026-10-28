@@ -99,7 +99,7 @@ has steady colour enough to hide one.
 
 **The state line ends in the run chip, `Host · model`** (`OpenCode · gpt-6.1-sol`,
 `Claude · sonnet-5-5`). The host is the card's provider, so a live process names
-it; the model comes from the session pointer, and only while the pointer's
+it, an interactive one before a headless dispatch in the same branch; the model comes from the session pointer, and only while the pointer's
 `host_cli` is that host, since a pointer another CLI wrote is history. A model
 the runtime has not yet reported is never drawn as observed: the chip shows the
 requested one with a trailing `?`, dashed and faint (`Claude · opus?`), and

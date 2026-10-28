@@ -161,6 +161,15 @@ pub(crate) fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
 /// pointer's id is the resume door only while its provider is the card's:
 /// `claude --resume` on a Codex thread fails the launch. A codex or opencode
 /// card has no transcript scan, so `claude_history` runs only for claude.
+/// The CLI of the branch's live agent; an interactive one outranks a headless dispatch beside it.
+pub(crate) fn live_provider(sessions: &[ClaudeSession], dir: &Path) -> Option<&'static str> {
+    sessions
+        .iter()
+        .filter(|session| session.cwd.starts_with(dir))
+        .min_by_key(|session| session.headless)
+        .map(|session| session.provider)
+}
+
 pub(crate) fn resume_door(
     live: Option<&'static str>,
     pointer: Option<(&'static str, String)>,
@@ -211,10 +220,7 @@ pub(crate) fn read_branch(
     // every wake) outranks the transcript-scan guess — the scan's `-c` door
     // can never enter a dispatched session. No pointer → the old guess, so a
     // branch that predates the pointer resumes exactly as before.
-    let live_provider = sessions
-        .iter()
-        .find(|session| session.cwd.starts_with(&canonical))
-        .map(|session| session.provider);
+    let live_provider = live_provider(sessions, &canonical);
     let pointer = session_pointer(&canonical);
     status.run = pointer.as_ref().map(|(_, _, run)| run.clone());
     let pointer = pointer.map(|(provider, id, _)| (provider, id));
