@@ -822,7 +822,7 @@ export default function App() {
               onRoomEnded={roomWasEnded}
               onRoom={setHeldRoom}
               liveSessions={snapshot?.live_agent_sessions ?? []}
-              roomProviders={roomProviders(snapshot?.branches ?? [])}
+              roomProviders={roomProviders([...(snapshot?.branches ?? []), ...(roster ?? [])])}
             />
           </div>
           {fileTabs.map((tab) => (

@@ -108,7 +108,9 @@ export function roomDoors(branch: BranchStatus): RoomDoor[] {
     ];
   }
   const doors: RoomDoor[] = [];
-  if (canResume(branch) && branch.dispatched && branch.resume_id) {
+  // Reclaim only stops a Claude process; on Codex/OpenCode it would start a second agent on the live session.
+  const reclaimable = (branch.provider ?? "claude") === "claude";
+  if (canResume(branch) && branch.dispatched && branch.resume_id && reclaimable) {
     doors.push({
       mode: "resume",
       label: "▸ resume ⚡",

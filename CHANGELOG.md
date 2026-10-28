@@ -42,6 +42,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Fixed
 
+- **`▸ resume ⚡` is offered on Claude cards only.** Reclaim stops Claude processes only, so on a dispatched Codex or OpenCode card the door started a second agent beside the live dispatch; those cards offer `▸ fresh` alone.
+- **A card's provider prefers the interactive agent.** With a headless dispatch and an interactive session in one branch, the interactive one names the CLI, so the chips and switch legs match the room. The desktop's room spelling also reads the roster, so a room opened in another project gets its own CLI's commands.
 - **Phone: "bell keeps" now governs the badge and the feed.** The phone kept a fixed 200 events and read no setting, so a badge said `99+` while the desktop bell, set to 50, held at 50. The badge hook and the feed screen now keep `bell_max_events` events (the desktop's own retention), newest first; `FEED_KEEP` is only the fallback before the settings load. The interface door's summary moves "bell keeps" to the shared list.
 
 ### Changed
