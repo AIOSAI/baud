@@ -25,7 +25,7 @@ import NewProjectSheet from "../phone/NewProjectSheet";
 import { bornCard, bornSeat } from "../phone/lib/newProject";
 import { machineFaces, useMachineVitals } from "../phone/lib/machine";
 import { useGitSweep, useRepoCount } from "../phone/lib/pollers";
-import { codexSessions, type LaunchMode, launchCommand } from "../phone/lib/rooms";
+import { type LaunchMode, launchCommand, roomProviders } from "../phone/lib/rooms";
 import Terminal, { type TerminalHandle } from "./Terminal";
 import Zoom from "./Zoom";
 import { relativeAge } from "../age";
@@ -822,7 +822,7 @@ export default function App() {
               onRoomEnded={roomWasEnded}
               onRoom={setHeldRoom}
               liveSessions={snapshot?.live_agent_sessions ?? []}
-              codexSessions={codexSessions(snapshot?.branches ?? [])}
+              roomProviders={roomProviders(snapshot?.branches ?? [])}
             />
           </div>
           {fileTabs.map((tab) => (

@@ -156,10 +156,10 @@ const INBOX_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", "inbox.json"];
 /// BAUD's rooms from the operator's own tmux sessions.
 const ROOM_PREFIX: &str = "baud-";
 
-/// A live agent process (claude or codex) found on the process table.
+/// A live agent process (claude, codex or opencode) found on the process table.
 ///
-/// `headless` is true for `claude -p`/`--print` and `codex exec` runs - the
-/// shape every dispatched wake takes - and false for a human-driven
+/// `headless` is true for `claude -p`/`--print`, `codex exec` and `opencode
+/// run` runs - the shape every dispatched wake takes - and false for a human-driven
 /// interactive session.
 struct ClaudeSession {
     cwd: PathBuf,
@@ -222,10 +222,11 @@ pub struct BranchStatus {
     /// interactive history exists (plain `-c` continues it) or there are no
     /// transcripts at all.
     pub resume_id: Option<String>,
-    /// The CLI the resume and launch doors start: "claude" or "codex". The
-    /// session pointer's provider when the pointer resolves, else the live
-    /// session's in this branch, else "claude". A codex branch with no pointer
-    /// has no history and no `resume_id`: BAUD scans no Codex transcripts.
+    /// The CLI the resume and launch doors start: "claude", "codex" or
+    /// "opencode". The live session's in this branch, else the session
+    /// pointer's provider when the pointer resolves, else "claude". A codex or
+    /// opencode branch with no pointer has no history and no `resume_id`: BAUD
+    /// scans only Claude transcripts.
     pub provider: String,
     /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
     /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.
@@ -1117,6 +1118,45 @@ mod tests {
     }
 
     #[test]
+    fn opencode_sessions_are_agents_and_run_is_headless() {
+        let tui = argv(&["/home/op/.opencode/bin/opencode", "--standalone", "--auto", "--session", "ses_aaaa"]);
+        assert_eq!(classify_claude_cmdline(&tui), Some(("opencode", false)));
+        assert_eq!(classify_claude_cmdline(&argv(&["opencode"])), Some(("opencode", false)));
+        let switched = argv(&["opencode", "--standalone", "--auto", "--prompt", "Hi. You are canary, run the tests"]);
+        assert_eq!(classify_claude_cmdline(&switched), Some(("opencode", false)));
+        let dispatched = argv(&["opencode", "run", "--standalone", "--format", "json", "--auto", "do the work"]);
+        assert_eq!(classify_claude_cmdline(&dispatched), Some(("opencode", true)));
+    }
+
+    #[test]
+    fn opencode_servers_are_not_agents() {
+        // The shared daemon and the private server a --standalone seat spawns both keep a cwd forever.
+        assert_eq!(classify_claude_cmdline(&argv(&["/home/op/.opencode/bin/opencode", "serve", "--service"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["opencode", "serve", "--stdio", "--port", "0"])), None);
+    }
+
+    #[test]
+    #[ignore]
+    fn live_opencode_processes_classify() {
+        for entry in fs::read_dir("/proc").unwrap().flatten() {
+            let Ok(cmdline) = fs::read(entry.path().join("cmdline")) else { continue };
+            if cmdline.split(|byte| *byte == 0).next().is_some_and(|argv0| argv0.ends_with(b"/opencode") || argv0 == b"opencode") {
+                let shown = String::from_utf8_lossy(&cmdline).replace('\0', " ");
+                println!("{} {:?} <- {}", entry.file_name().to_string_lossy(), classify_claude_cmdline(&cmdline), &shown[..shown.len().min(90)]);
+            }
+        }
+    }
+
+    #[test]
+    fn an_opencode_pointer_resumes_an_opencode_card() {
+        let pointer = || Some(("opencode", "ses_aaaa".to_string()));
+        let scanned = || (true, Some("claude-old".to_string()));
+        assert_eq!(resume_door(None, pointer(), scanned), ("opencode", false, Some("ses_aaaa".into())));
+        assert_eq!(resume_door(Some("opencode"), None, scanned), ("opencode", false, None));
+        assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("claude-old".into())));
+    }
+
+    #[test]
     fn a_live_session_names_the_provider_over_the_pointer() {
         let codex_pointer = || Some(("codex", "thread-1".to_string()));
         let scanned = || (true, Some("claude-old".to_string()));
@@ -1136,6 +1176,12 @@ mod tests {
         assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("pointed".into())));
         assert_eq!(resume_door(None, None, scanned), ("claude", true, Some("scanned".into())));
         assert_eq!(resume_door(None, None, || (false, None)), ("claude", false, None));
+    }
+
+    #[test]
+    fn an_opencode_pane_is_an_agent_pane() {
+        let scan = parse_panes("canary-oc\topencode\t/r/src/aipass/canary\n");
+        assert_eq!(scan.agent_panes, vec![("canary-oc".to_string(), PathBuf::from("/r/src/aipass/canary"))]);
     }
 
     #[test]

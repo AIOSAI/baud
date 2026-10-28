@@ -43,13 +43,13 @@ pub fn room_name(scope: Option<&str>, branch_name: &str) -> String {
     }
 }
 
-/// The command names tmux reports for a pane running an agent session, claude
-/// or codex. An install that shows up as something else (a node shim, a
-/// wrapper script) simply never matches - that costs a card its outside-room
+/// The command names tmux reports for a pane running an agent session, claude,
+/// codex or opencode. An install that shows up as something else (a node shim,
+/// a wrapper script) simply never matches - that costs a card its outside-room
 /// tag, which is the same place we stood before m12. A LOOSER test would be
 /// worse: BAUD would treat the operator's own shell session as an agent's room
 /// and type into it.
-pub(crate) const AGENT_PANE_COMMANDS: [&str; 2] = ["claude", "codex"];
+pub(crate) const AGENT_PANE_COMMANDS: [&str; 3] = ["claude", "codex", "opencode"];
 
 /// What one tmux round-trip tells the snapshot.
 #[derive(Debug, Default)]

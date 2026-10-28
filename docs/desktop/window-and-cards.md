@@ -234,12 +234,15 @@ One visible line, on the click, built by `launchCommand` in
 ```
 cd '<branch dir>' && command claude --permission-mode bypassPermissions [-c | --resume <id>]
 cd '<branch dir>' && command codex --dangerously-bypass-approvals-and-sandbox [resume <id>]
+cd '<branch dir>' && PATH="$HOME/.opencode/bin:$PATH" command opencode --standalone --auto [--session <id>]
 cd '<branch dir>' && drone @hooks sessions reclaim @<branch> && sleep 2 && <the resume line>
 ```
 
-The agent's `provider` picks the line. A codex branch resumes only through its
-session pointer: BAUD scans no Codex transcripts, so with no pointer it starts
-fresh. The third line is `▸ resume ⚡` on a dispatched agent: resuming onto a
+The agent's `provider` picks the line. A codex or opencode branch resumes only
+through its session pointer: BAUD scans no Codex or OpenCode history, so with no
+pointer it starts fresh. The OpenCode line puts the installer's bin on `PATH`,
+since a pane's shell is not a login shell, and `--standalone` gives the seat its
+own server, so the pane's env reaches its hooks. The third line is `▸ resume ⚡` on a dispatched agent: resuming onto a
 working session would steal its background tasks and kill the job silently, so
 the door takes two presses inside four seconds and the line stops the job
 first. The startup agent never takes that door; a dispatched startup agent
