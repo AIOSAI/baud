@@ -179,6 +179,12 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     void ptyKill(id).catch(() => {});
   }, []);
 
+  // A webview reload skips unmount: without this the room's tmux client stays attached with nobody reading it.
+  useEffect(() => {
+    window.addEventListener("beforeunload", kill);
+    return () => window.removeEventListener("beforeunload", kill);
+  }, [kill]);
+
   const restart = useCallback(() => {
     setFailure(null);
     setPhase("opening");

@@ -586,7 +586,10 @@ export default function App() {
     <div className="baud-app">
       <header className="baud-header">
         <div className="baud-header-brand">
-          <span className="baud-wordmark">BAUD</span>
+          {/* The wordmark is the reload, as on the phone: lossless, every room is a tmux session on the host. */}
+          <button type="button" className="baud-wordmark" title="reload BAUD" onClick={() => window.location.reload()}>
+            BAUD
+          </button>
           <ProjectSwitch
             project={snapshot?.project ?? null}
             onSwitched={reseat}
