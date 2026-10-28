@@ -5,8 +5,11 @@
 //! Chrome 136+ refuses remote debugging on the default user-data-dir, so the
 //! profile lives at `<BAUD config dir>/chrome`: fresh, or a one-time copy of
 //! `~/.config/google-chrome` made by `browser_adopt`. Linux only.
+//!
+//! A view is one page's screencast: Rust owns the page's DevTools socket, because the
+//! DevTools server refuses any socket that carries an Origin, and the webview's always does.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct BrowserTarget {
@@ -26,6 +29,24 @@ pub struct BrowserStatus {
     /// `linked`, `present` or `absent`.
     pub native_hosts: &'static str,
     pub detail: String,
+}
+
+/// One view's stream to the webview.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum BrowserEvent {
+    /// `data` is the JPEG as base64; the sizes are CSS pixels, the space input coordinates live in.
+    Frame { data: String, device_width: f64, device_height: f64, page_scale: f64, scroll_x: f64, scroll_y: f64 },
+    Visibility { visible: bool },
+    Closed { reason: String },
+}
+
+/// Only these two Input methods cross; the params are CDP's own, built by the webview.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(tag = "kind", content = "params", rename_all = "lowercase")]
+pub enum BrowserInput {
+    Mouse(serde_json::Value),
+    Key(serde_json::Value),
 }
 
 #[cfg(target_os = "linux")]
@@ -60,6 +81,41 @@ pub fn browser_adopt(app: tauri::AppHandle) -> Result<BrowserStatus, String> {
     linux::adopt(&profile_dir(&app)?, &user_chrome_dir())
 }
 
+#[cfg(target_os = "linux")]
+#[tauri::command(async)]
+pub fn browser_view_open(target_id: String, on_event: tauri::ipc::Channel<BrowserEvent>) -> Result<String, String> {
+    linux::view_open(linux::PORT, &target_id, move |event| on_event.send(event).is_ok())
+}
+
+/// Ends BAUD's stream only; the page stays open in Chrome.
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub fn browser_view_close(view_id: String) {
+    linux::view_close(&view_id);
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub fn browser_input(view_id: String, event: BrowserInput) -> Result<(), String> {
+    let (method, params) = match event {
+        BrowserInput::Mouse(params) => ("Input.dispatchMouseEvent", params),
+        BrowserInput::Key(params) => ("Input.dispatchKeyEvent", params),
+    };
+    linux::view_send(&view_id, method, params)
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command]
+pub fn browser_navigate(view_id: String, url: String) -> Result<(), String> {
+    linux::view_send(&view_id, "Page.navigate", serde_json::json!({ "url": url }))
+}
+
+#[cfg(target_os = "linux")]
+#[tauri::command(async)]
+pub fn browser_new_tab() -> Result<BrowserTarget, String> {
+    linux::new_tab(linux::PORT)
+}
+
 #[cfg(not(target_os = "linux"))]
 const NOT_LINUX: &str = "BAUD's Chrome is Linux-only for now - the room, the profile path and the binary are Linux's";
 
@@ -81,14 +137,50 @@ pub fn browser_adopt() -> Result<BrowserStatus, String> {
     Err(NOT_LINUX.into())
 }
 
+#[cfg(not(target_os = "linux"))]
+#[tauri::command(async)]
+pub fn browser_view_open(target_id: String, on_event: tauri::ipc::Channel<BrowserEvent>) -> Result<String, String> {
+    let _ = (target_id, on_event);
+    Err(NOT_LINUX.into())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub fn browser_view_close(view_id: String) {
+    let _ = view_id;
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub fn browser_input(view_id: String, event: BrowserInput) -> Result<(), String> {
+    let _ = (view_id, event);
+    Err(NOT_LINUX.into())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command]
+pub fn browser_navigate(view_id: String, url: String) -> Result<(), String> {
+    let _ = (view_id, url);
+    Err(NOT_LINUX.into())
+}
+
+#[cfg(not(target_os = "linux"))]
+#[tauri::command(async)]
+pub fn browser_new_tab() -> Result<BrowserTarget, String> {
+    Err(NOT_LINUX.into())
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::{BrowserStatus, BrowserTarget};
+    use super::{BrowserEvent, BrowserStatus, BrowserTarget};
     use std::io::{Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, TcpStream};
     use std::path::{Path, PathBuf};
+    use serde_json::{json, Value};
     use std::process::Command;
-    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{mpsc, Mutex};
+    use tungstenite::{Message, WebSocket};
     use std::time::{Duration, Instant};
 
     pub(super) const ROOM: &str = "baud-chrome";
@@ -114,12 +206,14 @@ mod linux {
     }
 
     /// One tmux invocation, argv only: `remain-on-exit` keeps a crashed Chrome's last words readable as `stale`.
+    /// Headless: a headed window behind BAUD paints nothing, so the screencast freezes; headless paints always.
     pub(super) fn launch_argv(chrome: &str, profile: &Path) -> Vec<String> {
         let exact = format!("={ROOM}:");
         [
             "new-session", "-d", "-s", ROOM, "--", chrome,
             &format!("--user-data-dir={}", profile.display()),
             &format!("--remote-debugging-port={PORT}"),
+            "--headless=new", "--window-size=1280,800",
             "--no-first-run", "--no-default-browser-check",
             ";", "set-option", "-t", &exact, "remain-on-exit", "on",
         ]
@@ -151,12 +245,20 @@ mod linux {
         tmux(&["display-message", "-p", "-t", &format!("={ROOM}:"), "#{pane_dead}"]).is_some_and(|out| out.trim() == "1")
     }
 
-    /// Loopback only, by construction: the address is a literal, never a name or a setting.
     fn devtools_get(path: &str) -> Option<String> {
-        let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, PORT));
-        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(300)).ok()?;
+        devtools_at(PORT, "GET", path)
+    }
+
+    /// Loopback only, by construction: the address is a literal, never a name or a setting.
+    fn loopback(port: u16) -> std::io::Result<TcpStream> {
+        TcpStream::connect_timeout(&SocketAddr::from((Ipv4Addr::LOCALHOST, port)), Duration::from_millis(300))
+    }
+
+    /// The port is an argument so a proof can run on its own Chrome; the commands always pass `PORT`.
+    fn devtools_at(port: u16, method: &str, path: &str) -> Option<String> {
+        let mut stream = loopback(port).ok()?;
         stream.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
-        write!(stream, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{PORT}\r\nConnection: close\r\n\r\n").ok()?;
+        write!(stream, "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n").ok()?;
         // Chrome holds the socket open past the body, so the read stops at Content-Length, not at EOF.
         let mut raw = Vec::new();
         let mut chunk = [0u8; 8192];
@@ -187,14 +289,170 @@ mod linux {
         (body.len() >= length).then(|| Some(String::from_utf8_lossy(&body[..length]).into_owned()))
     }
 
+    fn target_of(item: &Value) -> BrowserTarget {
+        let field = |key: &str| item[key].as_str().unwrap_or_default().to_string();
+        BrowserTarget { id: field("id"), title: field("title"), url: field("url") }
+    }
+
     pub(super) fn page_targets(list: &str) -> Vec<BrowserTarget> {
-        let Ok(serde_json::Value::Array(items)) = serde_json::from_str(list) else { return Vec::new() };
-        let field = |item: &serde_json::Value, key: &str| item[key].as_str().unwrap_or_default().to_string();
-        items
-            .iter()
-            .filter(|item| item["type"] == "page")
-            .map(|item| BrowserTarget { id: field(item, "id"), title: field(item, "title"), url: field(item, "url") })
-            .collect()
+        let Ok(Value::Array(items)) = serde_json::from_str(list) else { return Vec::new() };
+        items.iter().filter(|item| item["type"] == "page").map(target_of).collect()
+    }
+
+    /// The path of the page's own socket; the host is dropped, the connection always goes to loopback.
+    pub(super) fn socket_path(list: &str, target_id: &str) -> Option<String> {
+        let Ok(Value::Array(items)) = serde_json::from_str::<Value>(list) else { return None };
+        let url = items.iter().find(|item| item["id"] == target_id)?["webSocketDebuggerUrl"].as_str()?;
+        let rest = url.strip_prefix("ws://")?;
+        Some(rest[rest.find('/')?..].to_string())
+    }
+
+    pub(super) fn cdp(id: u64, method: &str, params: Value) -> String {
+        json!({ "id": id, "method": method, "params": params }).to_string()
+    }
+
+    /// What one message from the page means: an event for the webview, and the frame to ack.
+    pub(super) fn react(text: &str) -> (Option<BrowserEvent>, Option<Value>) {
+        let Ok(message) = serde_json::from_str::<Value>(text) else { return (None, None) };
+        let params = &message["params"];
+        let number = |value: &Value| value.as_f64().unwrap_or_default();
+        match message["method"].as_str().unwrap_or_default() {
+            "Page.screencastFrame" => {
+                let meta = &params["metadata"];
+                let frame = BrowserEvent::Frame {
+                    data: params["data"].as_str().unwrap_or_default().to_string(),
+                    device_width: number(&meta["deviceWidth"]),
+                    device_height: number(&meta["deviceHeight"]),
+                    page_scale: number(&meta["pageScaleFactor"]),
+                    scroll_x: number(&meta["scrollOffsetX"]),
+                    scroll_y: number(&meta["scrollOffsetY"]),
+                };
+                (Some(frame), Some(params["sessionId"].clone()))
+            }
+            "Page.screencastVisibilityChanged" => {
+                (Some(BrowserEvent::Visibility { visible: params["visible"].as_bool().unwrap_or(true) }), None)
+            }
+            "Inspector.detached" => {
+                let reason = params["reason"].as_str().unwrap_or("detached").to_string();
+                (Some(BrowserEvent::Closed { reason: format!("the page let go: {reason}") }), None)
+            }
+            "Inspector.targetCrashed" => (Some(BrowserEvent::Closed { reason: "the page crashed".into() }), None),
+            _ => (None, None),
+        }
+    }
+
+    type Queued = (&'static str, Value);
+    /// A view is its command queue; dropping the sender is what ends the view's thread.
+    static VIEWS: Mutex<Vec<(String, mpsc::Sender<Queued>)>> = Mutex::new(Vec::new());
+    static NEXT_VIEW: AtomicU64 = AtomicU64::new(1);
+    /// How long a read waits before the queued input gets its turn on the socket.
+    const INPUT_TURN: Duration = Duration::from_millis(10);
+
+    fn views() -> std::sync::MutexGuard<'static, Vec<(String, mpsc::Sender<Queued>)>> {
+        VIEWS.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub(super) fn view_open(
+        port: u16,
+        target_id: &str,
+        mut emit: impl FnMut(BrowserEvent) -> bool + Send + 'static,
+    ) -> Result<String, String> {
+        let list = devtools_at(port, "GET", "/json/list").ok_or("BAUD's Chrome did not answer its page list")?;
+        let path = socket_path(&list, target_id).ok_or_else(|| format!("BAUD's Chrome has no page {target_id}"))?;
+        let stream = loopback(port).map_err(|err| format!("could not reach BAUD's Chrome: {err}"))?;
+        stream.set_read_timeout(Some(Duration::from_secs(2))).map_err(|err| err.to_string())?;
+        let (mut socket, _) = tungstenite::client(format!("ws://127.0.0.1:{port}{path}"), stream)
+            .map_err(|err| format!("the page's socket refused BAUD: {err}"))?;
+        socket.get_ref().set_read_timeout(Some(INPUT_TURN)).map_err(|err| err.to_string())?;
+        // A background tab paints nothing, so the shown page is brought to the front first.
+        let start = json!({ "format": "jpeg", "quality": 60, "maxWidth": 1280, "maxHeight": 1280, "everyNthFrame": 1 });
+        for (id, method, params) in [(1, "Page.bringToFront", json!({})), (2, "Page.startScreencast", start)] {
+            socket.send(Message::text(cdp(id, method, params))).map_err(|err| format!("the page's socket broke: {err}"))?;
+        }
+
+        let view_id = format!("view-{}", NEXT_VIEW.fetch_add(1, Ordering::Relaxed));
+        let (sender, commands) = mpsc::channel();
+        views().push((view_id.clone(), sender));
+        let mine = view_id.clone();
+        std::thread::spawn(move || {
+            if let Some(reason) = pump(&mut socket, &commands, &mut emit) {
+                emit(BrowserEvent::Closed { reason });
+            }
+            let _ = socket.close(None);
+            let _ = socket.flush();
+            views().retain(|(id, _)| *id != mine);
+        });
+        Ok(view_id)
+    }
+
+    /// `None` when BAUD ended the view (closed, or the webview went); `Some(reason)` when the page did.
+    fn pump(
+        socket: &mut WebSocket<TcpStream>,
+        commands: &mpsc::Receiver<Queued>,
+        emit: &mut impl FnMut(BrowserEvent) -> bool,
+    ) -> Option<String> {
+        let mut next_id = 3;
+        let mut send = |socket: &mut WebSocket<TcpStream>, method: &str, params: Value| {
+            next_id += 1;
+            socket.send(Message::text(cdp(next_id, method, params))).map_err(|err| err.to_string())
+        };
+        loop {
+            loop {
+                match commands.try_recv() {
+                    Ok((method, params)) => {
+                        if let Err(err) = send(socket, method, params) {
+                            return Some(err);
+                        }
+                    }
+                    Err(mpsc::TryRecvError::Empty) => break,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        let _ = send(socket, "Page.stopScreencast", json!({}));
+                        return None;
+                    }
+                }
+            }
+            match socket.read() {
+                Ok(Message::Text(text)) => {
+                    let (event, ack) = react(&text);
+                    // Unacked, Chrome stops after a few frames.
+                    if let Some(session) = ack {
+                        if let Err(err) = send(socket, "Page.screencastFrameAck", json!({ "sessionId": session })) {
+                            return Some(err);
+                        }
+                    }
+                    if let Some(event) = event {
+                        if let BrowserEvent::Closed { reason } = event {
+                            return Some(reason);
+                        }
+                        if !emit(event) {
+                            let _ = send(socket, "Page.stopScreencast", json!({}));
+                            return None;
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) => return Some("the page's socket closed".into()),
+                Ok(_) => {}
+                Err(tungstenite::Error::Io(err))
+                    if matches!(err.kind(), std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut) => {}
+                Err(err) => return Some(format!("the page's socket broke: {err}")),
+            }
+        }
+    }
+
+    pub(super) fn view_close(view_id: &str) {
+        views().retain(|(id, _)| id != view_id);
+    }
+
+    pub(super) fn view_send(view_id: &str, method: &'static str, params: Value) -> Result<(), String> {
+        let views = views();
+        let (_, sender) = views.iter().find(|(id, _)| id == view_id).ok_or("this view has closed")?;
+        sender.send((method, params)).map_err(|_| "this view has closed".to_string())
+    }
+
+    /// Chrome answers `/json/new` only to PUT.
+    pub(super) fn new_tab(port: u16) -> Result<BrowserTarget, String> {
+        let body = devtools_at(port, "PUT", "/json/new?about:blank").ok_or("BAUD's Chrome did not open a tab")?;
+        serde_json::from_str::<Value>(&body).map(|item| target_of(&item)).map_err(|err| err.to_string())
     }
 
     pub(super) fn native_hosts(profile: &Path) -> &'static str {
@@ -375,6 +633,8 @@ mod linux {
             assert_eq!(&argv[..6], ["new-session", "-d", "-s", "baud-chrome", "--", "/usr/bin/google-chrome"]);
             assert!(argv.contains(&"--user-data-dir=/home/op/.config/x y/chrome".to_string()));
             assert!(argv.contains(&"--remote-debugging-port=9333".to_string()));
+            assert!(argv.contains(&"--headless=new".to_string()));
+            assert!(argv.contains(&"--window-size=1280,800".to_string()));
             assert!(argv.contains(&"--no-first-run".to_string()));
             assert!(argv.contains(&"--no-default-browser-check".to_string()));
             assert!(argv.ends_with(&["set-option", "-t", "=baud-chrome:", "remain-on-exit", "on"].map(String::from)));
@@ -479,6 +739,143 @@ mod linux {
             assert_eq!(complete_body(b"HTTP/1.1 200 OK\r\ncontent-length:2\r\n\r\n{}"), Some(Some("{}".into())));
             assert_eq!(complete_body(b"HTTP/1.1 500 Internal\r\nContent-Length: 0\r\n\r\n"), Some(None));
             assert_eq!(complete_body(b"HTTP/1.1 200 OK\r\nContent-"), None);
+        }
+
+        #[test]
+        fn the_socket_path_is_the_named_pages_own() {
+            let list = r#"[{"id":"A","type":"page","webSocketDebuggerUrl":"ws://127.0.0.1:9333/devtools/page/A"},
+                           {"id":"B","type":"page"}]"#;
+            assert_eq!(socket_path(list, "A").as_deref(), Some("/devtools/page/A"));
+            assert_eq!(socket_path(list, "B"), None);
+            assert_eq!(socket_path(list, "C"), None);
+            assert_eq!(socket_path("[]", "A"), None);
+        }
+
+        #[test]
+        fn a_frame_is_forwarded_with_its_metadata_and_acked_by_session() {
+            let text = r#"{"method":"Page.screencastFrame","params":{"data":"/9j/","sessionId":7,
+                "metadata":{"deviceWidth":1280,"deviceHeight":720.5,"pageScaleFactor":1,"scrollOffsetX":0,"scrollOffsetY":40,"offsetTop":0}}}"#;
+            let (event, ack) = react(text);
+            assert_eq!(
+                event,
+                Some(BrowserEvent::Frame {
+                    data: "/9j/".into(),
+                    device_width: 1280.0,
+                    device_height: 720.5,
+                    page_scale: 1.0,
+                    scroll_x: 0.0,
+                    scroll_y: 40.0
+                })
+            );
+            assert_eq!(cdp(9, "Page.screencastFrameAck", json!({ "sessionId": ack.unwrap() })),
+                r#"{"id":9,"method":"Page.screencastFrameAck","params":{"sessionId":7}}"#);
+        }
+
+        #[test]
+        fn visibility_detach_and_noise_read_as_meant() {
+            let hidden = r#"{"method":"Page.screencastVisibilityChanged","params":{"visible":false}}"#;
+            assert_eq!(react(hidden), (Some(BrowserEvent::Visibility { visible: false }), None));
+            let gone = r#"{"method":"Inspector.detached","params":{"reason":"target_closed"}}"#;
+            assert!(matches!(react(gone).0, Some(BrowserEvent::Closed { reason }) if reason.contains("target_closed")));
+            assert_eq!(react(r#"{"id":2,"result":{}}"#), (None, None));
+            assert_eq!(react("not json"), (None, None));
+        }
+
+        #[test]
+        fn events_and_input_wear_the_webviews_shapes() {
+            let frame = serde_json::to_value(BrowserEvent::Visibility { visible: true }).unwrap();
+            assert_eq!(frame, json!({ "kind": "visibility", "visible": true }));
+            let input: super::super::BrowserInput =
+                serde_json::from_value(json!({ "kind": "key", "params": { "type": "char", "text": "a" } })).unwrap();
+            assert_eq!(input, super::super::BrowserInput::Key(json!({ "type": "char", "text": "a" })));
+            assert!(serde_json::from_value::<super::super::BrowserInput>(json!({ "kind": "eval", "params": {} })).is_err());
+        }
+
+        #[test]
+        fn a_closed_view_refuses_input() {
+            assert_eq!(view_send("view-none", "Page.navigate", json!({})), Err("this view has closed".into()));
+            view_close("view-none");
+        }
+
+        /// Live: views a Chrome the caller started on `BAUD_BROWSER_PROOF_PORT` (never 9333), scrolls a long
+        /// page, minimises the window, and writes the last frame's base64 to `BAUD_BROWSER_PROOF_OUT`.
+        /// Run alone with `cargo test -- --ignored live_view_streams_frames --nocapture`.
+        #[test]
+        #[ignore]
+        fn live_view_streams_frames() {
+            use std::sync::Arc;
+            let port: u16 = std::env::var("BAUD_BROWSER_PROOF_PORT").expect("a test port").parse().unwrap();
+            assert_ne!(port, PORT, "the proof never touches BAUD's own Chrome");
+            let target = page_targets(&devtools_at(port, "GET", "/json/list").unwrap()).remove(0);
+            let seen: Arc<Mutex<Vec<(Instant, BrowserEvent)>>> = Arc::default();
+            let sink = seen.clone();
+            let view = view_open(port, &target.id, move |event| {
+                sink.lock().unwrap().push((Instant::now(), event));
+                true
+            })
+            .unwrap();
+            let frames_in = |seconds: f64| {
+                let from = Instant::now();
+                std::thread::sleep(Duration::from_secs_f64(seconds));
+                let seen = seen.lock().unwrap();
+                let frames: Vec<&BrowserEvent> =
+                    seen.iter().filter(|(at, event)| *at >= from && matches!(event, BrowserEvent::Frame { .. })).map(|(_, e)| e).collect();
+                let others: Vec<&BrowserEvent> =
+                    seen.iter().filter(|(at, event)| *at >= from && !matches!(event, BrowserEvent::Frame { .. })).map(|(_, e)| e).collect();
+                (frames.len(), others.into_iter().cloned().collect::<Vec<_>>())
+            };
+            println!("first 2 s: {:?}", frames_in(2.0));
+            let page = format!("data:text/html,<body style='margin:0'>{}</body>", "<p style='height:200px;border-top:4px solid red'>row</p>".repeat(100));
+            view_send(&view, "Page.navigate", json!({ "url": page })).unwrap();
+            std::thread::sleep(Duration::from_millis(1500));
+            let wheel = std::thread::spawn({
+                let view = view.clone();
+                move || {
+                    for _ in 0..180 {
+                        let _ = view_send(&view, "Input.dispatchMouseEvent", json!({ "type": "mouseWheel", "x": 200, "y": 200, "deltaX": 0, "deltaY": 40 }));
+                        std::thread::sleep(Duration::from_millis(16));
+                    }
+                }
+            });
+            let (scrolled, _) = frames_in(3.0);
+            wheel.join().unwrap();
+            println!("scrolling 3 s: {scrolled} frames, {:.1} fps", scrolled as f64 / 3.0);
+            println!("idle 2 s after scroll: {:?}", frames_in(2.0).0);
+
+            let version: Value = serde_json::from_str(&devtools_at(port, "GET", "/json/version").unwrap()).unwrap();
+            let url = version["webSocketDebuggerUrl"].as_str().unwrap().to_string();
+            let path = &url[url.find("/devtools").unwrap()..];
+            let (mut browser, _) = tungstenite::client(format!("ws://127.0.0.1:{port}{path}"), loopback(port).unwrap()).unwrap();
+            let mut call = |id: u64, method: &str, params: Value| -> Value {
+                browser.send(Message::text(cdp(id, method, params))).unwrap();
+                loop {
+                    if let Message::Text(text) = browser.read().unwrap() {
+                        let answer: Value = serde_json::from_str(&text).unwrap();
+                        if answer["id"] == id {
+                            return answer;
+                        }
+                    }
+                }
+            };
+            let window = call(1, "Browser.getWindowForTarget", json!({ "targetId": target.id }))["result"]["windowId"].clone();
+            println!("minimise: {}", call(2, "Browser.setWindowBounds", json!({ "windowId": window, "bounds": { "windowState": "minimized" } })));
+            println!("minimised 4 s: {:?}", frames_in(4.0));
+            view_send(&view, "Input.dispatchMouseEvent", json!({ "type": "mouseWheel", "x": 200, "y": 200, "deltaX": 0, "deltaY": -400 })).unwrap();
+            println!("minimised, scrolled once, 2 s: {:?}", frames_in(2.0));
+            println!("state: {}", call(3, "Browser.getWindowBounds", json!({ "windowId": window })));
+            call(4, "Browser.setWindowBounds", json!({ "windowId": window, "bounds": { "windowState": "normal" } }));
+            println!("restored 2 s: {:?}", frames_in(2.0));
+
+            let last = seen.lock().unwrap().iter().rev().find_map(|(_, event)| match event {
+                BrowserEvent::Frame { data, device_width, device_height, .. } => Some((data.clone(), *device_width, *device_height)),
+                _ => None,
+            });
+            let (data, width, height) = last.expect("at least one frame");
+            println!("last frame: css {width}x{height}, {} base64 bytes", data.len());
+            std::fs::write(std::env::var("BAUD_BROWSER_PROOF_OUT").unwrap(), data).unwrap();
+            view_close(&view);
+            std::thread::sleep(Duration::from_millis(300));
+            assert!(views().iter().all(|(id, _)| *id != view), "a closed view's thread lets go of its slot");
         }
 
         /// Live: launches a real Chrome in the `baud-chrome` room on port 9333 with a profile from

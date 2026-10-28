@@ -365,6 +365,11 @@ const NOT_YET: Record<string, string> = {
   browser_status: "BAUD's Chrome is the desktop's for now - the phone's view of it waits on @api's socket lane",
   browser_launch: "BAUD's Chrome is the desktop's for now - see browser_status",
   browser_adopt: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_view_open: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_view_close: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_input: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_navigate: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_new_tab: "BAUD's Chrome is the desktop's for now - see browser_status",
 };
 
 /** The absolute path of the root an answer stands on; "" when absent so composition refuses, not half-builds. */

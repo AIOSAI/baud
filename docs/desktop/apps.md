@@ -47,8 +47,9 @@ same refusals.
   IPC, not the relay, every five seconds while the tab is in front. Down, it
   says `BAUD's Chrome is not running` and offers `launch` and `adopt my
   Chrome`; running, it shows the port, the profile path and the native-hosts
-  word, then the open pages, title over url, and `reload`. A page row opens
-  nothing. On the phone the same card opens the same screen, which shows the
+  word, then a tab row of the open pages with `+`, a URL bar, and the shown
+  page live on a canvas that takes the mouse, the wheel and, while focused,
+  the keys. On the phone the same card opens the same screen, which shows the
   host's `not_on_the_phone` refusal.
 
 ## What differs from the phone

@@ -161,7 +161,7 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
 | `docs/desktop/settings.md` | The card gear, the header gear, the memory dials, the host API tab. |
 | `docs/desktop/apps.md` | The wheel's app and monitor cards, GIT, FILES, BACKUP, MACHINE and BROWSER, each the phone's screen in a workbench tab. |
-| `docs/desktop/browser.md` | BAUD's own Chrome: the profile copy, the room, the port, the four states, the native-hosts link. |
+| `docs/desktop/browser.md` | BAUD's own Chrome: the profile copy, the room, the port, the four states, the native-hosts link, the live view (screencast, input, tab row, URL bar). |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
 | `docs/phone.md` | The phone face's index: what the phone is, the transport and its refusal table, the token rule, project-named reads, serving, the checks, the visibility gate, and the table of the pages below. |

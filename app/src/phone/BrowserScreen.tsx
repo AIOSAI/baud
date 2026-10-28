@@ -1,9 +1,10 @@
-/** BAUD's own Chrome: down with two doors, or running with its open pages. Reference: docs/desktop/browser.md */
+/** BAUD's own Chrome: down with two doors, or running with its shown page live. Reference: docs/desktop/browser.md */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { browserAdopt, browserLaunch, browserStatus } from "../host";
 import type { BrowserStatus } from "../types";
+import BrowserView from "./BrowserView";
 import { whileVisible } from "./lib/whileVisible";
 
 const POLL_MS = 5000;
@@ -95,20 +96,7 @@ export default function BrowserScreen({ onClose }: { onClose: () => void }) {
             port {status.port} · {status.profile} · native hosts {status.native_hosts}
           </p>
           {status.detail ? <p className="baud-browser-line">{status.detail}</p> : null}
-          <ul className="baud-browser-pages">
-            {status.targets.map((page) => (
-              <li key={page.id} className="baud-browser-page">
-                <span className="baud-browser-title">{page.title || "untitled"}</span>
-                <span className="baud-browser-url">{page.url}</span>
-              </li>
-            ))}
-          </ul>
-          {status.targets.length === 0 ? <p className="baud-browser-line">no pages open</p> : null}
-          <div className="baud-browser-doors">
-            <button type="button" className="baud-browser-door" onClick={() => void read()}>
-              reload
-            </button>
-          </div>
+          <BrowserView targets={status.targets} onChanged={() => void read()} />
         </>
       ) : null}
 
