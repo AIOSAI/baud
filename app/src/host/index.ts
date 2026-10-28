@@ -155,7 +155,7 @@ export const notificationsRead = () => call<NotificationEvent[]>("notifications_
 export const notificationsFeed = (since: string | null, limit: number) =>
   call<FeedWindow>("notifications_feed", { since, limit });
 
-/* Phone-only, operate scope. `wake` names no model: the branch's own config decides that. */
+/* Operate scope, over the relay on the desktop. `wake` names no model: the branch's own config decides that. */
 
 /** Never admin: a woken agent is a worker. */
 export const verbWake = (branch: string, project: string, message: string) =>

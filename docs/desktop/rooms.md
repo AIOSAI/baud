@@ -37,9 +37,8 @@ but holds no claude (a room holding no claude never outranks a live seat; the
 row's `own_room_live` says which) — can still hold a live agent: @hooks' boot shim seats a typed `claude` in `aipass-<branch>`,
 the Telegram fleet wakes agents in `telegram-<branch>`. The snapshot reads panes,
 not just session names, so those show up as the branch's `outside_room` and the
-card's doors act on them: the badge wears a `⧉` and names the session on hover,
-the launch door reads `▸ attach` (never a second claude in a branch that already
-has one), and `✕ end room` ends that session rather than a `baud-<branch>`
+card's doors act on them: the launch door reads `▸ attach`, its hover naming the session (never a second
+claude in a branch that already has one), and `✕ end room` ends that session rather than a `baud-<branch>`
 that does not exist.
 
 A session is a candidate only when tmux reports one of its panes running
@@ -152,7 +151,7 @@ frontend passes a target token, never a command line — and the token must matc
 spawn through the login shell (`-l -c`) so `drone` resolves from the operator's
 own PATH.
 
-**Help terminals.** The `?` in an opened passport opens a real shell seated in that branch
+**Help terminals.** The `?` on an opened card opens a real shell seated in that branch
 with the branch's help command already run — `drone @<branch> --help`, except
 for `aipass`, which is the ecosystem's one routing exception and asks its own
 binary (`aipass --help`). The keyboard is deliberately ON: the point is

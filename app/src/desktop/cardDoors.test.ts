@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { awayNote, cardDoorView, gearFence } from "./cardDoors";
+import { cardDoorView, holdsRoom } from "./cardDoors";
 import { phoneTabKey } from "./phoneView";
 
 const flow = { name: "flow", project: "AIPASS" };
@@ -25,11 +25,11 @@ describe("cardDoorView", () => {
   });
 });
 
-describe("the fenced gear", () => {
-  it("names the project the agent lives in and why the gear stays", () => {
-    expect(gearFence("flow", "AIPASS")).toContain("Switch to AIPASS first");
-    expect(gearFence("flow", "AIPASS")).toContain("memory dials name no project");
-    expect(awayNote("flow", "AIPASS")).toContain("flow lives in AIPASS");
-    expect(awayNote("flow", "AIPASS")).toContain("settings gear");
+describe("holdsRoom", () => {
+  it("matches the terminal's room only on name and project both", () => {
+    expect(holdsRoom({ room: "flow", project: "AIPASS" }, flow)).toBe(true);
+    expect(holdsRoom({ room: "flow", project: "BAUD" }, flow)).toBe(false);
+    expect(holdsRoom({ room: "drone", project: "AIPASS" }, flow)).toBe(false);
+    expect(holdsRoom(null, flow)).toBe(false);
   });
 });

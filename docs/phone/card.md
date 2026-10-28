@@ -6,10 +6,11 @@ This page covers the expanded agent card: its doors, what crosses projects, the 
 
 ### The expanded card
 
-**The expanded card's stat tiles are doors, not labels** — on the desktop the
-same figures, in the opened passport's doors, are the read affordance. Three of them open `memory`, `dashboard`
-and `inbox`, and the agent's **name** is its README door. Before deleting a
-container, ask what doors it carries.
+**The expanded card's stat tiles are doors, not labels**, and the desktop opens
+this same card. `MAIL` opens the inbox, `PLANS` the plans screen, `TODOS` the
+memory screen on its todos tab, and `GIT` the branch's changes; the agent's
+**name** is its README door. Before deleting a container, ask what doors it
+carries.
 
 The verb chips on the expanded card are a deliberate deviation from the approved
 shape: dropping the row would take `end room` with it and strand rooms with no
@@ -25,9 +26,10 @@ friction. Exactly one door on the expanded card refuses a foreign agent:
 
 | Door | Cross-project | |
 | --- | --- | --- |
-| README, the four stat tiles, `files`, `passport` | **free** | the read routes take `project` |
-| `resume` / `fresh`, `shell`, `wake`, `end room` | **free** | one terminal, any agent |
+| README, the four stat tiles, `files`, `memory`, `passport` | **free** | the read routes take `project` |
+| `resume` / `fresh`, `shell`, `?`, `wake`, `end room` | **free** | one terminal, any agent |
 | `watch` | **free** | @prax scopes itself — see below |
+| `prax`, `commons` (a manager's) | **the seat's** | the installation's own views — see below |
 | `settings` | fenced | the sheet's memory dials name a branch and **no** project |
 
 None of the fences is arbitrary. A **read** that names no project resolves under
@@ -95,8 +97,8 @@ the beat. The desktop mounts the same wheel, so it is one indicator on both
 faces, and the fill rather than a halo carries the pulse because a 44px disc
 has steady colour enough to hide one.
 
-**The sheet states the sub-agent count in words**, on the status line rather than
-in the counter row. Every tile in that row is a *door* — press `MAIL` and the
+**The sheet states the sub-agent count in words**, on its own line under the
+status line rather than in the counter row. Every tile in that row is a *door* — press `MAIL` and the
 inbox opens — and sub-agents have no file to open, so a fifth tile would be a
 dead button among four live ones. It is also a different kind of fact: the four
 counters are standing figures, this one appears and vanishes with activity.
@@ -105,45 +107,35 @@ renders nothing at zero is indistinguishable from a sheet that does not report
 sub-agents at all. The rail says *that* something is running; the sheet says
 *how many*.
 
-**The passport opens from the door row, not from the avatar.** On the desk the
-centred card opens the passport itself, with the doors on it; here the disc
-lives on the wheel, inside the
-tap target that opens the sheet, and nesting a second target inside it at that
-size would trade the gesture the whole face is built on for a mis-tap. So it
-joins `files`, `shell`, `watch` and `settings` at finger size. What opens is the
-desktop document's **content and order** at 46 columns, not its layout: the
-fields *stack* (label over value, which is how a real passport prints a field
-and what stops a Purpose sentence living in thirty characters). The memory tabs
-and a manager's monitors live on the card, not the passport — see **The passport
-is only a passport** below — and they keep the sheet's idioms: tabs scroll
-sideways rather than wrapping to two rows that would change height under the
-reader's thumb, and each entry clamps to six lines with the **whole entry** as
-the tap target that opens it, because a fleet session summary runs past a
-thousand characters, and four of those unclamped is a wall rather than a
-document.
+**The passport opens from its own door, not from the avatar.** The disc lives
+on the wheel, inside the tap target that opens the sheet, and nesting a second
+target inside it at that size would trade the gesture the whole face is built
+on for a mis-tap. So `passport` sits alone, full width, in the card's IDENTITY
+zone at the foot; `settings` is not a door beside it but the gear chip in the
+card's head, beside `?`. The fields *stack* (label over value, which is how a
+real passport prints a field and what stops a Purpose sentence living in thirty
+characters). Working memory is the card's `memory` door, which opens its own
+screen, and a manager's monitors are plain doors in the MANAGER zone — see **The
+passport is only a passport** below.
 
 Three facts about that document are easy to get wrong. It reads **names, never
-paths**: the desk asks for `<path>/.trinity/passport.json` and this face's
-transport refuses absolute paths by design, so the phone asks for
-`<branch>/.trinity/passport.json` — the shape the stat tiles use. It follows the
-**poll**, holding the card's `project/name` ref rather than the card, so a
-sub-agent that starts while the passport is open appears on it; and an agent that
-leaves the fleet closes its own passport, because a modal that returns by itself
-on a later poll is a bug nobody can explain. And a **refused read is printed in
-the host's own words** rather than drawn as an empty document — which matters
-more here than at the desk, because this face's read lane genuinely does refuse
-some branches (see below).
+paths**: it asks for `<branch>/.trinity/passport.json` with the card's project —
+the shape the stat tiles use — and on the desktop that read rides the host relay
+like every other read that names a project. It **holds its card**: the passport
+keeps the card's `project/name` ref and re-reads the row from the poll, and an
+agent that leaves the fleet keeps its passport open on the copy held at open,
+so a document being read never vanishes under the reader. And a **refused read
+is printed in the host's own words** rather than drawn as an empty document,
+because the read lane genuinely does refuse some branches (see below).
 
 **`traits` arrives in two shapes.** Most passports carry a string; some, such as
 @devpulse's, carry a JSON array of sentences. A string-only reader prints an
-em-dash over a populated field. The phone reads both shapes and bullets the list;
-the desktop reads both and joins them with `·`.
+em-dash over a populated field. The passport reads both shapes and bullets the
+list.
 
-The desktop is frozen as a rule about **findings**, not about files: a defect
-this face notices while porting is reported, not fixed on the desk.
-
-**A manager's card carries the monitors** in its MANAGER zone, relocated exactly
-as they are on the desk, and both doors are live. The commons feed is `drone
+**A manager's card carries the monitors** in its MANAGER zone as plain
+doors with no live state, the same on both faces; `commons` opens only where
+the seat has a commons card, and says so under the zone where it has none. The commons feed is `drone
 @prax monitor run commons`, a target the watch route names by keyword. Prax
 mission control is the desk's *target-less* `drone @prax monitor run` — every
 branch at once — and on the wire that is `kind=watch` with **no branch**, which

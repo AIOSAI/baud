@@ -72,9 +72,8 @@ events, cursor-keyed, and when the server reports a `gap` the screen says so —
 window that silently lost events looks exactly like a quiet night, and those are
 opposite things.
 
-The two faces share the wheel, `FleetWheel.tsx`, and not the opened card: the
-phone draws its own, `AgentSheet.tsx`, where the desktop opens a passport whose
-doors are `PassportDoors.tsx`. The push hooks (`src/phone/lib/push.ts`) are exported, empty
+The two faces share the wheel, `FleetWheel.tsx`, the opened card, `AgentSheet.tsx`,
+and its passport, `PassportSheet.tsx`. The push hooks (`src/phone/lib/push.ts`) are exported, empty
 and inert — a reservation with its gate named, the way `App.tsx` holds the
 terminal slot. There is **no service worker**: an offline cache of a live fleet
 would show stale aliveness, which is the one lie this system keeps paying to

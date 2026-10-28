@@ -1,4 +1,4 @@
-/** Which designed screen each door on an agent card opens, and the fenced gear's reason. Reference: docs/desktop/window-and-cards.md */
+/** Which designed screen each door on an agent card opens, and whether the terminal holds the card's room. Reference: docs/desktop/window-and-cards.md */
 
 import type { CardView } from "./phoneView";
 
@@ -21,12 +21,13 @@ export function cardDoorView(door: CardDoor, branch: { name: string; project: st
   }
 }
 
-/** The phone's wording (AgentSheet): the settings panel's memory dials write by branch name alone. */
-export function gearFence(name: string, project: string): string {
-  return `${name}'s settings live in ${project}, and this panel's memory dials name no project — they would edit the seated project's ${name}. Switch to ${project} first.`;
+/** The terminal's attached room, as it reports it; the project is the one the attach named. */
+export interface HeldRoom {
+  room: string;
+  project: string | null;
 }
 
-/** The card's visible line, since a disabled gear's tooltip is not a reason anyone sees. */
-export function awayNote(name: string, project: string): string {
-  return `${name} lives in ${project}: read it, watch it, attach it from here. Only the settings gear stays behind: its memory dials name no project.`;
+/** Name AND project: two projects can each hold a room for a same-named agent. */
+export function holdsRoom(held: HeldRoom | null, branch: { name: string; project: string }): boolean {
+  return held !== null && held.room === branch.name && held.project === branch.project;
 }

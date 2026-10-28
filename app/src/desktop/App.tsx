@@ -8,13 +8,15 @@ import Bell from "./Bell";
 import Camera from "./Camera";
 import { appCardView } from "./appCards";
 import FleetWheel, { cardRef } from "../phone/FleetWheel";
+import AgentSheet, { type SheetMonitor } from "../phone/AgentSheet";
+import { ARTIFACTS_DIR } from "../phone/Certificate";
+import PassportSheet from "../phone/PassportSheet";
+import { cardDoorView, type HeldRoom, holdsRoom } from "./cardDoors";
 import { interfacePrefs } from "./InterfaceSettings";
-import PassportDoors, { GIT_POLL_MS, type LaunchMode } from "./PassportDoors";
 import FileTree, { type TreeSeat } from "./FileTree";
 import FileView from "./FileView";
 import InquiryPane, { helpCommand } from "./InquiryPane";
 import MonitorPane from "./MonitorPane";
-import PassportView from "./PassportView";
 import PhoneTab from "./PhoneTab";
 import { phoneTabKey, phoneTabLabel, type PhoneView } from "./phoneView";
 import ProjectSwitch from "./ProjectSwitch";
@@ -23,7 +25,7 @@ import NewProjectSheet from "../phone/NewProjectSheet";
 import { bornCard, bornSeat } from "../phone/lib/newProject";
 import { machineFaces, useMachineVitals } from "../phone/lib/machine";
 import { useGitSweep, useRepoCount } from "../phone/lib/pollers";
-import { agentCommand, codexSessions } from "../phone/lib/rooms";
+import { codexSessions, type LaunchMode, launchCommand } from "../phone/lib/rooms";
 import Terminal, { type TerminalHandle } from "./Terminal";
 import Zoom from "./Zoom";
 import { relativeAge } from "../age";
@@ -36,7 +38,9 @@ import {
 } from "../intent";
 import type { BaudSettings, BranchStatus, FleetSnapshot, NewProjectResult } from "../types";
 
-/** PassportDoors' door judgment, mirrored so the startup agent opens exactly what a card click would. */
+const GIT_POLL_MS = 15_000;
+
+/** The startup agent's door: attach or resume where there is something to go back to, else fresh. */
 function cardMode(branch: BranchStatus): LaunchMode {
   const live = (branch.has_room || branch.outside_room !== null) && branch.interactive;
   return live || branch.has_history || branch.resume_id !== null ? "resume" : "fresh";
@@ -120,18 +124,24 @@ export default function App() {
   );
   const closeSettings = useCallback(() => setSettingsAgent(null), []);
 
-  /** The opened passport holds the IDENTITY, not the row: the row is re-read live each render (`passportBranch`).
+  /** The opened card holds the IDENTITY, not the row: the row is re-read live each render (`cardBranch`).
    *  `held` is only the fallback for a branch that leaves the list while open. */
-  const [passportOf, setPassportOf] = useState<{
+  const [cardOf, setCardOf] = useState<{
     name: string;
     project: string;
     held: BranchStatus;
   } | null>(null);
-  const openPassport = useCallback(
-    (branch: BranchStatus) =>
-      setPassportOf({ name: branch.name, project: branch.project, held: branch }),
-    [],
-  );
+  // The passport stands in for the card while open, and closing it returns to the card, as on the phone.
+  const [passportShown, setPassportShown] = useState(false);
+  const openCard = useCallback((branch: BranchStatus) => {
+    setCardOf({ name: branch.name, project: branch.project, held: branch });
+    setPassportShown(false);
+  }, []);
+  const closeCard = useCallback(() => {
+    setCardOf(null);
+    setPassportShown(false);
+  }, []);
+  const [heldRoom, setHeldRoom] = useState<HeldRoom | null>(null);
 
   // null until the read lands: the startup agent waits for it rather than firing on a guess.
   const [baudSettings, setBaudSettings] = useState<BaudSettings | null>(null);
@@ -286,27 +296,21 @@ export default function App() {
   // `--resume <id>` outranks `-c`, which can never enter a dispatched session. A fresh launch is unknown to the
   // session pointer, and pointer writes stay with dispatch. `command claude` skips the bashrc boot shim's menu.
   // `--remote-control` stays out: the fleet must not depend on one terminal's feature set.
+  // A dispatched resume types the reclaim form (`launchCommand`): the card's two-tap ⚡ door is the operator's yes.
   const launch = useCallback((branch: BranchStatus, mode: LaunchMode) => {
-    // Resume onto a dispatched session is takeover: a second claude steals its background tasks and the job dies.
-    // The card guards this too, but the startup agent calls launch() directly. Interactive means attach, so exempt.
-    if (mode === "resume" && branch.dispatched && !branch.interactive) {
-      monitorBranch(branch);
-      return;
-    }
     seatedRef.current = true;
     // Opening the card is the one door that revives an ended room.
-    clearRoomEnded(snapshotRef.current?.project ?? "", branch.name);
-    const quote = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
+    clearRoomEnded(branch.project, branch.name);
     terminalRef.current?.launch({
       room: branch.name,
       cwd: branch.path,
       // The card's own project, not the seat's: a roster card is often from elsewhere.
       project: branch.project,
-      command: `cd ${quote(branch.path)} && ${agentCommand(branch, mode === "resume")}`,
+      command: launchCommand(branch, mode),
       typeIfAttached: !branch.interactive,
     });
     setActiveTab(TERMINAL_TAB);
-  }, [monitorBranch]);
+  }, []);
 
   // The startup agent fires ONCE per run, spent whatever the outcome. The shot lives in sessionStorage, not a ref:
   // a hot reload re-arms a ref and would resurrect a room the operator just ended.
@@ -325,8 +329,14 @@ export default function App() {
       );
       return;
     }
-    launch(branch, cardMode(branch));
-  }, [snapshot, baudSettings, prefs.startupAgent, launch]);
+    const mode = cardMode(branch);
+    // Nobody pressed ⚡ at startup, so a dispatched job is watched, never reclaimed.
+    if (mode === "resume" && branch.dispatched && !branch.interactive) {
+      monitorBranch(branch);
+      return;
+    }
+    launch(branch, mode);
+  }, [snapshot, baudSettings, prefs.startupAgent, launch, monitorBranch]);
 
   // The quoting rule lives once in deliver.ts, shared with the phone's photo lane.
   const deliverPaths = useCallback((paths: string[]) => {
@@ -371,9 +381,10 @@ export default function App() {
   }, []);
 
   // Recorded where a hot reload cannot forget it; nothing reopens this agent until its card is clicked.
+  // Marked under the room's own project: a roster card's room is not the seat's.
   const roomWasEnded = useCallback(
-    (branch: string) => {
-      markRoomEnded(snapshotRef.current?.project ?? "", branch);
+    (branch: string, project: string | null) => {
+      markRoomEnded(project ?? snapshotRef.current?.project ?? "", branch);
       void poll(() => true);
     },
     [poll],
@@ -477,9 +488,9 @@ export default function App() {
   const expandCard = useCallback(
     (ref: string) => {
       const card = [...branches, ...(roster ?? [])].find((branch) => cardRef(branch) === ref);
-      if (card) openPassport(card);
+      if (card) openCard(card);
     },
-    [branches, roster, openPassport],
+    [branches, roster, openCard],
   );
 
   const openApp = useCallback(
@@ -496,17 +507,49 @@ export default function App() {
     [snapshot?.project, snapshot?.root, openPhone, toggleTree],
   );
 
-  /** The passport's row, re-read live: seated snapshot first (fresher), then roster. Identity is name AND project,
-   *  or one project's numbers would show under another's passport. */
-  const passportBranch = passportOf
-    ? (branches.find(
-        (branch) => branch.name === passportOf.name && branch.project === passportOf.project,
-      ) ??
-      roster?.find(
-        (branch) => branch.name === passportOf.name && branch.project === passportOf.project,
-      ) ??
-      passportOf.held)
+  /** The card's row, re-read live: seated snapshot first (fresher), then roster. Identity is name AND project,
+   *  or one project's numbers would show under another's card. */
+  const cardBranch = cardOf
+    ? (branches.find((branch) => branch.name === cardOf.name && branch.project === cardOf.project) ??
+      roster?.find((branch) => branch.name === cardOf.name && branch.project === cardOf.project) ??
+      cardOf.held)
     : null;
+
+  // The desktop's scrim model: Escape steps back one level, passport to card, card to the window.
+  useEffect(() => {
+    if (!cardOf) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (passportShown) setPassportShown(false);
+      else closeCard();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cardOf, passportShown, closeCard]);
+
+  /** A door that opens something in the window behind the scrim closes the card first. */
+  const leaveCard = (then: () => void) => () => {
+    closeCard();
+    then();
+  };
+
+  const monitors: SheetMonitor[] = cardBranch?.manager
+    ? MONITOR_TOGGLES.map((spec) => {
+        const live = fileTabs.some((tab) => tab.path === spec.id);
+        // As on the phone: the commons feed has a door only where a commons card exists.
+        const missing = spec.target === "commons" && !branches.some((branch) => branch.name === "commons");
+        return {
+          id: spec.id,
+          label: spec.label,
+          hint: missing
+            ? "the commons feed opens through the commons card, and this seat has none"
+            : live
+              ? spec.onTitle
+              : spec.offTitle,
+          open: missing ? null : leaveCard(() => (live ? closeFile(spec.id) : openMonitor(spec))),
+        };
+      })
+    : [];
 
   // Not a sum of the cards: their `diff HEAD` cannot see untracked files, so a new module counts only here.
   const [projectChanges, setProjectChanges] = useState<number | null>(null);
@@ -644,60 +687,59 @@ export default function App() {
         <AgentSettings agent={settingsAgent} onClose={closeSettings} />
       ) : null}
 
-      {/* Monitor toggles only for a manager; their live state derives from the open tabs. */}
-      {passportBranch ? (
-        <PassportView
-          branch={passportBranch}
-          onClose={() => setPassportOf(null)}
-          doors={
-            // Every door opens something in the window behind the scrim, so pressing one closes the passport.
-            <PassportDoors
-              branch={passportBranch}
-              foreign={snapshot !== null && passportBranch.project !== snapshot.project}
-              onLaunch={(branch, mode) => {
-                setPassportOf(null);
-                launch(branch, mode);
-              }}
-              onFiles={(branch) => {
-                setPassportOf(null);
-                toggleTree(branch);
-              }}
-              onShell={(branch) => {
-                setPassportOf(null);
-                shellBranch(branch);
-              }}
-              onMonitor={(branch) => {
-                setPassportOf(null);
-                monitorBranch(branch);
-              }}
-              onHelp={(branch) => {
-                setPassportOf(null);
-                helpBranch(branch);
-              }}
-              onSettings={(branch) => {
-                setPassportOf(null);
-                openSettings(branch);
-              }}
-              onOpenPhone={(view) => {
-                setPassportOf(null);
-                openPhone(view);
-              }}
-            />
-          }
-          monitors={
-            passportBranch.manager
-              ? MONITOR_TOGGLES.map((spec) => {
-                  const live = fileTabs.some((tab) => tab.path === spec.id);
-                  return {
-                    id: spec.id,
-                    label: spec.label,
-                    live,
-                    title: live ? spec.onTitle : spec.offTitle,
-                    onToggle: () => (live ? closeFile(spec.id) : openMonitor(spec)),
-                  };
-                })
-              : []
-          }
+      {cardBranch && !passportShown ? (
+        <div className="baud-desk-card">
+          <AgentSheet
+            branch={cardBranch}
+            seatedProject={seat}
+            // The desktop's relay token is minted with `operate` scope (host_relay.rs).
+            scope="operate"
+            onRead={leaveCard(() => openFile(`${cardBranch.path}/README.md`, "README.md", cardBranch.name))}
+            onInbox={leaveCard(() => openPhone(cardDoorView("inbox", cardBranch)))}
+            onPlans={leaveCard(() => openPhone(cardDoorView("plans", cardBranch)))}
+            onTodos={leaveCard(() => openPhone(cardDoorView("todos", cardBranch)))}
+            onGit={leaveCard(() => openPhone(cardDoorView("git", cardBranch)))}
+            // The docked tree is fenced to the seat, so a foreign card's files open as a tab.
+            onFiles={leaveCard(() =>
+              cardBranch.project === seat ? toggleTree(cardBranch) : openPhone(cardDoorView("files", cardBranch)),
+            )}
+            onShell={leaveCard(() => shellBranch(cardBranch))}
+            onHelp={leaveCard(() => helpBranch(cardBranch))}
+            onWatch={leaveCard(() => monitorBranch(cardBranch))}
+            onSettings={leaveCard(() => openSettings(cardBranch))}
+            onMemory={leaveCard(() =>
+              openPhone({ screen: "memory", branch: cardBranch.name, project: cardBranch.project }),
+            )}
+            monitors={monitors}
+            onPassport={() => setPassportShown(true)}
+            onAttach={(mode) => {
+              closeCard();
+              launch(cardBranch, mode);
+            }}
+            isAttachedRoom={holdsRoom(heldRoom, cardBranch)}
+            onDetach={leaveCard(() => terminalRef.current?.detach())}
+            // The sheet stays open to show the kill's confirmation, as on the phone.
+            onEnded={() => {
+              if (holdsRoom(heldRoom, cardBranch)) terminalRef.current?.detach();
+              roomWasEnded(cardBranch.name, cardBranch.project);
+            }}
+            onClose={closeCard}
+          />
+        </div>
+      ) : null}
+
+      {cardBranch && passportShown ? (
+        <PassportSheet
+          branch={cardBranch}
+          onArtifacts={leaveCard(() =>
+            openPhone({
+              screen: "branch-files",
+              branch: cardBranch.name,
+              project: cardBranch.project,
+              start: ARTIFACTS_DIR,
+            }),
+          )}
+          onClose={() => setPassportShown(false)}
         />
       ) : null}
 
@@ -774,6 +816,7 @@ export default function App() {
               ref={terminalRef}
               onOpenFile={openFromTerminal}
               onRoomEnded={roomWasEnded}
+              onRoom={setHeldRoom}
               liveSessions={snapshot?.live_agent_sessions ?? []}
               codexSessions={codexSessions(snapshot?.branches ?? [])}
             />
