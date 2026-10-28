@@ -13,6 +13,8 @@ import { LanguageDescription } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
 
+import { isMarkdownRef } from "../phone/lib/markdown";
+import { renderMarkdown } from "../phone/Markdown";
 
 /**
  * The read-only pane behind a file tab. Editing is off by design: enabling it needs its own save command, not two flags flipped.
@@ -41,6 +43,9 @@ function describe(err: unknown): string {
 export default function FileView({ path, line }: { path: string; line?: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // The text again, for the phone's markdown preview; the editor keeps its own copy.
+  const [content, setContent] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -53,6 +58,7 @@ export default function FileView({ path, line }: { path: string; line?: number }
     readFileText(path)
       .then(async (file) => {
         if (disposed) return;
+        setContent(file.content);
 
         const name = path.split("/").pop() ?? path;
         const description = LanguageDescription.matchFilename(languages, name);
@@ -104,8 +110,22 @@ export default function FileView({ path, line }: { path: string; line?: number }
 
   return (
     <div className="baud-view">
+      {isMarkdownRef(path) && content !== null ? (
+        <div className="baud-view-bar">
+          <button
+            type="button"
+            className={`baud-phone-copyhead ${previewing ? "baud-phone-copy-done" : ""}`}
+            aria-pressed={previewing}
+            onClick={() => setPreviewing((on) => !on)}
+          >
+            {previewing ? "raw" : "preview"}
+          </button>
+        </div>
+      ) : null}
       {notice ? <div className="baud-view-notice">{notice}</div> : null}
-      <div className="baud-view-host" ref={hostRef} />
+      {/* The editor stays mounted behind the preview: rebuilding it would lose the cited line. */}
+      <div className="baud-view-host" ref={hostRef} hidden={previewing} />
+      {previewing && content ? <div className="baud-view-md">{renderMarkdown(content)}</div> : null}
     </div>
   );
 }

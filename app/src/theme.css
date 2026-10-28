@@ -1645,6 +1645,19 @@ button.baud-tab {
   overflow: hidden;
 }
 
+.baud-view-bar {
+  flex: none;
+  display: flex;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-view-md {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
 .baud-view-host .cm-editor {
   height: 100%;
 }
