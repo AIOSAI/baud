@@ -462,6 +462,8 @@ pub fn run() {
             browser::browser_input,
             browser::browser_navigate,
             browser::browser_new_tab,
+            browser::browser_history,
+            browser::browser_close_tab,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,

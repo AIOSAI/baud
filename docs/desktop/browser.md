@@ -38,10 +38,18 @@ argv with no shell:
 tmux new-session -d -s baud-chrome -- <chrome> --user-data-dir=<profile> \
   --remote-debugging-port=9333 --headless=new --window-size=1280,800 \
   --no-first-run --no-default-browser-check \
+  "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<major>.0.0.0 Safari/537.36" \
   ; set-option -t =baud-chrome: remain-on-exit on
 ```
 
 `<chrome>` is `google-chrome` from `PATH`, else `google-chrome-stable`.
+Headless Chrome names itself `HeadlessChrome/<major>.0.0.0` in its user agent,
+and sites with a bot wall refuse that; the launch passes the string a headed
+Chrome of the same version sends. `<major>` is read from `<chrome> --version`
+(`Google Chrome 156.0.8078.47` gives `156`); Chrome reduces its own user agent
+to `<major>.0.0.0`, so the string is the headed one, not a different browser.
+When the version cannot be read, Chrome launches without the flag and the
+status line says so.
 Chrome runs headless: no window on the desktop, the BROWSER tab is the only
 face it has, and the page keeps painting whatever covers BAUD (the numbers
 under the live view say why).
@@ -94,6 +102,8 @@ owns the socket: `tungstenite` (sync, no TLS) over a std `TcpStream` to
 | `browser_input(view_id, event)` | `{kind: "mouse" \| "key", params}`, CDP's own params for `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent`; no other method crosses |
 | `browser_navigate(view_id, url)` | `Page.navigate` |
 | `browser_new_tab()` | `PUT /json/new?about:blank` (Chrome answers it only to PUT), the new page as `{id, title, url}` |
+| `browser_history(view_id, step)` | `Runtime.evaluate {expression: "history.go(-1)"}` or `"history.go(1)"`: a negative step is back, a positive one forward, 0 is refused; no other expression ever goes through `Runtime` |
+| `browser_close_tab(target_id)` | `GET /json/close/<target_id>` (Chrome answers `Target is closing`); ids other than Chrome's letters and digits are refused before any request |
 
 A view opens with `Page.bringToFront` (a background tab paints nothing) and
 `Page.startScreencast {format: "jpeg", quality: 60, maxWidth: 1280, maxHeight:
@@ -107,11 +117,18 @@ ends the thread. Closing the view drops its command queue, and the thread sends
 `Page.stopScreencast` and lets go of the socket. Input waits at most 10 ms for
 its turn on the socket between reads.
 
-The tab draws the newest frame on a canvas scaled to the tab's width: frames
-that arrive while one decodes replace each other, so the picture never falls
-behind. Above it, the tab row lists the pages (a click shows that page, `+`
-opens one) and the URL bar shows the shown page's url from the five-second
-poll; Enter navigates, a bare host gaining `https://`. A view opens when the
+The tab draws the newest frame on a canvas that fits the space under the URL
+bar, both ways, its aspect kept: frames that arrive while one decodes replace
+each other, so the picture never falls behind. The screen never scrolls; the
+header, the tab row and the URL bar hold still above the picture. The tab row
+lists the pages: a click shows that page, its `×` closes it, `+` opens one and
+puts the cursor in the URL bar with its text selected, so typing replaces
+`about:blank` and Enter goes. Closing the shown page moves the row to its
+nearest neighbour at once; closing the last leaves Chrome running with no
+pages, and the tab says `no pages open` with `+` still there. Beside the URL
+bar, `‹` goes back and `›` forward in the shown page's history. The URL bar
+shows the shown page's url from the five-second poll; Enter navigates, a bare
+host gaining `https://`. A view opens when the
 tab mounts or a page is picked, and closes when the tab closes or leaves the
 front, on a project switch and on `beforeunload`. A closed view shows its
 reason and the next poll shows the first page again.
@@ -156,5 +173,5 @@ screen's device pixels.
 - The phone: the phone's card opens the screen, and the host refuses every
   browser verb with `not_on_the_phone`; the phone's view of BAUD's Chrome
   waits on @api's socket lane.
-- Touch, the clipboard, closing tabs, and Chrome's own UI (native prompts
+- Touch, the clipboard, and Chrome's own UI (native prompts
   cannot be seen or answered).

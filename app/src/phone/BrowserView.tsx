@@ -2,9 +2,18 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { browserInput, browserNavigate, browserNewTab, browserViewClose, browserViewOpen, HostChannel } from "../host";
+import {
+  browserCloseTab,
+  browserHistory,
+  browserInput,
+  browserNavigate,
+  browserNewTab,
+  browserViewClose,
+  browserViewOpen,
+  HostChannel,
+} from "../host";
 import type { BrowserEvent, BrowserInput, BrowserTarget } from "../types";
-import { keyInputs, mouseInput, pagePoint, urlOf, wheelInput } from "./lib/browserInput";
+import { keyInputs, mouseInput, neighbourOf, pagePoint, urlOf, wheelInput } from "./lib/browserInput";
 
 type Frame = Extract<BrowserEvent, { kind: "frame" }>;
 
@@ -19,6 +28,7 @@ export default function BrowserView({ targets, onChanged }: { targets: BrowserTa
   const [said, setSaid] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const address = useRef<HTMLInputElement>(null);
   const view = useRef<string | null>(null);
   /** The newest undrawn frame; frames that arrive while one decodes replace it, so the tab never falls behind. */
   const latest = useRef<Frame | null>(null);
@@ -143,9 +153,26 @@ export default function BrowserView({ targets, onChanged }: { targets: BrowserTa
       const tab = await browserNewTab();
       setShown(tab.id);
       onChanged();
+      address.current?.focus();
+      address.current?.select();
     } catch (error) {
       setSaid(sentence(error));
     }
+  };
+
+  // The shown tab's view ends on Chrome's detach; the row moves to its neighbour now rather than at the next poll.
+  const closeTab = async (id: string) => {
+    try {
+      await browserCloseTab(id);
+      if (id === shown) setShown(neighbourOf(targets.map((t) => t.id), id));
+      onChanged();
+    } catch (error) {
+      setSaid(sentence(error));
+    }
+  };
+
+  const step = (by: -1 | 1) => {
+    if (view.current) void browserHistory(view.current, by).catch((error) => setSaid(sentence(error)));
   };
 
   const go = () => {
@@ -159,47 +186,64 @@ export default function BrowserView({ targets, onChanged }: { targets: BrowserTa
     <div className="baud-browser-view">
       <div className="baud-browser-tabs">
         {targets.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={`baud-browser-tab ${t.id === shown ? "baud-browser-tab-on" : ""}`}
-            title={t.url}
-            onClick={() => setShown(t.id)}
-          >
-            {t.title || t.url || "untitled"}
-          </button>
+          <span key={t.id} className={`baud-browser-tab ${t.id === shown ? "baud-browser-tab-on" : ""}`}>
+            <button type="button" className="baud-browser-tab-name" title={t.url} onClick={() => setShown(t.id)}>
+              {t.title || t.url || "untitled"}
+            </button>
+            <button
+              type="button"
+              className="baud-browser-tab-x"
+              aria-label={`close ${t.title || t.url || "tab"}`}
+              title="close this tab"
+              onClick={() => void closeTab(t.id)}
+            >
+              ×
+            </button>
+          </span>
         ))}
         <button type="button" className="baud-browser-tab" title="open a tab" onClick={() => void openTab()}>
           +
         </button>
       </div>
-      <input
-        className="baud-browser-address"
-        aria-label="address"
-        spellCheck={false}
-        value={draft ?? current?.url ?? ""}
-        onFocus={(e) => setDraft(e.target.value)}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => setDraft(null)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") go();
-          if (e.key === "Escape") setDraft(null);
-        }}
-      />
+      <div className="baud-browser-bar">
+        <button type="button" className="baud-browser-step" aria-label="back" title="back" onClick={() => step(-1)}>
+          ‹
+        </button>
+        <button type="button" className="baud-browser-step" aria-label="forward" title="forward" onClick={() => step(1)}>
+          ›
+        </button>
+        <input
+          ref={address}
+          className="baud-browser-address"
+          aria-label="address"
+          spellCheck={false}
+          value={draft ?? current?.url ?? ""}
+          onFocus={(e) => setDraft(e.target.value)}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => setDraft(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") go();
+            if (e.key === "Escape") setDraft(null);
+          }}
+        />
+      </div>
+      {targets.length === 0 ? <p className="baud-browser-line">no pages open</p> : null}
       {hidden ? <p className="baud-browser-line">Chrome's window is hidden; frames stop until it is shown</p> : null}
       {said ? <p className="baud-browser-said">{said}</p> : null}
-      <canvas
-        ref={canvas}
-        className={`baud-browser-canvas ${hidden ? "baud-browser-canvas-hidden" : ""}`}
-        tabIndex={0}
-        aria-label={current ? `page: ${current.title || current.url}` : "page"}
-        onMouseDown={mouse("mousePressed")}
-        onMouseUp={mouse("mouseReleased")}
-        onMouseMove={mouse("mouseMoved")}
-        onContextMenu={(e) => e.preventDefault()}
-        onKeyDown={key("down")}
-        onKeyUp={key("up")}
-      />
+      <div className="baud-browser-stage">
+        <canvas
+          ref={canvas}
+          className={`baud-browser-canvas ${hidden ? "baud-browser-canvas-hidden" : ""}`}
+          tabIndex={0}
+          aria-label={current ? `page: ${current.title || current.url}` : "page"}
+          onMouseDown={mouse("mousePressed")}
+          onMouseUp={mouse("mouseReleased")}
+          onMouseMove={mouse("mouseMoved")}
+          onContextMenu={(e) => e.preventDefault()}
+          onKeyDown={key("down")}
+          onKeyUp={key("up")}
+        />
+      </div>
     </div>
   );
 }

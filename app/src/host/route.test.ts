@@ -39,6 +39,8 @@ describe("routeOf", () => {
       "browser_input",
       "browser_navigate",
       "browser_new_tab",
+      "browser_history",
+      "browser_close_tab",
     ]) expect(routeOf(command, {})).toBe("ipc");
   });
 
