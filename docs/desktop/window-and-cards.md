@@ -14,6 +14,13 @@ totals (citizens, dispatched, interactive, unread mail, plans, changes), the
 `❯_` terminal button, two monitor traffic lights (`prax`, `commons`), the
 camera, the bell, BAUD's own settings gear, and the zoom chip.
 
+**The wordmark is the reload**, as on the phone: a click does a full
+`location.reload()`, lossless because nothing this window knows lives only in
+it (the seat and the tabs are in `localStorage`, every room is a tmux session
+on the host, the fleet is one poll away). The terminal closes its tmux client
+on `beforeunload`, so the room is not left with a client nobody reads; the new
+window attaches afresh.
+
 **`❯_` opens a working shell in a tab**, seated at the project root — the
 global one. It follows the project chip: reseat the view and the next click
 opens the new root, and it stays disabled until a snapshot names that root

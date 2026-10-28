@@ -72,11 +72,20 @@ body {
 }
 
 .baud-wordmark {
+  font: inherit;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.34em;
   color: var(--baud-green);
   text-shadow: 0 0 12px var(--baud-glow-green);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.baud-wordmark:active {
+  color: var(--baud-amber);
 }
 
 .baud-header-side {

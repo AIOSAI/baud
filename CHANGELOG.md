@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Desktop: the wordmark reloads the window.** Clicking `BAUD` in the header does a full `location.reload()`, as the phone's name does; the terminal closes its tmux client on `beforeunload` so the room keeps no unread client, and the new window attaches afresh.
+
 - **Desktop: the phone's agent card and passport.** Opening an agent on the wheel opens the phone's `AgentSheet`, centred at 460px, with Escape and a scrim click to close; its `passport` door opens the phone's `PassportSheet` (stamps, holder disc, short serials, the records door to the drawn certificate, read over the relay by name and project). Launch doors follow the phone's rules, `▸ resume ⚡` and its reclaim line included; `‹ detach` and the room-below line follow the terminal's room by name and project; `wake` and `end room` ride the relay; an ended room is marked under its own project. The desktop's own passport and door row are retired to `(disabled)`.
 
 - **Desktop: a wheel speed setting.** The header gear's `wheel speed` row (slow, normal, fast) sets how a mouse-wheel or trackpad turn moves the fleet wheel: the quiet gap that ends a gesture and the turn a gesture needs before its one step (slow 500 ms / 60 px, normal 350 ms / 30 px, fast 220 ms / 0 px; `WHEEL_SPEEDS` and `gateTurn` in `phone/lib/wheelInput.ts`, pinned). It is this window's own feel, kept in `localStorage` like the zoom and applied on the change; the default is normal. Keys and drag are not governed.
