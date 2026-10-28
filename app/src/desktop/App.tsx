@@ -784,7 +784,8 @@ export default function App() {
                 className={`baud-tab ${activeTab === TERMINAL_TAB ? "baud-tab-active" : ""}`}
                 onClick={() => setActiveTab(TERMINAL_TAB)}
               >
-                terminal
+                {/* Named for the room it holds, as the phone's pane tab is; the scratch shell stays "terminal". */}
+                {heldRoom?.room ?? "terminal"}
               </button>
               {fileTabs.map((tab) => (
                 <span

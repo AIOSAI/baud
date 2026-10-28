@@ -124,7 +124,9 @@ does.
 
 Open files, the phone's screens, monitors and help shells live as tabs beside
 the terminal. The terminal is never unmounted — hidden panes are display-hidden,
-so claude keeps streaming underneath while you read.
+so claude keeps streaming underneath while you read. Its tab carries the name
+of the room it holds, as the phone's pane tab does; with no live room (the
+scratch shell, or after `end room`) it reads `terminal`.
 
 **The reading room.** Ctrl+clicked paths open read-only CodeMirror panes; a
 passport's `files` door docks a lazily-loaded directory tree. A passport's
