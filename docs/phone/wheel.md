@@ -1,6 +1,6 @@
 # The wheel and the header
 
-This page covers the fleet rail (the wheel), the header: the name that reloads the face, the lock chip and the verbs, the `GIT` tile, how the wheel keeps names whole, and the project switcher's new-project sheet. The expanded agent card and the passport are on [the card page](card.md).
+This page covers the fleet rail (the wheel) and its desktop input, the header: the name that reloads the face, the lock chip and the verbs, the `GIT` tile, how the wheel keeps names whole, and the project switcher's new-project sheet. The expanded agent card and the passport are on [the card page](card.md).
 
 ← [the phone face](../phone.md)
 
@@ -13,8 +13,8 @@ the **current agent**, and everything context-bound follows them.
 
 Seventeen agents in a vertical list is a scroll-to-find, and the fleet's whole
 point is knowing at a glance who is awake. The rail makes the entire fleet one
-flick, and it gives the phone something the desktop does not have: a current
-agent at all.
+flick, and it gives the face a current agent at all. The desktop window mounts
+this same component in place of a fleet list (see *Desktop input* below).
 
 **The approved mockup is the specification.**
 [`wheel_mockup_APPROVED_SHAPE.html`](../design/wheel_mockup_APPROVED_SHAPE.html) is the specification
@@ -82,6 +82,35 @@ avatars shrink, names and notch drop, the strip and footer go — and never
 disappears. Card **width** is deliberately untouched, so the snap geometry cannot
 move: card layout width, rail scrollWidth and scrollLeft are identical across
 focus and blur, and the centred card does not drift out from under the thumb.
+
+### Desktop input
+
+**One component, two faces.** The desktop window mounts `FleetWheel.tsx` under
+its header (see [the window and cards](../desktop/window-and-cards.md#the-wheel)),
+so the desk binds keys and the mouse wheel on top of the touch paths, which are
+untouched. The bindings exist only when `matchMedia("(any-pointer: fine)")`
+matches — a mouse or trackpad is attached — so the phone's touch-only screen
+never binds them. Then the wrap is focusable (`tabIndex` 0) and:
+
+- `←` / `→` centre the previous or next card;
+- `↑` / `↓` switch layer, down being the next layer, as a finger's upward swipe
+  is on the phone;
+- `Enter` opens the centred card: an agent through `onExpand`, an app through
+  `onOpenApp`;
+- a vertical mouse-wheel turn switches the layer, `shift`+wheel steps one card
+  (an engine that hands shift+wheel over on `deltaX` is read the same), and a
+  sideways-dominant pan — a trackpad's — is left to the rail's native
+  scroll-snap;
+- the pips are buttons and take a click; a mouse drag switches layers through
+  the same pointer handlers a finger uses.
+
+**One step per gesture.** A trackpad's inertia sends a stream of wheel events
+long after the fingers lift, and read one-for-one it would ride through the
+whole stack. A quiet gap longer than `WHEEL_REST_MS` (220 ms) starts a new
+gesture; every event inside one is swallowed after the first step. The listener
+is native and non-passive, because React's wheel listener is passive and the
+page must not scroll under the wheel. The mapping is data in
+`lib/wheelInput.ts` (`keyStep`, `wheelStep`), pinned by `wheelInput.test.ts`.
 
 ### The header name is the refresh
 

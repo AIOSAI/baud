@@ -16,7 +16,7 @@ took 330 lines out of the file above.
 
 | File | One line |
 |---|---|
-| `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen. |
+| `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen, and the desktop window's fleet too. |
 | `AgentSheet.tsx` | One agent's card, opened. |
 | `TerminalSheet.tsx` | The room, over a WebSocket. The other big one (2983 lines). Owns the composer's delivery rule (a line goes out as a declared bracketed paste; the `\r` waits until the room has SHOWN it), the keyboard rule (no tap opens one into the terminal), and TYPING MODE - **one compose slot with two modes**: the baud box, or the armed bar that hands raw keys to xterm's own textarea. The mirror-diff lane is dead (r6) and the bar's own row is gone (r8) - both live in the same footprint now. The room SLIDES under the keyboard rather than being resized, for either mode. Re-states its grid to the pty on every return to the foreground, so a pty moved from the host side is corrected the moment he looks instead of leaving the phone clipping a window it does not fit. The chip row's one-pixel field is still the only soft-keyboard door for `ctrl`/`alt`; typing mode does not touch it. |
 | `Reader.tsx` | Any file or diff, read. |
@@ -55,6 +55,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `trail.ts` | The back rule's trail: the screens left through a door, newest last - the card, the files roster, the passport - one step back, and the word each `‹` shows for where it lands. Also the `Browse` type the trail and a file pane's `from` share. Pure, plus `trail.test.ts`. |
 | `tabStore.ts` | The tab row kept across a reload: the panes, the front tab and the focus history in localStorage beside the seat, read back and checked against the first census (a tab whose agent left is dropped with one console line), folded under anything opened meanwhile; and which tab a close fronts (the one before it, not the rightmost). Pure over an injected store, plus `tabStore.test.ts`. |
 | `systemBack.ts` | The phone's own Back: open screens register the handler their `‹` calls, and one guard entry in history runs the newest on Android Back; at rest there is no entry and Back is the browser's. The registry and the guard are pure, plus `systemBack.test.ts`; two thin hooks wire them. |
+| `wheelInput.ts` | The wheel's desktop input as data: `keyStep` (arrows and Enter) and `wheelStep` (a wheel turn, shift for cards, a sideways pan left to scroll-snap), and `WHEEL_REST_MS`, the quiet gap that ends one gesture. Pure, plus `wheelInput.test.ts`. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
 | `processes.ts` | The PROC sheet's list: the cpu/mem order of the same twenty rows, a row's name (or its pid), and the sampled line - pure, plus `processes.test.ts`. |

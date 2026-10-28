@@ -1,19 +1,21 @@
 # The apps
 
-This page covers the four app cards at the end of the fleet strip, GIT, FILES, BACKUP and MACHINE, and how each one hosts the phone's own screen in a workbench tab.
+This page covers the wheel's app and monitor cards, the four tabs they open (GIT, FILES, BACKUP and MACHINE), and how each tab hosts the phone's own screen.
 
 ← [the desktop window](../desktop.md)
 
 ## The app cards
 
-After the agent cards, under their own `Apps` heading, the strip carries four
-cards: GIT, FILES, BACKUP and MACHINE. Each is a glyph and a name in the phone's
-app accent, with no lamp: an app has no session to light. A click opens the
-app's workbench tab, or fronts it when it is already open; there is one tab per
-app, whatever the seat. GIT, FILES and BACKUP carry the seated
-project by name, never an empty project, which the host would read as its own
-default seat. Until the seat is read the cards are disabled and their hover says
-so.
+The wheel's `apps` layer carries the phone's three app cards, GIT, FILES and
+BACKUP; its `monitor` layer carries the seven machine cards, CPU to BAT, with
+their live faces. Each opens a workbench tab, as the centred card opens on the
+wheel (see [the wheel](window-and-cards.md#the-wheel)): GIT, FILES and BACKUP
+their own tab, and every monitor card the one MACHINE tab. A tab already open is
+fronted; there is one tab per app, whatever the seat. GIT, FILES and BACKUP
+carry the seated project by name, never an empty project, which the host would
+read as its own default seat, so until the seat is read an app card opens
+nothing. The GIT card's badge is the repository count, read through the seated
+project's manager.
 
 ## One tab, the phone's screen
 

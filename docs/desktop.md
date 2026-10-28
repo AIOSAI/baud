@@ -32,28 +32,28 @@ Each part of the window has its own page under `docs/desktop/`.
 
 | Page | What it covers |
 | --- | --- |
-| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the cards and their doors; what a launch types; the opened passport |
+| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened passport and its doors; what a launch types |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
-| [apps](desktop/apps.md) | the strip's app cards, GIT, FILES, BACKUP and MACHINE, each the phone's own screen in a workbench tab |
+| [apps](desktop/apps.md) | the wheel's app and monitor cards, GIT, FILES, BACKUP and MACHINE, each the phone's own screen in a workbench tab |
 
 ## The desktop face — `src/desktop/`
 
 Paths in this section are under `app/`.
 
-One window, panes inside it. `main.tsx` mounts, and `App.tsx` (929 lines) is the
+One window, panes inside it. `main.tsx` mounts, and `App.tsx` (835 lines) is the
 shell that owns the rest. The other files are the panes themselves — they are
 desktop-only, and since 2026-08-18 the directory says so.
 
 | File | One line |
 |---|---|
 | `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
-| `FleetStrip.tsx` | The fleet, as a strip of cards, with the four app cards after them. |
-| `BranchChip.tsx` · `CardScreens.tsx` · `cardDoors.ts` | One agent's card: status, counts, doors; the designed screens its doors open in tabs; which screen each door opens and the fenced gear's words. |
-| `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; the strip's app card list. |
+| `../phone/FleetWheel.tsx` | The fleet: the phone's wheel, mounted under the header (see [the wheel](desktop/window-and-cards.md#the-wheel)). |
+| `PassportDoors.tsx` · `CardScreens.tsx` · `cardDoors.ts` | One agent's doors in its opened passport: badges, figures, launch, files, watch, shell, help, gear; the designed screens its doors open in tabs; which screen each door opens and the fenced gear's words. |
+| `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; which tab a wheel app card opens. |
 | `PhoneTab.tsx` · `PhonePane.tsx` · `phoneView.ts` | The seam: a workbench tab that hosts a phone screen, the box it mounts in, and what each such tab shows and is keyed by. |
-| `FileTree.tsx` · `FileView.tsx` · `DiffView.tsx` | Browse, read, diff. |
-| `PassportView.tsx` | An agent's identity and memory, read. |
+| `FileTree.tsx` · `FileView.tsx` | Browse, read. |
+| `PassportView.tsx` | An agent's identity and memory, read, with its doors above the pages. |
 | `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
 | `Bell.tsx` · `bellMarks.ts` | The notification shade and its unread marker; the machine-wide cleared mark and the mail row's door. |
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
@@ -150,8 +150,9 @@ projects/baud/
 │   ├── src/                    React + TypeScript frontend
 │   │   ├── desktop/            the desktop face — App.tsx (window shell, tabs, launch,
 │   │   │                       startup agent), main.tsx, and the components:
-│   │   │                       cards, app cards, terminal, panes, panels, header tools,
-│   │   │                       and the workbench tabs that host the phone's screens
+│   │   │                       passport and its doors, app tabs, terminal, panes, panels,
+│   │   │                       header tools, and the workbench tabs that host the phone's
+│   │   │                       screens; the fleet is the phone's wheel, mounted here
 │   │   ├── host/               the transport seam — every host call, named once
 │   │   │                       transport.ts = tauri IPC or the relay, picked by route.ts ·
 │   │   │                       transport.http.ts = /v1 over fetch, and the one parser
@@ -160,7 +161,7 @@ projects/baud/
 │   │   │                       files, roots, memory, machine vitals, agent monitor, reader, feed,
 │   │   │                       verb chips, attached terminal, settings
 │   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
-│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible,
+│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible, wheelInput,
 │   │   │                       machine — the monitor row's lane and its card faces,
 │   │   │                       and pollers — all four polling lanes, lifted out of the shell
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted

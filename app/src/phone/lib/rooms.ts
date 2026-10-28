@@ -1,6 +1,6 @@
 /** Which door a card offers and what a door types, ported from the desktop's own rules. Reference: docs/phone/room.md */
 
-import type { LaunchMode } from "../../desktop/BranchChip";
+import type { LaunchMode } from "../../desktop/PassportDoors";
 import type { BranchStatus } from "../../types";
 
 export type { LaunchMode };

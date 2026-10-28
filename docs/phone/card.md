@@ -6,8 +6,8 @@ This page covers the expanded agent card: its doors, what crosses projects, the 
 
 ### The expanded card
 
-**The expanded card's stat tiles are doors, not labels** — on the desktop those
-same figures are the read affordance. Three of them open `memory`, `dashboard`
+**The expanded card's stat tiles are doors, not labels** — on the desktop the
+same figures, in the opened passport's doors, are the read affordance. Three of them open `memory`, `dashboard`
 and `inbox`, and the agent's **name** is its README door. Before deleting a
 container, ask what doors it carries.
 
@@ -89,10 +89,11 @@ The keys are never written by hand. Every site builds the key through the same
 function, so the detach affordance and the close gesture cannot drift from the
 pane they name.
 
-**The wheel's avatars carry the desktop's two marks**, from the same payload: a
+**The wheel's avatars carry two marks**, from the payload both faces read: a
 manager's disc is ringed blue, and a disc with sub-agents running fills red on
-the beat. One indicator wearing two sizes, kept visible on both faces together,
-because the phone's 44px disc has even more steady colour to hide a pulse in.
+the beat. The desktop mounts the same wheel, so it is one indicator on both
+faces, and the fill rather than a halo carries the pulse because a 44px disc
+has steady colour enough to hide one.
 
 **The sheet states the sub-agent count in words**, on the status line rather than
 in the counter row. Every tile in that row is a *door* — press `MAIL` and the
@@ -105,7 +106,8 @@ sub-agents at all. The rail says *that* something is running; the sheet says
 *how many*.
 
 **The passport opens from the door row, not from the avatar.** On the desk the
-avatar *is* the door; here the equivalent disc lives on the wheel, inside the
+centred card opens the passport itself, with the doors on it; here the disc
+lives on the wheel, inside the
 tap target that opens the sheet, and nesting a second target inside it at that
 size would trade the gesture the whole face is built on for a mis-tap. So it
 joins `files`, `shell`, `watch` and `settings` at finger size. What opens is the

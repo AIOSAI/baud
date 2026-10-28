@@ -6,8 +6,8 @@ This page covers the terminal sheet: attaching to a room, the key bar, the room'
 
 ### The terminal sheet
 
-**The terminal — attach, not repaint.** Each card carries the desktop's own
-launch doors, and pressing one opens a real `xterm.js` client on a WebSocket
+**The terminal — attach, not repaint.** Each card carries the launch doors the
+desktop's opened passport carries, and pressing one opens a real `xterm.js` client on a WebSocket
 (`/v1/room/attach`) whose far end is a PTY running `tmux new-session -A -t
 baud-<branch>` — the same command `pty.rs` runs on the desk. Two clients, one
 session. Scrollback, colour, cursor position and full-screen programs all work

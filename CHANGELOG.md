@@ -26,6 +26,7 @@ and every change that lands adds its line there in the same sitting.
 
 ### Changed
 
+- **Desktop: the fleet strip is the phone's wheel.** `App.tsx` mounts `FleetWheel` in the strip slot: round cards left to right, the layers (current project, live, dispatched, apps, monitor) up and down, replacing the strip's three tabs. On a mouse or trackpad (`any-pointer: fine`) the wheel also takes ←/→ for cards, ↑/↓ for layers, Enter to open, a vertical wheel turn for the layer and shift+wheel for a card, one step per gesture (`phone/lib/wheelInput.ts`, pinned by its test); touch is untouched. Opening a card opens its passport, which now carries the chip's doors, figures and sub-agent badge (`PassportDoors.tsx`); app cards open their tabs, every monitor card the machine tab. The rail is capped at 960px. `FleetStrip`, `BranchChip` and the unreachable `DiffView` tab are retired.
 - **Phone: the backup card's running line says the time left, not the time so far.** `remainingText` (`backupView.ts`) scales the seconds since the start by the files still to go, `1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left`; before the first file lands the line keeps the elapsed time, since there is no rate yet. The owner, reading a six-hour Drive rebuild on the card (2026-10-22): the counter should say how long is left to complete, not how long has passed. By devpulse; `backupView.test.ts` pins the arithmetic, the fallback and the nulls.
 
 ## [0.5.0] — 2026-10-19
