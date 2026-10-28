@@ -1155,7 +1155,7 @@ body {
 
 .baud-wheel {
   display: flex;
-  gap: 6px;
+  gap: calc(6px * var(--wheel-scale, 1));
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
@@ -1165,7 +1165,7 @@ body {
      half the card. The vertical padding is headroom for the centre card's
      scale(1.28), which overflow-y clips. RE-MEASURE BOTH IF THE CARD OR THE
      SCALE CHANGES. */
-  padding: 11px calc(50vw - 32px);
+  padding: calc(11px * var(--wheel-scale, 1)) calc(50vw - calc(32px * var(--wheel-scale, 1)));
   /* pan-x refuses vertical drags, so a drifting flick never steals scrollback;
      contain on x stops an overscroll becoming back-nav. */
   touch-action: pan-x;
@@ -1192,12 +1192,12 @@ body {
 }
 
 .baud-wheel-card {
-  flex: 0 0 64px;
+  flex: 0 0 calc(64px * var(--wheel-scale, 1));
   scroll-snap-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--wheel-scale, 1));
   transition: transform 0.12s linear, opacity 0.12s linear;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -1205,17 +1205,17 @@ body {
 
 .baud-wheel-avatar {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--wheel-scale, 1));
+  height: calc(44px * var(--wheel-scale, 1));
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--baud-bg-card);
-  border: 2px solid var(--baud-line-strong);
+  border: calc(2px * var(--wheel-scale, 1)) solid var(--baud-line-strong);
   color: var(--baud-green);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--wheel-scale, 1));
   font-weight: 700;
   /* The card is the tap target: the delegated listener reads its data-name. */
   pointer-events: none;
@@ -1234,13 +1234,13 @@ body {
 
 .baud-wheel-dot {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 12px;
-  height: 12px;
+  right: calc(-1px * var(--wheel-scale, 1));
+  bottom: calc(-1px * var(--wheel-scale, 1));
+  width: calc(12px * var(--wheel-scale, 1));
+  height: calc(12px * var(--wheel-scale, 1));
   border-radius: 50%;
   /* Punched out of the page, so the dot reads as a lamp on top. */
-  border: 2px solid var(--baud-bg);
+  border: calc(2px * var(--wheel-scale, 1)) solid var(--baud-bg);
 }
 
 /* The desktop lamp's three states, pulse and reduced-motion fallback. */
@@ -1270,22 +1270,22 @@ body {
    if the card, the scale or that padding changes. */
 .baud-wheel-mail {
   position: absolute;
-  top: -2px;
-  right: -7px;
+  top: calc(-2px * var(--wheel-scale, 1));
+  right: calc(-7px * var(--wheel-scale, 1));
   background: var(--baud-amber);
   color: var(--baud-bg);
-  font-size: 0.56rem;
+  font-size: calc(0.56rem * var(--wheel-scale, 1));
   font-weight: 700;
-  border-radius: 8px;
-  padding: 1px 4px;
+  border-radius: calc(8px * var(--wheel-scale, 1));
+  padding: calc(1px * var(--wheel-scale, 1)) calc(4px * var(--wheel-scale, 1));
   line-height: 1;
   white-space: nowrap;
 }
 
 .baud-wheel-name {
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--wheel-scale, 1));
   color: var(--baud-ink-dim);
-  max-width: 64px;
+  max-width: calc(64px * var(--wheel-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1299,10 +1299,10 @@ body {
 
 /* App cards are squares, so a surface and a citizen separate at a glance. */
 .baud-wheel-avatar-app {
-  border-radius: 11px;
+  border-radius: calc(11px * var(--wheel-scale, 1));
   color: var(--baud-apps);
-  font-size: 0.55rem;
-  letter-spacing: 1px;
+  font-size: calc(0.55rem * var(--wheel-scale, 1));
+  letter-spacing: calc(1px * var(--wheel-scale, 1));
 }
 
 .baud-wheel-center .baud-wheel-avatar-app {
@@ -1317,10 +1317,10 @@ body {
 /* The arrow marks a link-card: it leaves for a web home, not a sheet. */
 .baud-wheel-out {
   position: absolute;
-  top: -6px;
-  right: -8px;
+  top: calc(-6px * var(--wheel-scale, 1));
+  right: calc(-8px * var(--wheel-scale, 1));
   color: var(--baud-apps);
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--wheel-scale, 1));
   line-height: 1;
 }
 
@@ -1329,13 +1329,13 @@ body {
    border: past the scaled centre card's edge, the rail clips. */
 .baud-wheel-avatar-face {
   flex-direction: column;
-  gap: 1px;
+  gap: calc(1px * var(--wheel-scale, 1));
   letter-spacing: 0;
 }
 
 .baud-wheel-face-value {
   color: var(--baud-ink);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--wheel-scale, 1));
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -1343,7 +1343,7 @@ body {
 
 .baud-wheel-face-value small {
   color: var(--baud-ink-dim);
-  font-size: 0.5rem;
+  font-size: calc(0.5rem * var(--wheel-scale, 1));
   font-weight: 600;
 }
 
@@ -1353,17 +1353,17 @@ body {
 
 /* Six characters or more overrun the box, so a long face steps down. */
 .baud-wheel-face-long {
-  font-size: 0.64rem;
+  font-size: calc(0.64rem * var(--wheel-scale, 1));
 }
 
 .baud-wheel-face-long small {
-  font-size: 0.42rem;
+  font-size: calc(0.42rem * var(--wheel-scale, 1));
 }
 
 .baud-wheel-face-mark {
   color: var(--baud-apps);
-  font-size: 0.42rem;
-  letter-spacing: 1px;
+  font-size: calc(0.42rem * var(--wheel-scale, 1));
+  letter-spacing: calc(1px * var(--wheel-scale, 1));
   line-height: 1;
 }
 
@@ -1372,8 +1372,8 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 40px;
-  height: 40px;
+  width: calc(40px * var(--wheel-scale, 1));
+  height: calc(40px * var(--wheel-scale, 1));
   fill: none;
   stroke-width: 2;
   pointer-events: none;
@@ -1559,8 +1559,8 @@ body {
 /* 22x10 around a 4px dot: the pips are the way off a wheel whose gesture
    the browser ate. */
 .baud-wheel-pip {
-  width: 22px;
-  height: 10px;
+  width: calc(22px * var(--wheel-scale, 1));
+  height: calc(10px * var(--wheel-scale, 1));
   padding: 0;
   border: none;
   background: none;
@@ -1571,8 +1571,8 @@ body {
 
 .baud-wheel-pip::before {
   content: "";
-  width: 4px;
-  height: 4px;
+  width: calc(4px * var(--wheel-scale, 1));
+  height: calc(4px * var(--wheel-scale, 1));
   border-radius: 50%;
   background: var(--baud-line-strong);
 }
@@ -1637,10 +1637,10 @@ body {
 
 /* A foreign agent's home project, sized well under its name. */
 .baud-wheel-home {
-  font-size: 0.46rem;
+  font-size: calc(0.46rem * var(--wheel-scale, 1));
   letter-spacing: 0.04em;
   color: var(--baud-ink-dim);
-  max-width: 64px;
+  max-width: calc(64px * var(--wheel-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2025,8 +2025,8 @@ body {
 
 /* The card whose room is attached below: green, like its open-below line. */
 .baud-wheel-attached .baud-wheel-avatar {
-  outline: 2px solid var(--baud-green);
-  outline-offset: 3px;
+  outline: calc(2px * var(--wheel-scale, 1)) solid var(--baud-green);
+  outline-offset: calc(3px * var(--wheel-scale, 1));
 }
 
 .baud-agent-here {

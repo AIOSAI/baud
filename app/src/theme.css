@@ -565,23 +565,24 @@ body {
   scrollbar-color: var(--baud-line-strong) transparent;
 }
 
-/* The phone's wheel in the strip slot, at the phone's numbers; the cap keeps a
+/* The phone's wheel in the strip slot at 1.5x through --wheel-scale; the cap keeps a
    wide window's cards together instead of strewn across 1920px. */
 .baud-wheel-desktop {
+  --wheel-scale: 1.5;
   flex: none;
   padding-top: 6px;
   border-bottom: 1px solid var(--baud-line);
 }
 
 .baud-wheel-desktop .baud-wheel-wrap {
-  max-width: 960px;
+  max-width: 1440px;
   margin: 0 auto;
 }
 
 /* 50%, not the phone's 50vw: padding percentages read the wrap, which the cap
    makes narrower than the viewport. */
 .baud-wheel-desktop .baud-wheel {
-  padding-inline: calc(50% - 32px);
+  padding-inline: calc(50% - 32px * var(--wheel-scale));
 }
 
 .baud-wheel-desktop .baud-wheel-wrap:focus-visible {
