@@ -1,0 +1,3 @@
+# Owner-protected: aipass init update and drone @spawn update never write, back up or retire a match.
+# One fnmatch pattern per line, relative to the project root (src/<pkg>/*/docs.local/ reaches every
+# citizen); a slashless name matches at any depth, a trailing / claims the whole folder.
