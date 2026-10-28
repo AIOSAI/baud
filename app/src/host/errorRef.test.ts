@@ -147,6 +147,9 @@ describe("a call through an injected sender", () => {
     expect(seen[0].method).toBe("POST");
     expect(seen[0].body).toEqual({});
     await expect(callWith(send, "pty_create", {})).rejects.toMatchObject({ status: 501, code: "not_on_the_phone" });
+    for (const verb of ["browser_view_open", "browser_input", "browser_navigate", "browser_new_tab"]) {
+      await expect(callWith(send, verb, {})).rejects.toMatchObject({ status: 501, code: "not_on_the_phone" });
+    }
     expect(seen).toHaveLength(1);
   });
 });

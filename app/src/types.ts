@@ -477,6 +477,32 @@ export interface BackupStatus {
 }
 
 /** BAUD's own Chrome (browser.rs); IPC only. */
+export interface BrowserTarget {
+  id: string;
+  title: string;
+  url: string;
+}
+
+/** One view's stream (`BrowserEvent`); frame sizes are CSS pixels, the space input coordinates live in. */
+export type BrowserEvent =
+  | {
+      kind: "frame";
+      /** The JPEG as base64. */
+      data: string;
+      device_width: number;
+      device_height: number;
+      page_scale: number;
+      scroll_x: number;
+      scroll_y: number;
+    }
+  | { kind: "visibility"; visible: boolean }
+  | { kind: "closed"; reason: string };
+
+/** `BrowserInput`: CDP's own `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` params. */
+export type BrowserInput =
+  | { kind: "mouse"; params: Record<string, unknown> }
+  | { kind: "key"; params: Record<string, unknown> };
+
 export interface BrowserStatus {
   /** `foreign`: the port answers with no BAUD room. `stale`: the room is open and the port silent. */
   state: "running" | "down" | "foreign" | "stale";
@@ -484,7 +510,7 @@ export interface BrowserStatus {
   profile: string;
   room_alive: boolean;
   /** Pages only, never workers or extension backgrounds. */
-  targets: { id: string; title: string; url: string }[];
+  targets: BrowserTarget[];
   /** Whether Claude Code's native-messaging manifest is reachable from the profile. */
   native_hosts: "linked" | "present" | "absent";
   detail: string;

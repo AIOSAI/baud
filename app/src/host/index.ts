@@ -9,7 +9,10 @@ import type {
   BackupStatus,
   BaudSettings,
   BranchStatus,
+  BrowserEvent,
+  BrowserInput,
   BrowserStatus,
+  BrowserTarget,
   DirEntryInfo,
   DirWindow,
   GitChangeCount,
@@ -34,7 +37,7 @@ import type {
   SpawnResult,
   VerbResult,
 } from "../types";
-import { call } from "./transport";
+import { call, type HostChannel } from "./transport";
 
 export { HostChannel, openExternal } from "./transport";
 
@@ -242,3 +245,15 @@ export const browserLaunch = () => call<BrowserStatus>("browser_launch");
 
 /** Copies ~/.config/google-chrome into BAUD's profile, the old one renamed aside; refused while any Chrome runs. */
 export const browserAdopt = () => call<BrowserStatus>("browser_adopt");
+
+/** Streams one page's screencast into `onEvent`; closing the view never touches the page. */
+export const browserViewOpen = (targetId: string, onEvent: HostChannel<BrowserEvent>) =>
+  call<string>("browser_view_open", { targetId, onEvent });
+
+export const browserViewClose = (viewId: string) => call<void>("browser_view_close", { viewId });
+
+export const browserInput = (viewId: string, event: BrowserInput) => call<void>("browser_input", { viewId, event });
+
+export const browserNavigate = (viewId: string, url: string) => call<void>("browser_navigate", { viewId, url });
+
+export const browserNewTab = () => call<BrowserTarget>("browser_new_tab");
