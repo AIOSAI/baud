@@ -1788,6 +1788,37 @@ body {
   color: var(--baud-green);
 }
 
+/* The run chip: solid when the runtime named its model; dashed and faint while
+   the model is only requested, so a request never reads as observed. */
+.baud-agent-run {
+  font: inherit;
+  color: var(--baud-ink);
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.baud-agent-run-pending {
+  color: var(--baud-ink-faint);
+  border-style: dashed;
+  font-style: italic;
+}
+
+.baud-agent-runrows {
+  margin: -6px 0 12px;
+}
+
+/* Only ungrounded alarms and only verified is green; every other status stays neutral. */
+.baud-agent-runrows dd.baud-agent-receipt-verified {
+  color: var(--baud-green);
+}
+
+.baud-agent-runrows dd.baud-agent-receipt-ungrounded {
+  color: var(--baud-red);
+}
+
 .baud-agent-stats {
   display: flex;
   gap: 14px;

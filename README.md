@@ -14,7 +14,7 @@
 
 **The wheel.** Every agent in one flick, with live state, mail and memory; the project switcher in the header moves you between projects.
 
-**The card.** Tap an agent: what it is doing now, its mail, plans and todos, and the doors to its room, files, shell and memory.
+**The card.** Tap an agent: what it is doing now, which CLI and model it runs on, its mail, plans and todos, and the doors to its room, files, shell and memory.
 
 <p align="center">
   <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos, and the doors to its room, files, shell and memory" width="280">

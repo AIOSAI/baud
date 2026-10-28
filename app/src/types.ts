@@ -13,6 +13,8 @@ export interface BranchStatus {
   resume_id: string | null;
   /** The CLI the doors start: the pointer's provider, else the live session's, else "claude". An older baud-cli omits it. */
   provider?: "claude" | "codex" | "opencode";
+  /** The resolved pointer's run record; null with no pointer, absent from an older baud-cli. */
+  run?: RunRecord | null;
   /** The own room's name whether or not it exists. Read it, never rebuild it: `room_name` owns the rule. */
   room: string;
   has_room: boolean;
@@ -26,6 +28,27 @@ export interface BranchStatus {
   todo_count: number;
   summary: string;
   last_updated: string;
+}
+
+/** Mirrors `RunRecord` in src-tauri/src/lib.rs. Absent pointer fields arrive as "pending" / "cli_default" / "unknown". */
+export interface RunRecord {
+  session_id: string;
+  host_cli: string | null;
+  model_provider: string;
+  model_requested: string;
+  /** The runtime's own model id, or "pending". */
+  model_observed: string;
+  selection_source: string;
+  observed_at: string | null;
+  /** null is "no receipt": absent, unreadable, or for another session. */
+  receipt: GroundingReceipt | null;
+}
+
+/** Mirrors `GroundingReceipt` in src-tauri/src/lib.rs. */
+export interface GroundingReceipt {
+  status: string;
+  generation: number;
+  missing: string[];
 }
 
 /** Mirrors `FleetSnapshot` in src-tauri/src/lib.rs. */

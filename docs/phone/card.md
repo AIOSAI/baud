@@ -97,6 +97,20 @@ the beat. The desktop mounts the same wheel, so it is one indicator on both
 faces, and the fill rather than a halo carries the pulse because a 44px disc
 has steady colour enough to hide one.
 
+**The state line ends in the run chip, `Host · model`** (`OpenCode · gpt-6.1-sol`,
+`Claude · sonnet-5-5`). The host is the card's provider, so a live process names
+it; the model comes from the session pointer, and only while the pointer's
+`host_cli` is that host, since a pointer another CLI wrote is history. A model
+the runtime has not yet reported is never drawn as observed: the chip shows the
+requested one with a trailing `?`, dashed and faint (`Claude · opus?`), and
+`default?` when the request was the CLI's own default or the pointer predates
+the run record. The chip is a button: click, Enter or Space opens the detail
+under it, rows for host, model provider, requested, observed, selection source,
+observed at and session, then the grounding receipt's status, generation and
+missing keys. `ungrounded` is the only red and `verified` the only green;
+`pending`, `unverified` and `no receipt` stay neutral. A receipt written for
+another session is no receipt.
+
 **The sheet states the sub-agent count in words**, on its own line under the
 status line rather than in the counter row. Every tile in that row is a *door* — press `MAIL` and the
 inbox opens — and sub-agents have no file to open, so a fifth tile would be a

@@ -48,7 +48,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 |---|---|
 | `verbs.ts` | What each scope may do, and the sentence when it may not. |
 | `newProject.ts` | The new-project sheet's rules: the name rule (the host's, mirrored), its hint, the two templates, the phone-side refusal, and the manager's card built from the host's answer. Pure, plus `newProject.test.ts`, which also drives `verb_new_project` through the transport with `fetch` stubbed. |
-| `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
+| `rooms.ts` | Which door a card's state means; the room's own vocabulary; the run chip's `Host · model` text. |
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `gitWords.ts` | The git app's small rules and words: where a changed row's tap goes (an untracked file is read, an untracked directory answers under its row or, at repo grain under a named root, opens the files door; `rootAddress` spells that root for the files lane), a commit message without its subject line, the merge's no-files line, the no-agent line by whether the fleet answered, and the no-remote read of contract C-D. Pure, plus `gitWords.test.ts`. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |

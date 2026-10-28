@@ -1,11 +1,11 @@
-/** Tests for app/src/phone/lib/rooms.ts: the command line a door types, by provider and mode, and the ritual chips. */
+/** Tests for app/src/phone/lib/rooms.ts: the command line a door types, by provider and mode, the ritual chips, and the run chip. */
 
 // Not tested here: the one-line guards isAttached, canResume and typeOnAttach (unpinned).
 
 import { describe, expect, it } from "vitest";
 
-import type { BranchStatus } from "../../types";
-import { agentCommand, launchCommand, roomDoors, roomProviders, slashCommand, switchLegs } from "./rooms";
+import type { BranchStatus, RunRecord } from "../../types";
+import { agentCommand, launchCommand, roomDoors, roomProviders, runChip, slashCommand, switchLegs } from "./rooms";
 
 const PATH = "/home/op/Projects/AIPass/src/aipass/canary";
 const THREAD = "01a1748b-7c02-78d0-bb32-8d5f593ce962";
@@ -174,5 +174,42 @@ describe("the switch dropdown", () => {
     expect(switchLegs(undefined)).toEqual(["/codex", "/opencode"]);
     expect(switchLegs("codex")).toEqual(["$claude", "$opencode"]);
     expect(switchLegs("opencode")).toEqual(["/claude", "/codex"]);
+  });
+});
+
+describe("the run chip", () => {
+  const run = (fields: Partial<RunRecord>): RunRecord => ({
+    session_id: OC_SESSION,
+    host_cli: "opencode",
+    model_provider: "openai",
+    model_requested: "openai/gpt-6.1-sol",
+    model_observed: "gpt-6.1-sol",
+    selection_source: "flag",
+    observed_at: "2026-10-28T13:48:44-07:00",
+    receipt: null,
+    ...fields,
+  });
+
+  it("names the host and the observed model, unmarked", () => {
+    expect(runChip(card({ provider: "opencode", run: run({}) }))).toMatchObject({
+      text: "OpenCode · gpt-6.1-sol",
+      pending: false,
+    });
+  });
+
+  it("shows a pending model's request with the pending mark, never as observed", () => {
+    const pending = run({ host_cli: "claude", model_requested: "opus", model_observed: "pending" });
+    expect(runChip(card({ provider: "claude", run: pending }))).toMatchObject({ text: "Claude · opus?", pending: true });
+  });
+
+  it("says default for a pending cli_default, an old pointer or no pointer", () => {
+    const old = run({ host_cli: null, model_requested: "cli_default", model_observed: "pending" });
+    expect(runChip(card({ provider: "codex", run: old }))).toMatchObject({ text: "Codex · default?", pending: true });
+    expect(runChip(card({ provider: "codex", run: null })).text).toBe("Codex · default?");
+    expect(runChip(card({ provider: undefined })).text).toBe("Claude · default?");
+  });
+
+  it("drops a pointer's model when a live process on another host names the card", () => {
+    expect(runChip(card({ provider: "claude", run: run({}) }))).toMatchObject({ text: "Claude · default?", pending: true });
   });
 });
