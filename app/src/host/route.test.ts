@@ -30,6 +30,7 @@ describe("routeOf", () => {
     expect(routeOf("pty_create", { cwd: "/x", project: "BAUD" })).toBe("ipc");
     expect(routeOf("list_dir", { path: "src" })).toBe("ipc");
     expect(routeOf("memory_config_write", { patch: {} })).toBe("ipc");
+    for (const command of ["browser_status", "browser_launch", "browser_adopt"]) expect(routeOf(command, {})).toBe("ipc");
   });
 
   it("knows exactly the commands lib.rs registers, plus the relay", () => {

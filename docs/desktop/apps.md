@@ -1,13 +1,13 @@
 # The apps
 
-This page covers the wheel's app and monitor cards, the FILES tree they dock and the three tabs they open (GIT, BACKUP and MACHINE), and how each tab hosts the phone's own screen.
+This page covers the wheel's app and monitor cards, the FILES tree they dock and the four tabs they open (GIT, BACKUP, MACHINE and BROWSER), and how each tab hosts the phone's own screen.
 
 ← [the desktop window](../desktop.md)
 
 ## The app cards
 
-The wheel's `apps` layer carries the phone's three app cards, GIT, FILES and
-BACKUP; its `monitor` layer carries the seven machine cards, CPU to BAT, with
+The wheel's `apps` layer carries four app cards, GIT, FILES, BACKUP and
+BROWSER (its mark reads `WEB`); its `monitor` layer carries the seven machine cards, CPU to BAT, with
 their live faces. The centred card opens (see
 [the wheel](window-and-cards.md#the-wheel)):
 
@@ -21,6 +21,8 @@ their live faces. The centred card opens (see
   project, which the host would read as its own default seat, so until the seat
   is read they open nothing. The GIT card's badge is the repository count, read through the seated
 project's manager.
+- BROWSER opens the one BROWSER tab. Like MACHINE it is machine-wide: it names
+  no project, and a seat change leaves it as it is.
 
 ## One tab, the phone's screen
 
@@ -41,6 +43,13 @@ same refusals.
   BAT) with their live readings, polled every two seconds while the tab is in
   front. A tile opens the phone's machine sheet: the CPU sheet shows the cores,
   PROC the top twenty processes. Under the sheet one line reads the lock state.
+- **BROWSER** is BAUD's own Chrome (see [the browser](browser.md)), read over
+  IPC, not the relay, every five seconds while the tab is in front. Down, it
+  says `BAUD's Chrome is not running` and offers `launch` and `adopt my
+  Chrome`; running, it shows the port, the profile path and the native-hosts
+  word, then the open pages, title over url, and `reload`. A page row opens
+  nothing. On the phone the same card opens the same screen, which shows the
+  host's `not_on_the_phone` refusal.
 
 ## What differs from the phone
 

@@ -16,18 +16,21 @@ export const APP_CARDS: ReadonlyArray<AppCard> = [
   { screen: "files", name: "FILES", opens: "the roots: branch, project, aipass, home" },
   { screen: "backup", name: "BACKUP", opens: "the backup store, its runs and Snapshot now" },
   { screen: "machine", name: "MACHINE", opens: "the machine's live vitals and the lock state" },
+  { screen: "browser", name: "BROWSER", opens: "BAUD's Chrome: its open pages, and launch when it is down" },
 ];
+
+const machineWide = (screen: AppScreen): screen is "machine" | "browser" => screen === "machine" || screen === "browser";
 
 /** Null until the seat is read: an empty project would be the host's default seat, not this window's. */
 export function appCardView(screen: AppScreen, seatedProject: string | null): AppView | null {
   if (seatedProject === null) return null;
-  if (screen === "machine") return { screen };
+  if (machineWide(screen)) return { screen };
   return { screen, project: seatedProject };
 }
 
 export function appCardTitle(card: AppCard, seatedProject: string | null): string {
   if (seatedProject === null) return `${card.name.toLowerCase()} - waits until the seat is read`;
-  const where = card.screen === "machine" ? "this machine" : seatedProject;
+  const where = machineWide(card.screen) ? "this machine" : seatedProject;
   return `open ${card.name.toLowerCase()} in a tab - ${card.opens} (${where})`;
 }
 

@@ -9,6 +9,7 @@ import type {
   BackupStatus,
   BaudSettings,
   BranchStatus,
+  BrowserStatus,
   DirEntryInfo,
   DirWindow,
   GitChangeCount,
@@ -232,3 +233,12 @@ export const memoryConfigPush = async () => {
 };
 
 export const screenshotCapture = () => call<string>("screenshot_capture");
+
+/* BAUD's own Chrome lives on the desktop's machine; the phone is refused before any request. */
+
+export const browserStatus = () => call<BrowserStatus>("browser_status");
+
+export const browserLaunch = () => call<BrowserStatus>("browser_launch");
+
+/** Copies ~/.config/google-chrome into BAUD's profile, the old one renamed aside; refused while any Chrome runs. */
+export const browserAdopt = () => call<BrowserStatus>("browser_adopt");

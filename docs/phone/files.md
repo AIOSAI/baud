@@ -26,6 +26,7 @@ took 330 lines out of the file above.
 | `PhoneSettings.tsx` | The phone's own settings. |
 | `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder. |
 | `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap. |
+| `BrowserScreen.tsx` | BAUD's Chrome: down with `launch` and `adopt my Chrome`, or running with its open pages. The desktop's BROWSER tab; on the phone it shows the host's `not_on_the_phone` refusal. |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
 | `NewProjectSheet.tsx` | What the switcher's `+ new project` row opens: a name, a template chip, one `create`, and the host's sentence verbatim on a refusal. |

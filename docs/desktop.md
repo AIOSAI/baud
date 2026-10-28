@@ -35,7 +35,8 @@ Each part of the window has its own page under `docs/desktop/`.
 | [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened card and its passport; what a launch types |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
-| [apps](desktop/apps.md) | the wheel's app and monitor cards: FILES docks the tree at the project root; GIT, BACKUP and MACHINE are each the phone's own screen in a workbench tab |
+| [apps](desktop/apps.md) | the wheel's app and monitor cards: FILES docks the tree at the project root; GIT, BACKUP, MACHINE and BROWSER are each the phone's own screen in a workbench tab |
+| [browser](desktop/browser.md) | BAUD's own Chrome: the profile, the room, the port, the four states, the native-hosts link |
 
 ## The desktop face — `src/desktop/`
 
@@ -184,6 +185,7 @@ projects/baud/
 │   │   ├── settings.rs         the two config writers and the hooks flag
 │   │   ├── memory.rs           @memory's dials, read and surgically written
 │   │   ├── screenshot.rs       the XDG portal client
+│   │   ├── browser.rs          BAUD's own Chrome: its room, its port, its pages
 │   │   ├── host_relay.rs       the relay to the host API: bind, token receipt, /v1 fence
 │   │   ├── main.rs             thin binary entry — the desktop app, gui feature on
 │   │   └── bin/baud_cli.rs     baud-cli — the six headless verbs, no window, no GTK

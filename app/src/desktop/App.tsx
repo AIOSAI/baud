@@ -501,7 +501,7 @@ export default function App() {
         return;
       }
       // The wheel owns the monitor row's card list; every one of them is the machine tab here.
-      const view = appCardView(key.startsWith("mon-") ? "machine" : (key as "git" | "backup"), snapshot?.project ?? null);
+      const view = appCardView(key.startsWith("mon-") ? "machine" : (key as "git" | "backup" | "browser"), snapshot?.project ?? null);
       if (view) openPhone(view);
     },
     [snapshot?.project, snapshot?.root, openPhone, toggleTree],

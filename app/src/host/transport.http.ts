@@ -362,6 +362,9 @@ const NOT_YET: Record<string, string> = {
   memory_config_write:
     "entry character caps have no /v1 route - only the rollover limits are served here, and the desktop gear owns the caps",
   screenshot_capture: "this captures the MACHINE's screen through its compositor - there is none to capture from a phone",
+  browser_status: "BAUD's Chrome is the desktop's for now - the phone's view of it waits on @api's socket lane",
+  browser_launch: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_adopt: "BAUD's Chrome is the desktop's for now - see browser_status",
 };
 
 /** The absolute path of the root an answer stands on; "" when absent so composition refuses, not half-builds. */

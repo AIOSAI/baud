@@ -2,12 +2,13 @@
 
 import type { MemoryTabId } from "../phone/MemoryScreen";
 
-/** The four apps on the strip: one tab each, whatever the seat. */
+/** The apps on the strip: one tab each, whatever the seat. */
 export type AppView =
   | { screen: "git"; project: string }
   | { screen: "files"; project: string }
   | { screen: "backup"; project: string }
-  | { screen: "machine" };
+  | { screen: "machine" }
+  | { screen: "browser" };
 
 /** A card's doors: one tab per agent and door, the agent named with its project. */
 export type CardView =
@@ -19,7 +20,7 @@ export type CardView =
 
 export type PhoneView = AppView | CardView;
 
-export const APP_SCREENS: ReadonlySet<PhoneView["screen"]> = new Set(["git", "files", "backup", "machine"]);
+export const APP_SCREENS: ReadonlySet<PhoneView["screen"]> = new Set(["git", "files", "backup", "machine", "browser"]);
 
 export function isAppView(view: PhoneView): view is AppView {
   return APP_SCREENS.has(view.screen);
