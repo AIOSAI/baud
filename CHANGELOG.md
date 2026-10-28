@@ -34,6 +34,10 @@ and every change that lands adds its line there in the same sitting.
 - **Desktop: pair a phone and About in the header gear.** `pair a phone` opens a terminal tab already running `drone @api host-api pair phone --scope operate`, which draws its own QR; `about` shows the app's version.
 - **Desktop: a bell mail row opens its message.** A row carrying `mail_id` and `recipient` opens the recipient's inbox screen on that message in a tab. The bell's cleared mark is one machine-wide key, adopting the seated project's old per-project mark once. The Rust feed reader keeps the three address fields it used to drop.
 
+### Fixed
+
+- **Phone: "bell keeps" now governs the badge and the feed.** The phone kept a fixed 200 events and read no setting, so a badge said `99+` while the desktop bell, set to 50, held at 50. The badge hook and the feed screen now keep `bell_max_events` events (the desktop's own retention), newest first; `FEED_KEEP` is only the fallback before the settings load. The interface door's summary moves "bell keeps" to the shared list.
+
 ### Changed
 
 - **Desktop: the wheel's cards are 50 percent larger.** Every card dimension in `phone.css` (card basis and gap, avatar and its border and letters, dot, waiting badge, name, app square, link arrow, monitor faces and ring, pips, home tag, attached outline, rail padding) is `calc(<px> * var(--wheel-scale, 1))`; `.baud-wheel-desktop` sets `--wheel-scale: 1.5`, its rail padding is half a scaled card, and its cap rises from 960px to 1440px so as many cards fit. The phone never sets the variable and renders pixel-identical (390px headless diff, 0 pixels).

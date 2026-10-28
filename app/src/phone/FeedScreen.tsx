@@ -16,6 +16,7 @@ import { whileVisible } from "./lib/whileVisible";
 
 interface FeedScreenProps {
   pollMs: number;
+  keep: number;
   /** ISO timestamp, or "" for never: at or older is hidden here and from the badge, never from the file. */
   clearedUpTo: string;
   onClear: (upTo: string) => void;
@@ -24,7 +25,7 @@ interface FeedScreenProps {
   onOpenMail: (recipient: string, mailId: string, project?: string) => void;
 }
 
-export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOpenMail }: FeedScreenProps) {
+export default function FeedScreen({ pollMs, keep, clearedUpTo, onClear, onClose, onOpenMail }: FeedScreenProps) {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [gap, setGap] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +37,11 @@ export default function FeedScreen({ pollMs, clearedUpTo, onClear, onClose, onOp
       cursor.current = window.cursor;
       setGap(window.gap ? (window.gap_reason ?? "events were lost before this window") : null);
       setError(null);
-      setEvents((seen) => mergeEvents(seen, window.events));
+      setEvents((seen) => mergeEvents(seen, window.events, keep));
     } catch (cause) {
       setError(cause instanceof HostError ? cause.message : String(cause));
     }
-  }, []);
+  }, [keep]);
 
   /* Screen-scoped but still gated: a pocketed phone must not poll, and the wake tick reads at once. */
   useEffect(() => whileVisible(() => void poll(), pollMs), [poll, pollMs]);

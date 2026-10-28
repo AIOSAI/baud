@@ -9,12 +9,14 @@ export const FEED_KEEP = 200;
 /**
  * Fold a window in on ts/title: the server re-delivers the boundary event (at-least-once).
  * Newest first is a contract: the badge counts the head, so another order makes the cut drop it.
+ * `keep` is the shared "bell keeps" setting, the desktop bell's own retention.
  */
 export function mergeEvents(
   seen: NotificationEvent[],
   arriving: NotificationEvent[],
+  keep: number = FEED_KEEP,
 ): NotificationEvent[] {
   const byKey = new Map(seen.map((event) => [`${event.ts}/${event.title}`, event]));
   arriving.forEach((event) => byKey.set(`${event.ts}/${event.title}`, event));
-  return [...byKey.values()].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, FEED_KEEP);
+  return [...byKey.values()].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, keep);
 }

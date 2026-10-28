@@ -171,11 +171,13 @@ The push confirm names the count of branch overrides when there are any and
 says "this resets every branch to the defaults" when there are none, on both
 faces.
 
-**Three interface rows are the desktop's.** The phone polls at its own fixed
-`POLL_MS`, keeps `FEED_KEEP` events and has no chime, so "poll every", "bell
-keeps" and "bell chime" change only the desktop. The interface door on
-settings home says so: "poll every, bell keeps, bell chime apply to the desktop
-only". They are not wired on the phone.
+**Two interface rows are the desktop's.** The phone polls at its own fixed
+`POLL_MS` and has no chime, so "poll every" and "bell chime" change only the
+desktop. The interface door on settings home says so: "poll every, bell chime
+apply to the desktop only". "Bell keeps" (`bell_max_events`) is shared: the
+header badge and the feed screen hold that many events, newest first, so a
+badge reads the same count on both faces (`FEED_KEEP` is only the fallback
+before the settings load).
 
 **Per-agent limits are the card's gear.** The memory screen's foot reads
 "limits: fleet defaults — settings → memory · per-agent limits: this card's
