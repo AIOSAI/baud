@@ -123,23 +123,23 @@ does.
 
 ## The workbench
 
-Open files, diffs, monitors and help shells live as tabs beside the terminal.
-The terminal is never unmounted — hidden panes are display-hidden, so claude
-keeps streaming underneath while you read.
+Open files, the phone's screens, monitors and help shells live as tabs beside
+the terminal. The terminal is never unmounted — hidden panes are display-hidden,
+so claude keeps streaming underneath while you read.
 
-**The reading room.** Card figures and ctrl+clicked paths open read-only
-CodeMirror panes; the `files` button docks a lazily-loaded directory tree.
-The git badge opens the branch's full uncommitted diff in patch syntax, and diff
-tabs refetch every time they return to the front (a diff goes stale the moment
-the agent keeps working); file tabs load once. Every path the frontend sends is
+**The reading room.** Ctrl+clicked paths open read-only CodeMirror panes; a
+passport's `files` door docks a lazily-loaded directory tree. A passport's
+figures open the phone's designed screens in tabs — the `⎇ git` figure the git
+app on that branch's changes, where a file row opens its diff — and a phone tab
+re-reads every time it returns to the front; file tabs load once. Every path the frontend sends is
 canonicalized and must sit inside the seated project's root, viewers cap at
 512 KB and flag the truncation, binaries are refused, and the tree skips `.git`,
 `node_modules`, `target`, `__pycache__`, `.venv`, `dist`.
 
 **Monitor panes (read-only).** The header's two traffic lights open
 `drone @prax monitor run` (mission control, all branches) and
-`drone @prax monitor run commons` (the live social feed); a card's `watch`
-button opens `drone @prax monitor run <branch>` in its own `watch:<branch>` tab.
+`drone @prax monitor run commons` (the live social feed); a passport's `watch`
+door opens `drone @prax monitor run <branch>` in its own `watch:<branch>` tab.
 A light is green exactly while its tab exists, so the toggle, the tab's `✕`, the
 pane's corner button and the monitor dying on its own all reset it through the
 same door.
@@ -152,7 +152,7 @@ frontend passes a target token, never a command line — and the token must matc
 spawn through the login shell (`-l -c`) so `drone` resolves from the operator's
 own PATH.
 
-**Help terminals.** The `?` on a card opens a real shell seated in that branch
+**Help terminals.** The `?` in an opened passport opens a real shell seated in that branch
 with the branch's help command already run — `drone @<branch> --help`, except
 for `aipass`, which is the ecosystem's one routing exception and asks its own
 binary (`aipass --help`). The keyboard is deliberately ON: the point is

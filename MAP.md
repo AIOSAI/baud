@@ -48,6 +48,7 @@ Everything below is under `app/` unless it says otherwise.
 |---|---|---|
 | The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop) |
 | The phone face | `src/phone/` | [its files, on their own page](docs/phone/files.md) |
+| The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the desktop's opened-card doors in `src/desktop/PassportDoors.tsx` | [the desktop's wheel and passport](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
 | The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |
 | The phone's backend | @api's host, not in this repo | [Host lanes](#host-lanes--the-phones-backend-and-it-is-not-in-this-repo), below |
@@ -156,14 +157,14 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/architecture.md` | How BAUD reads the fleet, the three rules everything else follows from, the type seam, and the Rust backend's files. |
 | `docs/desktop.md` | The desktop window's index: running it, the face's files, the camera, the command surface, the layout, and the table of the pages below. |
-| `docs/desktop/window-and-cards.md` | The window, the cards and their doors, the opened passport. |
+| `docs/desktop/window-and-cards.md` | The window, the wheel and its round cards, the opened passport and its doors. |
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
 | `docs/desktop/settings.md` | The card gear, the header gear, the memory dials, the host API tab. |
-| `docs/desktop/apps.md` | The strip's app cards, GIT, FILES, BACKUP and MACHINE, each the phone's screen in a workbench tab. |
+| `docs/desktop/apps.md` | The wheel's app and monitor cards, GIT, FILES, BACKUP and MACHINE, each the phone's screen in a workbench tab. |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
 | `docs/phone.md` | The phone face's index: what the phone is, the transport and its refusal table, the token rule, project-named reads, serving, the checks, the visibility gate, and the table of the pages below. |
-| `docs/phone/wheel.md` | The fleet rail, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet. |
+| `docs/phone/wheel.md` | The fleet rail and its desktop input, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet. |
 | `docs/phone/card.md` | The expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate. |
 | `docs/phone/room.md` | The terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost. |
 | `docs/phone/room-input.md` | Typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule. |

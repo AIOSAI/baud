@@ -36,7 +36,7 @@ Three sentences of doctrine, because everything else follows from them:
 | --- | --- |
 | citizen | `.trinity/passport.json` exists |
 | manager | that passport's `identity.citizen_class` reads `manager` |
-| roster tabs | the same per-project scan, run over every project in the census |
+| roster (the wheel's live and dispatched layers) | the same per-project scan, run over every project in the census |
 | dispatched | `.ai_mail.local/.dispatch.lock` names a pid that is alive (the dispatch monitor; `/proc/<pid>` stat'ed directly) |
 | interactive | `/proc` scan: argv[0] is `claude` with no `-p`/`--print`, or `codex` with no `exec` (its `app-server` and `mcp-server` are no agent), cwd inside the branch |
 | provider | the live session's in the branch, else `.ai_mail.local/session.json`'s `provider` when the pointer resolves (a codex thread needs `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl`), else `claude`; the pointer's id is the resume id only while its provider is the card's |

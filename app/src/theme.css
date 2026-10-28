@@ -528,61 +528,6 @@ body {
   word-break: break-word;
 }
 
-/* --------------------------------------------------------- section label
-   A quiet name for the band below it. Same micro-label vocabulary as the
-   header totals: faint, uppercase, widely tracked.
-   ------------------------------------------------------------------------ */
-
-.baud-section-head {
-  flex: none;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  padding: 10px var(--baud-pad) 0;
-}
-
-.baud-section-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--baud-ink-faint);
-}
-
-/* Which passports are on show. Quiet until chosen: the strip below is the
-   loud part, and two of these three tabs are usually empty. */
-.baud-section-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.baud-section-tab {
-  margin: 0;
-  padding: 1px 7px;
-  border: 1px solid transparent;
-  border-radius: var(--baud-radius);
-  background: none;
-  color: var(--baud-ink-faint);
-  font-family: inherit;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.baud-section-tab:hover,
-.baud-section-tab:focus-visible {
-  color: var(--baud-ink);
-  border-color: var(--baud-line);
-}
-
-.baud-section-tab-on {
-  color: var(--baud-green);
-  border-color: var(--baud-line-strong);
-}
-
 /* The tree a roster card came from. Amber like the manager mark: both are
    facts about identity rather than activity. */
 .baud-chip-project {
@@ -603,11 +548,6 @@ body {
   cursor: default;
 }
 
-/* The heading owns the gap above the cards, so the strip gives its own back. */
-.baud-section-head + .baud-strip {
-  padding-top: 6px;
-}
-
 /* ----------------------------------------------------------------- strip
    The fleet, compressed to one scrolling row above the terminal.
    ------------------------------------------------------------------------ */
@@ -623,6 +563,30 @@ body {
   border-bottom: 1px solid var(--baud-line);
   scrollbar-width: thin;
   scrollbar-color: var(--baud-line-strong) transparent;
+}
+
+/* The phone's wheel in the strip slot, at the phone's numbers; the cap keeps a
+   wide window's cards together instead of strewn across 1920px. */
+.baud-wheel-desktop {
+  flex: none;
+  padding-top: 6px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-wheel-desktop .baud-wheel-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* 50%, not the phone's 50vw: padding percentages read the wrap, which the cap
+   makes narrower than the viewport. */
+.baud-wheel-desktop .baud-wheel {
+  padding-inline: calc(50% - 32px);
+}
+
+.baud-wheel-desktop .baud-wheel-wrap:focus-visible {
+  outline: 1px solid var(--baud-wheel-accent);
+  outline-offset: -1px;
 }
 
 .baud-strip-empty {
@@ -1983,6 +1947,13 @@ button.baud-tab {
 
 .baud-passport-close:hover {
   color: var(--baud-ink);
+}
+
+/* The card's doors inside the opened passport: the chip's own rules, at the
+   passport's width. */
+.baud-passport-doors {
+  width: auto;
+  margin: 10px var(--baud-pad) 0;
 }
 
 .baud-passport-body {

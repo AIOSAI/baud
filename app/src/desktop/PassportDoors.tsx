@@ -13,40 +13,26 @@ export type LaunchMode = "resume" | "fresh";
  *  real work, and uncommitted-file counts don't move second to second. */
 export const GIT_POLL_MS = 15_000;
 
-interface BranchChipProps {
+interface PassportDoorsProps {
   branch: BranchStatus;
-  /** Operator clicked launch: open a claude session in this branch. */
-  onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
-  /** Operator clicked files: open this branch's directory tree. */
-  onFiles: (branch: BranchStatus) => void;
-  /** Unused: the figures open designed screens through `onOpenPhone`. */
-  onOpenFile: (path: string, name: string, branch: string) => void;
-  /** Unused: the git figure opens the git app through `onOpenPhone`. */
-  onOpenDiff: (branch: BranchStatus) => void;
-  /** Operator clicked the terminal glyph: open a plain shell in this branch. */
-  onShell: (branch: BranchStatus) => void;
   /** A roster card from an unseated project: its reads name its own project; only the settings gear is fenced. */
   foreign: boolean;
-  /** Operator clicked watch: open this branch's scoped monitor pane. */
+  onLaunch: (branch: BranchStatus, mode: LaunchMode) => void;
+  /** The seated branch's directory tree; a roster card browses through the files screen instead. */
+  onFiles: (branch: BranchStatus) => void;
+  onShell: (branch: BranchStatus) => void;
   onMonitor: (branch: BranchStatus) => void;
-  /** Operator clicked ?: open a help terminal seated in this branch. */
   onHelp: (branch: BranchStatus) => void;
-  /** Operator clicked the gear: open this branch's settings panel. */
   onSettings: (branch: BranchStatus) => void;
-  /** Operator clicked the avatar: open this agent's passport. Not the whole card, which would turn every miss into a navigation. */
-  onOpenPassport: (branch: BranchStatus) => void;
   /** Opens or fronts a phone-screen tab for one of this card's designed reads. */
   onOpenPhone: (view: PhoneView) => void;
-  /** Render the card as a report with no doors, for a face that can read but not act (the phone).
-   *  Remote-capable verbs, when they come, return through the buttons this flag suppresses. */
-  readOnly?: boolean;
 }
 
 /**
- * One branch's card on the fleet strip: lamp, badges, figures and doors.
- * Reference: docs/desktop/window-and-cards.md
+ * The opened card's doors: launch, files, shell, watch, help, settings, the figures and the sub-agent badge.
+ * The round card on the wheel shows state, mail and memory only. Reference: docs/desktop/window-and-cards.md
  */
-export default function BranchChip({
+export default function PassportDoors({
   branch,
   onLaunch,
   onFiles,
@@ -54,18 +40,14 @@ export default function BranchChip({
   onShell,
   onHelp,
   onSettings,
-  onOpenPassport,
   onOpenPhone,
   foreign,
-  readOnly = false,
-}: BranchChipProps) {
+}: PassportDoorsProps) {
   const age = relativeAge(branch.last_updated);
 
   const [changes, setChanges] = useState<GitChanges | null>(null);
   const [gitWhy, setGitWhy] = useState<string | null>(null);
   useEffect(() => {
-    // A read-only face has no local git.
-    if (readOnly) return;
     let mounted = true;
     const refresh = () => {
       // A foreign path fails the seat's fence, so a roster card asks by name over the relay, project named.
@@ -87,26 +69,11 @@ export default function BranchChip({
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [branch.path, branch.name, branch.project, foreign, readOnly]);
+  }, [branch.path, branch.name, branch.project, foreign]);
 
   const door = (which: CardDoor) => () => onOpenPhone(cardDoorView(which, branch));
   // A roster card's unanswered relay must not paint as 0, which reads as clean; the seated card keeps its 0.
   const gitFigure = changes ? String(changes.count) : foreign ? (gitWhy ? "n/a" : "—") : "0";
-
-  const chipClass = [
-    "baud-chip",
-    branch.dispatched ? "baud-chip-dispatched" : "",
-    branch.interactive ? "baud-chip-interactive" : "",
-    branch.is_citizen ? "" : "baud-chip-outsider",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const lampClass = branch.dispatched
-    ? "baud-lamp-dispatched"
-    : branch.interactive
-      ? "baud-lamp-interactive"
-      : "baud-lamp-dim";
 
   const badge = branch.dispatched
     ? "dispatched"
@@ -133,33 +100,8 @@ export default function BranchChip({
   const canResume = branch.has_history || branch.resume_id !== null;
 
   return (
-    <article className={chipClass}>
+    <article className="baud-chip baud-passport-doors">
       <header className="baud-chip-head">
-        <span className={`baud-lamp ${lampClass}`} aria-hidden="true" />
-        {/* Manager stays blue-family, never red: red is the alarm colour and ownership is not an alarm. */}
-        <button
-          type="button"
-          className={`baud-chip-avatar ${branch.manager ? "baud-chip-avatar-manager" : ""} ${
-            branch.subagents > 0 ? "baud-chip-avatar-busy" : ""
-          }`}
-          title={
-            branch.subagents > 0
-              ? `open ${branch.name}'s passport — ${branch.subagents} sub-agent(s) running inside this session`
-              : `open ${branch.name}'s passport`
-          }
-          onClick={() => onOpenPassport(branch)}
-        >
-          {branch.name.slice(0, 2).toUpperCase()}
-        </button>
-        <h2 className="baud-chip-name">{branch.name}</h2>
-        {branch.manager ? (
-          <span
-            className="baud-chip-manager"
-            title="manager — this project's owner: git write, feedback channel, watchdog"
-          >
-            ★
-          </span>
-        ) : null}
         {badge ? (
           <span className={`baud-badge ${badgeClass}`} title={badgeTitle}>
             {badge}
@@ -181,7 +123,7 @@ export default function BranchChip({
             {branch.project}
           </span>
         ) : null}
-        {branch.is_citizen && !readOnly ? (
+        {branch.is_citizen ? (
           <button
             type="button"
             className="baud-chip-help"
@@ -191,7 +133,7 @@ export default function BranchChip({
             ?
           </button>
         ) : null}
-        {branch.is_citizen && !readOnly ? (
+        {branch.is_citizen ? (
           <button
             type="button"
             className="baud-chip-gear"
@@ -221,7 +163,7 @@ export default function BranchChip({
         ) : null}
       </header>
 
-      {foreign && branch.is_citizen && !readOnly ? (
+      {foreign && branch.is_citizen ? (
         <p className="baud-chip-away">{awayNote(branch.name, branch.project)}</p>
       ) : null}
 
@@ -258,7 +200,7 @@ export default function BranchChip({
         <span className={`baud-chip-age ${age.stale ? "baud-chip-age-stale" : ""}`}>
           updated {age.label}
         </span>
-        {branch.is_citizen && !readOnly ? (
+        {branch.is_citizen ? (
           <span className="baud-chip-buttons">
             {/* The tree reads under the seat, so a roster card browses through the files screen instead. */}
             <button

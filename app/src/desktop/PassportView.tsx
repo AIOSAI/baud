@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { readFileText } from "../host";
 import type { BranchStatus } from "../types";
@@ -22,6 +22,8 @@ interface PassportViewProps {
   onClose: () => void;
   /** The global monitors, for manager-class passports only; the caller owns their tabs. */
   monitors: PassportMonitor[];
+  /** The card's door row (PassportDoors), owned by the caller since every door opens something in the window. */
+  doors: ReactNode;
 }
 
 /** The working-memory tabs, in display order. */
@@ -74,7 +76,7 @@ function message(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-export default function PassportView({ branch, onClose, monitors }: PassportViewProps) {
+export default function PassportView({ branch, onClose, monitors, doors }: PassportViewProps) {
   const [passport, setPassport] = useState<Document>(EMPTY);
   const [local, setLocal] = useState<Document>(EMPTY);
   const [observations, setObservations] = useState<Document>(EMPTY);
@@ -176,6 +178,8 @@ export default function PassportView({ branch, onClose, monitors }: PassportView
             ✕
           </button>
         </header>
+
+        {doors}
 
         <div className="baud-passport-body">
           <section className="baud-passport-page">

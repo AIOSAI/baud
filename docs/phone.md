@@ -72,9 +72,9 @@ events, cursor-keyed, and when the server reports a `gap` the screen says so —
 window that silently lost events looks exactly like a quiet night, and those are
 opposite things.
 
-The phone draws its own card, `AgentSheet.tsx` — the desktop's `BranchChip`
-read back — rather than rendering `BranchChip`, so the desktop card's `readOnly`
-flag plays no part on this face. The push hooks (`src/phone/lib/push.ts`) are exported, empty
+The two faces share the wheel, `FleetWheel.tsx`, and not the opened card: the
+phone draws its own, `AgentSheet.tsx`, where the desktop opens a passport whose
+doors are `PassportDoors.tsx`. The push hooks (`src/phone/lib/push.ts`) are exported, empty
 and inert — a reservation with its gate named, the way `App.tsx` holds the
 terminal slot. There is **no service worker**: an offline cache of a live fleet
 would show stale aliveness, which is the one lie this system keeps paying to
@@ -213,7 +213,7 @@ Each screen of the face has its own page under `docs/phone/`.
 
 | Page | What it covers |
 | --- | --- |
-| [wheel](phone/wheel.md) | the fleet rail, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet |
+| [wheel](phone/wheel.md) | the fleet rail and its desktop input, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet |
 | [card](phone/card.md) | the expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate |
 | [room](phone/room.md) | the terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost |
 | [room input](phone/room-input.md) | typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule |
