@@ -363,8 +363,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     });
   }, [snapshot, baudSettings, scope, scopeKnown, tabsSettled, focusPane]);
 
+  // The desktop bell's retention, shared: the badge and the feed screen hold the same count.
+  const bellMax = interfacePrefs(baudSettings).bellMax;
   const { events, setEvents, readUpTo, setReadUpTo, clearedUpTo, setClearedUpTo } =
-    useFeedBadge(project);
+    useFeedBadge(project, bellMax);
 
   // The later marker is the floor, so the badge and the feed screen filter alike.
   const floor = readUpTo > clearedUpTo ? readUpTo : clearedUpTo;
@@ -1030,6 +1032,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       {feedOpen ? (
         <FeedScreen
           pollMs={POLL_MS}
+          keep={bellMax}
           clearedUpTo={clearedUpTo}
           onClear={clearFeed}
           onClose={closeFeed}
