@@ -139,11 +139,16 @@ cannot ride through the stack. The pips are buttons, and a mouse drag switches
 layers as a finger does. The bindings and their detection are on
 [the phone's wheel page](../phone/wheel.md#desktop-input).
 
-**Size.** The phone's numbers, unchanged: a 64px card, a 44px avatar. The wrap is
-capped at 960px and centred, so a wide window gets a centred wheel rather than a
-longer one. Under the cap the rail's inline padding is `calc(50% - 32px)`,
-because the phone's `50vw` measures the window, not the wrap, and would centre
-the snap off the notch. A focused wheel wears an outline in the layer's accent.
+**Size.** The desktop renders the wheel at 1.5x through one variable:
+every card dimension in `phone.css` is `calc(<px> * var(--wheel-scale, 1))`, and
+`.baud-wheel-desktop` sets `--wheel-scale: 1.5`, so a card is 96px with a 66px
+avatar while the phone, which never sets it, computes its own numbers. No CSS
+`zoom`: the centring math measures rendered boxes, and the window zoom is the
+webview's own. The wrap is capped at 1440px and centred, so a wide window gets a
+centred wheel rather than a longer one. Under the cap the rail's inline padding
+is `calc(50% - 32px * var(--wheel-scale))`, half a card, because the phone's
+`50vw` measures the window, not the wrap, and would centre the snap off the
+notch. A focused wheel wears an outline in the layer's accent.
 
 ## The opened passport
 
