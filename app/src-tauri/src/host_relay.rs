@@ -103,8 +103,14 @@ fn home_dir() -> Result<PathBuf, String> {
 /// `line` in the operator's login shell, killed past `limit`. Output stays
 /// piped to the end, which holds for drone's few-line answers.
 fn login_shell(line: &str, limit: Duration) -> Result<Output, String> {
+    login_shell_in(Path::new("."), line, limit)
+}
+
+/// [`login_shell`] from `dir`: drone resolves `@name` from its cwd's project registry.
+fn login_shell_in(dir: &Path, line: &str, limit: Duration) -> Result<Output, String> {
     let shell = crate::pty::user_shell();
     let mut child = Command::new(&shell)
+        .current_dir(dir)
         .args(["-l", "-c", line])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -121,6 +127,17 @@ fn login_shell(line: &str, limit: Duration) -> Result<Output, String> {
         std::thread::sleep(Duration::from_millis(50));
     }
     child.wait_with_output().map_err(|err| format!("'{line}': {err}"))
+}
+
+/// One drone line from `dir`; a failure is its first line of output.
+pub(crate) fn drone_in(dir: &Path, line: &str) -> Result<(), String> {
+    let output = login_shell_in(dir, line, DRONE_TIMEOUT)?;
+    let text = said(&output);
+    // drone exits 0 when a module refuses, so its ❌ line is the failure signal.
+    if output.status.success() && !text.contains('❌') {
+        return Ok(());
+    }
+    Err(text.lines().find(|line| !line.trim().is_empty()).unwrap_or("drone failed with no output").to_string())
 }
 
 fn said(output: &Output) -> String {

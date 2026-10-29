@@ -224,6 +224,7 @@ pub(crate) fn snapshot_headless(name: Option<&str>) -> FleetSnapshot {
             error: None,
             branches,
             live_agent_sessions,
+            hark: hark_state(),
         },
         Err(error) => FleetSnapshot {
             project: project_name,
@@ -232,6 +233,7 @@ pub(crate) fn snapshot_headless(name: Option<&str>) -> FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: hark_state(),
         },
     }
 }

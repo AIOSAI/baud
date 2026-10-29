@@ -6,6 +6,7 @@ import { deliveryText } from "../deliver";
 import AgentSettings from "./AgentSettings";
 import Bell from "./Bell";
 import Camera from "./Camera";
+import Hark from "./Hark";
 import { appCardView } from "./appCards";
 import FleetWheel, { cardRef } from "../phone/FleetWheel";
 import AgentSheet, { type SheetMonitor } from "../phone/AgentSheet";
@@ -622,6 +623,7 @@ export default function App() {
           >
             ❯_
           </button>
+          <Hark state={snapshot?.hark ?? "absent"} />
           <Camera onCaptured={(path) => deliverPaths([path])} />
           <Bell
             project={snapshot?.project ?? null}

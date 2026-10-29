@@ -380,6 +380,7 @@ pub fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
             error: None,
             branches,
             live_agent_sessions,
+            hark: hark_state(),
         },
         Err(error) => FleetSnapshot {
             project: name,
@@ -388,6 +389,7 @@ pub fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: hark_state(),
         },
     }
 }

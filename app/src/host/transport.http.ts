@@ -372,6 +372,7 @@ const NOT_YET: Record<string, string> = {
   browser_new_tab: "BAUD's Chrome is the desktop's for now - see browser_status",
   browser_history: "BAUD's Chrome is the desktop's for now - see browser_status",
   browser_close_tab: "BAUD's Chrome is the desktop's for now - see browser_status",
+  hark_voice: "Hark's mic chip is the desktop's - the phone has no Hark control",
 };
 
 /** The absolute path of the root an answer stands on; "" when absent so composition refuses, not half-builds. */

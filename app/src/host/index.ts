@@ -261,3 +261,5 @@ export const browserNewTab = () => call<BrowserTarget>("browser_new_tab");
 export const browserHistory = (viewId: string, step: number) => call<void>("browser_history", { viewId, step });
 
 export const browserCloseTab = (targetId: string) => call<void>("browser_close_tab", { targetId });
+
+export const harkVoice = (word: "on" | "stop") => call<void>("hark_voice", { word });
