@@ -552,3 +552,42 @@ pub(crate) fn send_room_in(
     }
     Ok(room)
 }
+
+/// The tmux room Hark's Codex voice session lives in; `drone @hark standby` opens it.
+pub(crate) const HARK_ROOM: &str = "hark";
+
+/// Hark's mic for the desktop chip: `listening`, `muted`, `stopped`, or `absent` when the room is down.
+pub(crate) fn hark_state() -> String {
+    match Command::new("tmux").args(["capture-pane", "-p", "-t", &pane_target(HARK_ROOM)]).output() {
+        Ok(output) if output.status.success() => hark_state_of(&String::from_utf8_lossy(&output.stdout)).to_string(),
+        _ => "absent".to_string(),
+    }
+}
+
+/// Codex's voice status line, ` voice ● listening   … f9 mute` or ` voice ◌ muted …`, key hints to its right;
+/// none while voice is stopped.
+pub(crate) fn hark_state_of(pane: &str) -> &'static str {
+    pane.lines()
+        .rev()
+        .find_map(|line| match line.trim().strip_prefix("voice ")?.split_whitespace().nth(1)? {
+            "listening" => Some("listening"),
+            "muted" => Some("muted"),
+            _ => None,
+        })
+        .unwrap_or("stopped")
+}
+
+/// The chip's click: `drone @hark voice on|stop`, run from the hark project, the only seat `@hark` resolves from.
+#[cfg(feature = "gui")]
+#[tauri::command(async)]
+pub fn hark_voice(word: String) -> Result<(), String> {
+    if !matches!(word.as_str(), "on" | "stop") {
+        return Err(format!("hark_voice takes on or stop, not '{word}'"));
+    }
+    let anchor = anchor_project()?;
+    let hark = discover_projects(&anchor)
+        .into_iter()
+        .find(|project| project.name.eq_ignore_ascii_case(HARK_ROOM))
+        .ok_or("no hark project beside this one: drone @hark resolves only from inside it")?;
+    crate::host_relay::drone_in(&hark.root, &format!("drone @hark voice {word}"))
+}

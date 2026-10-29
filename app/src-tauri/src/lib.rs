@@ -376,6 +376,8 @@ pub struct FleetSnapshot {
     /// chat box exists there. Keyed by session name, which is what the pty
     /// actually attached to.
     pub live_agent_sessions: Vec<String>,
+    /// Hark's mic, read from the `hark` room's pane: listening, muted, stopped, or absent.
+    pub hark: String,
 }
 
 impl FleetSnapshot {
@@ -387,6 +389,7 @@ impl FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: "absent".to_string(),
         }
     }
 }
@@ -499,6 +502,7 @@ pub fn run() {
             browser::browser_new_tab,
             browser::browser_history,
             browser::browser_close_tab,
+            rooms::hark_voice,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
@@ -655,6 +659,7 @@ mod tests {
             error: None,
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: "absent".to_string(),
         };
         assert_eq!(snapshot_exit_code(&good), 0);
         assert_eq!(
@@ -1222,6 +1227,26 @@ mod tests {
         assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("pointed".into())));
         assert_eq!(resume_door(None, None, scanned), ("claude", true, Some("scanned".into())));
         assert_eq!(resume_door(None, None, || (false, None)), ("claude", false, None));
+    }
+
+    #[test]
+    fn the_hark_pane_names_the_mic_state() {
+        // Real line shapes from the live room: the status line sits above Codex's prompt.
+        let tail = "   mic ▂▁▁▁▂▁  codex ▁▁▁▁▁▁\n› Ask Codex to do anything\n  ? for shortcuts\n";
+        let hints = "                                        f9 mute     /voice stop";
+        assert_eq!(hark_state_of(&format!(" voice ● listening{hints}\n{tail}")), "listening");
+        assert_eq!(hark_state_of(&format!(" voice ◌ muted{hints}\n{tail}")), "muted");
+        assert_eq!(hark_state_of(&format!(" voice ● listening\n{tail}")), "listening");
+        assert_eq!(hark_state_of("• Voice conversation ended: requested\n› Ask Codex to do anything\n"), "stopped");
+        // Chat that quotes the words is not the status line.
+        assert_eq!(hark_state_of("• Patrick reports that “Hark voice mute” did not stop speech.\n"), "stopped");
+    }
+
+    #[cfg(feature = "gui")]
+    #[test]
+    fn hark_voice_types_only_on_and_stop() {
+        assert!(hark_voice("mute".to_string()).unwrap_err().contains("on or stop"));
+        assert!(hark_voice("on; rm -rf ~".to_string()).unwrap_err().contains("on or stop"));
     }
 
     #[test]

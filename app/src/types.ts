@@ -60,7 +60,11 @@ export interface FleetSnapshot {
   branches: BranchStatus[];
   /** Machine-wide on purpose: the terminal may sit in a room of a project the fleet view is not showing. */
   live_agent_sessions: string[];
+  /** Hark's mic, read from the `hark` room's pane. */
+  hark: HarkState;
 }
+
+export type HarkState = "listening" | "muted" | "stopped" | "absent";
 
 /** Mirrors `ProjectListing` in src-tauri/src/lib.rs. */
 export interface ProjectListing {
