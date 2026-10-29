@@ -1,14 +1,21 @@
 {
   "aipass_version": "2.8.29",
-  "stamped_at": "2026-10-28T02:01:32.367595+00:00",
+  "stamped_at": "2026-10-28T23:46:43.061321+00:00",
   "agents_md_managed": true,
   "files": {
     ".agents/skills/prep/SKILL.md": "387c4a9f35e5b6202efd551d7655fab08e9313c6db604f1559d387aadd5591d7",
     ".aipass/hooks.json": "16401383f1393c5db625cbc6a50e9720cafcff808f672da8931703dd497fc520",
     ".aipass/tier0_kernel.md": "dd94a4d3d2bf273be91c954f1832784162f06572389bbe723f551f0b6cab9d4f",
     ".claude/commands/codex.md": "9e4279ca5c7aba934de45adf1a123f35c396791e189a6386c5b03a5c71b8650c",
+    ".claude/commands/opencode.md": "f34178a704e236234f661b57dffbb92a7ed494f0874ce426033f0b9cfc2bf7f6",
     ".claude/settings.json": "176b5b9dc3b5a351ac4918957b96d1d3a5e225f3bd6743d4e7d15c4ff666dbb9",
     ".claude/settings.local.json": "b3cb43ebbf11adba0eeb2d34dc51edee36affec222dfd08252762a762ededde8",
-    ".codex/skills/claude/SKILL.md": "b2b4cb41851a5a5d5c7958bb961cd0b9b8e35b0bf819dff5d6071f7e8429ab54"
+    ".codex/skills/claude/SKILL.md": "b2b4cb41851a5a5d5c7958bb961cd0b9b8e35b0bf819dff5d6071f7e8429ab54",
+    ".codex/skills/opencode/SKILL.md": "1214fca381da722d58df2b039b62c9ae949a3a622da5001ef39a31b801095584",
+    ".opencode/commands/claude.md": "f7dc786fc3b1276ae5d144171b0aaf377781f939b0fa49eb9d2ba05340ff82b2",
+    ".opencode/commands/codex.md": "8f9a96ab14d6d3ba8c85d73622c56bdae5e1f25292d02ca70cef7fd3cc8a67be",
+    ".opencode/commands/compass.md": "be308b8536f661f6d683a217c1c1aabab8b3d7c7be25ea2dc78abd33c31cec84",
+    ".opencode/commands/memo.md": "42eff6a727b5d3053d9df6ac873612f5516a2cea9ade4cdec1628246545658a6",
+    ".opencode/commands/prep.md": "0850b8c6943512cf5fa40a2f9849b299fd0a61aee69da71c62d305a6005e5b51"
   }
 }
