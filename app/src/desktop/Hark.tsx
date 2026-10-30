@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { harkVoice } from "../host";
 import type { HarkState } from "../types";
 import { harkTitle, harkVerb } from "./harkChip";
@@ -11,10 +11,12 @@ export default function Hark({ state }: { state: HarkState }) {
   const [since, setSince] = useState(clock);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const giveUp = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setSince(clock());
     setPending(false);
+    if (giveUp.current) clearTimeout(giveUp.current);
   }, [state]);
 
   const verb = harkVerb(state);
@@ -22,10 +24,19 @@ export default function Hark({ state }: { state: HarkState }) {
     if (!verb || pending) return;
     setPending(true);
     setFailure(null);
-    harkVoice(verb).catch((err) => {
-      setPending(false);
-      setFailure(err instanceof Error ? err.message : String(err));
-    });
+    // Codex's bare /voice is a toggle: after a dropped voice session the room can land back where it was, so
+    // pending must not wait forever for a change that never comes.
+    harkVoice(verb)
+      .then(() => {
+        giveUp.current = setTimeout(() => {
+          setPending(false);
+          setFailure(`sent voice ${verb}, the room did not change - click again`);
+        }, 8000);
+      })
+      .catch((err) => {
+        setPending(false);
+        setFailure(err instanceof Error ? err.message : String(err));
+      });
   };
 
   const look = pending
