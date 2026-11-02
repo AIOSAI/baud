@@ -124,7 +124,7 @@ cd app && npm run build             # tsc && vite build - the frontend must actu
 cd app && npm run build:phone       # the phone face - same components, HTTP transport
 ```
 
-There is no seedgo audit lane for this repo: seedgo's checks target AIPass
+There is no sentry audit lane for this repo: sentry's checks target AIPass
 Python branches, and BAUD is Rust and TypeScript. The six commands above are
 the audit.
 

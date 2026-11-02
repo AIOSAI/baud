@@ -242,7 +242,7 @@ pub struct BranchStatus {
     /// of the two you are looking at.
     ///
     /// PUBLISHED BECAUSE THIS DERIVATION HAD BEEN COPIED (FPLAN-0438, on
-    /// @seedgo's finding). @api's attach lane re-implemented the prefix, the
+    /// @sentry's finding). @api's attach lane re-implemented the prefix, the
     /// scope rule and the character sanitizer in python to work out which
     /// session to attach the phone to - and a naming rule living in two
     /// runtimes is a rule that will disagree with itself the first time either
