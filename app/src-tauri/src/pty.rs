@@ -582,7 +582,7 @@ fn stream_session(
     Ok(id)
 }
 
-/// Charset fence for a monitor target: a branch list (`seedgo,cli`) or the
+/// Charset fence for a monitor target: a branch list (`sentry,cli`) or the
 /// `commons` feed keyword. Anything outside it is refused - the frontend
 /// picks targets off the fleet snapshot, it never composes command lines.
 /// The target is one argv word, so a leading `-` would be read as prax's own option.
@@ -763,8 +763,8 @@ mod tests {
     #[test]
     fn monitor_targets_are_branch_lists_or_commons() {
         assert!(valid_monitor_target("commons"));
-        assert!(valid_monitor_target("seedgo"));
-        assert!(valid_monitor_target("seedgo,cli,ai_mail"));
+        assert!(valid_monitor_target("sentry"));
+        assert!(valid_monitor_target("sentry,cli,ai_mail"));
         assert!(valid_monitor_target("vera-studio"));
     }
 
@@ -772,10 +772,10 @@ mod tests {
     fn monitor_target_fence_refuses_command_shapes() {
         // Anything that could smuggle shell syntax past the fixed command.
         assert!(!valid_monitor_target(""));
-        assert!(!valid_monitor_target("seedgo; rm -rf /"));
+        assert!(!valid_monitor_target("sentry; rm -rf /"));
         assert!(!valid_monitor_target("$(whoami)"));
-        assert!(!valid_monitor_target("seedgo cli"));
-        assert!(!valid_monitor_target("SEEDGO"));
+        assert!(!valid_monitor_target("sentry cli"));
+        assert!(!valid_monitor_target("SENTRY"));
         assert!(!valid_monitor_target("../etc"));
         assert!(!valid_monitor_target("run --relay"));
         // One argv word: a leading dash would reach prax as its own option.

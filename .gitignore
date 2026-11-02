@@ -67,7 +67,7 @@ docs.local/
 *_REGISTRY.json
 *_ROOTS.json
 **/.daemon/last_wake_prompt.txt
-**/.seedgo/ratchet/
+**/.sentry/ratchet/
 system_logs/
 **/*_json/
 artifacts/

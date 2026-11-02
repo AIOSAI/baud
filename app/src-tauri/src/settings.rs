@@ -125,7 +125,7 @@ fn branch_dir(project: &crate::Project, agent: &str) -> Result<PathBuf, String> 
 /// file's place - answered `{}`, so the gear rendered every dial at absent and
 /// the very next patch wrote a fresh three-key document over an operator's
 /// permission rules. Silently, because nothing in that chain had an error to
-/// report. @seedgo found it by cross-reading this file against @api's python
+/// report. @sentry found it by cross-reading this file against @api's python
 /// mirror of it, which had been hardened against exactly this and whose
 /// reasoning is quoted in its own `read_object`.
 ///
