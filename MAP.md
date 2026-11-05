@@ -11,6 +11,8 @@ the same React app built against an HTTP transport instead, served over the
 tailnet by @api's host. Neither face knows which one it is: they both call the
 same typed verbs, and a single alias in a vite config decides what those verbs
 turn into.
+The *Chrome extension* is a third build of the same HTTP transport: a side
+panel and an orb, with its own worker and content script.
 
 Everything below is under `app/` unless it says otherwise.
 
@@ -36,6 +38,7 @@ Everything below is under `app/` unless it says otherwise.
 |---|---|
 | `index.html` → `src/desktop/main.tsx` → `src/desktop/App.tsx` | The desktop window. |
 | `phone.html` → `src/phone/main.tsx` → `src/phone/PhoneApp.tsx` | The phone face. |
+| `src/extension/manifest.json` → `background.ts`, `content.ts`, `sidepanel.html`, `options.html` | The Chrome extension (`npm run build:extension` → `dist-extension/`). |
 | `src-tauri/src/main.rs` → `lib.rs::run()` | The Rust side; also `baud --snapshot`, the CLI the fleet read execs. |
 | `src-tauri/src/bin/baud_cli.rs` → `lib.rs::run_headless()` | `baud-cli`: the six headless verbs with no window, built with the `gui` feature off. The binary the host API prefers. |
 | `../src/baud/baud/apps/baud.py` | The AIPass branch shim (`drone @baud`). Nothing to do with the app. |
@@ -48,6 +51,7 @@ Everything below is under `app/` unless it says otherwise.
 |---|---|---|
 | The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop) |
 | The phone face | `src/phone/` | [its files, on their own page](docs/phone/files.md) |
+| The Chrome extension | `src/extension/` | [its files and the routes it uses](docs/extension.md) |
 | The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the opened card, both faces, in `src/phone/AgentSheet.tsx` | [the desktop's wheel and card](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
 | The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |

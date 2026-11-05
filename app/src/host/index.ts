@@ -1,7 +1,9 @@
 /** The host surface: every host capability, named and typed once; verbs never name one terminal's flags. */
 
 import type {
+  AgentFeed,
   AgentSettings,
+  AgentUsage,
   AgentSettingsPatch,
   BackupCancel,
   BackupJob,
@@ -29,6 +31,8 @@ import type {
   MachineProcesses,
   MachineVitals,
   MemoryConfig,
+  ModelCatalog,
+  ModelPick,
   NewProjectResult,
   NotificationEvent,
   ProjectListing,
@@ -190,7 +194,7 @@ export const backupCancel = (project: string, lane: BackupLane) =>
   call<BackupCancel>("backup_cancel", { project, lane });
 
 /* Not `call`s, but both transports export them and the vite alias picks one, keeping http out of the desktop. */
-export { openRoomSocket, uploadImage } from "./transport";
+export { openRoomSocket, speak, uploadImage } from "./transport";
 
 export const agentSettingsRead = (agent: string, project = "") =>
   call<AgentSettings>("agent_settings_read", project ? { agent, project } : { agent });
@@ -263,3 +267,23 @@ export const browserHistory = (viewId: string, step: number) => call<void>("brow
 export const browserCloseTab = (targetId: string) => call<void>("browser_close_tab", { targetId });
 
 export const harkVoice = (word: "on" | "stop") => call<void>("hark_voice", { word });
+
+/* The extension's chat, http-only (no desktop command): `agent` is `<project>/<name>`. */
+
+export const agentFeed = (agent: string, since?: number) => call<AgentFeed>("agent_feed", { agent, since });
+
+/** 409 when the agent has no room. */
+export const agentSend = (agent: string, text: string) => call<unknown>("agent_send", { agent, text });
+
+export const agentInterrupt = (agent: string) => call<unknown>("agent_interrupt", { agent });
+
+export const agentAllow = (agent: string) => call<unknown>("agent_allow", { agent });
+
+export const agentDeny = (agent: string) => call<unknown>("agent_deny", { agent });
+
+export const modelsList = () => call<ModelCatalog>("models_list");
+
+/** 409 while the agent works. A `provider` other than its own is a handoff. */
+export const agentModel = (agent: string, pick: ModelPick) => call<{ typed?: string } | undefined>("agent_model", { agent, pick });
+
+export const agentUsage = (agent: string) => call<AgentUsage>("agent_usage", { agent });

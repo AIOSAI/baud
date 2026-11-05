@@ -563,3 +563,52 @@ export interface BackupCancel {
   stopped: boolean;
   message: string;
 }
+
+/* The extension's chat; `<agent>` is `<project>/<name>` as /v1/fleet names it. */
+
+export interface AgentLine {
+  n: number;
+  role: "user" | "agent" | "tool";
+  text: string;
+  time: string;
+  model?: string;
+}
+
+export interface AgentFeed {
+  lines: AgentLine[];
+  busy: boolean;
+  waiting: { tool: string } | null;
+}
+
+export interface ModelRow {
+  name: string;
+  label?: string;
+  group?: string;
+  efforts?: string[];
+}
+
+/** Per provider its models, or why there are none; `switch[from][to]` says whether that handoff takes a model. */
+export type ModelCatalog = Partial<Record<"claude" | "codex" | "opencode", { models: ModelRow[]; reason?: string }>> & {
+  switch?: Record<string, Record<string, boolean>>;
+};
+
+export interface ModelPick {
+  provider: string;
+  model?: string;
+  effort?: string;
+}
+
+export interface UsageLimit {
+  label: string;
+  percent: number;
+  severity?: "normal" | "warning" | "critical";
+  resets_at?: string | null;
+}
+
+export interface AgentUsage {
+  provider?: string;
+  context: { used: number; total: number; percent: number } | null;
+  limits?: UsageLimit[];
+  note?: string | null;
+  reasons?: string[] | string | null;
+}

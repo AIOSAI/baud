@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **The Chrome extension.** A third face: a side-panel chat with the live interactive agents (feed, tool runs, send with a Looking-at tag, pending and resend, stop and Esc, allow and deny, model menu, usage ring, copy, Piper read-aloud, hold-Space dictation, image drop) and the orb on any tab you switch on (fleet rings, energy from the open agent, eyes, Looking at, pin). It runs on @api's host server through the phone's client; `npm run build:extension` writes `dist-extension/` to load unpacked. Fixed against the extension it replaces: Shift+Enter makes a newline, Esc in a menu stops nothing, the panel remembers its tab, the pointer line clears. See `docs/extension.md`.
+
 - **Desktop: Hark's mic chip.** A mic button beside the camera shows Hark's voice room: lit while listening, dim when muted or stopped, grey with no `hark` room. A click runs `drone @hark voice stop` (listening or muted: stop releases the mic, mute keeps it) or `drone @hark voice on` (stopped), from the hark project's root. The state comes from the room's pane, one `capture-pane` per fleet snapshot, in the snapshot's new `hark` field. See `docs/desktop.md`.
 
 - **The card names its host and model.** The state line ends in a `Host · model` chip (`OpenCode · gpt-6.1-sol`); a model not yet observed shows the requested one with a trailing `?`, dashed and faint, or `default?`. The chip opens the run record from the session pointer (host, model provider, requested, observed, selection source, observed at, session) and the grounding receipt from `.ai_mail.local/grounding.json` (status, generation, missing keys; `ungrounded` red, `verified` green, the rest neutral). See `docs/phone/card.md`.

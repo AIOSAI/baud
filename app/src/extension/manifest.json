@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "BAUD",
+  "version": "0.5.0",
+  "description": "AIPass in the side panel: chat with your agents, and the orb in the corner of any tab you switch on, with Looking at on the page.",
+  "minimum_chrome_version": "116",
+  "icons": { "128": "icon-192.png" },
+  "permissions": ["sidePanel", "storage"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "options_page": "options.html",
+  "action": { "default_title": "BAUD", "default_icon": { "128": "icon-192.png" } },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
