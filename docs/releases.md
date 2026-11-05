@@ -41,7 +41,12 @@ headless binary (see [*The headless doors*](headless.md)). It tests before it sh
 pointed at any commit, and "it was probably green on main" is not evidence.
 Each release also carries `install.sh`, stamped with the tag and with the AIPass version in the root `AIPASS_VERSION` file, which the release playbook bumps with BAUD's own version.
 
-@baud has no git write, so @devpulse pushes the tag.
+@baud cuts the tag on the owner's word with `drone @git tag vX.Y.Z`, which
+creates and pushes it. Right after the tag succeeds, and only at a tag, never at
+an intermediate merge, @baud wakes @vera, who decides whether to post the
+release or hold it: `drone @ai_mail dispatch @vera "Release vX.Y.Z (BAUD) — post
+or hold?" "<body>"`, the body holding the GitHub release link and that version's
+CHANGELOG section, with no backticks in it.
 
 What each release changed, and what is waiting for the next one, is in
 [`CHANGELOG.md`](../CHANGELOG.md): every row that lands adds its line under Unreleased.
