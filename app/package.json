@@ -13,6 +13,7 @@
     "tauri": "tauri",
     "dev:phone": "npm run tokens && vite --config vite.config.phone.ts",
     "build:phone": "npm run tokens && tsc && vite build --config vite.config.phone.ts",
+    "build:extension": "npm run tokens && tsc && vite build --config vite.config.extension.ts && vite build --config vite.config.extension.ts --mode content",
     "test": "vitest run --dir src"
   },
   "dependencies": {

@@ -1,0 +1,428 @@
+/* The extension's own pages (options, side panel), on BAUD's tokens. The orb's styles live in its shadow root. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body.baud-ext {
+  margin: 0;
+  background: var(--baud-bg);
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.baud-ext-dim {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+  max-width: 32rem;
+  padding: var(--baud-pad);
+}
+
+.baud-ext-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext input,
+.baud-ext button {
+  font: inherit;
+  color: var(--baud-ink);
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  padding: 6px 8px;
+}
+
+.baud-ext button {
+  cursor: pointer;
+}
+
+.baud-ext button:hover {
+  border-color: var(--baud-line-strong);
+}
+
+.baud-ext-row {
+  display: flex;
+  gap: var(--baud-gap);
+}
+
+.baud-ext-said[data-tone="ok"] {
+  color: var(--baud-green);
+}
+
+.baud-ext-said[data-tone="bad"] {
+  color: var(--baud-red);
+}
+
+.baud-ext-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+  padding: var(--baud-pad);
+}
+
+/* ---- the side panel's chat */
+
+.baud-ext-chat {
+  height: 100%;
+  box-sizing: border-box;
+  gap: 6px;
+}
+
+.baud-ext-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.baud-ext-chat .baud-ext-row {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.baud-ext-chat button {
+  padding: 2px 6px;
+}
+
+.baud-ext-chat button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.baud-ext-on {
+  border-color: var(--baud-green) !important;
+  color: var(--baud-green) !important;
+}
+
+.baud-ext-err {
+  color: var(--baud-red);
+  margin: 0;
+}
+
+.baud-ext-chat p {
+  margin: 0;
+}
+
+.baud-ext-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.baud-ext-tab {
+  display: inline-flex;
+}
+
+.baud-ext-tab button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.baud-ext-tab button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.baud-ext-tab .baud-ext-arw {
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-tab.baud-ext-on button:first-child {
+  border-color: var(--baud-green);
+  color: var(--baud-ink);
+}
+
+.baud-ext-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--baud-ink-faint);
+}
+
+.baud-ext-dot-idle {
+  background: var(--baud-green);
+}
+
+.baud-ext-dot-working {
+  background: var(--baud-amber);
+  box-shadow: 0 0 6px var(--baud-glow-amber);
+  animation: baud-ext-pulse 1.2s ease-in-out infinite;
+}
+
+.baud-ext-dot-waiting {
+  background: var(--baud-red);
+  box-shadow: 0 0 6px var(--baud-glow-red);
+}
+
+@keyframes baud-ext-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.baud-ext-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 8px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}
+
+.baud-ext-prov {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-ext-view {
+  border-color: var(--baud-blue) !important;
+}
+
+.baud-ext-model {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.baud-ext-chat .baud-ext-row-btn {
+  text-align: left;
+  border-color: transparent;
+}
+
+.baud-ext-chat .baud-ext-effort {
+  font-size: 11px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-ring {
+  display: inline-flex;
+  padding: 2px !important;
+}
+
+.baud-ext-ring-track,
+.baud-ext-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.baud-ext-ring-track {
+  stroke: var(--baud-line);
+}
+
+.baud-ext-ring-fill {
+  stroke: var(--baud-green);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.baud-ext-ring[data-severity="warning"] .baud-ext-ring-fill {
+  stroke: var(--baud-amber);
+}
+
+.baud-ext-ring[data-severity="critical"] .baud-ext-ring-fill {
+  stroke: var(--baud-red);
+}
+
+.baud-ext-dimmed {
+  opacity: 0.5;
+}
+
+.baud-ext-urow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+
+.baud-ext-urow progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  border: none;
+  background: var(--baud-line);
+}
+
+.baud-ext-urow progress::-webkit-progress-bar {
+  background: var(--baud-line);
+}
+
+.baud-ext-urow progress::-webkit-progress-value {
+  background: var(--baud-green);
+}
+
+.baud-ext-urow progress[data-severity="warning"]::-webkit-progress-value {
+  background: var(--baud-amber);
+}
+
+.baud-ext-urow progress[data-severity="critical"]::-webkit-progress-value {
+  background: var(--baud-red);
+}
+
+.baud-ext-urow small {
+  grid-column: 1 / -1;
+}
+
+.baud-ext-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: text;
+}
+
+.baud-ext-line small {
+  display: block;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-text a {
+  color: var(--baud-blue);
+}
+
+.baud-ext-user small {
+  color: var(--baud-green);
+}
+
+.baud-ext-tool small {
+  color: var(--baud-amber);
+}
+
+.baud-ext-tool .baud-ext-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-stack {
+  cursor: pointer;
+}
+
+.baud-ext-note .baud-ext-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-looktag {
+  color: var(--baud-blue);
+  cursor: help;
+}
+
+.baud-ext-acts {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0.45;
+}
+
+.baud-ext-acts:hover,
+.baud-ext-acts:focus-within {
+  opacity: 1;
+}
+
+.baud-ext-chat .baud-ext-acts button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.baud-ext-looking {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-looking span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baud-ext-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.baud-ext-pend {
+  color: var(--baud-ink-dim);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.baud-ext-pend-stale small,
+.baud-ext-pend-failed small {
+  color: var(--baud-amber);
+}
+
+.baud-ext-chat .baud-ext-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--baud-blue);
+  text-decoration: underline;
+}
+
+.baud-ext-busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--baud-amber);
+}
+
+.baud-ext-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.baud-ext-ask textarea {
+  flex: 1 1 auto;
+  /* shortcut: field-sizing needs Chrome 123+; on an older Chrome the box stays at its minimum height */
+  field-sizing: content;
+  min-height: 2.2em;
+  max-height: 9em;
+  resize: none;
+  font: inherit;
+  color: var(--baud-ink);
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  padding: 6px 8px;
+}
+
+.baud-ext-ask textarea.baud-ext-listening {
+  border-color: var(--baud-blue);
+  box-shadow: 0 0 8px var(--baud-glow-blue);
+}

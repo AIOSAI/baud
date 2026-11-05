@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BAUD - host</title>
+  </head>
+  <body class="baud-ext">
+    <main class="baud-ext-options">
+      <h1>BAUD host</h1>
+      <p class="baud-ext-dim">The host server the phone uses. Get a token with <code>drone @api host-api pair extension</code>.</p>
+      <label>Host address <input id="base" type="url" placeholder="http://127.0.0.1:8787" autocomplete="off" /></label>
+      <label>Token <input id="token" type="password" autocomplete="off" /></label>
+      <div class="baud-ext-row">
+        <button id="save" type="button">save</button>
+        <button id="test" type="button">test</button>
+      </div>
+      <p id="said" class="baud-ext-said" role="status"></p>
+    </main>
+    <script type="module" src="./options/main.ts"></script>
+  </body>
+</html>

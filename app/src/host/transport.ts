@@ -41,3 +41,7 @@ export function uploadImage(_file: File): Promise<string> {
     new Error("uploads are the phone's door - the desktop's files are already on this machine"),
   );
 }
+
+export function speak(_text: string, _signal?: AbortSignal): Promise<{ rate: number; body: ReadableStream<Uint8Array> }> {
+  return Promise.reject(new Error("read-aloud over /v1/speak is the extension's door"));
+}
