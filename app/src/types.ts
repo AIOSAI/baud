@@ -578,6 +578,8 @@ export interface AgentFeed {
   lines: AgentLine[];
   busy: boolean;
   waiting: { tool: string } | null;
+  /** The transcript file read; line numbers restart in a new one. */
+  session?: string | null;
 }
 
 export interface ModelRow {
@@ -610,5 +612,4 @@ export interface AgentUsage {
   context: { used: number; total: number; percent: number } | null;
   limits?: UsageLimit[];
   note?: string | null;
-  reasons?: string[] | string | null;
 }

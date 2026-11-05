@@ -11,13 +11,13 @@ describe("rings", () => {
   it("draws live and dispatched agents only, with sub-agents and working flags", () => {
     const rings = ringsOf([
       entry({ name: "a", interactive: true, busy: true }),
-      entry({ name: "b", dispatched: 2 as unknown as boolean, subagents: 3 }),
+      entry({ name: "b", dispatched: true, subagents: 3, delegating: true }),
       entry({ name: "c" }),
       entry({ name: "d", interactive: true, state: "working" }),
     ]);
     expect(rings).toEqual([
       { working: true, dispatched: false, subagents: 0 },
-      { working: false, dispatched: true, subagents: 3 },
+      { working: true, dispatched: true, subagents: 3 },
       { working: true, dispatched: false, subagents: 0 },
     ]);
   });

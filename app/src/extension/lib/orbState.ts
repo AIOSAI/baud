@@ -5,9 +5,9 @@ import type { FleetEntry, OrbInputs, OrbMode, Ring } from "../messages";
 /** `<project>/<name>`, as the contract names an agent. */
 export const agentId = (b: Pick<FleetEntry, "project" | "name">) => `${b.project}/${b.name}`;
 
-const working = (b: FleetEntry) => b.busy === true || b.state === "working";
+const working = (b: FleetEntry) => b.busy === true || b.state === "working" || b.delegating === true;
 
-/** Only agents with a live session or a dispatch get a dot; `dispatched` may arrive as a flag or a count. */
+/** Only agents with a live session or a dispatch get a dot. */
 export function ringsOf(branches: FleetEntry[]): Ring[] {
   return branches
     .filter((b) => b.interactive || !!b.dispatched)
