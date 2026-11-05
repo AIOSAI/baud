@@ -25,6 +25,7 @@ import {
   recallAgent,
   rememberAgent,
   resolveImages,
+  sessionChanged,
   shownAgent,
   tabTitle,
   withLook,
@@ -164,10 +165,18 @@ function Panel() {
     if (!agent || !host) return;
     let alive = true;
     let lines: AgentLine[] = [];
-    const tick = async () => {
+    let session: string | null = null;
+    const tick = async (): Promise<void> => {
       try {
         const f = await agentFeed(agent, lastN(lines));
         if (!alive) return;
+        if (sessionChanged(session, f?.session)) {
+          // A new transcript numbers its lines from 0 again: what was asked `since` an old n says nothing.
+          session = f.session ?? null;
+          lines = [];
+          return tick();
+        }
+        session = f?.session ?? session;
         lines = mergeLines(lines, Array.isArray(f?.lines) ? f.lines : []);
         const next = { agent, lines, busy: !!f.busy, waiting: f.waiting ?? null, error: null };
         feedRef.current = next;

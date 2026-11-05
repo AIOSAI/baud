@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { agentFeed, agentInterrupt, agentModel, agentSend, agentUsage, speak } from "../../host";
-import { configureHost } from "../../host/transport.http";
+import { configureHost, redeemPairing } from "../../host/transport.http";
 import { modelRefusal, usageWhy } from "./chat";
 import { failed, lookOf, type Pending } from "./pending";
 
@@ -71,8 +71,8 @@ describe("the chat's host verbs against a faked host", () => {
     expect(modelRefusal(err, "api")).toBe("api is working; the model can change when it stops (api is working)");
   });
 
-  it("reads usage and its reasons when unavailable", async () => {
-    fetch.mockResolvedValueOnce(json({ provider: "opencode", context: null, limits: [], reasons: ["OpenCode usage is not wired yet"] }));
+  it("reads usage and its note when unavailable", async () => {
+    fetch.mockResolvedValueOnce(json({ provider: "opencode", context: null, limits: [], note: "OpenCode usage is not wired yet" }));
     const u = await agentUsage("aipass/api");
     expect((fetch.mock.calls[0] as Call)[0]).toBe("http://h:8787/v1/agent/aipass/api/usage");
     expect(usageWhy(u, null)).toBe("OpenCode usage is not wired yet");
@@ -83,7 +83,18 @@ describe("the chat's host verbs against a faked host", () => {
     const got = await speak("hello");
     expect(got.rate).toBe(22050);
     expect((fetch.mock.calls[0] as Call)[0]).toBe("http://h:8787/v1/speak");
+    expect(((fetch.mock.calls[0] as Call)[1].headers as Record<string, string>).Authorization).toBe("Bearer tok");
     fetch.mockResolvedValueOnce(new Response(new Uint8Array([0, 0]), { status: 200 }));
     await expect(speak("hello")).rejects.toMatchObject({ code: "no_rate" });
+  });
+
+  it("redeems a pairing code at the configured host, with no bearer", async () => {
+    configureHost("http://h:8787", null);
+    fetch.mockResolvedValueOnce(json({ token: "fresh", id: "p1", label: "extension", scope: "operate" }));
+    expect((await redeemPairing("ABC-123")).token).toBe("fresh");
+    const [url, init] = fetch.mock.calls[0] as Call;
+    expect(url).toBe("http://h:8787/v1/pair");
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+    expect(JSON.parse(String(init.body))).toEqual({ code: "ABC-123" });
   });
 });

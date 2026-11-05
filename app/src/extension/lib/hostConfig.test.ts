@@ -4,7 +4,7 @@ import { call, configureHost } from "../../host/transport.http";
 import { HOST_KEY, asHostSettings, loadHost, normalizeBase, originPattern } from "./hostConfig";
 
 // vitest has no build alias, so the http transport's own `call` stands in for the verb the extension build routes there
-const fleetSnapshot = () => call("fleet_snapshot");
+const agentRoster = () => call("agent_roster");
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,10 +40,10 @@ describe("the transport seam", () => {
     vi.stubGlobal("fetch", fetch);
 
     await loadHost();
-    await fleetSnapshot();
+    await agentRoster();
 
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("http://h:8787/v1/fleet");
+    expect(url).toBe("http://h:8787/v1/roster");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
   });
 
@@ -52,7 +52,7 @@ describe("the transport seam", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     await loadHost();
-    await expect(fleetSnapshot()).rejects.toMatchObject({ status: 401 });
+    await expect(agentRoster()).rejects.toMatchObject({ status: 401 });
     expect(fetch).not.toHaveBeenCalled();
   });
 });

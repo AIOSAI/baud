@@ -24,6 +24,7 @@ import {
   speakable,
   splitLook,
   stamp,
+  sessionChanged,
   usageWhy,
   withLook,
   worstSeverity,
@@ -163,9 +164,16 @@ describe("usage and refusals", () => {
     expect(worstSeverity(undefined)).toBe("normal");
   });
 
+  it("drops `since` only when the transcript changes", () => {
+    expect(sessionChanged(null, "s1")).toBe(false);
+    expect(sessionChanged("s1", "s1")).toBe(false);
+    expect(sessionChanged("s1", undefined)).toBe(false);
+    expect(sessionChanged("s1", "s2")).toBe(true);
+  });
+
   it("says why there is no number", () => {
-    expect(usageWhy({ context: null, reasons: ["not signed in"], note: "no reply yet" }, null)).toBe("not signed in; no reply yet");
-    expect(usageWhy({ context: null, reasons: "codex not wired" }, null)).toBe("codex not wired");
+    expect(usageWhy({ context: null, note: "no reply yet" }, null)).toBe("no reply yet");
+    expect(usageWhy({ context: null, limits: [] }, null)).toBe("");
     expect(usageWhy(null, "HTTP 500")).toBe("usage could not be read: HTTP 500");
     expect(usageWhy(null, null)).toBe("reading…");
   });

@@ -23,8 +23,14 @@ export interface Eyes {
 }
 export const DEFAULT_EYES: Eyes = { on: true, hue: 187 };
 
-/** A fleet entry as /v1/fleet sends it, plus the contract's new fields (absent on an older host). */
-export type FleetEntry = BranchStatus & { state?: string; busy?: boolean; model?: string };
+/** A /v1/roster row: every project's working agents, with the host's live fields (absent on an older host). */
+export type FleetEntry = BranchStatus & {
+  state?: "idle" | "working" | "waiting" | null;
+  busy?: boolean;
+  tool?: string | null;
+  model?: string | null;
+  delegating?: boolean;
+};
 
 /** What a ring dot needs. */
 export interface Ring {

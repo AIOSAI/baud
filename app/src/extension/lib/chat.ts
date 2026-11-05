@@ -115,7 +115,7 @@ export const chatAgents = (branches: FleetEntry[]) => branches.filter((b) => b.i
 export const isBusyEntry = (b: FleetEntry) => b.busy === true || b.state === "working" || b.state === "waiting";
 
 /** A seat running a sub-agent pulses as a working one does. */
-export const dotState = (b: FleetEntry) => (Number(b.subagents) > 0 ? "working" : b.state || "");
+export const dotState = (b: FleetEntry) => (b.delegating || Number(b.subagents) > 0 ? "working" : b.state || "");
 
 export const tabTitle = (b: FleetEntry) => `${b.project} · ${b.provider ?? "claude"} · ${b.state || "state unknown"}`;
 
@@ -177,12 +177,11 @@ export function worstSeverity(limits: UsageLimit[] | undefined): "normal" | "war
   return worst;
 }
 
-/** Why there is no number: the host's reasons, its note, or the error that stopped the read. */
+/** Why there is no number: the host's note, or the error that stopped the read. */
 export function usageWhy(u: AgentUsage | null, error: string | null): string {
   if (error) return `usage could not be read: ${error}`;
   if (!u) return "reading…";
-  const reasons = Array.isArray(u.reasons) ? u.reasons.join("; ") : (u.reasons ?? "");
-  return [reasons, u.note ?? ""].filter(Boolean).join("; ");
+  return u.note ?? "";
 }
 
 /* ---- read aloud */
@@ -194,3 +193,7 @@ export const speakable = (text: string) =>
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/[*_#`>|]/g, "");
 
+
+/** A feed answer from another transcript than the one held; the first answer only names it. */
+export const sessionChanged = (held: string | null, got: string | null | undefined): boolean =>
+  held !== null && !!got && got !== held;

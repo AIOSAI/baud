@@ -1,7 +1,7 @@
 /* The service worker: the one place that reads the host for the tabs (a content script runs under the page's
    origin), the relay between a tab's orb and the side panel, and the panel's opener. */
 
-import { fleetSnapshot } from "../host";
+import { agentRoster } from "../host";
 import { loadHost } from "./lib/hostConfig";
 import { orbMode, ringsOf } from "./lib/orbState";
 import { TabBook } from "./lib/tabBook";
@@ -82,7 +82,7 @@ function pushSoon() {
 
 async function readFleet() {
   try {
-    const next = ((await fleetSnapshot()).branches ?? []) as FleetEntry[];
+    const next = (await agentRoster()) as FleetEntry[];
     fleetError = null;
     if (JSON.stringify(next) !== JSON.stringify(branches)) {
       branches = next;

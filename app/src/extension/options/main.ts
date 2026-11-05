@@ -1,28 +1,19 @@
-/** The options page: host address and token into chrome.storage.local, the origin permission, and a fleet test. */
+/** The options page: the host and a one-use pairing code redeemed for a token, the origin permission, and a roster test. */
 
-import { fleetSnapshot } from "../../host";
-import { configureHost } from "../../host/transport.http";
+import { agentRoster } from "../../host";
+import { configureHost, redeemPairing } from "../../host/transport.http";
 import { loadHost, normalizeBase, originPattern, readHost, saveHost } from "../lib/hostConfig";
 import "../../tokens/tokens.generated.css";
 import "../extension.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const base = $<HTMLInputElement>("base");
-const token = $<HTMLInputElement>("token");
+const code = $<HTMLInputElement>("code");
 const said = $<HTMLParagraphElement>("said");
 
 function say(text: string, tone: "ok" | "bad" | "" = "") {
   said.textContent = text;
   said.dataset.tone = tone;
-}
-
-/** The fields as typed, or a sentence saying what is wrong with them. */
-function fields(): { base: string; token: string } | string {
-  const b = normalizeBase(base.value);
-  if (!b) return "the host address must be an http(s) address, like http://127.0.0.1:8787";
-  const t = token.value.trim();
-  if (!t) return "paste the token `drone @api host-api pair extension` printed";
-  return { base: b, token: t };
 }
 
 /** Chrome lets an extension page skip CORS only for an origin it holds; asked inside the click, as Chrome requires. */
@@ -35,33 +26,38 @@ async function permitted(b: string): Promise<boolean> {
   }
 }
 
-$<HTMLButtonElement>("save").addEventListener("click", async () => {
-  const f = fields();
-  if (typeof f === "string") return say(f, "bad");
-  if (!(await permitted(f.base))) return say(`not saved: access to ${f.base} was not granted`, "bad");
-  await saveHost(f);
-  base.value = f.base;
-  say("saved", "ok");
+$<HTMLButtonElement>("pair").addEventListener("click", async () => {
+  const b = normalizeBase(base.value);
+  if (!b) return say("the host must be an http(s) address, like http://127.0.0.1:8787", "bad");
+  const c = code.value.trim();
+  if (!c) return say("paste the pairing code `drone @api host-api pair extension` printed", "bad");
+  if (!(await permitted(b))) return say(`not paired: access to ${b} was not granted`, "bad");
+  say("pairing …");
+  configureHost(b, null);
+  try {
+    const paired = await redeemPairing(c);
+    await saveHost({ base: b, token: paired.token });
+    base.value = b;
+    code.value = "";
+    say(`paired as ${paired.label || "extension"} (${paired.scope})`, "ok");
+  } catch (err) {
+    void readHost(); // a failed pairing leaves the saved host as it was
+    say(err instanceof Error ? err.message : String(err), "bad");
+  }
 });
 
 $<HTMLButtonElement>("test").addEventListener("click", async () => {
-  const f = fields();
-  if (typeof f === "string") return say(f, "bad");
-  if (!(await permitted(f.base))) return say(`access to ${f.base} was not granted`, "bad");
-  say("asking GET /v1/fleet …");
-  configureHost(f.base, f.token);
+  const saved = await readHost();
+  if (!saved) return say("not paired yet", "bad");
+  say("asking GET /v1/roster …");
   try {
-    const snap = await fleetSnapshot();
-    say(`ok - ${snap.branches?.length ?? 0} agents in ${snap.project || "the seated project"}`, "ok");
+    const rows = await agentRoster();
+    say(`ok - ${rows.length} working agents across projects`, "ok");
   } catch (err) {
     say(err instanceof Error ? err.message : String(err), "bad");
-  } finally {
-    void readHost(); // back to what is saved, so an unsaved test never becomes the page's token
   }
 });
 
 void loadHost().then((s) => {
-  if (!s) return;
-  base.value = s.base;
-  token.value = s.token;
+  if (s) base.value = s.base;
 });
