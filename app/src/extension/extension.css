@@ -84,16 +84,39 @@ body.baud-ext {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--baud-line);
 }
 
 .baud-ext-chat .baud-ext-row {
   align-items: center;
   flex-wrap: wrap;
+  gap: 6px;
 }
 
 .baud-ext-chat button {
   padding: 2px 6px;
+}
+
+/* the header's controls: quiet lettered pills, lit only when on */
+.baud-ext-head button {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+
+.baud-ext-head button:hover {
+  color: var(--baud-ink);
+}
+
+.baud-ext-head .baud-ext-on {
+  background: color-mix(in srgb, var(--baud-green) 10%, transparent);
 }
 
 .baud-ext-chat button:disabled {
@@ -134,23 +157,33 @@ body.baud-ext {
 .baud-ext-tab button:first-child {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
+  padding-right: 7px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 11px;
 }
 
 .baud-ext-tab .baud-ext-arw {
   border-left: none;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  color: var(--baud-ink-dim);
+  padding-left: 5px;
+  padding-right: 7px;
+  color: var(--baud-ink-faint);
+}
+
+.baud-ext-tab.baud-ext-on button {
+  border-color: var(--baud-green);
+  background: color-mix(in srgb, var(--baud-green) 10%, transparent);
 }
 
 .baud-ext-tab.baud-ext-on button:first-child {
-  border-color: var(--baud-green);
   color: var(--baud-ink);
 }
 
 .baud-ext-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--baud-ink-faint);
 }
@@ -224,6 +257,7 @@ body.baud-ext {
 .baud-ext-ring {
   display: inline-flex;
   padding: 2px !important;
+  border: none !important;
 }
 
 .baud-ext-ring-track,
