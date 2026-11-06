@@ -26,7 +26,7 @@ describe("manifest (MV3, offline)", () => {
   it("asks only known permissions, and the host origin only on request", () => {
     for (const p of manifest.permissions) expect(KNOWN_PERMISSIONS).toContain(p);
     expect("host_permissions" in manifest).toBe(false);
-    expect(manifest.optional_host_permissions).toEqual(["http://*/*", "https://*/*"]);
+    expect(manifest.optional_host_permissions).toEqual(["http://*/*", "https://*/*", "<all_urls>"]);
   });
 
   it("names pages and an icon that exist", () => {

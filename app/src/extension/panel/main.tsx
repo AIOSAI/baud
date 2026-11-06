@@ -330,10 +330,10 @@ function Panel() {
     }
   };
 
-  // captureVisibleTab needs explicit page access; request answers true at once, no prompt, when it is already held.
+  // captureVisibleTab needs <all_urls> (activeTab is granted only by the toolbar click); request answers true at once, no prompt, when it is already held.
   const shoot = async () => {
     try {
-      if (!(await chrome.permissions.request({ origins: ["http://*/*", "https://*/*"] }))) {
+      if (!(await chrome.permissions.request({ origins: ["<all_urls>"] }))) {
         setFlash("screenshot: page access not granted");
         return;
       }
