@@ -214,6 +214,7 @@ Each screen of the face has its own page under `docs/phone/`.
 | --- | --- |
 | [wheel](phone/wheel.md) | the fleet rail and its desktop input, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet |
 | [card](phone/card.md) | the expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate |
+| [chat](phone/chat.md) | the card's `chat` door: the agent's transcript, sending, pending, allow and deny, stop |
 | [room](phone/room.md) | the terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost |
 | [room input](phone/room-input.md) | typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule |
 | [room delivery](phone/room-delivery.md) | links and copy, sending a photo, dropped writes, a dead room and its reconnect ladder |

@@ -43,6 +43,8 @@ interface AgentSheetProps {
   onWatch: () => void;
   onSettings: () => void;
   onMemory: () => void;
+  /** Absent where this face has no chat: the door is not drawn. */
+  onChat?: () => void;
   monitors: SheetMonitor[];
   /** Open the passport - a door, not the avatar: the phone's avatar sits inside the chip's tap target. */
   onPassport: () => void;
@@ -73,6 +75,7 @@ export default function AgentSheet({
   onWatch,
   onSettings,
   onMemory,
+  onChat,
   monitors,
   onPassport,
   onAttach,
@@ -397,6 +400,16 @@ export default function AgentSheet({
           >
             memory
           </button>
+          {onChat ? (
+            <button
+              type="button"
+              className="baud-agent-door"
+              title={`talk to ${branch.name} - its transcript and a box to send into its room`}
+              onClick={onChat}
+            >
+              chat
+            </button>
+          ) : null}
         </nav>
         {/* Titles never show on touch, so the refusal or the ⚡ warning is said here; a refusal outranks it. */}
         {!isAttachedRoom && refusal ? (

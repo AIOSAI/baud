@@ -4265,3 +4265,149 @@ span.baud-browser-tab {
 .baud-browser-canvas-hidden {
   display: none;
 }
+
+/* The chat: the feed scrolls, the composer stays at the sheet's bottom, which
+   ChatSheet raises above the soft keyboard. */
+.baud-chat {
+  overflow: hidden;
+  transition: bottom 140ms ease-out;
+}
+
+.baud-chat-model {
+  margin-left: auto;
+  color: var(--baud-ink-faint);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.baud-chat-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--baud-pad) / 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.baud-chat-line {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.baud-chat-line small {
+  display: block;
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+}
+
+.baud-chat-text {
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.baud-chat-text a {
+  color: var(--baud-blue);
+}
+
+.baud-chat-user .baud-chat-text {
+  color: var(--baud-green);
+}
+
+.baud-chat-tool .baud-chat-text {
+  color: var(--baud-ink-dim);
+  font-size: 0.66rem;
+}
+
+.baud-chat-md.baud-phone-md {
+  padding: 0;
+}
+
+.baud-chat-md pre {
+  position: relative;
+  cursor: copy;
+}
+
+.baud-chat-md pre::after {
+  content: "copy";
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-chat-md pre[data-copied]::after {
+  content: "copied";
+  color: var(--baud-green);
+}
+
+.baud-chat-pend .baud-chat-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-pend-stale small,
+.baud-chat-pend-failed small {
+  color: var(--baud-amber);
+}
+
+.baud-chat-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--baud-blue);
+  font: inherit;
+}
+
+.baud-chat-busy {
+  display: flex;
+  align-items: center;
+  gap: var(--baud-gap);
+  padding: 4px calc(var(--baud-pad) / 1.5);
+  color: var(--baud-amber);
+  font-size: 0.7rem;
+}
+
+.baud-chat-busy span {
+  flex: 1;
+}
+
+.baud-chat-busy button,
+.baud-chat-ask button {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+}
+
+.baud-chat-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) / 1.5 + env(safe-area-inset-bottom, 0px));
+  background: var(--baud-bg-panel);
+  border-top: 1px solid var(--baud-line);
+}
+
+/* 16px, or mobile browsers zoom the page on focus. */
+.baud-chat-ask textarea {
+  flex: 1 1 auto;
+  field-sizing: content;
+  min-height: 44px;
+  max-height: 9em;
+  resize: none;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--baud-ink);
+  background: var(--baud-bg);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}

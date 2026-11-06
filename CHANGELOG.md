@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Phone: chat with an agent.** The agent card's new `chat` door opens the Chrome extension's chat as a full-height phone screen: the agent's transcript (replies as markdown, code boxes copy on a tap, tool runs stacked), a box the soft keyboard lifts, the pending mark with its 90 s resend, allow and deny when the agent asks, stop, and the model label. It reuses the extension's chat and pending rules. See `docs/phone/chat.md`.
+
 - **The Chrome extension.** A third face: a side-panel chat with the live interactive agents (feed, tool runs, send with a Looking-at tag, pending and resend, stop and Esc, allow and deny, model menu, usage ring, copy, Piper read-aloud, hold-Space dictation, image drop) and the orb on any tab you switch on (fleet rings, energy from the open agent, eyes, Looking at, pin). It runs on @api's host server through the phone's client; `npm run build:extension` writes `dist-extension/` to load unpacked. Fixed against the extension it replaces: Shift+Enter makes a newline, Esc in a menu stops nothing, the panel remembers its tab, the pointer line clears. See `docs/extension.md`.
 
 - **Desktop: Hark's mic chip.** A mic button beside the camera shows Hark's voice room: lit while listening, dim when muted or stopped, grey with no `hark` room. A click runs `drone @hark voice stop` (listening or muted: stop releases the mic, mute keeps it) or `drone @hark voice on` (stopped), from the hark project's root. The state comes from the room's pane, one `capture-pane` per fleet snapshot, in the snapshot's new `hark` field. See `docs/desktop.md`.
