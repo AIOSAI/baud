@@ -287,3 +287,5 @@ export const modelsList = () => call<ModelCatalog>("models_list");
 export const agentModel = (agent: string, pick: ModelPick) => call<{ typed?: string } | undefined>("agent_model", { agent, pick });
 
 export const agentUsage = (agent: string) => call<AgentUsage>("agent_usage", { agent });
+
+export const screenshot = () => call<{ path: string }>("screenshot");

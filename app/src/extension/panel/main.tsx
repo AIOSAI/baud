@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
-import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, agentUsage, uploadImage } from "../../host";
+import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, agentUsage, screenshot, uploadImage } from "../../host";
 import type { AgentLine, AgentUsage } from "../../types";
 import { whileVisible } from "../../phone/lib/whileVisible";
 import {
@@ -67,58 +67,6 @@ interface FeedState {
 }
 
 type Menu = { kind: "model"; agent: string } | { kind: "usage" } | null;
-
-type Rect = { x: number; y: number; w: number; h: number };
-
-/** Seed's crop: the frame over the panel, dimmed and fitted; drag a rectangle, release takes it, a plain click takes it all, Esc gives up. */
-function crop(frame: HTMLCanvasElement): Promise<Rect | null> {
-  return new Promise((done) => {
-    const o = document.createElement("div");
-    const box = document.createElement("div");
-    o.style.cssText = `position:fixed;inset:0;z-index:100;cursor:crosshair;background:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url(${frame.toDataURL()}) center/contain no-repeat`;
-    box.style.cssText = "position:absolute;border:1px dashed #fff;background:rgba(255,255,255,.12);display:none";
-    o.append(box);
-    document.body.append(o);
-    let at: { x: number; y: number } | null = null;
-    const end = (r: Rect | null) => {
-      removeEventListener("keydown", esc, true);
-      o.remove();
-      done(r);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        end(null);
-      }
-    };
-    addEventListener("keydown", esc, true);
-    const rect = (e: PointerEvent): Rect => ({ x: Math.min(at!.x, e.clientX), y: Math.min(at!.y, e.clientY), w: Math.abs(e.clientX - at!.x), h: Math.abs(e.clientY - at!.y) });
-    o.onpointerdown = (e) => {
-      at = { x: e.clientX, y: e.clientY };
-      o.setPointerCapture(e.pointerId);
-    };
-    o.onpointermove = (e) => {
-      if (!at) return;
-      const r = rect(e);
-      Object.assign(box.style, { display: "block", left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
-    };
-    o.onpointerup = (e) => {
-      if (!at) return;
-      const r = rect(e);
-      if (r.w < 4 || r.h < 4) return end({ x: 0, y: 0, w: frame.width, h: frame.height });
-      // contain: one scale, the frame centred, so a drag outside it clamps to its edge
-      const k = Math.min(innerWidth / frame.width, innerHeight / frame.height);
-      const ox = (innerWidth - frame.width * k) / 2;
-      const oy = (innerHeight - frame.height * k) / 2;
-      const x0 = Math.max(0, (r.x - ox) / k);
-      const y0 = Math.max(0, (r.y - oy) / k);
-      const x1 = Math.min(frame.width, (r.x + r.w - ox) / k);
-      const y1 = Math.min(frame.height, (r.y + r.h - oy) / k);
-      end(x1 - x0 < 1 || y1 - y0 < 1 ? null : { x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
-    };
-  });
-}
 
 /** A turning star and a playful word while the agent works. */
 function Star() {
@@ -382,30 +330,19 @@ function Panel() {
     }
   };
 
-  // Chrome's share picker, then Seed's crop: no preferCurrentTab, which in a side panel offers only the panel itself.
+  // The desktop's own picker, opened by the host, as Seed Dev's deck did; the saved file's path goes in at the cursor.
   const shoot = async () => {
+    const input = box.current;
+    if (!input) return;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      let frame: HTMLCanvasElement;
-      try {
-        const v = Object.assign(document.createElement("video"), { srcObject: stream, muted: true, playsInline: true });
-        await new Promise((ok, no) => ((v.onloadedmetadata = ok), (v.onerror = no)));
-        await v.play();
-        await new Promise((ok) => requestAnimationFrame(ok));
-        frame = Object.assign(document.createElement("canvas"), { width: v.videoWidth, height: v.videoHeight });
-        frame.getContext("2d")!.drawImage(v, 0, 0);
-      } finally {
-        stream.getTracks().forEach((t) => t.stop());
-      }
-      const r = await crop(frame);
-      if (!r) return;
-      const cut = Object.assign(document.createElement("canvas"), { width: Math.round(r.w), height: Math.round(r.h) });
-      cut.getContext("2d")!.drawImage(frame, r.x, r.y, r.w, r.h, 0, 0, cut.width, cut.height);
-      const blob = await new Promise<Blob | null>((ok) => cut.toBlob(ok, "image/png"));
-      if (!blob) throw new Error("the frame did not encode");
-      await attach([new File([blob], `screenshot-${Date.now()}.png`, { type: "image/png" })]);
+      const { path } = await screenshot();
+      const put = insertTag(input.value, input.selectionStart ?? input.value.length, images.current.push(path));
+      input.value = put.value;
+      input.focus();
+      input.setSelectionRange(put.cursor, put.cursor);
+      setFlash(null);
     } catch (err) {
-      if ((err as Error).name !== "NotAllowedError") setFlash(`screenshot: ${errText(err)}`);
+      setFlash(`screenshot: ${errText(err)}`);
     }
   };
 
