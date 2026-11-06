@@ -41,6 +41,7 @@ declare namespace chrome {
       active: boolean;
     }
     function query(info: { active?: boolean; windowId?: number }): Promise<Tab[]>;
+    function captureVisibleTab(windowId?: number, options?: { format?: "png" | "jpeg"; quality?: number }): Promise<string>;
     const onActivated: { addListener(cb: (info: { tabId: number; windowId: number }) => void): void };
   }
 

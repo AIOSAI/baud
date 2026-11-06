@@ -330,6 +330,22 @@ function Panel() {
     }
   };
 
+  // captureVisibleTab needs explicit page access; request answers true at once, no prompt, when it is already held.
+  const shoot = async () => {
+    try {
+      if (!(await chrome.permissions.request({ origins: ["http://*/*", "https://*/*"] }))) {
+        setFlash("screenshot: page access not granted");
+        return;
+      }
+      const win = await chrome.windows.getCurrent();
+      const shot = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
+      const blob = await (await fetch(shot)).blob();
+      await attach([new File([blob], `screenshot-${Date.now()}.png`, { type: "image/png" })]);
+    } catch (err) {
+      setFlash(`screenshot: ${errText(err)}`);
+    }
+  };
+
   const unpin = () => {
     if (looks.pin) link.send({ type: "unpin" });
     setLooks((was) => ({ ...was, pin: undefined }));
@@ -532,6 +548,9 @@ function Panel() {
             void attach(files);
           }}
         />
+        <button type="button" title="screenshot this tab into the message" disabled={!agent} onClick={() => void shoot()}>
+          ◫
+        </button>
         <button type="submit" title="Send to the agent" disabled={!agent}>
           ➤
         </button>
