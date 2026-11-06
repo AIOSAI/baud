@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Phone chat: read-aloud, model menu, usage, photos.** Each reply on the phone chat plays aloud through the extension's Piper player (play, pause, back 10 s, stop; one at a time); the model label in the head opens the model menu (provider chips, models, effort levels, the typed confirmation or the refusal in words); the usage ring beside it opens the usage sheet, read every 30 s; and `+` uploads a photo into the message as an `[Image #n]` tag that goes out as its host path. The extension's player now makes its audio context inside the tap. See `docs/phone/chat.md`.
+
 - **Phone: chat with an agent.** The agent card's new `chat` door opens the Chrome extension's chat as a full-height phone screen: the agent's transcript (replies as markdown, code boxes copy on a tap, tool runs stacked), a box the soft keyboard lifts, the pending mark with its 90 s resend, allow and deny when the agent asks, stop, and the model label. It reuses the extension's chat and pending rules. See `docs/phone/chat.md`.
 
 - **The Chrome extension.** A third face: a side-panel chat with the live interactive agents (feed, tool runs, send with a Looking-at tag, pending and resend, stop and Esc, allow and deny, model menu, usage ring, copy, Piper read-aloud, hold-Space dictation, image drop) and the orb on any tab you switch on (fleet rings, energy from the open agent, eyes, Looking at, pin). It runs on @api's host server through the phone's client; `npm run build:extension` writes `dist-extension/` to load unpacked. Fixed against the extension it replaces: Shift+Enter makes a newline, Esc in a menu stops nothing, the panel remembers its tab, the pointer line clears. See `docs/extension.md`.

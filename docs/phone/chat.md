@@ -30,8 +30,33 @@ rules are the extension's own, imported from `extension/lib/chat.ts` and
   has no room) says why, with the same two choices.
 - **Allow and deny** appear when the feed says the agent waits on a tool. The
   answer shows for 3 s, then the line stays quiet until the feed's state changes.
+- **Read-aloud** sits under each reply: `▶` plays it through the host's Piper
+  stream (`speak`), then `⏸`/`▶` pause and resume, `↺` goes back 10 s and `■`
+  stops. The player is the extension's own (`extension/panel/voice.ts`), one per
+  screen: a new play stops the old, and closing the screen stops it. The audio
+  context is made inside the tap, since a phone keeps a context made later
+  silent. Web Audio needs no secure context, so it works over plain http. A
+  refused read shows "read aloud: …" above the composer.
 - **The model label** in the head is the newest reply's model, or the provider
-  `agentUsage` reports before any reply.
+  `agentUsage` reports before any reply. A tap opens the model menu under the
+  head, the extension's `Menus.tsx` shaped for touch: the provider chips, the
+  catalog from `modelsList` with each model's effort levels, and under another
+  provider a handoff to that CLI. A pick goes out through `agentModel`; the
+  answer shows above the composer, "switched <name> to Opus high, typed
+  /model opus; pending its next reply", or the refusal in words (409: "<name>
+  is working; the model can change when it stops"). While the agent works the
+  rows are disabled.
+- **The usage ring** beside the label fills with the context window's share
+  and turns amber or red with the worst plan limit. A tap opens the usage sheet:
+  the context window in tokens, each plan limit with its reset time, and the
+  host's note or the read's error.
+- **A photo** goes in with `+`: the phone's picker, `uploadImage`, and an
+  `[Image #n]` tag at the cursor. On send each tag becomes the uploaded file's
+  host path, as the extension's `resolveImages` does; the pending line and the
+  echoed line show the tag. The picker takes no `capture` attribute, which would
+  lock out screenshots, and its value clears after each pick so the same photo
+  can go twice. The picker backgrounds the app, which pauses the polls; they
+  tick again on return, and the upload is a plain request with no socket to lose.
 - **Errors show inline**: a failed feed read in the list, a refused allow, deny
   or stop above the composer.
 
@@ -40,10 +65,13 @@ rules are the extension's own, imported from `extension/lib/chat.ts` and
 `agentFeed` every 2 s while the page is visible (`lib/whileVisible.ts`), asking
 only for lines after the newest it holds; a new transcript (`session` changes)
 starts the count over. A send, an answer or a stop asks again 0.6 s later.
-`agentUsage` is read once on open. Nothing polls once the screen closes.
+`agentUsage` on open and every 30 s while the page is visible; a failed read
+keeps the last numbers and shows the error in the sheet. `modelsList` is read
+each time the model menu opens. Nothing polls once the screen closes.
 
 ### What it leaves to the extension
 
-The Looking-at line, images and the screenshot button, the agent tab row, the
-orb, read-aloud and dictation, the usage ring and the model menu. The extension's
-model picker is where the model changes.
+The Looking-at line, the screenshot button, image drop and paste, the agent tab
+row, the orb, Interact, and hold-Space dictation (on the phone the keyboard's own
+mic dictates). Esc to stop is a desktop key; the phone has `■`. Copying a whole
+reply stays the extension's; on the phone a code box copies on a tap.

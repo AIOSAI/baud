@@ -1,12 +1,14 @@
-/** One agent's chat on the phone: the extension side panel's feed, send, pending, allow/deny and stop, full height. Reference: docs/phone/chat.md */
+/** One agent's chat on the phone: the extension side panel's feed, send, photos, pending, allow/deny, stop, read-aloud, model and usage. Reference: docs/phone/chat.md */
 
 import DOMPurify from "dompurify";
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
-import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, agentUsage } from "../host";
+import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, uploadImage } from "../host";
 import type { AgentLine } from "../types";
-import { busyView, errText, lastN, linkParts, mergeLines, runLabel, runsOf, sessionChanged, type Answered } from "../extension/lib/chat";
+import { busyView, errText, insertTag, isImage, lastN, linkParts, mergeLines, resolveImages, retag, runLabel, runsOf, sessionChanged, type Answered } from "../extension/lib/chat";
 import * as P from "../extension/lib/pending";
+import { ModelMenu, UsageRing, UsageSheet, useUsage } from "./ChatMenus";
+import { ReadAloud, useVoice } from "./ChatVoice";
 import { copyText } from "./lib/copyPath";
 import { markdownHtml } from "./lib/markdown";
 import { whileVisible } from "./lib/whileVisible";
@@ -49,8 +51,9 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<P.Pending[]>([]);
   const [answered, setAnswered] = useState<Answered | null>(null);
-  const [provider, setProvider] = useState<string | null>(null);
-  const [flash, setFlash] = useState<string | null>(null);
+  const [menu, setMenu] = useState<"model" | "usage" | null>(null);
+  const [flash, setFlash] = useState<{ text: string; err: boolean } | null>(null);
+  const [sending, setSending] = useState(false);
   const [open, setOpen] = useState<Set<number>>(new Set());
   const [now, setNow] = useState(Date.now());
   const [text, setText] = useState("");
@@ -59,6 +62,12 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
   const atEnd = useRef(true);
   const poke = useRef<() => void>(() => undefined);
   const nextId = useRef(1);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const images = useRef<string[]>([]);
+  const shownAs = useRef(new Map<string, string>());
+  const { voice, said } = useVoice();
+  const usage = useUsage(agent);
 
   useEffect(() => {
     let alive = true;
@@ -86,10 +95,6 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
     };
     poke.current = () => setTimeout(() => void tick(), 600);
     const stop = whileVisible(() => void tick(), FEED_MS);
-    agentUsage(agent).then(
-      (u) => alive && setProvider(u?.provider ?? null),
-      () => undefined,
-    );
     const clock = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       alive = false;
@@ -127,11 +132,13 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
     );
 
   const submit = () => {
-    const sent = text.trim();
-    if (!sent) return;
+    const shown = text.trim();
+    if (!shown) return;
+    const sent = resolveImages(shown, images.current, shownAs.current);
     const id = nextId.current++;
-    setPending((p) => P.add(p, { id, sent, shown: sent, at: Date.now(), failed: null }));
+    setPending((p) => P.add(p, { id, sent, shown, at: Date.now(), failed: null }));
     setText("");
+    images.current = [];
     atEnd.current = true;
     void deliver(id, sent);
   };
@@ -141,12 +148,38 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
     void deliver(p.id, p.sent);
   };
 
+  const fail = (text: string) => setFlash({ text, err: true });
+
   const answer = (allow: boolean) => {
     setAnswered({ at: Date.now(), word: allow ? "allowed" : "denied, and the turn stopped" });
-    (allow ? agentAllow : agentDeny)(agent).then(() => poke.current(), (err: unknown) => setFlash(errText(err)));
+    (allow ? agentAllow : agentDeny)(agent).then(() => poke.current(), (err: unknown) => fail(errText(err)));
   };
 
-  const stopAgent = () => agentInterrupt(agent).then(() => poke.current(), (err: unknown) => setFlash(`stop: ${errText(err)}`));
+  const stopAgent = () => agentInterrupt(agent).then(() => poke.current(), (err: unknown) => fail(`stop: ${errText(err)}`));
+
+  // Each upload's path waits in `images` behind an `[Image #n]` tag at the cursor; submit swaps the paths in.
+  const attach = async (files: File[]) => {
+    setSending(true);
+    try {
+      for (const f of files) {
+        if (!isImage(f)) {
+          fail(`images only: ${f.name} was not sent`);
+          continue;
+        }
+        try {
+          const n = images.current.push(await uploadImage(f));
+          setText((v) => insertTag(v, Math.min(field.current?.selectionStart ?? v.length, v.length), n).value);
+          setFlash(null);
+        } catch (err) {
+          fail(`upload: ${errText(err)}`);
+        }
+      }
+    } finally {
+      setSending(false);
+      // Or picking the same photo twice fires no change event.
+      if (picker.current) picker.current.value = "";
+    }
+  };
 
   const toggle = (n: number) =>
     setOpen((was) => {
@@ -155,8 +188,10 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
       return next;
     });
 
+  const provider = usage.data?.provider ?? null;
   const model = [...lines].reverse().find((l) => l.role === "agent" && l.model)?.model ?? provider;
   const busy = busyView(feed, answered, now);
+  const pickMenu = (m: "model" | "usage") => setMenu((was) => (was === m ? null : m));
 
   return (
     <section ref={sheet} className="baud-phone-reader baud-chat">
@@ -165,8 +200,24 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
           ‹ {backLabel}
         </button>
         <span className="baud-phone-reader-title">{name} · chat</span>
-        {model ? <span className="baud-chat-model">{model}</span> : null}
+        <button type="button" className="baud-chat-model" aria-expanded={menu === "model"} onClick={() => pickMenu("model")}>
+          {model ?? "model"}
+        </button>
+        <UsageRing usage={usage.data} error={usage.error} onClick={() => pickMenu("usage")} />
       </header>
+      {menu === "model" && (
+        <ModelMenu
+          agent={agent}
+          name={name}
+          provider={provider}
+          busy={!!feed?.busy || !!feed?.waiting}
+          onNote={(t, err) => {
+            setFlash({ text: t, err });
+            setMenu(null);
+          }}
+        />
+      )}
+      {menu === "usage" && <UsageSheet usage={usage.data} error={usage.error} />}
 
       <div
         ref={list}
@@ -194,9 +245,10 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
                 <div className="baud-phone-md baud-chat-md" onClick={copyBlock} dangerouslySetInnerHTML={{ __html: markdownHtml(l.text, DOMPurify) }} />
               ) : (
                 <div className="baud-chat-text">
-                  {stack && open.has(first) ? run.map((t) => <div key={t.n}>{linked(t.text)}</div>) : linked(l.text)}
+                  {stack && open.has(first) ? run.map((t) => <div key={t.n}>{linked(t.text)}</div>) : linked(l.role === "user" ? retag(l.text, shownAs.current) : l.text)}
                 </div>
               )}
+              {l.role === "agent" && !stack && <ReadAloud id={`${agent}#${l.n}`} text={l.text} voice={voice} said={said} />}
             </div>
           );
         })}
@@ -247,11 +299,29 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
           )}
         </div>
       )}
-      {flash ? (
+      {said.error ? (
         <p className="baud-phone-error" role="alert">
-          {flash}
+          read aloud: {said.error}
         </p>
       ) : null}
+      {flash ? (
+        <p className={flash.err ? "baud-phone-error" : "baud-chat-note"} role={flash.err ? "alert" : "status"}>
+          {flash.text}
+        </p>
+      ) : null}
+
+      {/* No `capture`: it would lock out screenshots. */}
+      <input
+        ref={picker}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length) void attach(files);
+        }}
+      />
 
       <form
         className="baud-chat-ask"
@@ -260,7 +330,10 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
           submit();
         }}
       >
-        <textarea value={text} maxLength={20000} placeholder={`Message ${name}`} onChange={(e) => setText(e.target.value)} />
+        <button type="button" disabled={sending} title={sending ? "sending the photo…" : "attach a photo"} aria-label="attach a photo" onClick={() => picker.current?.click()}>
+          +
+        </button>
+        <textarea ref={field} value={text} maxLength={20000} placeholder={`Message ${name}`} onChange={(e) => setText(e.target.value)} />
         <button type="submit" title={`send to ${name}`} aria-label="send">
           ➤
         </button>

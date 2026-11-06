@@ -94,16 +94,21 @@ export function createVoice(onChange: (s: VoiceState) => void) {
     if (state.id === id) return toggle();
     stop();
     const abort = new AbortController();
+    // Made before the first await, inside the tap: a phone keeps a context made later silent.
+    const ctx = new AudioContext();
     set({ id, loading: true, paused: false, error: null });
     let got: Awaited<ReturnType<typeof speak>>;
     try {
       got = await speak(speakable(text), abort.signal);
     } catch (err) {
+      void ctx.close();
       if (state.id === id && !abort.signal.aborted) set({ id: null, loading: false, error: err instanceof Error ? err.message : String(err) });
       return;
     }
-    if (state.id !== id || abort.signal.aborted) return;
-    const ctx = new AudioContext();
+    if (state.id !== id || abort.signal.aborted) {
+      void ctx.close();
+      return;
+    }
     const an = ctx.createAnalyser();
     an.fftSize = frame.length;
     an.connect(ctx.destination);
