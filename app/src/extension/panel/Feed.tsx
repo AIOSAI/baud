@@ -1,8 +1,11 @@
 /** The open agent's transcript: runs of lines, tool runs stacked, the panel's own notes placed among them by time.
-    Text is text: only http(s) URLs become links. Nodes are keyed by line number, so a poll leaves a selection be. */
+    An agent's reply renders as markdown through the phone's sanitizer; every other line is text, only http(s) URLs linked.
+    Nodes are keyed by line number, so a poll leaves a selection be. */
 
+import DOMPurify from "dompurify";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
+import { markdownHtml } from "../../phone/lib/markdown";
 import type { AgentLine } from "../../types";
 import { linkParts, retag, runLabel, runsOf, splitLook, stamp } from "../lib/chat";
 import type { Voice, VoiceState } from "./voice";
@@ -107,7 +110,11 @@ export function Feed(props: {
               </>
             )}
           </small>
-          <div className="baud-ext-text">{body}</div>
+          {l.role === "agent" && !stack ? (
+            <div className="baud-ext-md" dangerouslySetInnerHTML={{ __html: markdownHtml(l.text, DOMPurify) }} />
+          ) : (
+            <div className="baud-ext-text">{body}</div>
+          )}
           {l.role === "agent" && <Actions id={`${agent}#${l.n}`} text={l.text} voice={voice} said={said} />}
         </div>
       ),

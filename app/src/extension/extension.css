@@ -309,8 +309,89 @@ body.baud-ext {
   overflow-wrap: anywhere;
 }
 
-.baud-ext-text a {
+.baud-ext-text a,
+.baud-ext-md a {
   color: var(--baud-blue);
+}
+
+.baud-ext-md {
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-md > :first-child {
+  margin-top: 0;
+}
+
+.baud-ext-md > :last-child {
+  margin-bottom: 0;
+}
+
+.baud-ext-md p,
+.baud-ext-md ul,
+.baud-ext-md ol,
+.baud-ext-md pre,
+.baud-ext-md blockquote,
+.baud-ext-md table {
+  margin: 0 0 0.6em;
+}
+
+.baud-ext-md ul,
+.baud-ext-md ol {
+  padding-left: 1.4em;
+}
+
+.baud-ext-md h1,
+.baud-ext-md h2,
+.baud-ext-md h3,
+.baud-ext-md h4 {
+  margin: 0.8em 0 0.3em;
+  font-size: 1.1em;
+  color: var(--baud-green);
+}
+
+.baud-ext-md strong {
+  color: var(--baud-ink);
+  font-weight: 700;
+}
+
+.baud-ext-md code {
+  color: var(--baud-amber);
+}
+
+.baud-ext-md pre {
+  padding: 6px 8px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  white-space: pre-wrap;
+}
+
+.baud-ext-md pre code {
+  color: var(--baud-ink);
+}
+
+.baud-ext-md blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--baud-line-strong);
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.baud-ext-md th,
+.baud-ext-md td {
+  padding: 2px 6px;
+  border: 1px solid var(--baud-line);
+  text-align: left;
+}
+
+.baud-ext-md img {
+  max-width: 100%;
 }
 
 .baud-ext-user small {
