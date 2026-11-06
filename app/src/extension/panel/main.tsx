@@ -330,19 +330,26 @@ function Panel() {
     }
   };
 
-  // captureVisibleTab needs <all_urls> (activeTab is granted only by the toolbar click); request answers true at once, no prompt, when it is already held.
+  // Chrome's share picker, as Seed's chat does: captureVisibleTab refused a side panel even with <all_urls> granted.
   const shoot = async () => {
     try {
-      if (!(await chrome.permissions.request({ origins: ["<all_urls>"] }))) {
-        setFlash("screenshot: page access not granted");
-        return;
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" } as DisplayMediaStreamOptions);
+      let blob: Blob | null;
+      try {
+        const v = Object.assign(document.createElement("video"), { srcObject: stream, muted: true, playsInline: true });
+        await new Promise((ok, no) => ((v.onloadedmetadata = ok), (v.onerror = no)));
+        await v.play();
+        await new Promise((ok) => requestAnimationFrame(ok));
+        const c = Object.assign(document.createElement("canvas"), { width: v.videoWidth, height: v.videoHeight });
+        c.getContext("2d")!.drawImage(v, 0, 0);
+        blob = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/png"));
+      } finally {
+        stream.getTracks().forEach((t) => t.stop());
       }
-      const win = await chrome.windows.getCurrent();
-      const shot = await chrome.tabs.captureVisibleTab(win.id, { format: "png" });
-      const blob = await (await fetch(shot)).blob();
+      if (!blob) throw new Error("the frame did not encode");
       await attach([new File([blob], `screenshot-${Date.now()}.png`, { type: "image/png" })]);
     } catch (err) {
-      setFlash(`screenshot: ${errText(err)}`);
+      if ((err as Error).name !== "NotAllowedError") setFlash(`screenshot: ${errText(err)}`);
     }
   };
 
