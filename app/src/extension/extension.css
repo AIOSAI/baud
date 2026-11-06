@@ -11,8 +11,8 @@ body.baud-ext {
   background: var(--baud-bg);
   color: var(--baud-ink);
   font-family: var(--baud-mono);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .baud-ext-dim {
