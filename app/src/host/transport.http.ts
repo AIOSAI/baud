@@ -381,6 +381,7 @@ const ROUTES: Record<string, Route> = {
     body: (args) => ({ ...(args.pick as Record<string, unknown>) }),
   },
   agent_usage: { path: (args) => agentPath(args, "usage") },
+  screenshot: { path: "/v1/screenshot", method: "POST", body: () => ({}) },
 };
 
 /** `/v1/agent/<project>/<name>/<verb>`, each segment encoded; a dot segment would climb out of the agent. */
