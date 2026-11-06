@@ -8,10 +8,10 @@ import { isBusyEntry, modelRefusal, usageWhy, worstSeverity } from "../lib/chat"
 import type { FleetEntry } from "../messages";
 import { agentId } from "../lib/orbState";
 
-const PROVIDERS = { claude: "Claude", codex: "Codex", opencode: "OpenCode" } as const;
-type Provider = keyof typeof PROVIDERS;
+export const PROVIDERS = { claude: "Claude", codex: "Codex", opencode: "OpenCode" } as const;
+export type Provider = keyof typeof PROVIDERS;
 
-const nameOf = (m: ModelRow) => m.label || (m.group ? m.name.slice(m.group.length + 1) : (m.name[0] ?? "").toUpperCase() + m.name.slice(1));
+export const nameOf = (m: ModelRow) => m.label || (m.group ? m.name.slice(m.group.length + 1) : (m.name[0] ?? "").toUpperCase() + m.name.slice(1));
 
 /** Under its own provider a pick switches model (and effort); another provider's chip is a handoff to that CLI. */
 export function ModelMenu({ entry, onNote }: { entry: FleetEntry; onNote: (text: string, err: boolean) => void }) {
@@ -95,7 +95,7 @@ export function ModelMenu({ entry, onNote }: { entry: FleetEntry; onNote: (text:
   );
 }
 
-const AROUND = 2 * Math.PI * 7;
+export const AROUND = 2 * Math.PI * 7;
 
 export function UsageRing({ usage, error, onClick }: { usage: AgentUsage | null; error: string | null; onClick: () => void }) {
   const c = usage?.context ?? null;
@@ -127,7 +127,7 @@ function Row({ label, percent, sub, severity }: { label: string; percent: number
   );
 }
 
-const resets = (iso?: string | null) =>
+export const resets = (iso?: string | null) =>
   iso ? `Resets ${new Date(iso).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false })}` : "reset time not given";
 
 export function UsageSheet({ usage, error }: { usage: AgentUsage | null; error: string | null }) {

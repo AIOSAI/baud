@@ -4275,9 +4275,18 @@ span.baud-browser-tab {
 
 .baud-chat-model {
   margin-left: auto;
+  min-height: 44px;
+  padding: 0 6px;
+  background: none;
+  border: none;
   color: var(--baud-ink-faint);
+  font-family: inherit;
   font-size: 0.66rem;
   white-space: nowrap;
+}
+
+.baud-chat-model::after {
+  content: " ▾";
 }
 
 .baud-chat-feed {
@@ -4410,4 +4419,167 @@ span.baud-browser-tab {
   background: var(--baud-bg);
   border: 1px solid var(--baud-line-strong);
   border-radius: var(--baud-radius);
+}
+
+/* The model menu and the usage sheet drop under the head, full width, rows a thumb tall. */
+.baud-chat-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: calc(var(--baud-pad) / 1.5);
+  background: var(--baud-bg-panel);
+  border-bottom: 1px solid var(--baud-line);
+  font-size: 0.74rem;
+}
+
+.baud-chat-menu small {
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+}
+
+.baud-chat-menu button,
+.baud-chat-acts button {
+  min-height: 44px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.baud-chat-menu button:disabled {
+  opacity: 0.5;
+}
+
+.baud-chat-prov,
+.baud-chat-efforts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.baud-chat-prov {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-chat-prov .baud-chat-on {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+.baud-chat-prov .baud-chat-view {
+  border-color: var(--baud-blue);
+}
+
+.baud-chat-menu .baud-chat-row {
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+}
+
+.baud-chat-efforts button {
+  min-height: 36px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-menu .baud-chat-err {
+  color: var(--baud-red);
+}
+
+.baud-chat-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.baud-chat-dimmed {
+  opacity: 0.5;
+}
+
+.baud-chat-ring-track,
+.baud-chat-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.baud-chat-ring-track {
+  stroke: var(--baud-line);
+}
+
+.baud-chat-ring-fill {
+  stroke: var(--baud-green);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.baud-chat-ring[data-severity="warning"] .baud-chat-ring-fill {
+  stroke: var(--baud-amber);
+}
+
+.baud-chat-ring[data-severity="critical"] .baud-chat-ring-fill {
+  stroke: var(--baud-red);
+}
+
+.baud-chat-urow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+
+.baud-chat-urow progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  border: none;
+  background: var(--baud-line);
+}
+
+.baud-chat-urow progress::-webkit-progress-bar {
+  background: var(--baud-line);
+}
+
+.baud-chat-urow progress::-webkit-progress-value {
+  background: var(--baud-green);
+}
+
+.baud-chat-urow progress[data-severity="warning"]::-webkit-progress-value {
+  background: var(--baud-amber);
+}
+
+.baud-chat-urow progress[data-severity="critical"]::-webkit-progress-value {
+  background: var(--baud-red);
+}
+
+.baud-chat-urow small {
+  grid-column: 1 / -1;
+}
+
+/* Read-aloud under a reply. */
+.baud-chat-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.baud-chat-acts button {
+  min-width: 44px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-note {
+  margin: 0;
+  padding: 4px calc(var(--baud-pad) / 1.5);
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
 }

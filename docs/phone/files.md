@@ -23,6 +23,8 @@ took 330 lines out of the file above.
 | `FilesScreen.tsx` · `RootsScreen.tsx` | Browse a root; pick which root to stand on. |
 | `FeedScreen.tsx` | The feed, full height. |
 | `ChatSheet.tsx` | One agent's chat: the extension's side panel on the phone, its rules imported from `extension/lib/chat.ts` and `pending.ts`. |
+| `ChatMenus.tsx` | The chat's model menu, usage ring and usage sheet: the extension's `Menus.tsx` for touch, plus `useUsage`, the 30 s usage read. |
+| `ChatVoice.tsx` | The chat's read-aloud buttons and `useVoice`, the extension's `panel/voice.ts` player, one per screen. |
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
 | `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder. |
