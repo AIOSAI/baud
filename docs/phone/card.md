@@ -29,6 +29,7 @@ friction. Exactly one door on the expanded card refuses a foreign agent:
 | README, the four stat tiles, `files`, `memory`, `passport` | **free** | the read routes take `project` |
 | `resume` / `fresh`, `shell`, `?`, `wake`, `end room` | **free** | one terminal, any agent |
 | `watch` | **free** | @prax scopes itself — see below |
+| `chat` | **free** | the agent routes name `<project>/<name>` |
 | `prax`, `commons` (a manager's) | **the seat's** | the installation's own views — see below |
 | `settings` | fenced | the sheet's memory dials name a branch and **no** project |
 
@@ -131,6 +132,11 @@ real passport prints a field and what stops a Purpose sentence living in thirty
 characters). Working memory is the card's `memory` door, which opens its own
 screen, and a manager's monitors are plain doors in the MANAGER zone — see **The
 passport is only a passport** below.
+
+**`chat` is the extension's side panel as a phone screen.** The door sits last in
+the row after `memory` and opens a full-height chat with the card's agent: its
+transcript, a box to send into its room, allow and deny, stop. The desktop's card
+draws no `chat` door. See [the chat](chat.md).
 
 Three facts about that document are easy to get wrong. It reads **names, never
 paths**: it asks for `<branch>/.trinity/passport.json` with the card's project —

@@ -22,6 +22,7 @@ took 330 lines out of the file above.
 | `Reader.tsx` | Any file or diff, read. |
 | `FilesScreen.tsx` · `RootsScreen.tsx` | Browse a root; pick which root to stand on. |
 | `FeedScreen.tsx` | The feed, full height. |
+| `ChatSheet.tsx` | One agent's chat: the extension's side panel on the phone, its rules imported from `extension/lib/chat.ts` and `pending.ts`. |
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
 | `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder. |
