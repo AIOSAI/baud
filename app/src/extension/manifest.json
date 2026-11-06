@@ -6,7 +6,7 @@
   "minimum_chrome_version": "116",
   "icons": { "128": "icon-192.png" },
   "permissions": ["sidePanel", "storage"],
-  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*", "<all_urls>"],
   "background": { "service_worker": "background.js", "type": "module" },
   "side_panel": { "default_path": "sidepanel.html" },
   "options_page": "options.html",
