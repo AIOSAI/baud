@@ -393,11 +393,33 @@ body.baud-ext {
 }
 
 .baud-ext-md pre {
+  position: relative;
   padding: 6px 8px;
   background: var(--baud-bg-panel);
   border: 1px solid var(--baud-line);
   border-radius: var(--baud-radius);
   white-space: pre-wrap;
+  cursor: copy;
+}
+
+.baud-ext-md pre::after {
+  content: "copy";
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-ext-md pre:hover::after {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-md pre[data-copied]::after {
+  content: "copied";
+  color: var(--baud-green);
 }
 
 .baud-ext-md pre code {

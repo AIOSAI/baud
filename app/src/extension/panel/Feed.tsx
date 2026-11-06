@@ -27,6 +27,16 @@ const linked = (text: string): ReactNode[] =>
     ),
   );
 
+/** A click on a code block copies it; the block says "copied" for a moment. */
+function copyBlock(e: React.MouseEvent<HTMLDivElement>) {
+  const pre = (e.target as Element).closest("pre");
+  if (!pre || !e.currentTarget.contains(pre)) return;
+  void navigator.clipboard.writeText(pre.textContent ?? "").then(() => {
+    pre.dataset.copied = "";
+    setTimeout(() => delete pre.dataset.copied, 1200);
+  });
+}
+
 function Actions({ id, text, voice, said }: { id: string; text: string; voice: Voice; said: VoiceState }) {
   const [copied, setCopied] = useState(false);
   const mine = said.id === id;
@@ -111,7 +121,7 @@ export function Feed(props: {
             )}
           </small>
           {l.role === "agent" && !stack ? (
-            <div className="baud-ext-md" dangerouslySetInnerHTML={{ __html: markdownHtml(l.text, DOMPurify) }} />
+            <div className="baud-ext-md" onClick={copyBlock} dangerouslySetInnerHTML={{ __html: markdownHtml(l.text, DOMPurify) }} />
           ) : (
             <div className="baud-ext-text">{body}</div>
           )}
