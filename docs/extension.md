@@ -92,6 +92,29 @@ selection.
 - Dropping or pasting an image uploads it and inserts an `[Image #n]` tag;
   anything that is not an image is refused.
 
+## Quote-reply
+
+Selecting text inside an agent's reply shows a `Reply` chip above it (on touch,
+a long press selects the paragraph). Tap it, type an answer, press Enter: the
+composer gets, appended and unsent,
+
+```
+> the selected text
+
+↳ the answer
+```
+
+so several stack before one send. This is Seton, vendored unchanged in
+`src/extension/vendor/seton/`. A content script cannot reach an extension
+page, so the panel loads Seton itself, after `panel/setonSite.ts` declares its
+adapter: a message is an agent reply's markdown body
+(`.baud-ext-feed .baud-ext-agent .baud-ext-md`), never your own line, a tool
+row or a reply's label, and the composer is `.baud-ext-ask textarea`. Seton
+finds the composer at send time and sets a textarea's value through the native
+setter, so React's state follows. A quote is capped at 600 characters, and the
+chip hides when the feed scrolls. Seton's own switch is `setonOff` in
+`chrome.storage.local`; the panel has no control for it.
+
 ## The host routes it uses
 
 `<agent>` is `<project>/<name>`, each segment URL-encoded; the client refuses
@@ -119,5 +142,6 @@ any other shape. All bearer-token JSON.
 | `src/extension/options.html` · `options/main.ts` | the host and its pairing code |
 | `src/extension/sidepanel.html` · `panel/` | the chat: `main.tsx`, `Feed.tsx`, `Menus.tsx`, `voice.ts` (Piper), `dictation.ts`, `port.ts` |
 | `src/extension/lib/` | pure helpers with their tests: `chat`, `pending`, `pcm`, `look`, `place`, `tabBook`, `orbState`, `hostConfig` |
+| `src/extension/vendor/seton/` · `panel/setonSite.ts` | Seton, vendored; its adapter for the panel |
 | `src/extension/chrome.d.ts` | the Chrome API types it uses, by hand |
 | `vite.config.extension.ts` | the build |

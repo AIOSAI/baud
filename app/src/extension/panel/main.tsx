@@ -1,6 +1,10 @@
 /** The side panel: agent tabs over the open agent's chat, on the host API. The deck's chat, ported; its known bugs fixed
     (Shift+Enter is a newline, Esc in a menu only closes it, the open tab is remembered). */
 
+// Seton reads its adapter when it loads, and imports run in order: the adapter first.
+import "./setonSite";
+import "../vendor/seton/seton.js";
+import "../vendor/seton/seton.css";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom/client";
 
