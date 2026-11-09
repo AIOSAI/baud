@@ -48,7 +48,8 @@ Three sentences of doctrine, because everything else follows from them:
 | room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude`, `codex` or `opencode` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory |
 | header `changes` total | the same binary, `status --porcelain -uall` at the seated project root — untracked files included |
-| projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |
+| projects | the anchor, its `projects/*`, and the active roots in the anchor's `AIPASS_ROOTS.json` (a declared root carrying two `<NAME>_REGISTRY.json` seals is refused); no sibling scan |
+| branches (the cards) | the registry's rows with `status` "active", each path relative to the registry's dir; fleet dir is the first row's parent, or the project root for a flat layout |
 | files and viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
 | terminal links | OSC 8 `file://` hyperlinks and plain-text mentions, both through the fenced `resolve_paths` |
 | notifications | `<project root>/.aipass/notifications.jsonl`, written by ai_mail |

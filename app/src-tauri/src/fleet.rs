@@ -256,7 +256,7 @@ pub(crate) fn read_branch(
     status
 }
 
-/// Scan the seated project's fleet dir - visible directories only. Returns the
+/// Read the seated project's citizens - its registry rows. Returns the
 /// cards plus the machine-wide list of sessions holding a live interactive
 /// claude, which is read off the same two scans rather than costing a third.
 pub(crate) fn scan_fleet(project: &Project) -> Result<(Vec<BranchStatus>, Vec<String>), String> {
@@ -276,46 +276,24 @@ pub(crate) fn branches_of(
     sessions: &[ClaudeSession],
     rooms: &RoomScan,
 ) -> Result<Vec<BranchStatus>, String> {
-    let fleet_dir = &project.fleet_dir;
     let room_scope = project.room_scope();
-
-    let entries = fs::read_dir(fleet_dir)
-        .map_err(|err| format!("could not read '{}': {err}", fleet_dir.display()))?;
-
-    let mut branches: Vec<BranchStatus> = Vec::new();
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            // A single unreadable directory entry should not sink the scan.
-            Err(_) => continue,
-        };
-
-        let name = entry.file_name().to_string_lossy().into_owned();
-        // Skip dotfiles and tooling dirs like __pycache__ — machine residue, not branches.
-        if name.starts_with('.') || name.starts_with("__") {
-            continue;
-        }
-
-        let is_dir = match entry.file_type() {
-            Ok(file_type) => file_type.is_dir() || entry.path().is_dir(),
-            Err(_) => entry.path().is_dir(),
-        };
-        if !is_dir {
-            continue;
-        }
-
-        branches.push(read_branch(
-            &entry.path(),
-            name,
-            &project.name,
-            sessions,
-            rooms,
-            room_scope.as_deref(),
-        ));
+    if !project.fleet_dir.is_dir() {
+        return Err(format!("could not read '{}': not a directory", project.fleet_dir.display()));
     }
 
+    // A row whose dir is gone from disk is no card: there is nothing to read.
+    let mut branches: Vec<BranchStatus> = project
+        .citizens
+        .iter()
+        .filter(|dir| dir.is_dir())
+        .filter_map(|dir| {
+            let name = dir.file_name()?.to_string_lossy().into_owned();
+            Some(read_branch(dir, name, &project.name, sessions, rooms, room_scope.as_deref()))
+        })
+        .collect();
+
     branches.sort_by(|a, b| a.name.cmp(&b.name));
+    branches.dedup_by(|a, b| a.name == b.name);
     Ok(branches)
 }
 

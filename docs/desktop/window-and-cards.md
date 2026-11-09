@@ -53,11 +53,13 @@ clicking the percentage resets it.
 
 **The project switcher.** The chip beside the wordmark names the project the
 fleet view is seated in. A project is a directory sealed by a
-`<NAME>_REGISTRY.json`: the filename stem is the canonical name, and the fleet
-directory is the parent of the registry's own first `branches[].path` — no
-layout guessing. BAUD's census is the anchor, its `projects/*`, and the anchor's
-siblings; a seal that lists no branch paths, or whose branches sit at the
-project root, never makes the menu. Discovery is backend-owned: the frontend
+`<NAME>_REGISTRY.json`: the filename stem is the canonical name, its active
+`branches[]` rows are its cards, and the fleet directory is the parent of the
+first row's path, or the project root when that path has no parent (a flat
+layout, like Seed's `grow`). BAUD's census is the anchor, its `projects/*`, and
+the active roots the anchor's `AIPASS_ROOTS.json` declares (paths relative to
+the anchor); an undeclared sibling never makes the menu, and neither does a seal
+with no active row. Discovery is backend-owned: the frontend
 picks a NAME from the census and there is deliberately no way to hand the
 webview-facing commands a path, so seating elsewhere moves the read fence rather
 than weakening it. Reseating empties the reading room (its tabs point where the

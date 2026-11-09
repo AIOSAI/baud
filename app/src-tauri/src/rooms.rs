@@ -207,7 +207,7 @@ pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<Str
     let canonical = if fenced {
         None
     } else {
-        project.fleet_dir.join(branch_name).canonicalize().ok()
+        project.citizen(branch_name).and_then(|dir| dir.canonicalize().ok())
     };
     scan.door_session(&own, canonical.as_deref())
 }
@@ -279,8 +279,8 @@ pub(crate) fn resolve_room(project: &Project, branch_name: &str) -> Result<Optio
         return Err("a branch name is required".to_string());
     }
     // NAMES, not paths - the same rule the read lane is fenced on. Refusing is
-    // the whole point: a name that resolves anywhere but one directory under
-    // this project's fleet dir must not reach tmux at all.
+    // the whole point: a name that resolves anywhere but one of this
+    // project's registry rows must not reach tmux at all.
     if branch_name.contains(['/', '\\']) || branch_name.starts_with('.') {
         return Err(format!(
             "branch name '{branch_name}' is not a single directory component - this door takes names, not paths"
@@ -290,7 +290,7 @@ pub(crate) fn resolve_room(project: &Project, branch_name: &str) -> Result<Optio
     // look identical in a `null` room and are opposite facts: one means the
     // caller is holding a stale or wrong name, the other means the goal state
     // is already reached. Same doctrine as an unknown project name.
-    if !project.fleet_dir.join(branch_name).is_dir() {
+    if !project.citizen(branch_name).is_some_and(Path::is_dir) {
         return Err(format!(
             "no branch named '{branch_name}' in project '{}'",
             project.name

@@ -1,8 +1,10 @@
 //! THE CENSUS - which projects exist, and which one the window is seated in.
 //!
 //! A project is a directory carrying a `<NAME>_REGISTRY.json` seal; the seal's
-//! filename stem IS the canonical name. The seat lives in `ActiveProject`, one
-//! mutex the whole app reads through, so every fenced read below resolves
+//! filename stem IS the canonical name, and its active rows are its citizens.
+//! The census is declared, never walked: the anchor, its `projects/*`, and the
+//! active roots in the anchor's `AIPASS_ROOTS.json`. The seat lives in
+//! `ActiveProject`, one mutex the whole app reads through, so every fenced read below resolves
 //! against one answer rather than each command guessing its own root.
 //!
 //! Lifted out of lib.rs by FPLAN-0445 without a line of it changing.
@@ -23,6 +25,9 @@ pub(crate) const REGISTRY_SUFFIX: &str = "_REGISTRY.json";
 /// Where a project keeps nested projects (AIPass keeps baud itself here).
 pub(crate) const PROJECTS_SUBDIR: &str = "projects";
 
+/// The anchor's list of repo roots taking part in this installation.
+pub(crate) const ROOTS_FILE: &str = "AIPASS_ROOTS.json";
+
 /// One project BAUD can seat its read surface in.
 #[derive(Debug, Clone, Serialize)]
 pub struct Project {
@@ -31,8 +36,12 @@ pub struct Project {
     pub name: String,
     /// Absolute project root - the fence while this project is seated.
     pub root: PathBuf,
-    /// Absolute directory the branch cards come from.
+    /// Absolute directory the branch cards come from: the parent of the first
+    /// active row's path, or the root itself for a flat layout.
     pub fleet_dir: PathBuf,
+    /// Absolute branch dirs of the registry's active rows, in row order. A
+    /// card's name is its dir's last component.
+    pub citizens: Vec<PathBuf>,
     /// True for the anchor - the AIPass tree BAUD resolved at launch.
     pub anchor: bool,
 }
@@ -42,6 +51,14 @@ impl Project {
     /// their historical plain names, everyone else's carry the project.
     pub(crate) fn room_scope(&self) -> Option<String> {
         (!self.anchor).then(|| self.name.to_lowercase())
+    }
+
+    /// The citizen dir a card name stands for, if a registry row names one.
+    pub(crate) fn citizen(&self, name: &str) -> Option<&Path> {
+        self.citizens
+            .iter()
+            .find(|dir| dir.file_name().is_some_and(|last| last == name))
+            .map(PathBuf::as_path)
     }
 }
 
@@ -66,7 +83,14 @@ pub struct ActiveProject(Mutex<Option<Project>>);
 /// The registry file sealing `dir`, if any. Legacy trees can carry several;
 /// the lexically first wins so the answer never depends on readdir order.
 pub(crate) fn registry_in(dir: &Path) -> Option<PathBuf> {
-    let entries = fs::read_dir(dir).ok()?;
+    registries_in(dir).into_iter().next()
+}
+
+/// Every registry seal in `dir`, sorted.
+pub(crate) fn registries_in(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
     let mut seals: Vec<PathBuf> = entries
         .flatten()
         .map(|entry| entry.path())
@@ -82,17 +106,17 @@ pub(crate) fn registry_in(dir: &Path) -> Option<PathBuf> {
         })
         .collect();
     seals.sort();
-    seals.into_iter().next()
+    seals
 }
 
 /// Read a sealed directory into a [`Project`].
 ///
-/// The fleet dir comes from the registry's own branch paths (the parent of
-/// the first `branches[].path`), not from name-munging - registries are the
-/// truth about their own layout. Reads as `None` when the seal is missing,
-/// the registry lists no branch paths, the branches sit at the project root
-/// itself (legacy flat layouts BAUD cannot card), or the fleet dir is gone
-/// from disk.
+/// Citizens are the registry's rows with `status` "active", each path taken
+/// relative to the registry's directory (absolute accepted) - the same rule
+/// the memory branch reads the fleet by. The fleet dir is the parent of the
+/// first one, or the project root when that row has no parent (a flat
+/// layout). Reads as `None` when the seal is missing, no active row has a
+/// path, or the fleet dir is gone from disk.
 pub(crate) fn project_from_dir(dir: &Path, anchor: bool) -> Option<Project> {
     let registry = registry_in(dir)?;
     let file_name = registry.file_name()?.to_string_lossy().into_owned();
@@ -101,18 +125,17 @@ pub(crate) fn project_from_dir(dir: &Path, anchor: bool) -> Option<Project> {
     let raw = fs::read_to_string(&registry).ok()?;
     let document: Value = serde_json::from_str(&raw).ok()?;
 
-    let first_branch_path = document
+    let citizens: Vec<PathBuf> = document
         .get("branches")
         .and_then(Value::as_array)?
         .iter()
-        .find_map(|branch| branch.get("path").and_then(Value::as_str))
-        .map(Path::new)?;
+        .filter(|row| row.get("status").and_then(Value::as_str) == Some("active"))
+        .filter_map(|row| row.get("path").and_then(Value::as_str))
+        .filter(|path| !path.is_empty())
+        .map(|path| dir.join(path))
+        .collect();
 
-    let fleet_relative = first_branch_path.parent()?;
-    if fleet_relative.as_os_str().is_empty() {
-        return None;
-    }
-    let fleet_dir = dir.join(fleet_relative);
+    let fleet_dir = citizens.first()?.parent()?.to_path_buf();
     if !fleet_dir.is_dir() {
         return None;
     }
@@ -121,8 +144,37 @@ pub(crate) fn project_from_dir(dir: &Path, anchor: bool) -> Option<Project> {
         name,
         root: dir.to_path_buf(),
         fleet_dir,
+        citizens,
         anchor,
     })
+}
+
+/// The active repo roots the anchor's `AIPASS_ROOTS.json` declares, resolved,
+/// in declaration order. Paths are relative to the anchor (absolute
+/// accepted); a row whose status is not "active", whose path is not a
+/// directory, or which overlaps the anchor itself is skipped. A missing or
+/// unreadable file declares nothing.
+pub(crate) fn declared_roots(home: &Path) -> Vec<PathBuf> {
+    let Ok(raw) = fs::read_to_string(home.join(ROOTS_FILE)) else {
+        return Vec::new();
+    };
+    let Ok(document) = serde_json::from_str::<Value>(&raw) else {
+        return Vec::new();
+    };
+    let canonical_home = home.canonicalize().unwrap_or_else(|_| home.to_path_buf());
+    document
+        .get("roots")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|row| row.get("status").and_then(Value::as_str) == Some("active"))
+        .filter_map(|row| row.get("path").and_then(Value::as_str))
+        .filter(|path| !path.is_empty())
+        .filter_map(|path| home.join(path).canonicalize().ok())
+        .filter(|root| {
+            root.is_dir() && !root.starts_with(&canonical_home) && !canonical_home.starts_with(root)
+        })
+        .collect()
 }
 
 /// The anchor as a project. An anchor tree whose registry is unreadable or
@@ -133,14 +185,16 @@ pub(crate) fn anchor_project() -> Result<Project, String> {
     Ok(project_from_dir(&root, true).unwrap_or_else(|| Project {
         name: "AIPASS".to_string(),
         fleet_dir: join_all(&root, &FLEET_RELATIVE_DIR),
+        citizens: Vec::new(),
         root,
         anchor: true,
     }))
 }
 
-/// Every project BAUD can seat: the anchor, its nested `projects/*`, and its
-/// sibling directories. Anchor first, the rest alphabetical; deduped on the
-/// canonical root so the anchor never lists twice from the sibling scan.
+/// Every project BAUD can seat: the anchor, its nested `projects/*`, and the
+/// active roots its `AIPASS_ROOTS.json` declares. Nothing else on disk is
+/// read: an undeclared sibling is not a project. Anchor first, the rest
+/// alphabetical; deduped on the canonical root.
 pub(crate) fn discover_projects(anchor: &Project) -> Vec<Project> {
     let mut seen: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     seen.insert(
@@ -150,23 +204,30 @@ pub(crate) fn discover_projects(anchor: &Project) -> Vec<Project> {
             .unwrap_or_else(|_| anchor.root.clone()),
     );
 
-    let mut projects = vec![anchor.clone()];
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    for parent in [Some(anchor.root.join(PROJECTS_SUBDIR)), anchor.root.parent().map(Path::to_path_buf)]
+    let nested = fs::read_dir(anchor.root.join(PROJECTS_SUBDIR))
         .into_iter()
         .flatten()
-    {
-        if let Ok(entries) = fs::read_dir(&parent) {
-            candidates.extend(entries.flatten().map(|entry| entry.path()).filter(|path| path.is_dir()));
-        }
-    }
-
-    let mut found: Vec<Project> = candidates
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_dir()
+                && !path
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+        });
+    // A declared root carrying two seals is refused: which one is the fleet
+    // is not BAUD's to guess.
+    let declared = declared_roots(&anchor.root)
         .into_iter()
+        .filter(|root| registries_in(root).len() == 1);
+
+    let mut found: Vec<Project> = nested
+        .chain(declared)
         .filter(|dir| seen.insert(dir.canonicalize().unwrap_or_else(|_| dir.clone())))
         .filter_map(|dir| project_from_dir(&dir, false))
         .collect();
     found.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut projects = vec![anchor.clone()];
     projects.extend(found);
     projects
 }

@@ -701,7 +701,7 @@ mod tests {
             fs::create_dir_all(join_all(dir, &FLEET_RELATIVE_DIR)).unwrap();
             fs::write(
                 dir.join(format!("{name}{REGISTRY_SUFFIX}")),
-                r#"{"branches":[{"path":"src/aipass/one"}]}"#,
+                r#"{"branches":[{"path":"src/aipass/one","status":"active"}]}"#,
             )
             .unwrap();
         };
@@ -712,6 +712,7 @@ mod tests {
         let anchor = Project {
             name: "FIXTUREROOT".to_string(),
             fleet_dir: join_all(&root, &FLEET_RELATIVE_DIR),
+            citizens: Vec::new(),
             root,
             anchor: true,
         };
@@ -830,7 +831,7 @@ mod tests {
     /// them and a caller holding a stale name is told the kill succeeded.
     #[test]
     fn an_unknown_branch_is_refused_and_a_quiet_one_is_not() {
-        let (base, anchor) = census_fixture("kill-census");
+        let (base, mut anchor) = census_fixture("kill-census");
 
         let error = end_room_in(&anchor, "no-such-branch-4b1e").expect_err("refused");
         assert!(
@@ -844,6 +845,7 @@ mod tests {
         // without one.
         let quiet = anchor.fleet_dir.join("quiet-fixture-branch-4b1e");
         fs::create_dir_all(&quiet).unwrap();
+        anchor.citizens.push(quiet);
         assert_eq!(
             end_room_in(&anchor, "quiet-fixture-branch-4b1e").expect("nothing to end"),
             RoomEnded { room: None }
@@ -1050,9 +1052,10 @@ mod tests {
     /// fact about the fleet, the other looks like a dead agent.
     #[test]
     fn a_room_that_is_not_live_is_refused_by_both_new_doors() {
-        let (base, anchor) = census_fixture("terminal-noroom");
+        let (base, mut anchor) = census_fixture("terminal-noroom");
         let quiet = anchor.fleet_dir.join("quiet-terminal-branch-7c2d");
         fs::create_dir_all(&quiet).unwrap();
+        anchor.citizens.push(quiet);
 
         let captured = capture_room_in(&anchor, "quiet-terminal-branch-7c2d", 0).expect_err("refused");
         assert!(
@@ -1803,6 +1806,7 @@ mod tests {
             name: "AIPASS".into(),
             root: PathBuf::from("/x"),
             fleet_dir: PathBuf::from("/x/src/aipass"),
+            citizens: Vec::new(),
             anchor: true,
         };
         assert_eq!(anchor.room_scope(), None);
@@ -1975,7 +1979,7 @@ mod tests {
         fs::create_dir_all(vera.join("src/vera_studio/vera")).unwrap();
         fs::write(
             vera.join("VERA-STUDIO_REGISTRY.json"),
-            r#"{"metadata":{},"branches":[{"name":"VERA","path":"src/vera_studio/vera"}]}"#,
+            r#"{"metadata":{},"branches":[{"name":"VERA","path":"src/vera_studio/vera","status":"active"}]}"#,
         )
         .unwrap();
         let project = project_from_dir(&vera, false).expect("sealed dir reads as a project");
@@ -1994,21 +1998,33 @@ mod tests {
         fs::write(empty.join("EMPTY_REGISTRY.json"), r#"{"branches":[]}"#).unwrap();
         assert!(project_from_dir(&empty, false).is_none());
 
-        // Legacy flat layout - branches sit at the root itself: unswitchable.
+        // Rows that are not active are not citizens: nothing to card.
+        let retired = base.join("retired");
+        fs::create_dir_all(retired.join("src/retired/one")).unwrap();
+        fs::write(
+            retired.join("RETIRED_REGISTRY.json"),
+            r#"{"branches":[{"path":"src/retired/one","status":"archived"}]}"#,
+        )
+        .unwrap();
+        assert!(project_from_dir(&retired, false).is_none());
+
+        // Flat layout - branches sit at the root itself: the root is the fleet dir.
         let flat = base.join("flat");
         fs::create_dir_all(flat.join("devpulse")).unwrap();
         fs::write(
             flat.join("FLAT_REGISTRY.json"),
-            r#"{"branches":[{"path":"devpulse"}]}"#,
+            r#"{"branches":[{"path":"devpulse","status":"active"}]}"#,
         )
         .unwrap();
-        assert!(project_from_dir(&flat, false).is_none());
+        let flat_project = project_from_dir(&flat, false).expect("a flat layout seats");
+        assert_eq!(flat_project.fleet_dir, flat);
+        assert_eq!(flat_project.citizens, vec![flat.join("devpulse")]);
 
         // Two seals in one dir (legacy trees): the lexically first wins.
         let twin = base.join("twin");
         fs::create_dir_all(twin.join("src/twin/one")).unwrap();
         for seal in ["B_REGISTRY.json", "A_REGISTRY.json"] {
-            fs::write(twin.join(seal), r#"{"branches":[{"path":"src/twin/one"}]}"#).unwrap();
+            fs::write(twin.join(seal), r#"{"branches":[{"path":"src/twin/one","status":"active"}]}"#).unwrap();
         }
         assert_eq!(project_from_dir(&twin, false).unwrap().name, "A");
 
@@ -2016,7 +2032,7 @@ mod tests {
     }
 
     #[test]
-    fn discovery_covers_anchor_nested_and_siblings_without_duplicates() {
+    fn discovery_covers_anchor_nested_and_declared_roots_without_duplicates() {
         let base = std::env::temp_dir().join(format!("baud-disco-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
 
@@ -2024,7 +2040,7 @@ mod tests {
             fs::create_dir_all(dir.join(fleet).join("one")).unwrap();
             fs::write(
                 dir.join(format!("{name}_REGISTRY.json")),
-                format!(r#"{{"branches":[{{"path":"{fleet}/one"}}]}}"#),
+                format!(r#"{{"branches":[{{"path":"{fleet}/one","status":"active"}}]}}"#),
             )
             .unwrap();
         };
@@ -2035,15 +2051,102 @@ mod tests {
         seal(&base.join("Vera-Studio"), "VERA-STUDIO", "src/vera_studio");
         // A sibling with no seal is not a project and never listed.
         fs::create_dir_all(base.join("scratch")).unwrap();
+        // Declared twice, and the anchor declared as its own root: one listing
+        // each, never a duplicate.
+        fs::write(
+            anchor_dir.join("AIPASS_ROOTS.json"),
+            r#"{"roots":[{"path":"../Vera-Studio","status":"active"},{"path":"../Vera-Studio","status":"active"},{"path":".","status":"active"},{"path":"../scratch","status":"active"}]}"#,
+        )
+        .unwrap();
 
         let anchor = project_from_dir(&anchor_dir, true).expect("anchor seals");
         let names: Vec<String> = discover_projects(&anchor)
             .into_iter()
             .map(|project| project.name)
             .collect();
-        // Anchor first (never duplicated by the sibling scan), rest sorted.
+        // Anchor first (never duplicated by a declaration), rest sorted.
         assert_eq!(names, vec!["AIPASS", "BAUD", "VERA-STUDIO"]);
 
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// An anchor, one nested project, an active declared root whose registry
+    /// is flat (the row path has no parent, like Seed's "grow"), a declared
+    /// root that is not active, and an undeclared sibling with a registry.
+    fn declared_roots_fixture(tag: &str) -> (PathBuf, Project) {
+        let base = std::env::temp_dir().join(format!("baud-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let write = |path: PathBuf, text: &str| {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        };
+        let row = |path: &str| format!(r#"{{"branches":[{{"name":"X","path":"{path}","status":"active"}}]}}"#);
+
+        let anchor_dir = base.join("AIPass");
+        write(anchor_dir.join("AIPASS_REGISTRY.json"), &row("src/aipass/one"));
+        fs::create_dir_all(anchor_dir.join("src/aipass/one")).unwrap();
+        // On disk under the fleet dir, in no registry row: not a citizen.
+        fs::create_dir_all(anchor_dir.join("src/aipass/stray")).unwrap();
+        write(anchor_dir.join("projects/baud/BAUD_REGISTRY.json"), &row("src/baud/baud"));
+        fs::create_dir_all(anchor_dir.join("projects/baud/src/baud/baud")).unwrap();
+        write(
+            anchor_dir.join("AIPASS_ROOTS.json"),
+            r#"{"roots":[{"path":"../seed","status":"active"},{"path":"../sealed","status":"retired"}]}"#,
+        );
+
+        write(base.join("seed/SEED_REGISTRY.json"), &row("grow"));
+        write(base.join("seed/grow/.trinity/passport.json"), "{}");
+        fs::create_dir_all(base.join("seed/node_modules")).unwrap();
+
+        write(base.join("sealed/SEALED_REGISTRY.json"), &row("src/sealed/one"));
+        fs::create_dir_all(base.join("sealed/src/sealed/one")).unwrap();
+
+        write(base.join("chess/CHESS_REGISTRY.json"), &row("src/chess/chess"));
+        fs::create_dir_all(base.join("chess/src/chess/chess")).unwrap();
+
+        let anchor = project_from_dir(&anchor_dir, true).expect("anchor seals");
+        (base, anchor)
+    }
+
+    fn card_names(project: &Project) -> Vec<String> {
+        branches_of(project, &[], &RoomScan::default())
+            .expect("cards read")
+            .into_iter()
+            .map(|branch| branch.name)
+            .collect()
+    }
+
+    #[test]
+    fn the_census_is_the_anchor_its_projects_and_active_declared_roots_only() {
+        let (base, anchor) = declared_roots_fixture("declared-census");
+        let names: Vec<String> = discover_projects(&anchor)
+            .into_iter()
+            .map(|project| project.name)
+            .collect();
+        // CHESS is an undeclared sibling and SEALED is declared but retired.
+        assert_eq!(names, vec!["AIPASS", "BAUD", "SEED"]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn citizens_are_the_registry_rows_not_the_directory_listing() {
+        let (base, anchor) = declared_roots_fixture("declared-rows");
+        assert_eq!(card_names(&anchor), vec!["one"], "stray is on disk but in no row");
+        let seed = select_project(anchor, Some("SEED")).expect("seed is in the census");
+        assert_eq!(card_names(&seed), vec!["grow"], "node_modules is on disk but in no row");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_flat_declared_project_seats_and_its_rooms_resolve() {
+        let (base, anchor) = declared_roots_fixture("declared-flat");
+        let seed = select_project(anchor, Some("SEED")).expect("seed is in the census");
+        assert_eq!(seed.root, base.join("seed").canonicalize().unwrap());
+        assert_eq!(seed.fleet_dir, seed.root, "a flat layout's fleet dir is its root");
+        assert_eq!(seed.room_scope().as_deref(), Some("seed"));
+        assert!(resolve_room(&seed, "grow").is_ok(), "a citizen's room lane resolves");
+        let refused = resolve_room(&seed, "node_modules").expect_err("not a citizen");
+        assert!(refused.contains("node_modules"), "{refused}");
         let _ = fs::remove_dir_all(&base);
     }
 

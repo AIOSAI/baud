@@ -747,6 +747,7 @@ mod tests {
         let project = crate::Project {
             name: "AIPASS".to_string(),
             root: root.clone(),
+            citizens: vec![fleet.join("prax")],
             fleet_dir: fleet,
             anchor: true,
         };

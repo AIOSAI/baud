@@ -35,7 +35,8 @@ the same crate, the same `run_headless`, cut from the same tag.
   is still a full envelope with `error` set and `branches` empty, never partial
   output and never nothing.
 - **`--project`** takes a name from BAUD's own census, which is case-sensitive
-  and comes from the `<NAME>_REGISTRY.json` seal — `AIPASS`, `BAUD`. An unknown
+  and comes from the `<NAME>_REGISTRY.json` seal — `AIPASS`, `BAUD`, or a root
+  declared active in the anchor's `AIPASS_ROOTS.json`, like `SEED`. An unknown
   name is refused rather than defaulted to the anchor: quietly reading the wrong
   project is how a remote verb ends up acting on a session nobody named. With no
   `--project`, the anchor is read; the window's default is the *seated* project,
