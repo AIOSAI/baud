@@ -718,6 +718,14 @@ pub fn pty_kill(id: String, registry: tauri::State<'_, PtyRegistry>) -> Result<(
     Ok(())
 }
 
+/// A failure the page must leave on record, written to the process's stderr:
+/// a release webview keeps no console, and the desktop launch sends stderr to
+/// the user journal.
+#[tauri::command]
+pub fn page_log(line: String) {
+    eprintln!("baud: {line}");
+}
+
 #[cfg(test)]
 mod tests {
     use super::{base64_encode, room_argv, valid_monitor_target};

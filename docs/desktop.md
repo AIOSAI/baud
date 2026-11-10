@@ -104,7 +104,7 @@ time the window last saw it change. The phone has no Hark control.
 ## The command surface
 
 `invoke_handler` in `app/src-tauri/src/lib.rs` is the canonical inventory —
-43 commands, and nothing reaches the backend that is not on this list:
+44 commands, and nothing reaches the backend that is not on this list:
 
 ```
 fleet_snapshot  agent_roster  list_projects  project_switch
@@ -115,7 +115,7 @@ browser_status  browser_launch  browser_adopt
 browser_view_open  browser_view_close  browser_input  browser_navigate
 browser_new_tab  browser_history  browser_close_tab
 hark_voice
-pty_create  pty_write  pty_resize  pty_kill  monitor_create
+pty_create  pty_write  pty_resize  pty_kill  monitor_create  page_log
 notifications_read
 agent_settings_read  agent_settings_write
 baud_settings_read  baud_settings_write

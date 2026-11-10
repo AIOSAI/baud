@@ -508,6 +508,7 @@ pub fn run() {
             pty::pty_resize,
             pty::pty_kill,
             pty::monitor_create,
+            pty::page_log,
             notifications::notifications_read,
             settings::agent_settings_read,
             settings::agent_settings_write,

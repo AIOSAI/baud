@@ -407,6 +407,7 @@ const NOT_YET: Record<string, string> = {
   pty_resize: "no webview terminal on the phone - see pty_create",
   pty_kill: "no webview terminal on the phone - see pty_create",
   monitor_create: "monitor panes are a desktop pane concern",
+  page_log: "the desktop page writes its failures to the host process's stderr; the phone has its own console",
   /* Character caps have no host route; @api serves the rollover lane only. */
   memory_config_write:
     "entry character caps have no /v1 route - only the rollover limits are served here, and the desktop gear owns the caps",

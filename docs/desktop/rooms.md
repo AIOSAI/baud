@@ -87,6 +87,16 @@ only raw bytes let xterm's decoder stitch it back together. Teardown signals the
 whole process group — SIGHUP, 400ms of grace, then SIGKILL — so background jobs
 are not orphaned. Scrollback is 5000 lines.
 
+**Renderer.** The operator terminal paints through `@xterm/addon-webgl`, a
+glyph atlas on a WebGL2 canvas, because xterm's DOM renderer cost WebKit's main
+thread about 17 CPU seconds a minute on a busy room. There is no DOM fallback.
+If the addon throws on load, or its WebGL context is lost (a GPU reset or a
+suspend), the terminal detaches (a room keeps running), the curtain shows the
+reason, and `page_log` writes `baud: terminal: <reason>` to the process's
+stderr, which a desktop launch sends to the user journal. A click on the curtain
+opens a new terminal with a fresh context. The monitor and inquiry panes keep
+the DOM renderer: each WebGL terminal holds its own context and atlas.
+
 **Slash-command chips.** When the tmux session this terminal is attached to
 holds a live interactive claude, `/memo`, `/prep` and `/compact` appear beside
 the corner buttons. One click types the command, waits 150ms for the slash

@@ -154,6 +154,9 @@ export const ptyResize = (id: string, cols: number, rows: number) =>
 
 export const ptyKill = (id: string) => call<void>("pty_kill", { id });
 
+/** A line on the desktop process's stderr (the user journal): the release webview keeps no console. */
+export const pageLog = (line: string) => call<void>("page_log", { line });
+
 export const monitorCreate = (args: Record<string, unknown>) =>
   call<string>("monitor_create", args);
 

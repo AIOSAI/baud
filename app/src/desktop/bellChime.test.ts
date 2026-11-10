@@ -2,8 +2,12 @@
 import { describe, expect, it } from "vitest";
 
 import { chime } from "./Bell";
+import type { WebglAddon } from "@xterm/addon-webgl";
 
-/** Tests for the bell's chime in src/desktop/Bell.tsx: the audio context sleeps between chimes. */
+import { paintWithWebgl } from "./Terminal";
+
+/** Desktop hardware edges: the bell's audio context sleeps between chimes (Bell.tsx); the terminal's
+ *  WebGL renderer fails out loud, never to the DOM renderer (Terminal.tsx). */
 
 const calls: string[] = [];
 const oscillators: { onended: (() => void) | null; at: number }[] = [];
@@ -73,5 +77,28 @@ describe("the bell's chime", () => {
     lastEnds();
     await settle();
     expect(calls).toEqual(["resume", "resume", "suspend"]);
+  });
+});
+
+describe("the terminal's WebGL paint", () => {
+  it("reports a renderer that will not load, and loads nothing else", () => {
+    const reasons: string[] = [];
+    const loaded: unknown[] = [];
+    const term = { loadAddon: (addon: unknown) => { loaded.push(addon); throw new Error("WebGL2 not supported"); } };
+    expect(paintWithWebgl(term, (r) => reasons.push(r), () => ({ onContextLoss() {} }) as unknown as WebglAddon)).toBe(false);
+    expect(reasons).toEqual(["the terminal's WebGL renderer did not load: WebGL2 not supported"]);
+    expect(loaded).toHaveLength(1);
+  });
+
+  it("reports a lost context instead of switching renderer", () => {
+    const reasons: string[] = [];
+    let lose = () => {};
+    const addon = { onContextLoss: (listener: () => void) => { lose = listener; } } as unknown as WebglAddon;
+    const loaded: unknown[] = [];
+    expect(paintWithWebgl({ loadAddon: (a: unknown) => loaded.push(a) }, (r) => reasons.push(r), () => addon)).toBe(true);
+    expect(loaded).toEqual([addon]);
+    expect(reasons).toEqual([]);
+    lose();
+    expect(reasons).toEqual(["the terminal's WebGL context was lost (GPU reset or suspend)"]);
   });
 });

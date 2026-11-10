@@ -9,6 +9,7 @@ import {
 import {
   HostChannel,
   openExternal,
+  pageLog,
   ptyCreate,
   ptyKill,
   ptyResize,
@@ -18,6 +19,7 @@ import {
 } from "../host";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
@@ -145,6 +147,26 @@ function describe(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return String(err);
+}
+
+/**
+ * Paint `term` through WebGL. There is no DOM fallback: a failed load or a lost
+ * context goes to `fail` with the reason, and the caller shows it.
+ */
+export function paintWithWebgl(
+  term: Pick<XTerm, "loadAddon">,
+  fail: (reason: string) => void,
+  makeAddon: () => WebglAddon = () => new WebglAddon(),
+): boolean {
+  try {
+    const addon = makeAddon();
+    addon.onContextLoss(() => fail("the terminal's WebGL context was lost (GPU reset or suspend)"));
+    term.loadAddon(addon);
+    return true;
+  } catch (err) {
+    fail(`the terminal's WebGL renderer did not load: ${describe(err)}`);
+    return false;
+  }
 }
 
 /**
@@ -336,6 +358,24 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
     });
 
     term.open(host);
+
+    // A view that cannot paint is dead: `disposed` also kills a pty_create still in flight. A room keeps running.
+    const failPaint = (reason: string) => {
+      if (disposed) return;
+      disposed = true;
+      void pageLog(`terminal: ${reason}`).catch(() => {});
+      if (sessionId) void ptyKill(sessionId).catch(() => {});
+      sessionId = null;
+      sessionRef.current = null;
+      setFailure(`${reason} - click for a new terminal, or pick a card`);
+      setPhase("ended");
+    };
+    if (!paintWithWebgl(term, failPaint)) {
+      return () => {
+        disposed = true;
+        term.dispose();
+      };
+    }
 
     const measure = () => {
       if (host.offsetWidth === 0 || host.offsetHeight === 0) return false;
