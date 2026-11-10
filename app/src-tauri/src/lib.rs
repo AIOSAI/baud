@@ -281,7 +281,7 @@ pub struct BranchStatus {
     pub outside_room: Option<String>,
     /// Sub-agents running inside this branch's live claude session(s) right
     /// now - unmatched Agent/Task spawn calls in recent transcripts. See
-    /// [`count_inflight_subagents`].
+    /// [`subagent_count_in`].
     pub subagents: u64,
     /// Messages with status "new" in `.ai_mail.local/inbox.json`, 0 when the
     /// mailbox is missing or unreadable.
@@ -1402,6 +1402,75 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// Overwrite `path` with `text` and pin its mtime, so len and mtime can be
+    /// held equal while the bytes change underneath the cache.
+    fn write_at(path: &Path, text: &str, modified: std::time::SystemTime) {
+        fs::write(path, text).unwrap();
+        let times = fs::FileTimes::new().set_modified(modified);
+        fs::File::options().write(true).open(path).unwrap().set_times(times).unwrap();
+    }
+
+    #[test]
+    fn an_unchanged_transcript_is_not_read_again_until_len_or_mtime_moves() {
+        let dir = std::env::temp_dir().join(format!("baud-cache-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let then = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+
+        // Head verdict: same len, same mtime, marker gone - the cached verdict stands.
+        let head = dir.join("chat.jsonl");
+        write_at(&head, &format!("{{{INTERACTIVE_MARKER}}}\n"), then);
+        assert_eq!(claude_history_in(&dir), (true, None));
+        write_at(&head, &format!("{{{}}}\n", INTERACTIVE_MARKER.replace("file", "fill")), then);
+        assert_eq!(claude_history_in(&dir), (true, None), "unchanged stamp must not re-read");
+        write_at(&head, &format!("{{{}}}\n", INTERACTIVE_MARKER.replace("file", "fill")), then + std::time::Duration::from_secs(1));
+        assert_eq!(claude_history_in(&dir), (false, Some("chat".to_string())), "a new mtime re-reads");
+        let _ = fs::remove_file(&head);
+
+        // Subagent tail: same rule; the 900 s window still reads the live mtime.
+        let tail = dir.join("live.jsonl");
+        write_at(&tail, &spawn_line("toolu_01one"), then);
+        assert_eq!(subagent_count_in(&dir), 1);
+        write_at(&tail, &spawn_line("toolu_01one").replace("Agent", "Agenx"), then);
+        assert_eq!(subagent_count_in(&dir), 1, "unchanged stamp must not re-read");
+        write_at(&tail, &spawn_line("toolu_01one").replace("Agent", "Agenx"), then + std::time::Duration::from_secs(1));
+        assert_eq!(subagent_count_in(&dir), 0, "a new mtime re-reads");
+        let stale = then - std::time::Duration::from_secs(SUBAGENT_LIVENESS_SECS * 2);
+        write_at(&tail, &spawn_line("toolu_01one"), stale);
+        assert_eq!(subagent_count_in(&dir), 0, "the window closes on the file's mtime");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_chunked_head_read_matches_the_old_full_64k_verdict() {
+        // The pre-cache reader, kept here as the oracle.
+        fn full_read(path: &Path) -> bool {
+            let mut head = Vec::new();
+            fs::File::open(path).unwrap().take(MARKER_SCAN_BYTES).read_to_end(&mut head).unwrap();
+            String::from_utf8_lossy(&head).contains(INTERACTIVE_MARKER)
+        }
+        let dir = std::env::temp_dir().join(format!("baud-head-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let cap = MARKER_SCAN_BYTES as usize;
+        let marker = INTERACTIVE_MARKER.len();
+        // Marker starts: first line, past the first chunk, astride a chunk edge,
+        // ending exactly at the cap, astride the cap, past the cap; plus none.
+        let starts = [Some(0), Some(10_000), Some(4096 - 5), Some(cap - marker), Some(cap - 5), Some(cap + 100), None];
+        for (case, start) in starts.into_iter().enumerate() {
+            let mut bytes = vec![b'x'; cap + 4096];
+            bytes[1] = 0xff; // invalid UTF-8 the old lossy read replaced
+            if let Some(at) = start {
+                bytes[at..at + marker].copy_from_slice(INTERACTIVE_MARKER.as_bytes());
+            }
+            let path = dir.join(format!("case{case}.jsonl"));
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(is_interactive_transcript(&path), full_read(&path), "marker at {start:?}");
+        }
+        assert!(is_interactive_transcript(&dir.join("case1.jsonl")), "past the first chunk still counts");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn transcript_dir_name_munges_like_claude() {
         // Both '/' and '_' become '-': verified against real transcript dirs
@@ -2125,6 +2194,14 @@ mod tests {
             .collect();
         // CHESS is an undeclared sibling and SEALED is declared but retired.
         assert_eq!(names, vec!["AIPASS", "BAUD", "SEED"]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_declared_root_that_is_not_active_is_named_with_its_status() {
+        let (base, anchor) = declared_roots_fixture("declared-skipped");
+        let skipped = serde_json::to_value(skipped_roots(&anchor.root)).unwrap();
+        assert_eq!(skipped, serde_json::json!([{"path": "../sealed", "status": "retired"}]));
         let _ = fs::remove_dir_all(&base);
     }
 

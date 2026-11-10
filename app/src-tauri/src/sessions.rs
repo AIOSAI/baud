@@ -7,8 +7,11 @@
 //!
 //! Lifted out of lib.rs by FPLAN-0445 without a line of it changing.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
 use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
@@ -116,18 +119,72 @@ pub(crate) fn transcript_dir_name(branch_dir: &Path) -> String {
 pub(crate) const INTERACTIVE_MARKER: &str = "\"type\":\"file-history-snapshot\"";
 pub(crate) const MARKER_SCAN_BYTES: u64 = 64 * 1024;
 
+/// The first read is this size and the scan stops at the marker, so a cold
+/// process pays one small read per interactive transcript, not 64 KB. A file
+/// without it (a headless dispatch) still costs the full 64 KB.
+const HEAD_CHUNK_BYTES: usize = 4096;
+
 pub(crate) fn is_interactive_transcript(path: &Path) -> bool {
-    let file = match fs::File::open(path) {
-        Ok(file) => file,
-        Err(_) => return false,
-    };
+    static HEADS: Memo<bool> = OnceLock::new();
+    memoized(&HEADS, path, || head_has_marker(path))
+}
 
-    let mut head = Vec::with_capacity(MARKER_SCAN_BYTES as usize);
-    if file.take(MARKER_SCAN_BYTES).read_to_end(&mut head).is_err() {
+/// The marker is ASCII, so a byte search finds exactly what the old lossy
+/// UTF-8 `contains` over the whole 64 KB head found.
+fn head_has_marker(path: &Path) -> bool {
+    let Ok(file) = fs::File::open(path) else {
         return false;
+    };
+    let mut file = file.take(MARKER_SCAN_BYTES);
+    let marker = INTERACTIVE_MARKER.as_bytes();
+    let mut head = Vec::new();
+    let mut chunk = vec![0u8; MARKER_SCAN_BYTES as usize];
+    loop {
+        // Doubling: a few syscalls for a 64 KB miss, at most 2x over-read for a late marker.
+        let want = head.len().clamp(HEAD_CHUNK_BYTES, chunk.len());
+        let read = match file.read(&mut chunk[..want]) {
+            Ok(0) => return false,
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return false,
+        };
+        // Re-scan the last marker-length-minus-one bytes: a marker can straddle chunks.
+        let from = head.len().saturating_sub(marker.len() - 1);
+        head.extend_from_slice(&chunk[..read]);
+        if head[from..].windows(marker.len()).any(|window| window == marker) {
+            return true;
+        }
     }
+}
 
-    String::from_utf8_lossy(&head).contains(INTERACTIVE_MARKER)
+/// A per-reader, process-wide memo keyed on a file's (len, mtime): a
+/// transcript that has not moved answers from memory, so the desktop's 5 s
+/// polls stop re-reading the same bytes. Any change to either re-reads.
+type Memo<T> = OnceLock<Mutex<HashMap<PathBuf, (u64, SystemTime, T)>>>;
+
+/// Past this many entries, gone files are dropped, then the rest if still full.
+const MEMO_CAP: usize = 4096;
+
+fn memoized<T: Clone>(memo: &'static Memo<T>, path: &Path, read: impl FnOnce() -> T) -> T {
+    // Stamp before reading: a write that lands mid-read moves the stamp, so the next poll re-reads.
+    let Some((len, modified)) = fs::metadata(path).ok().and_then(|meta| Some((meta.len(), meta.modified().ok()?))) else {
+        return read();
+    };
+    let memo = memo.get_or_init(Default::default);
+    let lock = || memo.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, _, value)) = lock().get(path).filter(|(l, m, _)| *l == len && *m == modified) {
+        return value.clone();
+    }
+    let value = read();
+    let mut entries = lock();
+    if entries.len() >= MEMO_CAP {
+        entries.retain(|path, _| path.exists());
+        if entries.len() >= MEMO_CAP {
+            entries.clear();
+        }
+    }
+    entries.insert(path.to_path_buf(), (len, modified, value.clone()));
+    value
 }
 
 /// How the resume button reaches this branch's conversation, if any:
@@ -366,7 +423,19 @@ pub(crate) const AGENT_FILE_ACTIVE_SECS: u64 = 180;
 /// `agent-<id>.meta.json` names the spawning toolUseId): those are counted by
 /// file freshness over there, so they are excluded here - an async spawn still
 /// inside the tail must not count twice.
-pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::HashSet<String>) -> u64 {
+#[cfg(test)] // production goes through the memoized pairing in subagent_count_in
+pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &HashSet<String>) -> u64 {
+    not_async(&unmatched_spawns(tail), meta_ids)
+}
+
+/// (spawned minus meta) minus resolved equals (spawned minus resolved) minus
+/// meta, so the meta filter can run after the memoized tail pairing.
+fn not_async(unmatched: &HashSet<String>, meta_ids: &HashSet<String>) -> u64 {
+    unmatched.iter().filter(|id| !meta_ids.contains(*id)).count() as u64
+}
+
+/// Agent/Task spawn ids in a tail with no `tool_result` after them.
+fn unmatched_spawns(tail: &str) -> HashSet<String> {
     let mut spawned: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -392,9 +461,7 @@ pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::
                     let name = block.get("name").and_then(Value::as_str).unwrap_or("");
                     if name == "Agent" || name == "Task" {
                         if let Some(id) = block.get("id").and_then(Value::as_str) {
-                            if !meta_ids.contains(id) {
-                                spawned.insert(id.to_string());
-                            }
+                            spawned.insert(id.to_string());
                         }
                     }
                 }
@@ -408,7 +475,7 @@ pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::
         }
     }
 
-    spawned.difference(&resolved).count() as u64
+    spawned.difference(&resolved).cloned().collect()
 }
 
 /// Async agents running under one session, straight from disk.
@@ -501,7 +568,9 @@ pub(crate) fn subagent_count_in(transcripts: &Path) -> u64 {
         // disk, blocking agents by the unmatched spawn pair in the tail.
         let (meta_ids, running_async) = async_agents_running(&session_dir);
         count += running_async;
-        count += count_inflight_subagents(&read_tail(&path, SUBAGENT_TAIL_BYTES), &meta_ids);
+        static TAILS: Memo<HashSet<String>> = OnceLock::new();
+        let unmatched = memoized(&TAILS, &path, || unmatched_spawns(&read_tail(&path, SUBAGENT_TAIL_BYTES)));
+        count += not_async(&unmatched, &meta_ids);
     }
     count
 }

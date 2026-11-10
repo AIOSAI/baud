@@ -177,6 +177,35 @@ pub(crate) fn declared_roots(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// A row of `AIPASS_ROOTS.json` that [`declared_roots`] skips for its status:
+/// the path as declared, and the status it carries instead of "active".
+#[derive(Debug, Serialize)]
+pub(crate) struct SkippedRoot {
+    path: String,
+    status: Option<String>,
+}
+
+/// The declared roots whose status is not "active", in declaration order, so
+/// `--list-projects` can name them. Only the headless census calls this; the
+/// desktop's polls never do.
+pub(crate) fn skipped_roots(home: &Path) -> Vec<SkippedRoot> {
+    let document = fs::read_to_string(home.join(ROOTS_FILE))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+    document
+        .as_ref()
+        .and_then(|document| document.get("roots"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|row| row.get("status").and_then(Value::as_str) != Some("active"))
+        .map(|row| SkippedRoot {
+            path: row.get("path").and_then(Value::as_str).unwrap_or_default().to_string(),
+            status: row.get("status").and_then(Value::as_str).map(str::to_string),
+        })
+        .collect()
+}
+
 /// The anchor as a project. An anchor tree whose registry is unreadable or
 /// unsealed still seats - `resolve_aipass_root` already proved `src/aipass`
 /// exists, so the classic layout is the honest fallback.

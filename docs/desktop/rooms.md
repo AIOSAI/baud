@@ -200,4 +200,7 @@ The chime, when enabled, is synthesized with the Web Audio API — two short sin
 notes — because the CSP allows no external assets and a sound file shipped
 beside the binary is a sound that eventually goes missing. It fires only when a
 poll brings an event newer than the previous poll's newest; the first list after
-launch is history, not news.
+launch is history, not news. The one audio context sleeps between chimes:
+a chime resumes it, schedules its notes once it is awake, and suspends it when
+its last note ends unless another chime is still sounding. A running context
+keeps WebKit's audio threads busy at about 9 percent of a core.

@@ -50,6 +50,8 @@ and every change that lands adds its line there in the same sitting.
 - **Desktop: pair a phone and About in the header gear.** `pair a phone` opens a terminal tab already running `drone @api host-api pair phone --scope operate`, which draws its own QR; `about` shows the app's version.
 - **Desktop: a bell mail row opens its message.** A row carrying `mail_id` and `recipient` opens the recipient's inbox screen on that message in a tab. The bell's cleared mark is one machine-wide key, adopting the seated project's old per-project mark once. The Rust feed reader keeps the three address fields it used to drop.
 
+- **`--list-projects` names skipped roots.** The envelope gains `skipped`, `{path, status}` for each `AIPASS_ROOTS.json` row not declared `active`; the other keys are unchanged and the desktop's polls never compute it. See `docs/headless.md`.
+
 ### Fixed
 
 - **`▸ resume ⚡` is offered on Claude cards only.** Reclaim stops Claude processes only, so on a dispatched Codex or OpenCode card the door started a second agent beside the live dispatch; those cards offer `▸ fresh` alone.
@@ -58,6 +60,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Changed
 
+- **Desktop: the bell's audio sleeps between chimes.** The chime's Web Audio context is resumed before its notes are scheduled and suspended when the last note ends, so WebKit's audio threads (about 9 percent of a core, measured) no longer run at rest. The bell still polls while the window is hidden. See `docs/desktop/rooms.md`.
+- **A snapshot reads only the transcripts that changed.** The interactive-marker head scan reads from 4 KB upward and stops at the marker instead of always reading 64 KB, and the head verdict and the sub badge's tail pairing are kept per process for each transcript until its length or mtime changes, so the desktop's polls stop re-reading unchanged files. Answers are unchanged. See `docs/architecture.md`.
 - **The census comes from declared roots and registry rows.** Projects are the anchor, its `projects/*`, and the active roots in the anchor's `AIPASS_ROOTS.json`; the sibling-directory scan is gone, so an undeclared sibling no longer lists and a declared root anywhere does. A project's cards are its registry's active rows, not a listing of the fleet dir, and a flat layout (a row path with no parent) seats with the project root as its fleet dir. `--list-projects`, `--roster`, `--snapshot --project` and the room doors all read it, so Seed's `@grow` can be listed, opened and read. See `docs/architecture.md`.
 - **Desktop: the wheel's cards are 50 percent larger.** Every card dimension in `phone.css` (card basis and gap, avatar and its border and letters, dot, waiting badge, name, app square, link arrow, monitor faces and ring, pips, home tag, attached outline, rail padding) is `calc(<px> * var(--wheel-scale, 1))`; `.baud-wheel-desktop` sets `--wheel-scale: 1.5`, its rail padding is half a scaled card, and its cap rises from 960px to 1440px so as many cards fit. The phone never sets the variable and renders pixel-identical (390px headless diff, 0 pixels).
 - **Desktop: the FILES card docks the file tree on the left.** On the wheel's apps layer FILES seats the left-hand `FileTree` at the seated project's root, as a passport's `files` door does for a branch; a file opens as a tab on the right, and a second open closes the tree. `FileTree` takes a seat (a name and a path) instead of a branch. GIT, BACKUP and MACHINE keep their tabs.

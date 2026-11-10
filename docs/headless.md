@@ -41,6 +41,11 @@ the same crate, the same `run_headless`, cut from the same tag.
   project is how a remote verb ends up acting on a session nobody named. With no
   `--project`, the anchor is read; the window's default is the *seated* project,
   which does not exist in a process with no seat.
+- **`--list-projects`** prints `{projects, skipped, generated_at, error}`:
+  `projects` are the switcher's rows (`name`, `root`, `anchor`, `active`), and
+  `skipped` names each `AIPASS_ROOTS.json` row whose status is not `active`
+  as `{path, status}`, the path as declared. Only this verb reads `skipped`;
+  the window's polls never do.
 - **Exit codes.** `0` a real read (`error` is null) · `1` the snapshot could not
   be produced, and stdout carries a valid envelope explaining why · `2` usage
   error, and stdout is empty. So a caller may parse stdout unconditionally and

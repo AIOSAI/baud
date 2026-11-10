@@ -25,8 +25,10 @@ const CHIME_DECAY = 0.12;
 
 /** One context for the app's life - browsers cap how many may exist. */
 let audio: AudioContext | null = null;
+/** Chimes still sounding; the context sleeps when the last one ends. */
+let sounding = 0;
 
-function chime() {
+export function chime() {
   try {
     const Ctor =
       window.AudioContext ??
@@ -34,10 +36,28 @@ function chime() {
     if (!Ctor) return;
     audio ??= new Ctor();
     const ctx = audio;
-    // A context created before any gesture starts suspended; the operator's
-    // click on the toggle is that gesture, so this resumes rather than fails.
-    void ctx.resume().catch(() => {});
+    sounding += 1;
+    // A running context costs WebKit four audio threads at ~9% of a core, so it
+    // sleeps between chimes; notes are scheduled once it is awake, or a frozen
+    // clock would place the first note in the past.
+    ctx
+      .resume()
+      .then(() => play(ctx))
+      .catch(() => settle(ctx));
+  } catch {
+    // A machine with no audio device is not a reason to break the bell.
+  }
+}
+
+function settle(ctx: AudioContext) {
+  sounding -= 1;
+  if (sounding === 0) void ctx.suspend().catch(() => {});
+}
+
+function play(ctx: AudioContext) {
+  try {
     const base = ctx.currentTime + 0.01;
+    let last: OscillatorNode | null = null;
     for (const { hz, delay } of CHIME_NOTES) {
       const start = base + delay;
       const osc = ctx.createOscillator();
@@ -51,9 +71,12 @@ function chime() {
       osc.connect(gain).connect(ctx.destination);
       osc.start(start);
       osc.stop(start + CHIME_DECAY + 0.02);
+      last = osc;
     }
+    if (last) last.onended = () => settle(ctx);
+    else settle(ctx);
   } catch {
-    // A machine with no audio device is not a reason to break the bell.
+    settle(ctx);
   }
 }
 
