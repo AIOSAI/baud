@@ -10,6 +10,7 @@ import AgentSettings from "../desktop/AgentSettings";
 import { interfacePrefs } from "../desktop/InterfaceSettings";
 import AgentSheet from "./AgentSheet";
 import BackupApp from "./backup/BackupApp";
+import BrowserScreen from "./BrowserScreen";
 import { ARTIFACTS_DIR, isCertificateOpen, renderCertificate } from "./Certificate";
 import FeedScreen from "./FeedScreen";
 import FilesScreen from "./FilesScreen";
@@ -21,6 +22,7 @@ import { isMarkdownRef } from "./lib/markdown";
 import MachineSheet from "./MachineSheet";
 import { renderMarkdown } from "./Markdown";
 import MemoryScreen, { type MemoryTabId } from "./MemoryScreen";
+import ChatSheet from "./ChatSheet";
 import MonitorSheet from "./MonitorSheet";
 import NewProjectSheet from "./NewProjectSheet";
 import PassportSheet from "./PassportSheet";
@@ -208,6 +210,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     null,
   );
   const [plansOf, setPlansOf] = useState<{ name: string; project: string } | null>(null);
+  const [chatWith, setChatWith] = useState<string | null>(null);
   const [inboxOf, setInboxOf] = useState<{ name: string; project: string; messageId?: string } | null>(
     null,
   );
@@ -363,8 +366,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     });
   }, [snapshot, baudSettings, scope, scopeKnown, tabsSettled, focusPane]);
 
+  // The desktop bell's retention, shared: the badge and the feed screen hold the same count.
+  const bellMax = interfacePrefs(baudSettings).bellMax;
   const { events, setEvents, readUpTo, setReadUpTo, clearedUpTo, setClearedUpTo } =
-    useFeedBadge(project);
+    useFeedBadge(project, bellMax);
 
   // The later marker is the floor, so the badge and the feed screen filter alike.
   const floor = readUpTo > clearedUpTo ? readUpTo : clearedUpTo;
@@ -418,6 +423,8 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   const appFaces = useMemo(() => machineFaces(machine), [machine]);
   const [gitOpen, setGitOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  /** The phone shows the host's refusal: BAUD's Chrome is the desktop's machine. */
+  const [browserOpen, setBrowserOpen] = useState(false);
   /** Whose branch-grain changes are open (the card's GIT tile); `ref` is the card to come back to. */
   const [gitOf, setGitOf] = useState<{ name: string; project: string; ref: string } | null>(null);
 
@@ -478,9 +485,11 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     monitorCard !== null ||
     memoryOf !== null ||
     plansOf !== null ||
+    chatWith !== null ||
     reading !== null ||
     gitOpen ||
     backupOpen ||
+    browserOpen ||
     gitOf !== null ||
     feedOpen ||
     inboxOf !== null;
@@ -508,6 +517,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     setMemoryOf(null);
     walkBack();
   }, [walkBack]);
+  const closeChat = useCallback(() => {
+    setChatWith(null);
+    walkBack();
+  }, [walkBack]);
   const closePlans = useCallback(() => {
     setPlansOf(null);
     walkBack();
@@ -517,6 +530,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
     walkBack();
   }, [walkBack]);
   const closeBackup = useCallback(() => setBackupOpen(false), []);
+  const closeBrowser = useCallback(() => setBrowserOpen(false), []);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const closeNewProject = useCallback(() => setNewProjectOpen(false), []);
   const onProjectBorn = useCallback(
@@ -536,8 +550,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
   useSystemBack(monitorCard !== null ? closeMachine : null);
   useSystemBack(memoryOf !== null ? closeMemory : null);
   useSystemBack(plansOf !== null ? closePlans : null);
+  useSystemBack(chatWith !== null ? closeChat : null);
   useSystemBack(reading !== null ? closeReading : null);
   useSystemBack(backupOpen ? closeBackup : null);
+  useSystemBack(browserOpen ? closeBrowser : null);
   useSystemBack(feedOpen ? closeFeed : null);
 
   const leaveCard = () => {
@@ -645,6 +661,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           if (key === "git") setGitOpen(true);
           if (key === "files") setRootsOpen(true);
           if (key === "backup") setBackupOpen(true);
+          if (key === "browser") setBrowserOpen(true);
           // Prefix-matched: the wheel owns the monitor card list.
           if (key.startsWith("mon-")) setMonitorCard(key);
         }}
@@ -838,6 +855,10 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
             leaveCard();
             setMemoryOf({ name: expandedCard.name, project: expandedCard.project });
           }}
+          onChat={() => {
+            leaveCard();
+            setChatWith(`${expandedCard.project}/${expandedCard.name}`);
+          }}
           monitors={managerMonitors}
           onPassport={() => {
             leaveCard();
@@ -980,6 +1001,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
           onClose={closeMemory}
         />
       ) : null}
+      {chatWith ? <ChatSheet key={chatWith} agent={chatWith} backLabel={backTo} onClose={closeChat} /> : null}
       {plansOf ? (
         <PlansScreen
           branch={plansOf.name}
@@ -1009,6 +1031,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
         />
       ) : null}
       {/* Keyed on the seat so a seat change never shows one project's runs under another's name. */}
+      {browserOpen ? <BrowserScreen onClose={closeBrowser} /> : null}
       {backupOpen ? (
         <BackupApp key={seat} project={seat} scope={scope} onClose={closeBackup} />
       ) : null}
@@ -1030,6 +1053,7 @@ export default function PhoneApp({ label, scope, scopeKnown, onSignOut }: PhoneA
       {feedOpen ? (
         <FeedScreen
           pollMs={POLL_MS}
+          keep={bellMax}
           clearedUpTo={clearedUpTo}
           onClear={clearFeed}
           onClose={closeFeed}

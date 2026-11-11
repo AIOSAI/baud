@@ -43,13 +43,13 @@ pub fn room_name(scope: Option<&str>, branch_name: &str) -> String {
     }
 }
 
-/// The command name tmux reports for a pane running a claude session. An
-/// install that shows up as something else (a node shim, a wrapper script)
-/// simply never matches - that costs a card its outside-room tag, which is
-/// the same place we stood before m12. A LOOSER test would be worse: BAUD
-/// would treat the operator's own shell session as an agent's room and type
-/// into it.
-pub(crate) const CLAUDE_PANE_COMMAND: &str = "claude";
+/// The command names tmux reports for a pane running an agent session, claude,
+/// codex or opencode. An install that shows up as something else (a node shim,
+/// a wrapper script) simply never matches - that costs a card its outside-room
+/// tag, which is the same place we stood before m12. A LOOSER test would be
+/// worse: BAUD would treat the operator's own shell session as an agent's room
+/// and type into it.
+pub(crate) const AGENT_PANE_COMMANDS: [&str; 3] = ["claude", "codex", "opencode"];
 
 /// What one tmux round-trip tells the snapshot.
 #[derive(Debug, Default)]
@@ -177,7 +177,7 @@ pub(crate) fn parse_panes(text: &str) -> RoomScan {
             continue;
         }
         scan.names.insert(name.to_string());
-        if command.trim() == CLAUDE_PANE_COMMAND && !path.trim().is_empty() {
+        if AGENT_PANE_COMMANDS.contains(&command.trim()) && !path.trim().is_empty() {
             scan.agent_panes
                 .push((name.to_string(), PathBuf::from(path.trim())));
         }
@@ -207,7 +207,7 @@ pub(crate) fn branch_session(project: &Project, branch_name: &str) -> Option<Str
     let canonical = if fenced {
         None
     } else {
-        project.fleet_dir.join(branch_name).canonicalize().ok()
+        project.citizen(branch_name).and_then(|dir| dir.canonicalize().ok())
     };
     scan.door_session(&own, canonical.as_deref())
 }
@@ -279,8 +279,8 @@ pub(crate) fn resolve_room(project: &Project, branch_name: &str) -> Result<Optio
         return Err("a branch name is required".to_string());
     }
     // NAMES, not paths - the same rule the read lane is fenced on. Refusing is
-    // the whole point: a name that resolves anywhere but one directory under
-    // this project's fleet dir must not reach tmux at all.
+    // the whole point: a name that resolves anywhere but one of this
+    // project's registry rows must not reach tmux at all.
     if branch_name.contains(['/', '\\']) || branch_name.starts_with('.') {
         return Err(format!(
             "branch name '{branch_name}' is not a single directory component - this door takes names, not paths"
@@ -290,7 +290,7 @@ pub(crate) fn resolve_room(project: &Project, branch_name: &str) -> Result<Optio
     // look identical in a `null` room and are opposite facts: one means the
     // caller is holding a stale or wrong name, the other means the goal state
     // is already reached. Same doctrine as an unknown project name.
-    if !project.fleet_dir.join(branch_name).is_dir() {
+    if !project.citizen(branch_name).is_some_and(Path::is_dir) {
         return Err(format!(
             "no branch named '{branch_name}' in project '{}'",
             project.name
@@ -551,4 +551,43 @@ pub(crate) fn send_room_in(
         ));
     }
     Ok(room)
+}
+
+/// The tmux room Hark's Codex voice session lives in; `drone @hark standby` opens it.
+pub(crate) const HARK_ROOM: &str = "hark";
+
+/// Hark's mic for the desktop chip: `listening`, `muted`, `stopped`, or `absent` when the room is down.
+pub(crate) fn hark_state() -> String {
+    match Command::new("tmux").args(["capture-pane", "-p", "-t", &pane_target(HARK_ROOM)]).output() {
+        Ok(output) if output.status.success() => hark_state_of(&String::from_utf8_lossy(&output.stdout)).to_string(),
+        _ => "absent".to_string(),
+    }
+}
+
+/// Codex's voice status line, ` voice ● listening   … f9 mute` or ` voice ◌ muted …`, key hints to its right;
+/// none while voice is stopped.
+pub(crate) fn hark_state_of(pane: &str) -> &'static str {
+    pane.lines()
+        .rev()
+        .find_map(|line| match line.trim().strip_prefix("voice ")?.split_whitespace().nth(1)? {
+            "listening" => Some("listening"),
+            "muted" => Some("muted"),
+            _ => None,
+        })
+        .unwrap_or("stopped")
+}
+
+/// The chip's click: `drone @hark voice on|stop`, run from the hark project, the only seat `@hark` resolves from.
+#[cfg(feature = "gui")]
+#[tauri::command(async)]
+pub fn hark_voice(word: String) -> Result<(), String> {
+    if !matches!(word.as_str(), "on" | "stop") {
+        return Err(format!("hark_voice takes on or stop, not '{word}'"));
+    }
+    let anchor = anchor_project()?;
+    let hark = discover_projects(&anchor)
+        .into_iter()
+        .find(|project| project.name.eq_ignore_ascii_case(HARK_ROOM))
+        .ok_or("no hark project beside this one: drone @hark resolves only from inside it")?;
+    crate::host_relay::drone_in(&hark.root, &format!("drone @hark voice {word}"))
 }

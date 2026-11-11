@@ -1155,7 +1155,7 @@ body {
 
 .baud-wheel {
   display: flex;
-  gap: 6px;
+  gap: calc(6px * var(--wheel-scale, 1));
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
@@ -1165,7 +1165,7 @@ body {
      half the card. The vertical padding is headroom for the centre card's
      scale(1.28), which overflow-y clips. RE-MEASURE BOTH IF THE CARD OR THE
      SCALE CHANGES. */
-  padding: 11px calc(50vw - 32px);
+  padding: calc(11px * var(--wheel-scale, 1)) calc(50vw - calc(32px * var(--wheel-scale, 1)));
   /* pan-x refuses vertical drags, so a drifting flick never steals scrollback;
      contain on x stops an overscroll becoming back-nav. */
   touch-action: pan-x;
@@ -1192,12 +1192,12 @@ body {
 }
 
 .baud-wheel-card {
-  flex: 0 0 64px;
+  flex: 0 0 calc(64px * var(--wheel-scale, 1));
   scroll-snap-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: calc(4px * var(--wheel-scale, 1));
   transition: transform 0.12s linear, opacity 0.12s linear;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -1205,17 +1205,17 @@ body {
 
 .baud-wheel-avatar {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: calc(44px * var(--wheel-scale, 1));
+  height: calc(44px * var(--wheel-scale, 1));
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--baud-bg-card);
-  border: 2px solid var(--baud-line-strong);
+  border: calc(2px * var(--wheel-scale, 1)) solid var(--baud-line-strong);
   color: var(--baud-green);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: calc(0.9rem * var(--wheel-scale, 1));
   font-weight: 700;
   /* The card is the tap target: the delegated listener reads its data-name. */
   pointer-events: none;
@@ -1234,13 +1234,13 @@ body {
 
 .baud-wheel-dot {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 12px;
-  height: 12px;
+  right: calc(-1px * var(--wheel-scale, 1));
+  bottom: calc(-1px * var(--wheel-scale, 1));
+  width: calc(12px * var(--wheel-scale, 1));
+  height: calc(12px * var(--wheel-scale, 1));
   border-radius: 50%;
   /* Punched out of the page, so the dot reads as a lamp on top. */
-  border: 2px solid var(--baud-bg);
+  border: calc(2px * var(--wheel-scale, 1)) solid var(--baud-bg);
 }
 
 /* The desktop lamp's three states, pulse and reduced-motion fallback. */
@@ -1270,22 +1270,22 @@ body {
    if the card, the scale or that padding changes. */
 .baud-wheel-mail {
   position: absolute;
-  top: -2px;
-  right: -7px;
+  top: calc(-2px * var(--wheel-scale, 1));
+  right: calc(-7px * var(--wheel-scale, 1));
   background: var(--baud-amber);
   color: var(--baud-bg);
-  font-size: 0.56rem;
+  font-size: calc(0.56rem * var(--wheel-scale, 1));
   font-weight: 700;
-  border-radius: 8px;
-  padding: 1px 4px;
+  border-radius: calc(8px * var(--wheel-scale, 1));
+  padding: calc(1px * var(--wheel-scale, 1)) calc(4px * var(--wheel-scale, 1));
   line-height: 1;
   white-space: nowrap;
 }
 
 .baud-wheel-name {
-  font-size: 0.58rem;
+  font-size: calc(0.58rem * var(--wheel-scale, 1));
   color: var(--baud-ink-dim);
-  max-width: 64px;
+  max-width: calc(64px * var(--wheel-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1299,10 +1299,10 @@ body {
 
 /* App cards are squares, so a surface and a citizen separate at a glance. */
 .baud-wheel-avatar-app {
-  border-radius: 11px;
+  border-radius: calc(11px * var(--wheel-scale, 1));
   color: var(--baud-apps);
-  font-size: 0.55rem;
-  letter-spacing: 1px;
+  font-size: calc(0.55rem * var(--wheel-scale, 1));
+  letter-spacing: calc(1px * var(--wheel-scale, 1));
 }
 
 .baud-wheel-center .baud-wheel-avatar-app {
@@ -1317,10 +1317,10 @@ body {
 /* The arrow marks a link-card: it leaves for a web home, not a sheet. */
 .baud-wheel-out {
   position: absolute;
-  top: -6px;
-  right: -8px;
+  top: calc(-6px * var(--wheel-scale, 1));
+  right: calc(-8px * var(--wheel-scale, 1));
   color: var(--baud-apps);
-  font-size: 0.62rem;
+  font-size: calc(0.62rem * var(--wheel-scale, 1));
   line-height: 1;
 }
 
@@ -1329,13 +1329,13 @@ body {
    border: past the scaled centre card's edge, the rail clips. */
 .baud-wheel-avatar-face {
   flex-direction: column;
-  gap: 1px;
+  gap: calc(1px * var(--wheel-scale, 1));
   letter-spacing: 0;
 }
 
 .baud-wheel-face-value {
   color: var(--baud-ink);
-  font-size: 0.78rem;
+  font-size: calc(0.78rem * var(--wheel-scale, 1));
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -1343,7 +1343,7 @@ body {
 
 .baud-wheel-face-value small {
   color: var(--baud-ink-dim);
-  font-size: 0.5rem;
+  font-size: calc(0.5rem * var(--wheel-scale, 1));
   font-weight: 600;
 }
 
@@ -1353,17 +1353,17 @@ body {
 
 /* Six characters or more overrun the box, so a long face steps down. */
 .baud-wheel-face-long {
-  font-size: 0.64rem;
+  font-size: calc(0.64rem * var(--wheel-scale, 1));
 }
 
 .baud-wheel-face-long small {
-  font-size: 0.42rem;
+  font-size: calc(0.42rem * var(--wheel-scale, 1));
 }
 
 .baud-wheel-face-mark {
   color: var(--baud-apps);
-  font-size: 0.42rem;
-  letter-spacing: 1px;
+  font-size: calc(0.42rem * var(--wheel-scale, 1));
+  letter-spacing: calc(1px * var(--wheel-scale, 1));
   line-height: 1;
 }
 
@@ -1372,8 +1372,8 @@ body {
   position: absolute;
   top: 0;
   left: 0;
-  width: 40px;
-  height: 40px;
+  width: calc(40px * var(--wheel-scale, 1));
+  height: calc(40px * var(--wheel-scale, 1));
   fill: none;
   stroke-width: 2;
   pointer-events: none;
@@ -1559,8 +1559,8 @@ body {
 /* 22x10 around a 4px dot: the pips are the way off a wheel whose gesture
    the browser ate. */
 .baud-wheel-pip {
-  width: 22px;
-  height: 10px;
+  width: calc(22px * var(--wheel-scale, 1));
+  height: calc(10px * var(--wheel-scale, 1));
   padding: 0;
   border: none;
   background: none;
@@ -1571,8 +1571,8 @@ body {
 
 .baud-wheel-pip::before {
   content: "";
-  width: 4px;
-  height: 4px;
+  width: calc(4px * var(--wheel-scale, 1));
+  height: calc(4px * var(--wheel-scale, 1));
   border-radius: 50%;
   background: var(--baud-line-strong);
 }
@@ -1637,10 +1637,10 @@ body {
 
 /* A foreign agent's home project, sized well under its name. */
 .baud-wheel-home {
-  font-size: 0.46rem;
+  font-size: calc(0.46rem * var(--wheel-scale, 1));
   letter-spacing: 0.04em;
   color: var(--baud-ink-dim);
-  max-width: 64px;
+  max-width: calc(64px * var(--wheel-scale, 1));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1786,6 +1786,37 @@ body {
 
 .baud-agent-awake {
   color: var(--baud-green);
+}
+
+/* The run chip: solid when the runtime named its model; dashed and faint while
+   the model is only requested, so a request never reads as observed. */
+.baud-agent-run {
+  font: inherit;
+  color: var(--baud-ink);
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  padding: 1px 6px;
+  cursor: pointer;
+}
+
+.baud-agent-run-pending {
+  color: var(--baud-ink-faint);
+  border-style: dashed;
+  font-style: italic;
+}
+
+.baud-agent-runrows {
+  margin: -6px 0 12px;
+}
+
+/* Only ungrounded alarms and only verified is green; every other status stays neutral. */
+.baud-agent-runrows dd.baud-agent-receipt-verified {
+  color: var(--baud-green);
+}
+
+.baud-agent-runrows dd.baud-agent-receipt-ungrounded {
+  color: var(--baud-red);
 }
 
 .baud-agent-stats {
@@ -2025,8 +2056,8 @@ body {
 
 /* The card whose room is attached below: green, like its open-below line. */
 .baud-wheel-attached .baud-wheel-avatar {
-  outline: 2px solid var(--baud-green);
-  outline-offset: 3px;
+  outline: calc(2px * var(--wheel-scale, 1)) solid var(--baud-green);
+  outline-offset: calc(3px * var(--wheel-scale, 1));
 }
 
 .baud-agent-here {
@@ -4017,4 +4048,538 @@ body {
 
 .baud-git-fileblock .baud-git-said {
   padding: 6px 2px 8px;
+}
+
+/* BAUD's Chrome: the backup app's panel and door shapes, the wheel's apps accent. */
+.baud-browser-accent {
+  color: var(--baud-apps);
+  font-weight: 600;
+}
+
+.baud-browser-line,
+.baud-browser-where,
+.baud-browser-hint,
+.baud-browser-said {
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  font-size: 0.74rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.baud-browser-where,
+.baud-browser-hint,
+.baud-browser-said {
+  color: var(--baud-ink-dim);
+  font-size: 0.68rem;
+}
+
+.baud-browser-detail {
+  margin: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+  padding: 10px 13px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.68rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-browser-doors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-browser-doors .baud-browser-hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.baud-browser-door {
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 12px;
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.78rem;
+  min-height: 44px;
+  padding: 10px 16px;
+}
+
+.baud-browser-door:hover:not(:disabled),
+.baud-browser-door:focus-visible {
+  border-color: var(--baud-apps);
+}
+
+.baud-browser-door:disabled {
+  color: var(--baud-ink-dim);
+}
+
+/* The section never scrolls: the header, tab row and URL bar hold still and the page fits below them. */
+.baud-phone-reader.baud-browser {
+  overflow: hidden;
+}
+
+.baud-browser-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--baud-gap) calc(var(--baud-pad) / 1.5);
+}
+
+.baud-browser-tabs {
+  flex: none;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.baud-browser-tab {
+  flex: 0 1 auto;
+  max-width: 16rem;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 10px;
+  color: var(--baud-ink-dim);
+  font-family: inherit;
+  font-size: 0.7rem;
+  padding: 6px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+span.baud-browser-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 0;
+}
+
+.baud-browser-tab-name,
+.baud-browser-tab-x,
+.baud-browser-step {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.baud-browser-tab-name {
+  min-width: 0;
+  padding: 6px 0 6px 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.baud-browser-tab-x {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.baud-browser-tab-x:hover {
+  color: var(--baud-ink);
+  background: var(--baud-line);
+}
+
+.baud-browser-bar {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.baud-browser-step {
+  flex: none;
+  min-width: 34px;
+  border: 1px solid var(--baud-line);
+  border-radius: 10px;
+  background: var(--baud-bg-panel);
+  color: var(--baud-ink-dim);
+  font-size: 0.9rem;
+}
+
+.baud-browser-step:hover {
+  border-color: var(--baud-apps);
+  color: var(--baud-ink);
+}
+
+.baud-browser-tab-on {
+  border-color: var(--baud-apps);
+  color: var(--baud-ink);
+}
+
+.baud-browser-address {
+  flex: 1;
+  min-width: 0;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: 10px;
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 0.74rem;
+  padding: 7px 12px;
+}
+
+.baud-browser-view .baud-browser-line,
+.baud-browser-view .baud-browser-said {
+  margin: 0;
+}
+
+.baud-browser-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+/* Bounded both ways with auto sizes, so the aspect holds and the whole page fits. */
+.baud-browser-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--baud-line);
+  border-radius: 6px;
+  background: var(--baud-bg-panel);
+}
+
+.baud-browser-tab-name:focus-visible,
+.baud-browser-tab-x:focus-visible,
+.baud-browser-step:focus-visible,
+.baud-browser-tab:focus-visible,
+.baud-browser-address:focus-visible,
+.baud-browser-canvas:focus-visible {
+  outline: 2px solid var(--baud-apps);
+  outline-offset: 1px;
+}
+
+.baud-browser-canvas-hidden {
+  display: none;
+}
+
+/* The chat: the feed scrolls, the composer stays at the sheet's bottom, which
+   ChatSheet raises above the soft keyboard. */
+.baud-chat {
+  overflow: hidden;
+  transition: bottom 140ms ease-out;
+}
+
+.baud-chat-model {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 6px;
+  background: none;
+  border: none;
+  color: var(--baud-ink-faint);
+  font-family: inherit;
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+
+.baud-chat-model::after {
+  content: " ▾";
+}
+
+.baud-chat-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--baud-pad) / 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.baud-chat-line {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.baud-chat-line small {
+  display: block;
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+}
+
+.baud-chat-text {
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.baud-chat-text a {
+  color: var(--baud-blue);
+}
+
+.baud-chat-user .baud-chat-text {
+  color: var(--baud-green);
+}
+
+.baud-chat-tool .baud-chat-text {
+  color: var(--baud-ink-dim);
+  font-size: 0.66rem;
+}
+
+.baud-chat-md.baud-phone-md {
+  padding: 0;
+}
+
+.baud-chat-md pre {
+  position: relative;
+  cursor: copy;
+}
+
+.baud-chat-md pre::after {
+  content: "copy";
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-chat-md pre[data-copied]::after {
+  content: "copied";
+  color: var(--baud-green);
+}
+
+.baud-chat-pend .baud-chat-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-pend-stale small,
+.baud-chat-pend-failed small {
+  color: var(--baud-amber);
+}
+
+.baud-chat-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--baud-blue);
+  font: inherit;
+}
+
+.baud-chat-busy {
+  display: flex;
+  align-items: center;
+  gap: var(--baud-gap);
+  padding: 4px calc(var(--baud-pad) / 1.5);
+  color: var(--baud-amber);
+  font-size: 0.7rem;
+}
+
+.baud-chat-busy span {
+  flex: 1;
+}
+
+.baud-chat-busy button,
+.baud-chat-ask button {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+}
+
+.baud-chat-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: calc(var(--baud-pad) / 1.5);
+  padding-bottom: calc(var(--baud-pad) / 1.5 + env(safe-area-inset-bottom, 0px));
+  background: var(--baud-bg-panel);
+  border-top: 1px solid var(--baud-line);
+}
+
+/* 16px, or mobile browsers zoom the page on focus. */
+.baud-chat-ask textarea {
+  flex: 1 1 auto;
+  field-sizing: content;
+  min-height: 44px;
+  max-height: 9em;
+  resize: none;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--baud-ink);
+  background: var(--baud-bg);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}
+
+/* The model menu and the usage sheet drop under the head, full width, rows a thumb tall. */
+.baud-chat-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: calc(var(--baud-pad) / 1.5);
+  background: var(--baud-bg-panel);
+  border-bottom: 1px solid var(--baud-line);
+  font-size: 0.74rem;
+}
+
+.baud-chat-menu small {
+  color: var(--baud-ink-faint);
+  font-size: 0.62rem;
+}
+
+.baud-chat-menu button,
+.baud-chat-acts button {
+  min-height: 44px;
+  padding: 0 10px;
+  background: none;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.baud-chat-menu button:disabled {
+  opacity: 0.5;
+}
+
+.baud-chat-prov,
+.baud-chat-efforts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.baud-chat-prov {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-chat-prov .baud-chat-on {
+  border-color: var(--baud-green);
+  color: var(--baud-green);
+}
+
+.baud-chat-prov .baud-chat-view {
+  border-color: var(--baud-blue);
+}
+
+.baud-chat-menu .baud-chat-row {
+  width: 100%;
+  text-align: left;
+  border-color: transparent;
+}
+
+.baud-chat-efforts button {
+  min-height: 36px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-menu .baud-chat-err {
+  color: var(--baud-red);
+}
+
+.baud-chat-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.baud-chat-dimmed {
+  opacity: 0.5;
+}
+
+.baud-chat-ring-track,
+.baud-chat-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.baud-chat-ring-track {
+  stroke: var(--baud-line);
+}
+
+.baud-chat-ring-fill {
+  stroke: var(--baud-green);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.baud-chat-ring[data-severity="warning"] .baud-chat-ring-fill {
+  stroke: var(--baud-amber);
+}
+
+.baud-chat-ring[data-severity="critical"] .baud-chat-ring-fill {
+  stroke: var(--baud-red);
+}
+
+.baud-chat-urow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+
+.baud-chat-urow progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  border: none;
+  background: var(--baud-line);
+}
+
+.baud-chat-urow progress::-webkit-progress-bar {
+  background: var(--baud-line);
+}
+
+.baud-chat-urow progress::-webkit-progress-value {
+  background: var(--baud-green);
+}
+
+.baud-chat-urow progress[data-severity="warning"]::-webkit-progress-value {
+  background: var(--baud-amber);
+}
+
+.baud-chat-urow progress[data-severity="critical"]::-webkit-progress-value {
+  background: var(--baud-red);
+}
+
+.baud-chat-urow small {
+  grid-column: 1 / -1;
+}
+
+/* Read-aloud under a reply. */
+.baud-chat-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.baud-chat-acts button {
+  min-width: 44px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-chat-note {
+  margin: 0;
+  padding: 4px calc(var(--baud-pad) / 1.5);
+  color: var(--baud-ink-dim);
+  font-size: 0.7rem;
 }

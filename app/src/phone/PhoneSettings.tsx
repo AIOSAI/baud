@@ -35,9 +35,9 @@ const SECTIONS: readonly Section[] = [
   {
     id: "interface",
     label: "interface",
-    // Poll, bell keep and chime are not wired on the phone; the summary says they apply to the desktop.
+    // Poll and chime are not wired on the phone; the summary says they apply to the desktop.
     summary:
-      "startup agent, hook sounds — shared with the desktop · poll every, bell keeps, bell chime apply to the desktop only",
+      "startup agent, hook sounds, bell keeps — shared with the desktop · poll every, bell chime apply to the desktop only",
   },
   {
     id: "memory",

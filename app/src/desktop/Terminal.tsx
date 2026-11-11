@@ -9,6 +9,7 @@ import {
 import {
   HostChannel,
   openExternal,
+  pageLog,
   ptyCreate,
   ptyKill,
   ptyResize,
@@ -18,9 +19,14 @@ import {
 } from "../host";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal as XTerm, type ILink } from "@xterm/xterm";
 
 import "@xterm/xterm/css/xterm.css";
+
+import { slashCommand, switchLegs } from "../phone/lib/rooms";
+import type { BranchStatus } from "../types";
+import type { HeldRoom } from "./cardDoors";
 
 /** A launch attaches a tmux client to the branch's room; the command is typed only where it lands at a prompt. */
 export interface LaunchSpec {
@@ -40,16 +46,22 @@ export interface TerminalHandle {
   launch(spec: LaunchSpec): void;
   /** Type text into the live pty WITHOUT a newline (sending stays the operator's keystroke); false when no session. */
   typeText(text: string): boolean;
+  /** Close this client; the room and whatever runs in it keep running. */
+  detach(): void;
 }
 
 interface TerminalProps {
   /** A ctrl+clicked file path from the output, already resolved and fenced by the backend. */
   onOpenFile: (path: string, line: number | null) => void;
   /** The operator ended this branch's room and tmux confirmed it; App keeps it dead until the card reopens. */
-  onRoomEnded: (branch: string) => void;
+  onRoomEnded: (branch: string, project: string | null) => void;
+  /** The room this client is attached to while it is live, else null; the card's `detach` reads it. */
+  onRoom: (held: HeldRoom | null) => void;
   /** Every tmux session holding a live claude, machine-wide: sessions, not seat branches, so a room in
    *  another project still gets its slash-command chips. */
   liveSessions: string[];
+  /** The live sessions whose card runs Codex or OpenCode: the chips' spelling and the switch legs follow it. */
+  roomProviders: Record<string, BranchStatus["provider"]>;
 }
 
 /** The memory rituals as one-click chips. /clear is left out on purpose: it discards a conversation. */
@@ -138,11 +150,31 @@ function describe(err: unknown): string {
 }
 
 /**
+ * Paint `term` through WebGL. There is no DOM fallback: a failed load or a lost
+ * context goes to `fail` with the reason, and the caller shows it.
+ */
+export function paintWithWebgl(
+  term: Pick<XTerm, "loadAddon">,
+  fail: (reason: string) => void,
+  makeAddon: () => WebglAddon = () => new WebglAddon(),
+): boolean {
+  try {
+    const addon = makeAddon();
+    addon.onContextLoss(() => fail("the terminal's WebGL context was lost (GPU reset or suspend)"));
+    term.loadAddon(addon);
+    return true;
+  } catch (err) {
+    fail(`the terminal's WebGL renderer did not load: ${describe(err)}`);
+    return false;
+  }
+}
+
+/**
  * The operator's shell: one PTY with the user's privileges; every byte comes from a keystroke or a click.
  * Reference: docs/desktop/rooms.md
  */
 const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
-  { onOpenFile, onRoomEnded, liveSessions },
+  { onOpenFile, onRoomEnded, onRoom, liveSessions, roomProviders },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -163,6 +195,18 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
   // Ref'd because the link provider is created once per pty.
   const onOpenFileRef = useRef(onOpenFile);
   onOpenFileRef.current = onOpenFile;
+
+  const kill = useCallback(() => {
+    const id = sessionRef.current;
+    if (!id) return;
+    void ptyKill(id).catch(() => {});
+  }, []);
+
+  // A webview reload skips unmount: without this the room's tmux client stays attached with nobody reading it.
+  useEffect(() => {
+    window.addEventListener("beforeunload", kill);
+    return () => window.removeEventListener("beforeunload", kill);
+  }, [kill]);
 
   const restart = useCallback(() => {
     setFailure(null);
@@ -185,21 +229,21 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
         termRef.current?.focus();
         return true;
       },
+      detach: kill,
     }),
-    [restart],
+    [restart, kill],
   );
 
-  const kill = useCallback(() => {
-    const id = sessionRef.current;
-    if (!id) return;
-    void ptyKill(id).catch(() => {});
-  }, []);
+  useEffect(() => {
+    onRoom(phase === "live" && room ? { room, project: roomProjectRef.current } : null);
+  }, [phase, room, onRoom]);
 
   // Only a CONFIRMED kill records "stays dead": a room that refused to die is still alive.
   const endRoom = useCallback(() => {
     if (!room) return;
-    void roomKill(room, roomProjectRef.current)
-      .then(() => onRoomEnded(room))
+    const project = roomProjectRef.current;
+    void roomKill(room, project)
+      .then(() => onRoomEnded(room, project))
       .catch((err) => {
         setFailure(describe(err));
       });
@@ -315,6 +359,24 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
 
     term.open(host);
 
+    // A view that cannot paint is dead: `disposed` also kills a pty_create still in flight. A room keeps running.
+    const failPaint = (reason: string) => {
+      if (disposed) return;
+      disposed = true;
+      void pageLog(`terminal: ${reason}`).catch(() => {});
+      if (sessionId) void ptyKill(sessionId).catch(() => {});
+      sessionId = null;
+      sessionRef.current = null;
+      setFailure(`${reason} - click for a new terminal, or pick a card`);
+      setPhase("ended");
+    };
+    if (!paintWithWebgl(term, failPaint)) {
+      return () => {
+        disposed = true;
+        term.dispose();
+      };
+    }
+
     const measure = () => {
       if (host.offsetWidth === 0 || host.offsetHeight === 0) return false;
       try {
@@ -424,18 +486,36 @@ const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
       {phase === "live" ? (
         <span className="baud-terminal-actions">
           {session && liveSessions.includes(session)
-            ? SLASH_COMMANDS.map(({ cmd, hint }) => (
-                <button
-                  key={cmd}
-                  type="button"
-                  className="baud-terminal-kill baud-terminal-cmd"
-                  title={hint}
-                  onClick={() => sendCommand(cmd)}
-                >
-                  {cmd}
-                </button>
-              ))
+            ? SLASH_COMMANDS.map(({ cmd, hint }) => {
+                const spelled = slashCommand(cmd, roomProviders[session]);
+                return (
+                  <button
+                    key={cmd}
+                    type="button"
+                    className="baud-terminal-kill baud-terminal-cmd"
+                    title={hint}
+                    onClick={() => sendCommand(spelled)}
+                  >
+                    {spelled}
+                  </button>
+                );
+              })
             : null}
+          {session && liveSessions.includes(session) ? (
+            <select
+              className="baud-terminal-kill baud-terminal-cmd"
+              title="switch this room's CLI - the agent saves its memories, writes the handoff and respawns the pane"
+              value=""
+              onChange={(event) => sendCommand(event.target.value)}
+            >
+              <option value="">switch</option>
+              {switchLegs(roomProviders[session]).map((leg) => (
+                <option key={leg} value={leg}>
+                  {leg}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {room ? (
             <>
               <button

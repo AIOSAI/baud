@@ -10,11 +10,14 @@ import type { ProjectListing } from "../types";
 export default function ProjectSwitch({
   project,
   onSwitched,
+  onNewProject,
 }: {
   /** The seated project's name, from the latest snapshot. */
   project: string | null;
   /** Fired after a successful switch so the app can reseat immediately. */
   onSwitched: () => void;
+  /** The menu's last row: the app opens the new-project sheet. */
+  onNewProject: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [listing, setListing] = useState<ProjectListing[] | null>(null);
@@ -89,6 +92,18 @@ export default function ProjectSwitch({
               {entry.anchor ? <span className="baud-project-item-tag">anchor</span> : null}
             </button>
           ))}
+          <button
+            type="button"
+            role="menuitem"
+            className="baud-project-item baud-project-item-new"
+            title="create a project from a template, then seat it and start its manager"
+            onClick={() => {
+              setOpen(false);
+              onNewProject();
+            }}
+          >
+            <span className="baud-project-item-name">+ new project</span>
+          </button>
         </div>
       ) : null}
     </div>

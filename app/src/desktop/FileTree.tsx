@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { listDir } from "../host";
 
-import type { BranchStatus, DirEntryInfo } from "../types";
+import type { DirEntryInfo } from "../types";
+
+/** What the tree is seated on: a branch (its name and directory) or the project (its name and root). */
+export interface TreeSeat {
+  name: string;
+  path: string;
+}
 
 interface FileTreeProps {
-  branch: BranchStatus;
+  seat: TreeSeat;
   /** Operator clicked a file: open it in a viewer tab. */
   onOpen: (path: string, name: string, branch: string) => void;
   onClose: () => void;
 }
 
 /**
- * The files drawer: a branch's directory as a lazily-loaded, read-only tree.
+ * The files drawer: a branch's or the project's directory as a lazily-loaded, read-only tree.
  * The backend fences `list_dir` and file reads to the AIPass root, so no path policing here.
  */
-export default function FileTree({ branch, onOpen, onClose }: FileTreeProps) {
+export default function FileTree({ seat, onOpen, onClose }: FileTreeProps) {
   return (
-    <aside className="baud-tree" aria-label={`${branch.name} files`}>
+    <aside className="baud-tree" aria-label={`${seat.name} files`}>
       <header className="baud-tree-head">
-        <span className="baud-tree-title">{branch.name}</span>
+        <span className="baud-tree-title" title={seat.path}>
+          {seat.name}
+        </span>
         <button
           type="button"
           className="baud-tree-close"
@@ -29,7 +37,7 @@ export default function FileTree({ branch, onOpen, onClose }: FileTreeProps) {
         </button>
       </header>
       <div className="baud-tree-body">
-        <DirLevel path={branch.path} onOpen={(path, name) => onOpen(path, name, branch.name)} />
+        <DirLevel path={seat.path} onOpen={(path, name) => onOpen(path, name, seat.name)} />
       </div>
     </aside>
   );

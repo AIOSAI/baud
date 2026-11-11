@@ -6,6 +6,8 @@ import App from "./App";
 // custom properties defined before it. Generated from tokens/tokens.json.
 import "../tokens/tokens.generated.css";
 import "../theme.css";
+// The phone's screens mount as workbench tabs; every rule is prefixed, the one global is `html, body`.
+import "../phone/phone.css";
 
 const container = document.getElementById("root");
 

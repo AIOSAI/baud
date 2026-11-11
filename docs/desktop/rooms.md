@@ -37,9 +37,8 @@ but holds no claude (a room holding no claude never outranks a live seat; the
 row's `own_room_live` says which) — can still hold a live agent: @hooks' boot shim seats a typed `claude` in `aipass-<branch>`,
 the Telegram fleet wakes agents in `telegram-<branch>`. The snapshot reads panes,
 not just session names, so those show up as the branch's `outside_room` and the
-card's doors act on them: the badge wears a `⧉` and names the session on hover,
-the launch door reads `▸ attach` (never a second claude in a branch that already
-has one), and `✕ end room` ends that session rather than a `baud-<branch>`
+card's doors act on them: the launch door reads `▸ attach`, its hover naming the session (never a second
+claude in a branch that already has one), and `✕ end room` ends that session rather than a `baud-<branch>`
 that does not exist.
 
 A session is a candidate only when tmux reports one of its panes running
@@ -88,13 +87,35 @@ only raw bytes let xterm's decoder stitch it back together. Teardown signals the
 whole process group — SIGHUP, 400ms of grace, then SIGKILL — so background jobs
 are not orphaned. Scrollback is 5000 lines.
 
+**Renderer.** The operator terminal paints through `@xterm/addon-webgl`, a
+glyph atlas on a WebGL2 canvas, because xterm's DOM renderer cost WebKit's main
+thread about 17 CPU seconds a minute on a busy room. There is no DOM fallback.
+If the addon throws on load, or its WebGL context is lost (a GPU reset or a
+suspend), the terminal detaches (a room keeps running), the curtain shows the
+reason, and `page_log` writes `baud: terminal: <reason>` to the process's
+stderr, which a desktop launch sends to the user journal. A click on the curtain
+opens a new terminal with a fresh context. The monitor and inquiry panes keep
+the DOM renderer: each WebGL terminal holds its own context and atlas.
+
 **Slash-command chips.** When the tmux session this terminal is attached to
 holds a live interactive claude, `/memo`, `/prep` and `/compact` appear beside
 the corner buttons. One click types the command, waits 150ms for the slash
 palette to settle, then sends `\r` (a carriage return — claude's raw-mode input
 treats a linefeed as text). The hover text explains what each ritual is for.
 `/clear` is deliberately not a chip: the command that discards a conversation
-keeps its typing friction.
+keeps its typing friction. A room whose card runs Codex gets `$memo` and `$prep`
+instead, since Codex has no custom slash commands and its rituals are skills;
+`/compact` is a Codex built-in and stays. A room on OpenCode gets the Claude
+spelling: its `/memo`, `/prep` and `/compact` are commands of its own. The
+card's provider decides, for the session its doors act on (`roomProviders` and
+`slashCommand` in `phone/lib/rooms.ts`).
+
+**The switch dropdown.** Beside the chips, a `switch` dropdown offers the other
+two CLIs as the room's CLI spells them: `/codex` and `/opencode` on Claude,
+`$claude` and `$opencode` on Codex, `/claude` and `/codex` on OpenCode
+(`switchLegs`). Picking one types that command into the live pane, nothing
+else; the agent saves its memories, writes the handoff and respawns the pane on
+the other CLI.
 
 The question is asked of **the session, not the seat**, so the chips appear in
 a room attached from another project, which the seat's cards know nothing
@@ -119,23 +140,27 @@ does.
 
 ## The workbench
 
-Open files, diffs, monitors and help shells live as tabs beside the terminal.
-The terminal is never unmounted — hidden panes are display-hidden, so claude
-keeps streaming underneath while you read.
+Open files, the phone's screens, monitors and help shells live as tabs beside
+the terminal. The terminal is never unmounted — hidden panes are display-hidden,
+so claude keeps streaming underneath while you read. Its tab carries the name
+of the room it holds, as the phone's pane tab does; with no live room (the
+scratch shell, or after `end room`) it reads `terminal`.
 
-**The reading room.** Card figures and ctrl+clicked paths open read-only
-CodeMirror panes; the `files` button docks a lazily-loaded directory tree.
-The git badge opens the branch's full uncommitted diff in patch syntax, and diff
-tabs refetch every time they return to the front (a diff goes stale the moment
-the agent keeps working); file tabs load once. Every path the frontend sends is
+**The reading room.** Ctrl+clicked paths open read-only CodeMirror panes; a
+`.md` pane carries the phone Reader's `preview` / `raw` toggle, rendering
+through the same sanitized markdown as the phone, raw by default. A
+passport's `files` door docks a lazily-loaded directory tree. A passport's
+figures open the phone's designed screens in tabs — the `⎇ git` figure the git
+app on that branch's changes, where a file row opens its diff — and a phone tab
+re-reads every time it returns to the front; file tabs load once. Every path the frontend sends is
 canonicalized and must sit inside the seated project's root, viewers cap at
 512 KB and flag the truncation, binaries are refused, and the tree skips `.git`,
 `node_modules`, `target`, `__pycache__`, `.venv`, `dist`.
 
 **Monitor panes (read-only).** The header's two traffic lights open
 `drone @prax monitor run` (mission control, all branches) and
-`drone @prax monitor run commons` (the live social feed); a card's `watch`
-button opens `drone @prax monitor run <branch>` in its own `watch:<branch>` tab.
+`drone @prax monitor run commons` (the live social feed); a passport's `watch`
+door opens `drone @prax monitor run <branch>` in its own `watch:<branch>` tab.
 A light is green exactly while its tab exists, so the toggle, the tab's `✕`, the
 pane's corner button and the monitor dying on its own all reset it through the
 same door.
@@ -148,7 +173,7 @@ frontend passes a target token, never a command line — and the token must matc
 spawn through the login shell (`-l -c`) so `drone` resolves from the operator's
 own PATH.
 
-**Help terminals.** The `?` on a card opens a real shell seated in that branch
+**Help terminals.** The `?` on an opened card opens a real shell seated in that branch
 with the branch's help command already run — `drone @<branch> --help`, except
 for `aipass`, which is the ecosystem's one routing exception and asks its own
 binary (`aipass --help`). The keyboard is deliberately ON: the point is
@@ -161,7 +186,8 @@ tab.
 
 ai_mail appends every notification event — mail delivered, agent waking,
 dispatch finished — to `<project root>/.aipass/notifications.jsonl`, one JSON
-object per line (`ts`, `kind`, `title`, `body`, `source`). There are no desktop
+object per line (`ts`, `kind`, `title`, `body`, `source`, and on a mail line
+`mail_id`, `recipient` and `project`). There are no desktop
 toasts: ai_mail's notifier writes this feed and has no D-Bus or notify-send
 path.
 
@@ -171,13 +197,20 @@ the bell down), and returns at most 200 events; the bell then keeps as many as
 the interface settings say. A missing feed is a quiet bell, not an error.
 
 Nothing clears itself. The badge stays until the operator clicks **clear**,
-which wipes the lot in one click. Clearing is local — a cleared-up-to timestamp
-in `localStorage`, keyed per project — so the feed file is never written by
-BAUD, and two BAUD windows never fight over read flags. Rows click to expand
-from their two-line preview to the whole event.
+which wipes the lot in one click. Clearing is local — one cleared-up-to
+timestamp in `localStorage` for the machine, as the phone's bell keeps, so a
+clear holds across a reseat; an older per-project mark for the seated project is
+adopted once — so the feed file is never written by BAUD, and two BAUD windows
+never fight over read flags. A mail row carrying both `mail_id` and `recipient`
+opens that message in the recipient's inbox screen, in a workbench tab, under
+the line's own project (the seat for a line that names none). Every other row
+clicks to expand from its two-line preview to the whole event.
 
 The chime, when enabled, is synthesized with the Web Audio API — two short sine
 notes — because the CSP allows no external assets and a sound file shipped
 beside the binary is a sound that eventually goes missing. It fires only when a
 poll brings an event newer than the previous poll's newest; the first list after
-launch is history, not news.
+launch is history, not news. The one audio context sleeps between chimes:
+a chime resumes it, schedules its notes once it is awake, and suspends it when
+its last note ends unless another chime is still sounding. A running context
+keeps WebKit's audio threads busy at about 9 percent of a core.

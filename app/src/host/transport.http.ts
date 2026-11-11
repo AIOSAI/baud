@@ -3,10 +3,21 @@
 import { withRef } from "./errorRef";
 
 /** Where `/v1` lives. Empty is same-origin, so a bundle @api serves needs no configuration. */
-const API_BASE = (import.meta.env.VITE_BAUD_API ?? "").replace(/\/+$/, "");
+const BUILT_BASE = (import.meta.env.VITE_BAUD_API ?? "").replace(/\/+$/, "");
+
+/** A face whose address and token live outside this page (the extension's chrome.storage) sets them here. */
+let configured: { base: string; token: string | null } | null = null;
+
+export function configureHost(base: string, token: string | null): void {
+  configured = { base: base.replace(/\/+$/, ""), token };
+}
+
+function apiBase(): string {
+  return configured ? configured.base : BUILT_BASE;
+}
 
 export function apiOrigin(): string {
-  return API_BASE || window.location.origin;
+  return apiBase() || window.location.origin;
 }
 
 const TOKEN_KEY = "baud.phone.token";
@@ -15,6 +26,7 @@ const TOKEN_KEY = "baud.phone.token";
 const BEARER_SENTINEL = "aipass.bearer";
 
 export function readToken(): string | null {
+  if (configured) return configured.token;
   try {
     return window.localStorage.getItem(TOKEN_KEY);
   } catch {
@@ -23,6 +35,10 @@ export function readToken(): string | null {
 }
 
 export function writeToken(token: string | null): void {
+  if (configured) {
+    configured.token = token;
+    return;
+  }
   try {
     if (token === null) window.localStorage.removeItem(TOKEN_KEY);
     else window.localStorage.setItem(TOKEN_KEY, token);
@@ -74,7 +90,7 @@ function errorFrom(body: any, status: number): HostError {
 type Query = Record<string, string | number | boolean | null | undefined>;
 
 interface Route {
-  path: string;
+  path: string | ((args: Record<string, unknown>) => string);
   method?: "GET" | "POST";
   query?: (args: Record<string, unknown>) => Query;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
@@ -342,7 +358,40 @@ const ROUTES: Record<string, Route> = {
   },
 
   // No terminal route: the room is a stream, and `openRoomSocket` is its door.
+
+  /* The extension's chat; the agent rides in the path. */
+
+  agent_feed: {
+    path: (args) => agentPath(args, "feed"),
+    // Omitted on the first read; `since` is the last line number held.
+    query: (args) => ({ since: args.since as number | undefined }),
+  },
+  agent_send: {
+    path: (args) => agentPath(args, "send"),
+    method: "POST",
+    body: (args) => ({ text: args.text }),
+  },
+  agent_interrupt: { path: (args) => agentPath(args, "interrupt"), method: "POST" },
+  agent_allow: { path: (args) => agentPath(args, "allow"), method: "POST" },
+  agent_deny: { path: (args) => agentPath(args, "deny"), method: "POST" },
+  models_list: { path: "/v1/models" },
+  agent_model: {
+    path: (args) => agentPath(args, "model"),
+    method: "POST",
+    body: (args) => ({ ...(args.pick as Record<string, unknown>) }),
+  },
+  agent_usage: { path: (args) => agentPath(args, "usage") },
+  screenshot: { path: "/v1/screenshot", method: "POST", body: () => ({}) },
 };
+
+/** `/v1/agent/<project>/<name>/<verb>`, each segment encoded; a dot segment would climb out of the agent. */
+function agentPath(args: Record<string, unknown>, verb: string): string {
+  const parts = String(args.agent ?? "").split("/");
+  if (parts.length !== 2 || parts.some((p) => !p || p === "." || p === "..")) {
+    throw new HostError(400, "bad_agent", `an agent is '<project>/<name>', got '${String(args.agent ?? "")}'`);
+  }
+  return `/v1/agent/${parts.map(encodeURIComponent).join("/")}/${verb}`;
+}
 
 /** Verbs the phone knows and cannot perform: a designed absence, distinct from an unrouted bug. */
 const NOT_YET: Record<string, string> = {
@@ -358,10 +407,22 @@ const NOT_YET: Record<string, string> = {
   pty_resize: "no webview terminal on the phone - see pty_create",
   pty_kill: "no webview terminal on the phone - see pty_create",
   monitor_create: "monitor panes are a desktop pane concern",
+  page_log: "the desktop page writes its failures to the host process's stderr; the phone has its own console",
   /* Character caps have no host route; @api serves the rollover lane only. */
   memory_config_write:
     "entry character caps have no /v1 route - only the rollover limits are served here, and the desktop gear owns the caps",
   screenshot_capture: "this captures the MACHINE's screen through its compositor - there is none to capture from a phone",
+  browser_status: "BAUD's Chrome is the desktop's for now - the phone's view of it waits on @api's socket lane",
+  browser_launch: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_adopt: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_view_open: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_view_close: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_input: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_navigate: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_new_tab: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_history: "BAUD's Chrome is the desktop's for now - see browser_status",
+  browser_close_tab: "BAUD's Chrome is the desktop's for now - see browser_status",
+  hark_voice: "Hark's mic chip is the desktop's - the phone has no Hark control",
 };
 
 /** The absolute path of the root an answer stands on; "" when absent so composition refuses, not half-builds. */
@@ -441,58 +502,100 @@ function fleetMemoryConfig(body: any): unknown {
   };
 }
 
-function queryString(query: Query): string {
-  const parts = Object.entries(query)
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+function queryString(query: Record<string, string>): string {
+  const parts = Object.entries(query).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
-/** A typed host call. The only `fetch` in the application. */
-export async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+/** What a face sends: a fenced `/v1` request, its query already stringified and emptied of blanks. */
+export interface WireRequest {
+  method: "GET" | "POST";
+  path: string;
+  query: Record<string, string>;
+  body: Record<string, unknown> | null;
+}
+
+/** What a face hands back: the status and the raw body, parsed once by `callWith` for every face. */
+export interface WireResponse {
+  status: number;
+  body: string;
+}
+
+export type Sender = (request: WireRequest) => Promise<WireResponse>;
+
+/** The phone's sender: `fetch` with the pasted token. */
+const fetchSender: Sender = async (request) => {
+  const token = readToken();
+  if (!token) throw new HostError(401, "no_token", "no token - paste one to connect");
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: "application/json",
+  };
+  if (request.body !== null) headers["Content-Type"] = "application/json";
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase()}${request.path}${queryString(request.query)}`, {
+      method: request.method,
+      headers,
+      body: request.body === null ? undefined : JSON.stringify(request.body),
+    });
+  } catch (cause) {
+    // A network failure is not a rejected token: re-paste versus check the server.
+    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
+  }
+  return { status: response.status, body: await response.text().catch(() => "") };
+};
+
+/** Seam verb and args -> the wire request, or the designed refusal. */
+export function wireRequest(command: string, args?: Record<string, unknown>): WireRequest {
   const refusal = NOT_YET[command];
   if (refusal) throw new HostError(501, "not_on_the_phone", `${command}: ${refusal}`);
 
   const route = ROUTES[command];
   if (!route) throw new HostError(501, "unrouted", `${command} has no /v1 route - the seam grew and this table did not`);
 
-  const token = readToken();
-  if (!token) throw new HostError(401, "no_token", "no token - paste one to connect");
-
-  const query = route.query ? route.query(args ?? {}) : {};
+  const query: Query = route.query ? route.query(args ?? {}) : {};
   const project = (args?.project as string) ?? "";
   if (project) query.project = project;
 
   const method = route.method ?? "GET";
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/json",
+  const sent: Record<string, string> = {};
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") sent[key] = String(value);
+  }
+  return {
+    method,
+    path: typeof route.path === "function" ? route.path(args ?? {}) : route.path,
+    query: sent,
+    body: method === "POST" ? (route.body ? route.body(args ?? {}) : {}) : null,
   };
-  let payload: string | undefined;
-  if (method === "POST") {
-    headers["Content-Type"] = "application/json";
-    payload = JSON.stringify(route.body ? route.body(args ?? {}) : {});
-  }
+}
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}${route.path}${queryString(query)}`, {
-      method,
-      headers,
-      body: payload,
-    });
-  } catch (cause) {
-    // A network failure is not a rejected token: re-paste versus check the server.
-    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
-  }
+/** A typed host call through any sender: one parse, so `HostError` means the same on every face. */
+export async function callWith<T>(send: Sender, command: string, args?: Record<string, unknown>): Promise<T> {
+  const request = wireRequest(command, args);
+  const response = await send(request);
 
   if (response.status === 204) return undefined as T;
 
-  const body = await response.json().catch(() => null);
+  let body: any = null;
+  try {
+    body = JSON.parse(response.body);
+  } catch {
+    body = null;
+  }
 
-  if (!response.ok) throw errorFrom(body, response.status);
+  if (response.status < 200 || response.status > 299) throw errorFrom(body, response.status);
 
+  const route = ROUTES[command];
   return (route.unwrap ? route.unwrap(body) : body) as T;
+}
+
+/** A typed host call. The only `fetch` in the application. */
+export function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return callWith<T>(fetchSender, command, args);
 }
 
 export async function verifyToken(token: string): Promise<{ id: string; label: string; scope: string }> {
@@ -509,7 +612,7 @@ export async function verifyToken(token: string): Promise<{ id: string; label: s
 export async function redeemPairing(code: string): Promise<{ token: string; id: string; label: string; scope: string }> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/v1/pair`, {
+    response = await fetch(`${apiBase()}/v1/pair`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ code }),
@@ -550,7 +653,7 @@ export async function uploadImage(file: File): Promise<string> {
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}/v1/files/upload`, {
+    response = await fetch(`${apiBase()}/v1/files/upload`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
       body: form,
@@ -569,6 +672,28 @@ export async function uploadImage(file: File): Promise<string> {
   return path;
 }
 
+/** Piper's raw 16-bit mono PCM as it is made, at the rate the `X-Sample-Rate` header names; a stream, so not `call`. */
+export async function speak(text: string, signal?: AbortSignal): Promise<{ rate: number; body: ReadableStream<Uint8Array> }> {
+  const token = readToken();
+  if (!token) throw new HostError(401, "unauthorized", "no token - set the host before reading aloud");
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase()}/v1/speak`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+      signal,
+    });
+  } catch (cause) {
+    throw new HostError(0, "unreachable", `cannot reach the host API: ${String(cause)}`);
+  }
+  if (!response.ok) throw errorFrom(await response.json().catch(() => null), response.status);
+  const rate = Number(response.headers.get("X-Sample-Rate"));
+  // A guessed rate plays at the wrong pitch, so a missing header is an error, not a default.
+  if (!(rate > 0) || !response.body) throw new HostError(502, "no_rate", "the speech answered without X-Sample-Rate or a body");
+  return { rate, body: response.body };
+}
+
 /** Attach a tmux client to a room. A closed socket is a detach, never an end. */
 export function openRoomSocket(branch: string, project: string, kind = ""): WebSocket {
   const token = readToken();
@@ -576,8 +701,8 @@ export function openRoomSocket(branch: string, project: string, kind = ""): WebS
     throw new HostError(401, "unauthorized", "no token - sign in before attaching a room");
   }
   // The page's protocol picks ws or wss, so a TLS page never opens a cleartext socket.
-  const base = API_BASE
-    ? API_BASE.replace(/^http/, "ws")
+  const base = apiBase()
+    ? apiBase().replace(/^http/, "ws")
     : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
   const query = new URLSearchParams({ branch, project });
   // `kind` is absent for agent attaches, so that handshake is unchanged.

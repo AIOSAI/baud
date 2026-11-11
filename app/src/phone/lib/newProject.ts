@@ -37,6 +37,7 @@ export function bornCard(result: NewProjectResult): BranchStatus {
     interactive: false,
     has_history: false,
     resume_id: null,
+    provider: "claude",
     room: "",
     has_room: false,
     own_room_live: false,

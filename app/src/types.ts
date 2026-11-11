@@ -11,6 +11,10 @@ export interface BranchStatus {
   interactive: boolean;
   has_history: boolean;
   resume_id: string | null;
+  /** The CLI the doors start: the pointer's provider, else the live session's, else "claude". An older baud-cli omits it. */
+  provider?: "claude" | "codex" | "opencode";
+  /** The resolved pointer's run record; null with no pointer, absent from an older baud-cli. */
+  run?: RunRecord | null;
   /** The own room's name whether or not it exists. Read it, never rebuild it: `room_name` owns the rule. */
   room: string;
   has_room: boolean;
@@ -26,6 +30,27 @@ export interface BranchStatus {
   last_updated: string;
 }
 
+/** Mirrors `RunRecord` in src-tauri/src/lib.rs. Absent pointer fields arrive as "pending" / "cli_default" / "unknown". */
+export interface RunRecord {
+  session_id: string;
+  host_cli: string | null;
+  model_provider: string;
+  model_requested: string;
+  /** The runtime's own model id, or "pending". */
+  model_observed: string;
+  selection_source: string;
+  observed_at: string | null;
+  /** null is "no receipt": absent, unreadable, or for another session. */
+  receipt: GroundingReceipt | null;
+}
+
+/** Mirrors `GroundingReceipt` in src-tauri/src/lib.rs. */
+export interface GroundingReceipt {
+  status: string;
+  generation: number;
+  missing: string[];
+}
+
 /** Mirrors `FleetSnapshot` in src-tauri/src/lib.rs. */
 export interface FleetSnapshot {
   project: string;
@@ -35,7 +60,11 @@ export interface FleetSnapshot {
   branches: BranchStatus[];
   /** Machine-wide on purpose: the terminal may sit in a room of a project the fleet view is not showing. */
   live_agent_sessions: string[];
+  /** Hark's mic, read from the `hark` room's pane. */
+  hark: HarkState;
 }
+
+export type HarkState = "listening" | "muted" | "stopped" | "absent";
 
 /** Mirrors `ProjectListing` in src-tauri/src/lib.rs. */
 export interface ProjectListing {
@@ -256,6 +285,12 @@ export interface BaudSettings {
   terminal_scroll_percent?: number;
 }
 
+/** Mirrors `RelaySettings` in src-tauri/src/host_relay.rs: this machine's relay settings. Null asks @api / uses the default receipt. */
+export interface RelaySettings {
+  url: string | null;
+  token_path: string | null;
+}
+
 /** Mirrors `EntryLimit` in src-tauri/src/memory.rs. */
 export interface EntryLimit {
   key: string;
@@ -468,6 +503,46 @@ export interface BackupStatus {
   running: BackupRunning[];
 }
 
+/** BAUD's own Chrome (browser.rs); IPC only. */
+export interface BrowserTarget {
+  id: string;
+  title: string;
+  url: string;
+}
+
+/** One view's stream (`BrowserEvent`); frame sizes are CSS pixels, the space input coordinates live in. */
+export type BrowserEvent =
+  | {
+      kind: "frame";
+      /** The JPEG as base64. */
+      data: string;
+      device_width: number;
+      device_height: number;
+      page_scale: number;
+      scroll_x: number;
+      scroll_y: number;
+    }
+  | { kind: "visibility"; visible: boolean }
+  | { kind: "closed"; reason: string };
+
+/** `BrowserInput`: CDP's own `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` params. */
+export type BrowserInput =
+  | { kind: "mouse"; params: Record<string, unknown> }
+  | { kind: "key"; params: Record<string, unknown> };
+
+export interface BrowserStatus {
+  /** `foreign`: the port answers with no BAUD room. `stale`: the room is open and the port silent. */
+  state: "running" | "down" | "foreign" | "stale";
+  port: number;
+  profile: string;
+  room_alive: boolean;
+  /** Pages only, never workers or extension backgrounds. */
+  targets: BrowserTarget[];
+  /** Whether Claude Code's native-messaging manifest is reachable from the profile. */
+  native_hosts: "linked" | "present" | "absent";
+  detail: string;
+}
+
 /** `POST /v1/backup/run` (202, state running) and `GET /v1/backup/job`. */
 export interface BackupJob {
   job: string;
@@ -487,4 +562,54 @@ export interface BackupCancel {
   lane: BackupLane;
   stopped: boolean;
   message: string;
+}
+
+/* The extension's chat; `<agent>` is `<project>/<name>` as /v1/fleet names it. */
+
+export interface AgentLine {
+  n: number;
+  role: "user" | "agent" | "tool";
+  text: string;
+  time: string;
+  model?: string;
+}
+
+export interface AgentFeed {
+  lines: AgentLine[];
+  busy: boolean;
+  waiting: { tool: string } | null;
+  /** The transcript file read; line numbers restart in a new one. */
+  session?: string | null;
+}
+
+export interface ModelRow {
+  name: string;
+  label?: string;
+  group?: string;
+  efforts?: string[];
+}
+
+/** Per provider its models, or why there are none; `switch[from][to]` says whether that handoff takes a model. */
+export type ModelCatalog = Partial<Record<"claude" | "codex" | "opencode", { models: ModelRow[]; reason?: string }>> & {
+  switch?: Record<string, Record<string, boolean>>;
+};
+
+export interface ModelPick {
+  provider: string;
+  model?: string;
+  effort?: string;
+}
+
+export interface UsageLimit {
+  label: string;
+  percent: number;
+  severity?: "normal" | "warning" | "critical";
+  resets_at?: string | null;
+}
+
+export interface AgentUsage {
+  provider?: string;
+  context: { used: number; total: number; percent: number } | null;
+  limits?: UsageLimit[];
+  note?: string | null;
 }

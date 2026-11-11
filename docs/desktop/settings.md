@@ -1,6 +1,6 @@
 # Settings
 
-This page covers the desktop's settings: the card gear that edits one agent's claude settings, the header gear for BAUD's own interface, and the memory dials over @memory's config.
+This page covers the desktop's settings: the card gear that edits one agent's claude settings, the header gear for BAUD's own interface, the memory dials over @memory's config, and the host API tab for the relay.
 
 ← [the desktop window](../desktop.md)
 
@@ -107,6 +107,12 @@ a key, and it hands the whole document back as written.
 | bell keeps | `bell_max_events` | 200 (menu: 50/100/200, accepted range 1–500) |
 | bell chime | `bell_sound` | off |
 
+**Wheel speed** sits in the same panel, under `poll every`, but outside the
+file and the Save button: like the zoom it is this window's own feel, kept in
+`localStorage` (`baud-wheel-speed`: slow, normal or fast; absent is normal) and
+applied the moment the menu changes. The levels' rest and delta are in
+[the wheel](../phone/wheel.md#desktop-input).
+
 Absence and nonsense both fall back to the default — the file is
 operator-editable by hand, and the app must keep running rather than poll every
 0 ms. A stored value the menu does not offer stays listed instead of being
@@ -136,6 +142,15 @@ rather than on save, both directions are idempotent, the state is read live on
 open because a shell or another window may have flipped it, and nothing about it
 is mirrored into `baud.settings.json` where it would drift. The flag lives in
 the temp directory, so it resets on reboot; that is the flag's design, not ours.
+
+Under the interface rows, two more that store nothing:
+
+- **phone · pair a phone** closes the dialog and opens a terminal tab at the
+  project root already running `drone @api host-api pair phone --scope operate`,
+  the help-terminal pattern: keyboard on, the command draws its own one-use QR
+  (five minutes), and `exit` closes the tab. The button waits, disabled, until
+  the seat's root is read.
+- **about** shows `BAUD <version>`, the app's own version as Tauri reports it.
 
 ### The memory dials — @memory's config, edited from here
 
@@ -200,3 +215,21 @@ moving one dial rewrites 2 of its 364 lines. One is the number. The other is
 literal UTF-8 — the same decoded string, spelled differently. Both writers
 build serde_json with `preserve_order`, which is what keeps the rest of the file
 in place.
+
+### The host API tab — where the relay reaches the server
+
+The gear's third tab writes this machine's `host_relay.json` in the app's config
+dir (`~/.config/ai.aipass.baud/` on Linux), never a project's file: the address
+belongs to the machine, not to the seat. A blank row clears its key on save.
+
+| Row | Key | Blank means |
+| --- | --- | --- |
+| address | `url` — `http://host:port`, nothing more (no https: the relay is built without TLS) | ask `drone @api host-api config` on this machine |
+| token receipt | `token_path` — absolute path to a receipt file | this machine's `baud-desktop` receipt, minted on the first call |
+
+A desktop on the machine that serves the host API leaves both blank. A desktop
+on a second machine types the server's tailnet address and the path of a
+receipt issued on the server (`drone @api host-api issue-token <label> --scope
+operate`) and copied over. The relay never mints a typed path. A save refuses a
+malformed address or a relative path and leaves the file as it was; it takes
+effect on the next relay call.

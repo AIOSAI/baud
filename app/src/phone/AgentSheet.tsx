@@ -8,7 +8,7 @@ import VerbChips from "./VerbChips";
 import { isAwake } from "./FleetWheel";
 import { INTERCEPT_WINDOW_MS, interceptTap } from "./lib/intercept";
 import { mailFigure } from "./lib/mailFigure";
-import { type LaunchMode, type RoomDoor, helpCommand, roomDoors } from "./lib/rooms";
+import { type LaunchMode, type RoomDoor, helpCommand, roomDoors, runChip } from "./lib/rooms";
 import { type Scope, scopeRefusal } from "./lib/verbs";
 
 /** The one file this card opens in the plain reader, by the name @api's fence takes. */
@@ -43,6 +43,8 @@ interface AgentSheetProps {
   onWatch: () => void;
   onSettings: () => void;
   onMemory: () => void;
+  /** Absent where this face has no chat: the door is not drawn. */
+  onChat?: () => void;
   monitors: SheetMonitor[];
   /** Open the passport - a door, not the avatar: the phone's avatar sits inside the chip's tap target. */
   onPassport: () => void;
@@ -73,6 +75,7 @@ export default function AgentSheet({
   onWatch,
   onSettings,
   onMemory,
+  onChat,
   monitors,
   onPassport,
   onAttach,
@@ -103,6 +106,9 @@ export default function AgentSheet({
     };
   }, [branch.name, branch.project]);
 
+  /** The run detail under the chip: opened by the chip, a button, so click, Enter and Space all reach it. */
+  const [runOpen, setRunOpen] = useState(false);
+
   /** When the intercept door was armed, or null: a second tap inside the window fires it (`lib/intercept.ts`). */
   const [armedAt, setArmedAt] = useState<number | null>(null);
   useEffect(() => {
@@ -131,6 +137,19 @@ export default function AgentSheet({
   const refusal = scopeRefusal(scope);
   const state = branch.dispatched ? "dispatched" : branch.interactive ? "interactive" : "idle";
   const kind = branch.manager ? "manager" : branch.is_citizen ? "citizen" : "branch";
+  const chip = runChip(branch);
+  const run = branch.run ?? null;
+  const receipt = run?.receipt ?? null;
+  const host = branch.provider ?? "claude";
+  const runRows: Array<[string, string]> = [
+    ["host", run?.host_cli && run.host_cli !== host ? `${host} (pointer: ${run.host_cli})` : host],
+    ["model provider", run?.model_provider ?? "pending"],
+    ["requested", run?.model_requested ?? "cli_default"],
+    ["observed", run?.model_observed ?? "pending"],
+    ["selection source", run?.selection_source ?? "unknown"],
+    ["observed at", run?.observed_at ?? "—"],
+    ["session", run?.session_id ?? "no pointer"],
+  ];
 
   const stats: ReadonlyArray<{
     figure: string;
@@ -240,10 +259,45 @@ export default function AgentSheet({
           </button>
         </div>
         <p className="baud-agent-sub">
-          {kind} · <span className={isAwake(branch) ? "baud-agent-awake" : ""}>{state}</span>
+          {kind} · <span className={isAwake(branch) ? "baud-agent-awake" : ""}>{state}</span> ·{" "}
+          <button
+            type="button"
+            className={`baud-agent-run ${chip.pending ? "baud-agent-run-pending" : ""}`}
+            title={chip.title}
+            aria-expanded={runOpen}
+            onClick={() => setRunOpen((open) => !open)}
+          >
+            {chip.text}
+          </button>
         </p>
+        {runOpen ? (
+          <dl className="baud-machine-rows baud-agent-runrows">
+            {runRows.map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>receipt</dt>
+              <dd className={receipt ? `baud-agent-receipt-${receipt.status}` : ""}>{receipt?.status ?? "no receipt"}</dd>
+            </div>
+            {receipt ? (
+              <>
+                <div>
+                  <dt>generation</dt>
+                  <dd>{receipt.generation}</dd>
+                </div>
+                <div>
+                  <dt>missing</dt>
+                  <dd>{receipt.missing.join(", ") || "none"}</dd>
+                </div>
+              </>
+            ) : null}
+          </dl>
+        ) : null}
         {/* Zero is stated, not hidden: a sheet silent at zero cannot be told from one that
-            does not report sub-agents, and the desktop passport says "none running". */}
+            does not report sub-agents. */}
         <p
           className={`baud-agent-subagents ${
             branch.subagents > 0 ? "baud-agent-subagents-live" : ""
@@ -346,6 +400,16 @@ export default function AgentSheet({
           >
             memory
           </button>
+          {onChat ? (
+            <button
+              type="button"
+              className="baud-agent-door"
+              title={`talk to ${branch.name} - its transcript and a box to send into its room`}
+              onClick={onChat}
+            >
+              chat
+            </button>
+          ) : null}
         </nav>
         {/* Titles never show on touch, so the refusal or the ⚡ warning is said here; a refusal outranks it. */}
         {!isAttachedRoom && refusal ? (

@@ -1,7 +1,9 @@
 /** The host surface: every host capability, named and typed once; verbs never name one terminal's flags. */
 
 import type {
+  AgentFeed,
   AgentSettings,
+  AgentUsage,
   AgentSettingsPatch,
   BackupCancel,
   BackupJob,
@@ -9,6 +11,10 @@ import type {
   BackupStatus,
   BaudSettings,
   BranchStatus,
+  BrowserEvent,
+  BrowserInput,
+  BrowserStatus,
+  BrowserTarget,
   DirEntryInfo,
   DirWindow,
   GitChangeCount,
@@ -25,14 +31,17 @@ import type {
   MachineProcesses,
   MachineVitals,
   MemoryConfig,
+  ModelCatalog,
+  ModelPick,
   NewProjectResult,
   NotificationEvent,
   ProjectListing,
+  RelaySettings,
   RootEntry,
   SpawnResult,
   VerbResult,
 } from "../types";
-import { call } from "./transport";
+import { call, type HostChannel } from "./transport";
 
 export { HostChannel, openExternal } from "./transport";
 
@@ -145,6 +154,9 @@ export const ptyResize = (id: string, cols: number, rows: number) =>
 
 export const ptyKill = (id: string) => call<void>("pty_kill", { id });
 
+/** A line on the desktop process's stderr (the user journal): the release webview keeps no console. */
+export const pageLog = (line: string) => call<void>("page_log", { line });
+
 export const monitorCreate = (args: Record<string, unknown>) =>
   call<string>("monitor_create", args);
 
@@ -154,7 +166,7 @@ export const notificationsRead = () => call<NotificationEvent[]>("notifications_
 export const notificationsFeed = (since: string | null, limit: number) =>
   call<FeedWindow>("notifications_feed", { since, limit });
 
-/* Phone-only, operate scope. `wake` names no model: the branch's own config decides that. */
+/* Operate scope, over the relay on the desktop. `wake` names no model: the branch's own config decides that. */
 
 /** Never admin: a woken agent is a worker. */
 export const verbWake = (branch: string, project: string, message: string) =>
@@ -185,7 +197,7 @@ export const backupCancel = (project: string, lane: BackupLane) =>
   call<BackupCancel>("backup_cancel", { project, lane });
 
 /* Not `call`s, but both transports export them and the vite alias picks one, keeping http out of the desktop. */
-export { openRoomSocket, uploadImage } from "./transport";
+export { openRoomSocket, speak, uploadImage } from "./transport";
 
 export const agentSettingsRead = (agent: string, project = "") =>
   call<AgentSettings>("agent_settings_read", project ? { agent, project } : { agent });
@@ -200,6 +212,11 @@ export const baudSettingsWrite = (patch: unknown) => call<BaudSettings>("baud_se
 export const hooksSoundGet = () => call<boolean>("hooks_sound_get");
 
 export const hooksSoundSet = (active: boolean) => call<boolean>("hooks_sound_set", { active });
+
+export const hostRelaySettingsRead = () => call<RelaySettings>("host_relay_settings_read");
+
+export const hostRelaySettingsWrite = (settings: RelaySettings) =>
+  call<RelaySettings>("host_relay_settings_write", { settings });
 
 export const memoryConfigRead = () => call<MemoryConfig>("memory_config_read");
 
@@ -226,3 +243,52 @@ export const memoryConfigPush = async () => {
 };
 
 export const screenshotCapture = () => call<string>("screenshot_capture");
+
+/* BAUD's own Chrome lives on the desktop's machine; the phone is refused before any request. */
+
+export const browserStatus = () => call<BrowserStatus>("browser_status");
+
+export const browserLaunch = () => call<BrowserStatus>("browser_launch");
+
+/** Copies ~/.config/google-chrome into BAUD's profile, the old one renamed aside; refused while any Chrome runs. */
+export const browserAdopt = () => call<BrowserStatus>("browser_adopt");
+
+/** Streams one page's screencast into `onEvent`; closing the view never touches the page. */
+export const browserViewOpen = (targetId: string, onEvent: HostChannel<BrowserEvent>) =>
+  call<string>("browser_view_open", { targetId, onEvent });
+
+export const browserViewClose = (viewId: string) => call<void>("browser_view_close", { viewId });
+
+export const browserInput = (viewId: string, event: BrowserInput) => call<void>("browser_input", { viewId, event });
+
+export const browserNavigate = (viewId: string, url: string) => call<void>("browser_navigate", { viewId, url });
+
+export const browserNewTab = () => call<BrowserTarget>("browser_new_tab");
+
+export const browserHistory = (viewId: string, step: number) => call<void>("browser_history", { viewId, step });
+
+export const browserCloseTab = (targetId: string) => call<void>("browser_close_tab", { targetId });
+
+export const harkVoice = (word: "on" | "stop") => call<void>("hark_voice", { word });
+
+/* The extension's chat, http-only (no desktop command): `agent` is `<project>/<name>`. */
+
+export const agentFeed = (agent: string, since?: number) => call<AgentFeed>("agent_feed", { agent, since });
+
+/** 409 when the agent has no room. */
+export const agentSend = (agent: string, text: string) => call<unknown>("agent_send", { agent, text });
+
+export const agentInterrupt = (agent: string) => call<unknown>("agent_interrupt", { agent });
+
+export const agentAllow = (agent: string) => call<unknown>("agent_allow", { agent });
+
+export const agentDeny = (agent: string) => call<unknown>("agent_deny", { agent });
+
+export const modelsList = () => call<ModelCatalog>("models_list");
+
+/** 409 while the agent works. A `provider` other than its own is a handoff. */
+export const agentModel = (agent: string, pick: ModelPick) => call<{ typed?: string } | undefined>("agent_model", { agent, pick });
+
+export const agentUsage = (agent: string) => call<AgentUsage>("agent_usage", { agent });
+
+export const screenshot = () => call<{ path: string }>("screenshot");

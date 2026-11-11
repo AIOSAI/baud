@@ -14,7 +14,7 @@
 
 **The wheel.** Every agent in one flick, with live state, mail and memory; the project switcher in the header moves you between projects.
 
-**The card.** Tap an agent: what it is doing now, its mail, plans and todos, and the doors to its room, files, shell and memory.
+**The card.** Tap an agent: what it is doing now, which CLI and model it runs on, its mail, plans and todos, and the doors to its room, files, shell and memory.
 
 <p align="center">
   <img src="docs/assets/baud-agent.png" alt="An agent's card: what it is doing, its mail, plans and todos, and the doors to its room, files, shell and memory" width="280">
@@ -96,6 +96,7 @@ Pre-release, `0.x`. Linux only, and the surface still moves. Changes are listed 
   - [The wheel](docs/phone/wheel.md) · [The card](docs/phone/card.md) · [The room](docs/phone/room.md) · [Room input](docs/phone/room-input.md) · [Room delivery](docs/phone/room-delivery.md)
   - [Files and git](docs/phone/files-git.md) · [Backup](docs/phone/backup.md) · [Monitor](docs/phone/monitor.md) · [Settings and navigation](docs/phone/settings-nav.md) · [Files](docs/phone/files.md)
 - [The desktop window](docs/desktop.md) (under development): [window and cards](docs/desktop/window-and-cards.md) · [rooms](docs/desktop/rooms.md) · [settings](docs/desktop/settings.md)
+- [The Chrome extension](docs/extension.md): chat with your agents in Chrome's side panel, and the pulse on the page.
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
 - [Architecture](docs/architecture.md) · [Development](docs/development.md) · [The install sandbox](docs/sandbox.md) · [Releases](docs/releases.md)
 - [CHANGELOG.md](CHANGELOG.md) · [MAP.md](MAP.md): where every file lives.

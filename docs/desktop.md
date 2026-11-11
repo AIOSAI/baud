@@ -32,29 +32,34 @@ Each part of the window has its own page under `docs/desktop/`.
 
 | Page | What it covers |
 | --- | --- |
-| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the cards and their doors; what a launch types; the opened passport |
+| [window and cards](desktop/window-and-cards.md) | the header, footer, zoom and project switcher; the wheel and its round cards; the opened card and its passport; what a launch types |
 | [rooms](desktop/rooms.md) | rooms and the seat model, the terminal, the workbench tabs, the bell |
 | [settings](desktop/settings.md) | the card gear, the header gear, the memory dials |
+| [apps](desktop/apps.md) | the wheel's app and monitor cards: FILES docks the tree at the project root; GIT, BACKUP, MACHINE and BROWSER are each the phone's own screen in a workbench tab |
+| [browser](desktop/browser.md) | BAUD's own Chrome: the profile, the room, the port, the four states, the native-hosts link |
 
-## The desktop face — `src/desktop/` (19 files)
+## The desktop face — `src/desktop/`
 
 Paths in this section are under `app/`.
 
-One window, panes inside it. `main.tsx` mounts, and `App.tsx` (929 lines) is the
-shell that owns the rest. The other 17 files are the panes themselves — they are
+One window, panes inside it. `main.tsx` mounts, and `App.tsx` (835 lines) is the
+shell that owns the rest. The other files are the panes themselves — they are
 desktop-only, and since 2026-08-18 the directory says so.
 
 | File | One line |
 |---|---|
 | `Terminal.tsx` | The operator's real terminal — xterm over a Rust pty. The centrepiece. |
-| `FleetStrip.tsx` | The fleet, as a strip of cards. |
-| `BranchChip.tsx` | One agent's card: status, counts, doors. |
-| `FileTree.tsx` · `FileView.tsx` · `DiffView.tsx` | Browse, read, diff. |
-| `PassportView.tsx` | An agent's identity and memory, read. |
+| `../phone/FleetWheel.tsx` | The fleet: the phone's wheel, mounted under the header (see [the wheel](desktop/window-and-cards.md#the-wheel)). |
+| `../phone/AgentSheet.tsx` · `../phone/PassportSheet.tsx` | The opened card and its passport, the phone's own, mounted by `App.tsx` (see [the opened card](desktop/window-and-cards.md#the-opened-card)). |
+| `CardScreens.tsx` · `cardDoors.ts` | The designed screens a card's doors open in tabs; which screen each door opens, and whether the terminal holds the card's room. |
+| `AppScreens.tsx` · `appCards.ts` | The four apps' tabs, each mounting the phone's screen; which tab a wheel app card opens. |
+| `PhoneTab.tsx` · `PhonePane.tsx` · `phoneView.ts` | The seam: a workbench tab that hosts a phone screen, the box it mounts in, and what each such tab shows and is keyed by. |
+| `FileTree.tsx` · `FileView.tsx` | Browse, read. |
 | `MonitorPane.tsx` · `InquiryPane.tsx` | Log monitor; the ask-an-agent pane. |
-| `Bell.tsx` | The notification shade and its unread marker. |
+| `Bell.tsx` · `bellMarks.ts` | The notification shade and its unread marker; the machine-wide cleared mark and the mail row's door. |
 | `SettingsDialog.tsx` · `AgentSettings.tsx` · `InterfaceSettings.tsx` · `MemorySettings.tsx` | Four settings surfaces: one per owner of the file being edited. |
 | `ProjectSwitch.tsx` · `Camera.tsx` · `Zoom.tsx` | Seat picker; capture; scale. |
+| `Hark.tsx` · `harkChip.ts` | Hark's mic chip; its click verb and tooltip. |
 
 ## The camera
 
@@ -69,24 +74,92 @@ Enter stays the operator's. The button goes quiet while a request is out and
 carries the failure (including a cancelled picker) in its tooltip. On non-Linux
 targets the command returns an honest error.
 
+## The Hark chip
+
+Hark, the voice assistant, is a Codex `/voice` session in the tmux room named
+`hark` (`drone @hark standby` opens it). The mic button beside the camera shows
+and switches its mic. Each fleet snapshot runs one `tmux capture-pane -p -t
+=hark:` and reads Codex's status line into the snapshot's `hark` field:
+` voice ● listening` is `listening`, ` voice ◌ muted` is `muted`, no voice line is
+`stopped`, and no room is `absent`.
+
+| State | Chip | Click runs |
+|---|---|---|
+| listening | lit green | `drone @hark voice stop` |
+| muted | dim, like off | `drone @hark voice stop` |
+| stopped | dim | `drone @hark voice on` |
+| absent | grey | nothing; the tooltip says `open with drone @hark standby` |
+
+Muted counts as off because Codex's mute keeps the microphone device open, so
+dictation elsewhere cannot have it; only stop releases it. `voice on` types a
+bare `/voice`, which Codex reads as stop while a voice session is up, so a muted
+mic is stopped rather than unmuted. The click is `hark_voice`, which runs drone
+in the operator's login shell from the hark project's root, found among the
+discovered projects, because `@hark` resolves only from inside that project.
+drone exits 0 when a module refuses, so a non-zero exit or a `❌` line is the
+failure, and its first line becomes the tooltip. After a click the chip is
+amber until a poll shows the state changed. The tooltip names the state and the
+time the window last saw it change. The phone has no Hark control.
+
 ## The command surface
 
 `invoke_handler` in `app/src-tauri/src/lib.rs` is the canonical inventory —
-29 commands, and nothing reaches the backend that is not on this list:
+44 commands, and nothing reaches the backend that is not on this list:
 
 ```
 fleet_snapshot  agent_roster  list_projects  project_switch
 list_dir  read_file_text  resolve_paths
 git_changes  git_project_changes  git_diff_text
 room_kill  screenshot_capture
-pty_create  pty_write  pty_resize  pty_kill  monitor_create
+browser_status  browser_launch  browser_adopt
+browser_view_open  browser_view_close  browser_input  browser_navigate
+browser_new_tab  browser_history  browser_close_tab
+hark_voice
+pty_create  pty_write  pty_resize  pty_kill  monitor_create  page_log
 notifications_read
 agent_settings_read  agent_settings_write
 baud_settings_read  baud_settings_write
 hooks_sound_get  hooks_sound_set
 memory_config_read  memory_config_write
 memory_config_set  memory_config_set_default  memory_config_push
+host_relay_settings_read  host_relay_settings_write
+host_api_call
 ```
+
+`host_api_call` is the relay to @api's host API, the server the phone uses
+(`host_relay.rs`). The window reaches every lane the phone has through it: the
+git, backup, machine and roots lanes, new projects, and any read that names a
+project. The page hands the relay the phone's own wire request (`GET` or `POST`,
+a path under `/v1/`, a query, a body) and gets the status and the raw body back.
+`transport.http.ts` then parses it exactly as it parses the phone's `fetch`, so
+a refusal is the same `HostError` on both faces. Anything outside the fence is an
+error that names the rule.
+
+The relay takes the address and the token path from this machine's
+`host_relay.json` in the app's config dir, typed in the gear's **host API** tab
+(`docs/desktop/settings.md`). With no address typed, it asks
+`drone @api host-api config` in the operator's login shell, keeps the answer for
+the process, and asks again after a call that could not connect; it never reads
+@api's store. With no token path typed, the token is the receipt
+`~/.secrets/aipass/host_api/baud-desktop.token`. When that receipt is missing, the relay runs
+`drone @api host-api issue-token baud-desktop --scope operate` once, in the
+operator's login shell, and reads the new receipt. A typed token path is never
+minted: its token belongs to the server named in the address, so a missing file
+is an error that says to copy that host's receipt there. Both drone lines are
+killed after 30 seconds. The token stays in the Rust
+process; the page never holds it, and the CSP and the capability grant are
+unchanged. A 401 is never re-minted: it comes back with the receipt's path and
+the cure (`drone @api host-api revoke-token <id>`, then remove the receipt).
+
+`transport.ts` picks the door per call with `routeOf` (`host/route.ts`), by the
+call's shape rather than its name. The seat, the pty, the rooms and the caps
+writer always take IPC. Any other Rust command takes IPC only when the call is
+desktop-shaped, with no `project`, no `root`, and a path that is absent or
+absolute. Everything else goes over the relay. The Rust readers canonicalize a
+path against the process and take no project, so a phone screen's
+`<branch>/<file>` plus `project` would miss over IPC. Only `openRoomSocket` and
+`uploadImage` stay refused on the desktop, by nature: rooms ride the pty, and
+the desktop's files are already on this machine.
 
 The registry lives in `lib.rs` while the command functions live in lanes beside
 it, deliberately: one list of what a face may invoke is worth more than tidiness
@@ -110,16 +183,19 @@ projects/baud/
 ├── app/                        the desktop application
 │   ├── src/                    React + TypeScript frontend
 │   │   ├── desktop/            the desktop face — App.tsx (window shell, tabs, launch,
-│   │   │                       startup agent), main.tsx, and the 17 components:
-│   │   │                       cards, terminal, panes, panels, header tools
+│   │   │                       startup agent), main.tsx, and the components:
+│   │   │                       passport and its doors, app tabs, terminal, panes, panels,
+│   │   │                       header tools, and the workbench tabs that host the phone's
+│   │   │                       screens; the fleet is the phone's wheel, mounted here
 │   │   ├── host/               the transport seam — every host call, named once
-│   │   │                       transport.ts = tauri IPC · transport.http.ts = /v1 over fetch
+│   │   │                       transport.ts = tauri IPC or the relay, picked by route.ts ·
+│   │   │                       transport.http.ts = /v1 over fetch, and the one parser
 │   │   ├── phone/              the wheel face — main.tsx, PhoneApp.tsx (the shell) and 15 screens:
 │   │   │                       token door, fleet wheel, expanded agent card, passport sheet, certificate,
 │   │   │                       files, roots, memory, machine vitals, agent monitor, reader, feed,
 │   │   │                       verb chips, attached terminal, settings
 │   │   │   ├── git/            the repository sub-app: changes, one revision, the log, diffs, a file row
-│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible,
+│   │   │   └── lib/            the no-JSX logic: verbs, rooms, feed, push, gitStatus, copyPath, whileVisible, wheelInput,
 │   │   │                       machine — the monitor row's lane and its card faces,
 │   │   │                       and pollers — all four polling lanes, lifted out of the shell
 │   │   ├── deliver.ts           the ONE quoting rule - a path, quoted if needed, wrapped in spaces, never submitted
@@ -142,6 +218,8 @@ projects/baud/
 │   │   ├── settings.rs         the two config writers and the hooks flag
 │   │   ├── memory.rs           @memory's dials, read and surgically written
 │   │   ├── screenshot.rs       the XDG portal client
+│   │   ├── browser.rs          BAUD's own Chrome: its room, its port, its pages
+│   │   ├── host_relay.rs       the relay to the host API: bind, token receipt, /v1 fence
 │   │   ├── main.rs             thin binary entry — the desktop app, gui feature on
 │   │   └── bin/baud_cli.rs     baud-cli — the six headless verbs, no window, no GTK
 │   ├── src-tauri/capabilities/ the permission grant

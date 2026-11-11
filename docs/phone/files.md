@@ -16,16 +16,20 @@ took 330 lines out of the file above.
 
 | File | One line |
 |---|---|
-| `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen. |
+| `FleetWheel.tsx` | The wheel — the fleet as one flick. The face's standing screen, and the desktop window's fleet too. |
 | `AgentSheet.tsx` | One agent's card, opened. |
 | `TerminalSheet.tsx` | The room, over a WebSocket. The other big one (2983 lines). Owns the composer's delivery rule (a line goes out as a declared bracketed paste; the `\r` waits until the room has SHOWN it), the keyboard rule (no tap opens one into the terminal), and TYPING MODE - **one compose slot with two modes**: the baud box, or the armed bar that hands raw keys to xterm's own textarea. The mirror-diff lane is dead (r6) and the bar's own row is gone (r8) - both live in the same footprint now. The room SLIDES under the keyboard rather than being resized, for either mode. Re-states its grid to the pty on every return to the foreground, so a pty moved from the host side is corrected the moment he looks instead of leaving the phone clipping a window it does not fit. The chip row's one-pixel field is still the only soft-keyboard door for `ctrl`/`alt`; typing mode does not touch it. |
 | `Reader.tsx` | Any file or diff, read. |
 | `FilesScreen.tsx` · `RootsScreen.tsx` | Browse a root; pick which root to stand on. |
 | `FeedScreen.tsx` | The feed, full height. |
+| `ChatSheet.tsx` | One agent's chat: the extension's side panel on the phone, its rules imported from `extension/lib/chat.ts` and `pending.ts`. |
+| `ChatMenus.tsx` | The chat's model menu, usage ring and usage sheet: the extension's `Menus.tsx` for touch, plus `useUsage`, the 30 s usage read. |
+| `ChatVoice.tsx` | The chat's read-aloud buttons and `useVoice`, the extension's `panel/voice.ts` player, one per screen. |
 | `MemoryScreen.tsx` · `PassportSheet.tsx` · `Certificate.tsx` | Memory; identity; @spawn's birth certificate as a document. |
 | `PhoneSettings.tsx` | The phone's own settings. |
 | `MonitorSheet.tsx` | Logs. A dropped watch wears the room's dead overlay and climbs the room's reconnect ladder. |
 | `MachineSheet.tsx` | What a monitor card opens to: the machine's live vitals, and the skill's own sentence for anything this host cannot read. The PROC sheet also lists the top 20 processes, read once per open and on a tap. |
+| `BrowserScreen.tsx` | BAUD's Chrome: down with `launch` and `adopt my Chrome`, or running with its open pages. The desktop's BROWSER tab; on the phone it shows the host's `not_on_the_phone` refusal. |
 | `TokenDoor.tsx` | The paste-a-token screen. Nothing renders until it passes. |
 | `VerbChips.tsx` | The operate-scope buttons and their refusals. |
 | `NewProjectSheet.tsx` | What the switcher's `+ new project` row opens: a name, a template chip, one `create`, and the host's sentence verbatim on a refusal. |
@@ -47,7 +51,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 |---|---|
 | `verbs.ts` | What each scope may do, and the sentence when it may not. |
 | `newProject.ts` | The new-project sheet's rules: the name rule (the host's, mirrored), its hint, the two templates, the phone-side refusal, and the manager's card built from the host's answer. Pure, plus `newProject.test.ts`, which also drives `verb_new_project` through the transport with `fetch` stubbed. |
-| `rooms.ts` | Which door a card's state means; the room's own vocabulary. |
+| `rooms.ts` | Which door a card's state means; the room's own vocabulary; the run chip's `Host · model` text. |
 | `gitStatus.ts` | git's two-column code → the chip letter. One mapping, both screens. |
 | `gitWords.ts` | The git app's small rules and words: where a changed row's tap goes (an untracked file is read, an untracked directory answers under its row or, at repo grain under a named root, opens the files door; `rootAddress` spells that root for the files lane), a commit message without its subject line, the merge's no-files line, the no-agent line by whether the fleet answered, and the no-remote read of contract C-D. Pure, plus `gitWords.test.ts`. |
 | `feed.ts` | The feed window size, retention, and the merge rule the badge and the screen share. |
@@ -55,6 +59,7 @@ ask-before-sending rule and its Stop/progress/outcome rules, pure.
 | `trail.ts` | The back rule's trail: the screens left through a door, newest last - the card, the files roster, the passport - one step back, and the word each `‹` shows for where it lands. Also the `Browse` type the trail and a file pane's `from` share. Pure, plus `trail.test.ts`. |
 | `tabStore.ts` | The tab row kept across a reload: the panes, the front tab and the focus history in localStorage beside the seat, read back and checked against the first census (a tab whose agent left is dropped with one console line), folded under anything opened meanwhile; and which tab a close fronts (the one before it, not the rightmost). Pure over an injected store, plus `tabStore.test.ts`. |
 | `systemBack.ts` | The phone's own Back: open screens register the handler their `‹` calls, and one guard entry in history runs the newest on Android Back; at rest there is no entry and Back is the browser's. The registry and the guard are pure, plus `systemBack.test.ts`; two thin hooks wire them. |
+| `wheelInput.ts` | The wheel's desktop input as data: `keyStep` (arrows and Enter) and `wheelStep` (a wheel turn, shift for cards, a sideways pan left to scroll-snap), and `WHEEL_SPEEDS` with `gateTurn`, the wheel speed levels and the gate that makes one gesture one step. Pure, plus `wheelInput.test.ts`. |
 | `whileVisible.ts` | The polling gate: no lane on this face ticks while the screen is away. |
 | `machine.ts` | The monitor row's lane: `GET /v1/machine`, read only while that row is the visible wheel, and the ONE derivation of what each card face and the sheet draw from it. Not in `pollers.ts` because it is gated on a layer, not on the shell. |
 | `processes.ts` | The PROC sheet's list: the cpu/mem order of the same twenty rows, a row's name (or its pid), and the sampled line - pure, plus `processes.test.ts`. |

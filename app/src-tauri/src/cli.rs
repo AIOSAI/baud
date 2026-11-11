@@ -224,6 +224,7 @@ pub(crate) fn snapshot_headless(name: Option<&str>) -> FleetSnapshot {
             error: None,
             branches,
             live_agent_sessions,
+            hark: hark_state(),
         },
         Err(error) => FleetSnapshot {
             project: project_name,
@@ -232,6 +233,7 @@ pub(crate) fn snapshot_headless(name: Option<&str>) -> FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: hark_state(),
         },
     }
 }
@@ -452,6 +454,9 @@ pub(crate) struct CensusOutcome {
     /// Every project BAUD can seat, anchor first - the same rows the desktop
     /// menu shows.
     projects: Vec<ProjectListing>,
+    /// Roots `AIPASS_ROOTS.json` declares with a status other than "active":
+    /// named here so a missing project has a visible reason.
+    skipped: Vec<SkippedRoot>,
     /// ISO-8601 UTC timestamp of this census.
     generated_at: String,
     /// Why the census is empty, when it is.
@@ -474,11 +479,13 @@ pub(crate) fn list_projects_headless() -> CensusOutcome {
                     anchor: project.anchor,
                 })
                 .collect(),
+            skipped: skipped_roots(&anchor.root),
             generated_at: now_iso8601(),
             error: None,
         },
         Err(error) => CensusOutcome {
             projects: Vec::new(),
+            skipped: Vec::new(),
             generated_at: now_iso8601(),
             error: Some(error),
         },

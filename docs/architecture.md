@@ -36,17 +36,20 @@ Three sentences of doctrine, because everything else follows from them:
 | --- | --- |
 | citizen | `.trinity/passport.json` exists |
 | manager | that passport's `identity.citizen_class` reads `manager` |
-| roster tabs | the same per-project scan, run over every project in the census |
+| roster (the wheel's live and dispatched layers) | the same per-project scan, run over every project in the census |
 | dispatched | `.ai_mail.local/.dispatch.lock` names a pid that is alive (the dispatch monitor; `/proc/<pid>` stat'ed directly) |
-| interactive | `/proc` scan: argv[0] is `claude`, no `-p`/`--print`, cwd inside the branch |
-| resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do |
+| interactive | `/proc` scan: argv[0] is `claude` with no `-p`/`--print`, `codex` with no `exec` (its `app-server` and `mcp-server` are no agent), or `opencode` with no `run` (its `serve`, the shared daemon and a seat's private server, is no agent), cwd inside the branch |
+| provider | the live session's in the branch, else `.ai_mail.local/session.json`'s `provider` when the pointer resolves (a codex thread needs `~/.codex/sessions/*/*/*/rollout-*-<id>.jsonl`; an opencode session needs its `session_v2` row in `~/.local/share/opencode/opencode.db`, opened read-only, with `directory` equal to the branch path), else `claude`; the pointer's id is the resume id only while its provider is the card's |
+| run record (the card's chip and its detail) | the resolved pointer's `host_cli`, `model_provider`, `model_requested`, `model_observed`, `selection_source` and `observed_at`; an older pointer without them reads `pending` / `cli_default` / `pending` / `unknown`. The receipt is `.ai_mail.local/grounding.json`'s `current` row (`status`, `generation`, `missing`), and only while its `session_id` is the pointer's: absent, unreadable or another session's is "no receipt" |
+| resume kind | `~/.claude/projects/<munged path>/*.jsonl` — interactive transcripts carry `"type":"file-history-snapshot"` entries within their first 64 KB; headless dispatch runs never do. The head is read from 4 KB upward and stops at the marker; the verdict, and the sub badge's tail pairing, are kept per process for each file until its length or mtime changes |
 | sub badge | `subagents/agent-*.jsonl` freshness (async agents, 180s) plus unmatched `Agent`/`Task` spawn calls in the transcript tail (blocking agents); sessions idle over 15 minutes are skipped |
 | mail figures | `.ai_mail.local/inbox.json` message statuses — the dashboard's cached counts drift |
 | plans / todos / age | the branch's `DASHBOARD.local.json` |
-| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude` (which is what finds sessions BAUD did not create) |
+| room | one `tmux list-panes -a` per snapshot: session names, plus the cwd of every pane running `claude`, `codex` or `opencode` (which is what finds sessions BAUD did not create) |
 | git figure and diff | the installed `git` binary, `diff HEAD --relative -- .` in the branch directory |
 | header `changes` total | the same binary, `status --porcelain -uall` at the seated project root — untracked files included |
-| projects | sealed `<NAME>_REGISTRY.json` census; fleet dir from the registry's own `branches[].path` |
+| projects | the anchor, its `projects/*`, and the active roots in the anchor's `AIPASS_ROOTS.json` (a declared root carrying two `<NAME>_REGISTRY.json` seals is refused); no sibling scan |
+| branches (the cards) | the registry's rows with `status` "active", each path relative to the registry's dir; fleet dir is the first row's parent, or the project root for a flat layout |
 | files and viewer | `list_dir` + `read_file_text`, fenced to the seated project's root |
 | terminal links | OSC 8 `file://` hyperlinks and plain-text mentions, both through the fenced `resolve_paths` |
 | notifications | `<project root>/.aipass/notifications.jsonl`, written by ai_mail |
@@ -82,7 +85,7 @@ the compiler will not tell you.
 
 | File | One line |
 |---|---|
-| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 29 commands; `run()` builds only with the `gui` feature) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
+| `lib.rs` (1768) | The root: shared constants, `BranchStatus` and `FleetSnapshot`, `run()`, and the **command registry** (`generate_handler![...]`, 30 commands; `run()` builds only with the `gui` feature) — the canonical inventory of what a face can invoke. About 430 lines of it are code; the rest is the crate's test suite, which stayed here when the lanes left. |
 | `cli.rs` (628) | `baud --snapshot` and the rest of the headless surface. Every outcome serializes in full even when it failed, and the exit code agrees with the payload. |
 | `rooms.rs` (515) | tmux sessions: the name sanitizer, the pane scan, kill, capture, and the send door that types but cannot submit. |
 | `sessions.rs` (397) | Who is actually awake — `/proc` for the processes, transcripts for what they are doing, and the subagent count. |
@@ -94,6 +97,8 @@ the compiler will not tell you.
 | `memory.rs` (728) | @memory's rollover config, edited from here. |
 | `notifications.rs` (155) | Reads the feed file off disk. |
 | `screenshot.rs` (148) | The compositor capture. Desktop-only by nature. |
+| `browser.rs` | BAUD's own Chrome: the `baud-chrome` room, port 9333 on loopback, the four states, the native-hosts link, the one-time profile copy. Linux only. |
+| `host_relay.rs` | `host_api_call`, the relay to @api's host API: the address and token path from this machine's `host_relay.json` (`host_relay_settings_read`/`_write`), else the bind from `drone @api host-api config` and the `baud-desktop` token receipt (minted once when absent), the `/v1/` fence. The token never reaches the page. |
 | `main.rs` (6) | Calls `lib.rs::run()`. The desktop app, so it builds only with the `gui` feature. |
 | `bin/baud_cli.rs` (27) | `baud-cli`: hands its arguments to `run_headless` and exits with its code; with no verb it prints the six and exits 2. Built `--no-default-features`, it links no GTK. |
 

@@ -72,11 +72,20 @@ body {
 }
 
 .baud-wordmark {
+  font: inherit;
   font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.34em;
   color: var(--baud-green);
   text-shadow: 0 0 12px var(--baud-glow-green);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.baud-wordmark:active {
+  color: var(--baud-amber);
 }
 
 .baud-header-side {
@@ -158,6 +167,12 @@ body {
 
 .baud-project-item-active {
   color: var(--baud-green);
+}
+
+.baud-project-item-new {
+  margin-top: 4px;
+  border-top: 1px solid var(--baud-line);
+  border-radius: 0 0 4px 4px;
 }
 
 .baud-project-item-tag {
@@ -251,6 +266,16 @@ body {
 /* The last capture failed or was cancelled; the title says why. */
 .baud-tool-btn-failed {
   color: var(--baud-red);
+}
+
+/* Hark's mic chip: lit only while listening; grey with no room to act on. */
+.baud-hark-on {
+  color: var(--baud-green);
+}
+
+.baud-hark-absent {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* The bell, wired (m10): desktop toasts are retired, ai_mail's feed lands
@@ -522,61 +547,6 @@ body {
   word-break: break-word;
 }
 
-/* --------------------------------------------------------- section label
-   A quiet name for the band below it. Same micro-label vocabulary as the
-   header totals: faint, uppercase, widely tracked.
-   ------------------------------------------------------------------------ */
-
-.baud-section-head {
-  flex: none;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  padding: 10px var(--baud-pad) 0;
-}
-
-.baud-section-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--baud-ink-faint);
-}
-
-/* Which passports are on show. Quiet until chosen: the strip below is the
-   loud part, and two of these three tabs are usually empty. */
-.baud-section-tabs {
-  display: flex;
-  gap: 4px;
-}
-
-.baud-section-tab {
-  margin: 0;
-  padding: 1px 7px;
-  border: 1px solid transparent;
-  border-radius: var(--baud-radius);
-  background: none;
-  color: var(--baud-ink-faint);
-  font-family: inherit;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.baud-section-tab:hover,
-.baud-section-tab:focus-visible {
-  color: var(--baud-ink);
-  border-color: var(--baud-line);
-}
-
-.baud-section-tab-on {
-  color: var(--baud-green);
-  border-color: var(--baud-line-strong);
-}
-
 /* The tree a roster card came from. Amber like the manager mark: both are
    facts about identity rather than activity. */
 .baud-chip-project {
@@ -597,11 +567,6 @@ body {
   cursor: default;
 }
 
-/* The heading owns the gap above the cards, so the strip gives its own back. */
-.baud-section-head + .baud-strip {
-  padding-top: 6px;
-}
-
 /* ----------------------------------------------------------------- strip
    The fleet, compressed to one scrolling row above the terminal.
    ------------------------------------------------------------------------ */
@@ -617,6 +582,31 @@ body {
   border-bottom: 1px solid var(--baud-line);
   scrollbar-width: thin;
   scrollbar-color: var(--baud-line-strong) transparent;
+}
+
+/* The phone's wheel in the strip slot at 1.5x through --wheel-scale; the cap keeps a
+   wide window's cards together instead of strewn across 1920px. */
+.baud-wheel-desktop {
+  --wheel-scale: 1.5;
+  flex: none;
+  padding-top: 6px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-wheel-desktop .baud-wheel-wrap {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* 50%, not the phone's 50vw: padding percentages read the wrap, which the cap
+   makes narrower than the viewport. */
+.baud-wheel-desktop .baud-wheel {
+  padding-inline: calc(50% - 32px * var(--wheel-scale));
+}
+
+.baud-wheel-desktop .baud-wheel-wrap:focus-visible {
+  outline: 1px solid var(--baud-wheel-accent);
+  outline-offset: -1px;
 }
 
 .baud-strip-empty {
@@ -817,6 +807,26 @@ body {
 .baud-chip-help ~ .baud-chip-gear,
 .baud-badge ~ .baud-chip-gear {
   margin-left: 5px;
+}
+
+/* Card doors: a roster card's gear is fenced, dashed like the phone's, and
+   the line under the head says why in words a tooltip never shows. */
+.baud-chip-gear:disabled {
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.baud-chip-gear:disabled:hover {
+  color: var(--baud-ink-faint);
+  border-color: var(--baud-line);
+}
+
+.baud-chip-away {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.35;
+  color: var(--baud-ink-dim);
 }
 
 .baud-chip-foot {
@@ -1071,6 +1081,19 @@ body {
   cursor: pointer;
 }
 
+.baud-settings-text {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 3px 6px;
+}
+
+.baud-settings-text:disabled,
 .baud-settings-select:disabled {
   opacity: 0.45;
   cursor: default;
@@ -1168,6 +1191,14 @@ body {
   color: var(--baud-ink-faint);
   font-size: 9px;
   letter-spacing: 0.04em;
+}
+
+.baud-settings-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--baud-line-strong);
 }
 
 .baud-settings-error {
@@ -1482,6 +1513,14 @@ button.baud-tab {
   display: none;
 }
 
+/* The containing box for a phone screen's absolute `.baud-phone-pane`. */
+.baud-phone-host {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* ------------------------------------------------------------- file tree */
 
 .baud-tree {
@@ -1614,6 +1653,19 @@ button.baud-tab {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+.baud-view-bar {
+  flex: none;
+  display: flex;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-view-md {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
 }
 
 .baud-view-host .cm-editor {
@@ -1870,6 +1922,18 @@ button.baud-tab {
   }
 }
 
+/* The phone's agent card on the desktop: centred as the settings modals are,
+   and wide enough to read across a 1920 window. phone.css stays the phone's. */
+.baud-desk-card .baud-agent-scrim {
+  align-items: center;
+  padding-top: 0;
+}
+
+.baud-desk-card .baud-agent-card {
+  width: min(92vw, 460px);
+  max-height: 86vh;
+}
+
 /* The document. Rides the settings scrim - a passport is a modal glance, and
    the operator already knows escape closes one of these. */
 .baud-passport {
@@ -1928,6 +1992,13 @@ button.baud-tab {
 
 .baud-passport-close:hover {
   color: var(--baud-ink);
+}
+
+/* The card's doors inside the opened passport: the chip's own rules, at the
+   passport's width. */
+.baud-passport-doors {
+  width: auto;
+  margin: 10px var(--baud-pad) 0;
 }
 
 .baud-passport-body {
@@ -2089,4 +2160,150 @@ button.baud-tab {
   border-radius: 999px;
   color: var(--baud-ink-faint);
   font-size: 0.58rem;
+}
+
+/* ------------------------------------------------------------- app cards
+   GIT, FILES, BACKUP, MACHINE after the agents. The phone's app accent and
+   no lamp, so an app never reads as an agent with a session.
+   ------------------------------------------------------------------------ */
+
+.baud-strip-apps {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding-left: 10px;
+  border-left: 1px solid var(--baud-line);
+}
+
+.baud-strip-apps-head {
+  margin: 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-appcard {
+  flex: none;
+  width: 78px;
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px 6px;
+  border: 1px dashed var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-panel);
+  color: var(--baud-apps);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.baud-appcard:hover:not(:disabled),
+.baud-appcard:focus-visible {
+  border-style: solid;
+  border-color: var(--baud-apps);
+  box-shadow: 0 0 10px var(--baud-glow-apps);
+}
+
+.baud-appcard:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.baud-appcard-glyph {
+  width: 22px;
+  height: 22px;
+}
+
+.baud-appcard-name {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--baud-ink);
+}
+
+/* The machine tab: the sheet fills the body, the lock line sits under it. */
+.baud-appscreen-machine {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.baud-appscreen-machine-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.baud-appscreen-lock {
+  flex: none;
+  margin: 0;
+  padding: 6px var(--baud-pad);
+  border-top: 1px solid var(--baud-line);
+  background: var(--baud-bg-panel);
+  color: var(--baud-ink-dim);
+  font-family: var(--baud-mono);
+  font-size: 0.7rem;
+}
+
+.baud-appscreen-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--baud-gap);
+  padding: var(--baud-pad);
+}
+
+.baud-appscreen-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-card);
+  color: var(--baud-ink);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.baud-appscreen-tile:hover,
+.baud-appscreen-tile:focus-visible {
+  border-color: var(--baud-apps);
+}
+
+.baud-appscreen-tile-mark {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--baud-apps);
+}
+
+.baud-appscreen-tile-value {
+  font-size: 1.2rem;
+}
+
+.baud-appscreen-tile-value small {
+  margin-left: 2px;
+  font-size: 0.65rem;
+  color: var(--baud-ink-dim);
+}
+
+.baud-appscreen-tile-absent {
+  color: var(--baud-ink-faint);
+}
+
+.baud-appscreen-tile-name {
+  font-size: 0.65rem;
+  color: var(--baud-ink-faint);
 }

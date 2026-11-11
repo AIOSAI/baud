@@ -24,14 +24,12 @@ the rows of `transport.http.ts`, and, after `npm run build:phone` in `app/`,
 built bundle contains — the table's distinct routes plus the socket and the
 upload.
 
-**The refusal table points both ways.** `transport.http.ts` refuses the verbs a
-phone cannot perform *by name*; `transport.ts` carries the mirror image,
-`NOT_ON_THIS_FACE` — the git app's five reads have no Rust command behind them
-and should not have one, because the desk sits three feet from the repository
-with the operator's own git in a terminal. Without the table those names would
-reach `invoke` and come back as tauri's *command not found*, which reads as a
-broken build rather than as a face that was never meant to have them. It is
-deliberately **not** applied to the older phone-only verbs.
+**The refusal table points one way.** `transport.http.ts` refuses the verbs a
+phone cannot perform *by name* (`NOT_YET`). The desktop serves every phone verb:
+`transport.ts` sends any call that is not desktop-shaped through the Rust relay
+`host_api_call` to the same `/v1` routes, and `callWith` parses the answer for
+both faces. The desktop refuses only the room socket and the image upload, by
+nature.
 
 The seam is command-shaped and `/v1` is REST-shaped, so `transport.http.ts` holds
 a table from command name to route, and holds it alone. Verbs the phone cannot
@@ -74,9 +72,8 @@ events, cursor-keyed, and when the server reports a `gap` the screen says so —
 window that silently lost events looks exactly like a quiet night, and those are
 opposite things.
 
-The phone draws its own card, `AgentSheet.tsx` — the desktop's `BranchChip`
-read back — rather than rendering `BranchChip`, so the desktop card's `readOnly`
-flag plays no part on this face. The push hooks (`src/phone/lib/push.ts`) are exported, empty
+The two faces share the wheel, `FleetWheel.tsx`, the opened card, `AgentSheet.tsx`,
+and its passport, `PassportSheet.tsx`. The push hooks (`src/phone/lib/push.ts`) are exported, empty
 and inert — a reservation with its gate named, the way `App.tsx` holds the
 terminal slot. There is **no service worker**: an offline cache of a live fleet
 would show stale aliveness, which is the one lie this system keeps paying to
@@ -127,7 +124,7 @@ cd app && npm run build             # tsc && vite build - the frontend must actu
 cd app && npm run build:phone       # the phone face - same components, HTTP transport
 ```
 
-There is no seedgo audit lane for this repo: seedgo's checks target AIPass
+There is no sentry audit lane for this repo: sentry's checks target AIPass
 Python branches, and BAUD is Rust and TypeScript. The six commands above are
 the audit.
 
@@ -215,8 +212,9 @@ Each screen of the face has its own page under `docs/phone/`.
 
 | Page | What it covers |
 | --- | --- |
-| [wheel](phone/wheel.md) | the fleet rail, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet |
+| [wheel](phone/wheel.md) | the fleet rail and its desktop input, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet |
 | [card](phone/card.md) | the expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate |
+| [chat](phone/chat.md) | the card's `chat` door: the agent's transcript, sending, pending, allow and deny, stop |
 | [room](phone/room.md) | the terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost |
 | [room input](phone/room-input.md) | typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule |
 | [room delivery](phone/room-delivery.md) | links and copy, sending a photo, dropped writes, a dead room and its reconnect ladder |

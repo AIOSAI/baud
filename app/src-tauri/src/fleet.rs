@@ -156,6 +156,34 @@ pub(crate) fn apply_dashboard(branch_dir: &Path, status: &mut BranchStatus) {
         .to_string();
 }
 
+/// The card's provider, history flag and resume id. A live session names the
+/// provider, since a pointer is history; else the pointer's, else claude. The
+/// pointer's id is the resume door only while its provider is the card's:
+/// `claude --resume` on a Codex thread fails the launch. A codex or opencode
+/// card has no transcript scan, so `claude_history` runs only for claude.
+/// The CLI of the branch's live agent; an interactive one outranks a headless dispatch beside it.
+pub(crate) fn live_provider(sessions: &[ClaudeSession], dir: &Path) -> Option<&'static str> {
+    sessions
+        .iter()
+        .filter(|session| session.cwd.starts_with(dir))
+        .min_by_key(|session| session.headless)
+        .map(|session| session.provider)
+}
+
+pub(crate) fn resume_door(
+    live: Option<&'static str>,
+    pointer: Option<(&'static str, String)>,
+    claude_history: impl FnOnce() -> (bool, Option<String>),
+) -> (&'static str, bool, Option<String>) {
+    let provider = live.or(pointer.as_ref().map(|(provider, _)| *provider)).unwrap_or("claude");
+    let pointed = pointer.filter(|(from, _)| *from == provider).map(|(_, id)| id);
+    if provider != "claude" {
+        return (provider, false, pointed);
+    }
+    let (has_history, scanned) = claude_history();
+    (provider, has_history, pointed.or(scanned))
+}
+
 /// Inspect a single branch directory. Never fails - worst case it reports a
 /// bare directory with all-default fields.
 pub(crate) fn read_branch(
@@ -192,9 +220,15 @@ pub(crate) fn read_branch(
     // every wake) outranks the transcript-scan guess — the scan's `-c` door
     // can never enter a dispatched session. No pointer → the old guess, so a
     // branch that predates the pointer resumes exactly as before.
-    let (has_history, resume_id) = claude_history(&canonical);
+    let live_provider = live_provider(sessions, &canonical);
+    let pointer = session_pointer(&canonical);
+    status.run = pointer.as_ref().map(|(_, _, run)| run.clone());
+    let pointer = pointer.map(|(provider, id, _)| (provider, id));
+    let (provider, has_history, resume_id) =
+        resume_door(live_provider, pointer, || claude_history(&canonical));
+    status.provider = provider.to_string();
     status.has_history = has_history;
-    status.resume_id = session_pointer(&canonical).or(resume_id);
+    status.resume_id = resume_id;
     status.subagents = subagent_count(&canonical);
 
     // Named once and used twice: the badge asks whether this session exists,
@@ -222,7 +256,7 @@ pub(crate) fn read_branch(
     status
 }
 
-/// Scan the seated project's fleet dir - visible directories only. Returns the
+/// Read the seated project's citizens - its registry rows. Returns the
 /// cards plus the machine-wide list of sessions holding a live interactive
 /// claude, which is read off the same two scans rather than costing a third.
 pub(crate) fn scan_fleet(project: &Project) -> Result<(Vec<BranchStatus>, Vec<String>), String> {
@@ -242,46 +276,24 @@ pub(crate) fn branches_of(
     sessions: &[ClaudeSession],
     rooms: &RoomScan,
 ) -> Result<Vec<BranchStatus>, String> {
-    let fleet_dir = &project.fleet_dir;
     let room_scope = project.room_scope();
-
-    let entries = fs::read_dir(fleet_dir)
-        .map_err(|err| format!("could not read '{}': {err}", fleet_dir.display()))?;
-
-    let mut branches: Vec<BranchStatus> = Vec::new();
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            // A single unreadable directory entry should not sink the scan.
-            Err(_) => continue,
-        };
-
-        let name = entry.file_name().to_string_lossy().into_owned();
-        // Skip dotfiles and tooling dirs like __pycache__ — machine residue, not branches.
-        if name.starts_with('.') || name.starts_with("__") {
-            continue;
-        }
-
-        let is_dir = match entry.file_type() {
-            Ok(file_type) => file_type.is_dir() || entry.path().is_dir(),
-            Err(_) => entry.path().is_dir(),
-        };
-        if !is_dir {
-            continue;
-        }
-
-        branches.push(read_branch(
-            &entry.path(),
-            name,
-            &project.name,
-            sessions,
-            rooms,
-            room_scope.as_deref(),
-        ));
+    if !project.fleet_dir.is_dir() {
+        return Err(format!("could not read '{}': not a directory", project.fleet_dir.display()));
     }
 
+    // A row whose dir is gone from disk is no card: there is nothing to read.
+    let mut branches: Vec<BranchStatus> = project
+        .citizens
+        .iter()
+        .filter(|dir| dir.is_dir())
+        .filter_map(|dir| {
+            let name = dir.file_name()?.to_string_lossy().into_owned();
+            Some(read_branch(dir, name, &project.name, sessions, rooms, room_scope.as_deref()))
+        })
+        .collect();
+
     branches.sort_by(|a, b| a.name.cmp(&b.name));
+    branches.dedup_by(|a, b| a.name == b.name);
     Ok(branches)
 }
 
@@ -346,6 +358,7 @@ pub fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
             error: None,
             branches,
             live_agent_sessions,
+            hark: hark_state(),
         },
         Err(error) => FleetSnapshot {
             project: name,
@@ -354,6 +367,7 @@ pub fn fleet_snapshot(state: tauri::State<'_, ActiveProject>) -> FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: hark_state(),
         },
     }
 }

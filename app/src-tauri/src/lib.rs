@@ -92,12 +92,16 @@ use tauri::Manager;
 // does the rest: a child module can already read this file's private items, so
 // only what LEFT needed a visibility prefix.
 //
-// `memory`, `notifications`, `pty`, `reads`, `screenshot` and `settings` serve
-// the window alone - its dials, bell, terminal, reading room and capture - so
-// they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
+// `browser`, `host_relay`, `memory`, `notifications`, `pty`, `reads`, `screenshot` and
+// `settings` serve the window alone - its relay, dials, bell, terminal, reading
+// room, capture and Chrome - so they build only with the gui feature. `cli`, `fleet`, `projects`, `rooms` and
 // `sessions` are the reader, which the desktop binary and baud-cli share.
+#[cfg(feature = "gui")]
+mod browser;
 mod cli;
 mod fleet;
+#[cfg(feature = "gui")]
+mod host_relay;
 #[cfg(feature = "gui")]
 mod memory;
 #[cfg(feature = "gui")]
@@ -152,13 +156,15 @@ const INBOX_RELATIVE_PATH: [&str; 2] = [".ai_mail.local", "inbox.json"];
 /// BAUD's rooms from the operator's own tmux sessions.
 const ROOM_PREFIX: &str = "baud-";
 
-/// A live claude process found on the process table.
+/// A live agent process (claude, codex or opencode) found on the process table.
 ///
-/// `headless` is true for `claude -p`/`--print` runs - the shape every
-/// dispatched wake takes - and false for a human-driven interactive session.
+/// `headless` is true for `claude -p`/`--print`, `codex exec` and `opencode
+/// run` runs - the shape every dispatched wake takes - and false for a human-driven
+/// interactive session.
 struct ClaudeSession {
     cwd: PathBuf,
     headless: bool,
+    provider: &'static str,
 }
 
 /// The per-branch status file that services keep up to date.
@@ -216,6 +222,17 @@ pub struct BranchStatus {
     /// interactive history exists (plain `-c` continues it) or there are no
     /// transcripts at all.
     pub resume_id: Option<String>,
+    /// The CLI the resume and launch doors start: "claude", "codex" or
+    /// "opencode". The live session's in this branch, else the session
+    /// pointer's provider when the pointer resolves, else "claude". A codex or
+    /// opencode branch with no pointer has no history and no `resume_id`: BAUD
+    /// scans only Claude transcripts.
+    pub provider: String,
+    /// The resolved pointer's run record: which model the session asked for
+    /// and which one its runtime reported. `None` when no pointer resolves.
+    /// The host stays [`provider`](Self::provider): a live process names the
+    /// host, the pointer names the model.
+    pub run: Option<RunRecord>,
     /// The name of THIS branch's own room - `baud-<branch>` in the anchor,
     /// `baud-<project>-<branch>` elsewhere, sanitized for tmux targets.
     ///
@@ -225,7 +242,7 @@ pub struct BranchStatus {
     /// of the two you are looking at.
     ///
     /// PUBLISHED BECAUSE THIS DERIVATION HAD BEEN COPIED (FPLAN-0438, on
-    /// @seedgo's finding). @api's attach lane re-implemented the prefix, the
+    /// @sentry's finding). @api's attach lane re-implemented the prefix, the
     /// scope rule and the character sanitizer in python to work out which
     /// session to attach the phone to - and a naming rule living in two
     /// runtimes is a rule that will disagree with itself the first time either
@@ -264,7 +281,7 @@ pub struct BranchStatus {
     pub outside_room: Option<String>,
     /// Sub-agents running inside this branch's live claude session(s) right
     /// now - unmatched Agent/Task spawn calls in recent transcripts. See
-    /// [`count_inflight_subagents`].
+    /// [`subagent_count_in`].
     pub subagents: u64,
     /// Messages with status "new" in `.ai_mail.local/inbox.json`, 0 when the
     /// mailbox is missing or unreadable.
@@ -281,6 +298,34 @@ pub struct BranchStatus {
     pub last_updated: String,
 }
 
+/// The run record ai_mail writes into the session pointer beside the session
+/// id. Older pointers lack the fields: absent reads as `pending` /
+/// `cli_default` / `unknown`, never as an error.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RunRecord {
+    pub session_id: String,
+    /// The CLI that wrote the pointer: "claude", "codex" or "opencode".
+    pub host_cli: Option<String>,
+    pub model_provider: String,
+    pub model_requested: String,
+    /// The runtime's own model id, or "pending" until it reports one.
+    pub model_observed: String,
+    pub selection_source: String,
+    pub observed_at: Option<String>,
+    /// `.ai_mail.local/grounding.json`'s current row, `None` when the file is
+    /// absent, unreadable or names another session ("no receipt").
+    pub receipt: Option<GroundingReceipt>,
+}
+
+/// The grounding receipt's current row, cut to what the card shows.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct GroundingReceipt {
+    /// "verified", "ungrounded", "unverified" or "pending", verbatim.
+    pub status: String,
+    pub generation: i64,
+    pub missing: Vec<String>,
+}
+
 impl BranchStatus {
     fn new(name: String, project: String, path: String) -> Self {
         Self {
@@ -294,6 +339,8 @@ impl BranchStatus {
             interactive: false,
             has_history: false,
             resume_id: None,
+            provider: "claude".to_string(),
+            run: None,
             room: String::new(),
             has_room: false,
             own_room_live: false,
@@ -329,6 +376,8 @@ pub struct FleetSnapshot {
     /// chat box exists there. Keyed by session name, which is what the pty
     /// actually attached to.
     pub live_agent_sessions: Vec<String>,
+    /// Hark's mic, read from the `hark` room's pane: listening, muted, stopped, or absent.
+    pub hark: String,
 }
 
 impl FleetSnapshot {
@@ -340,6 +389,7 @@ impl FleetSnapshot {
             error: Some(error),
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: "absent".to_string(),
         }
     }
 }
@@ -442,11 +492,23 @@ pub fn run() {
             reads::git_diff_text,
             rooms::room_kill,
             screenshot::screenshot_capture,
+            browser::browser_status,
+            browser::browser_launch,
+            browser::browser_adopt,
+            browser::browser_view_open,
+            browser::browser_view_close,
+            browser::browser_input,
+            browser::browser_navigate,
+            browser::browser_new_tab,
+            browser::browser_history,
+            browser::browser_close_tab,
+            rooms::hark_voice,
             pty::pty_create,
             pty::pty_write,
             pty::pty_resize,
             pty::pty_kill,
             pty::monitor_create,
+            pty::page_log,
             notifications::notifications_read,
             settings::agent_settings_read,
             settings::agent_settings_write,
@@ -458,7 +520,10 @@ pub fn run() {
             memory::memory_config_write,
             memory::memory_config_set,
             memory::memory_config_set_default,
-            memory::memory_config_push
+            memory::memory_config_push,
+            host_relay::host_relay_settings_read,
+            host_relay::host_relay_settings_write,
+            host_relay::host_api_call
         ])
         // Closing the window takes the pty processes with it: a plain shell
         // dies, a room's tmux client dies - which is a DETACH, the session
@@ -595,6 +660,7 @@ mod tests {
             error: None,
             branches: Vec::new(),
             live_agent_sessions: Vec::new(),
+            hark: "absent".to_string(),
         };
         assert_eq!(snapshot_exit_code(&good), 0);
         assert_eq!(
@@ -636,7 +702,7 @@ mod tests {
             fs::create_dir_all(join_all(dir, &FLEET_RELATIVE_DIR)).unwrap();
             fs::write(
                 dir.join(format!("{name}{REGISTRY_SUFFIX}")),
-                r#"{"branches":[{"path":"src/aipass/one"}]}"#,
+                r#"{"branches":[{"path":"src/aipass/one","status":"active"}]}"#,
             )
             .unwrap();
         };
@@ -647,6 +713,7 @@ mod tests {
         let anchor = Project {
             name: "FIXTUREROOT".to_string(),
             fleet_dir: join_all(&root, &FLEET_RELATIVE_DIR),
+            citizens: Vec::new(),
             root,
             anchor: true,
         };
@@ -765,7 +832,7 @@ mod tests {
     /// them and a caller holding a stale name is told the kill succeeded.
     #[test]
     fn an_unknown_branch_is_refused_and_a_quiet_one_is_not() {
-        let (base, anchor) = census_fixture("kill-census");
+        let (base, mut anchor) = census_fixture("kill-census");
 
         let error = end_room_in(&anchor, "no-such-branch-4b1e").expect_err("refused");
         assert!(
@@ -779,6 +846,7 @@ mod tests {
         // without one.
         let quiet = anchor.fleet_dir.join("quiet-fixture-branch-4b1e");
         fs::create_dir_all(&quiet).unwrap();
+        anchor.citizens.push(quiet);
         assert_eq!(
             end_room_in(&anchor, "quiet-fixture-branch-4b1e").expect("nothing to end"),
             RoomEnded { room: None }
@@ -985,9 +1053,10 @@ mod tests {
     /// fact about the fleet, the other looks like a dead agent.
     #[test]
     fn a_room_that_is_not_live_is_refused_by_both_new_doors() {
-        let (base, anchor) = census_fixture("terminal-noroom");
+        let (base, mut anchor) = census_fixture("terminal-noroom");
         let quiet = anchor.fleet_dir.join("quiet-terminal-branch-7c2d");
         fs::create_dir_all(&quiet).unwrap();
+        anchor.citizens.push(quiet);
 
         let captured = capture_room_in(&anchor, "quiet-terminal-branch-7c2d", 0).expect_err("refused");
         assert!(
@@ -1048,13 +1117,13 @@ mod tests {
             "--permission-mode",
             "bypassPermissions",
         ]);
-        assert_eq!(classify_claude_cmdline(&cmdline), Some(false));
+        assert_eq!(classify_claude_cmdline(&cmdline), Some(("claude", false)));
     }
 
     #[test]
     fn bare_and_continue_sessions_are_interactive() {
-        assert_eq!(classify_claude_cmdline(&argv(&["claude"])), Some(false));
-        assert_eq!(classify_claude_cmdline(&argv(&["claude", "-c"])), Some(false));
+        assert_eq!(classify_claude_cmdline(&argv(&["claude"])), Some(("claude", false)));
+        assert_eq!(classify_claude_cmdline(&argv(&["claude", "-c"])), Some(("claude", false)));
     }
 
     #[test]
@@ -1062,12 +1131,139 @@ mod tests {
         // The two exact shapes ai_mail's wake spawns: `-p` fresh, `-c -p` continue.
         let fresh = argv(&["claude", "-p", "do the work", "--output-format", "json"]);
         let cont = argv(&["claude", "-c", "-p", "do the work", "--output-format", "json"]);
-        assert_eq!(classify_claude_cmdline(&fresh), Some(true));
-        assert_eq!(classify_claude_cmdline(&cont), Some(true));
+        assert_eq!(classify_claude_cmdline(&fresh), Some(("claude", true)));
+        assert_eq!(classify_claude_cmdline(&cont), Some(("claude", true)));
         assert_eq!(
             classify_claude_cmdline(&argv(&["claude", "--print", "one-shot"])),
-            Some(true)
+            Some(("claude", true))
         );
+    }
+
+    #[test]
+    fn codex_sessions_are_agents_and_exec_is_headless() {
+        let room = argv(&["codex", "--sandbox", "danger-full-access", "Hi. You are canary, continuing a chat"]);
+        assert_eq!(classify_claude_cmdline(&room), Some(("codex", false)));
+        let resumed = argv(&["/home/op/.local/bin/codex", "--dangerously-bypass-approvals-and-sandbox", "resume", "0199-aaaa"]);
+        assert_eq!(classify_claude_cmdline(&resumed), Some(("codex", false)));
+        let dispatched = argv(&["codex", "--dangerously-bypass-approvals-and-sandbox", "exec", "do the work"]);
+        assert_eq!(classify_claude_cmdline(&dispatched), Some(("codex", true)));
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "e", "do the work"])), Some(("codex", true)));
+    }
+
+    #[test]
+    fn codex_servers_are_not_agents() {
+        // Codex's app-server daemon keeps the session's cwd after the chat ends.
+        let daemon = argv(&["/home/op/.codex/packages/bin/codex", "app-server", "--listen", "unix://"]);
+        assert_eq!(classify_claude_cmdline(&daemon), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "app-server", "daemon", "pid-update-loop"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["codex", "mcp-server"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["/x/bin/codex-code-mode-host"])), None);
+    }
+
+    #[test]
+    fn opencode_sessions_are_agents_and_run_is_headless() {
+        let tui = argv(&["/home/op/.opencode/bin/opencode", "--standalone", "--auto", "--session", "ses_aaaa"]);
+        assert_eq!(classify_claude_cmdline(&tui), Some(("opencode", false)));
+        assert_eq!(classify_claude_cmdline(&argv(&["opencode"])), Some(("opencode", false)));
+        let switched = argv(&["opencode", "--standalone", "--auto", "--prompt", "Hi. You are canary, run the tests"]);
+        assert_eq!(classify_claude_cmdline(&switched), Some(("opencode", false)));
+        let dispatched = argv(&["opencode", "run", "--standalone", "--format", "json", "--auto", "do the work"]);
+        assert_eq!(classify_claude_cmdline(&dispatched), Some(("opencode", true)));
+    }
+
+    #[test]
+    fn opencode_servers_are_not_agents() {
+        // The shared daemon and the private server a --standalone seat spawns both keep a cwd forever.
+        assert_eq!(classify_claude_cmdline(&argv(&["/home/op/.opencode/bin/opencode", "serve", "--service"])), None);
+        assert_eq!(classify_claude_cmdline(&argv(&["opencode", "serve", "--stdio", "--port", "0"])), None);
+    }
+
+    #[test]
+    #[ignore]
+    fn live_opencode_processes_classify() {
+        for entry in fs::read_dir("/proc").unwrap().flatten() {
+            let Ok(cmdline) = fs::read(entry.path().join("cmdline")) else { continue };
+            if cmdline.split(|byte| *byte == 0).next().is_some_and(|argv0| argv0.ends_with(b"/opencode") || argv0 == b"opencode") {
+                let shown = String::from_utf8_lossy(&cmdline).replace('\0', " ");
+                println!("{} {:?} <- {}", entry.file_name().to_string_lossy(), classify_claude_cmdline(&cmdline), &shown[..shown.len().min(90)]);
+            }
+        }
+    }
+
+    #[test]
+    fn an_opencode_pointer_resumes_an_opencode_card() {
+        let pointer = || Some(("opencode", "ses_aaaa".to_string()));
+        let scanned = || (true, Some("claude-old".to_string()));
+        assert_eq!(resume_door(None, pointer(), scanned), ("opencode", false, Some("ses_aaaa".into())));
+        assert_eq!(resume_door(Some("opencode"), None, scanned), ("opencode", false, None));
+        assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("claude-old".into())));
+    }
+
+    #[test]
+    fn a_live_session_names_the_provider_over_the_pointer() {
+        let codex_pointer = || Some(("codex", "thread-1".to_string()));
+        let scanned = || (true, Some("claude-old".to_string()));
+        // canary back on Claude with a codex pointer left over: claude, and the
+        // codex thread is never handed to `claude --resume`.
+        assert_eq!(resume_door(Some("claude"), codex_pointer(), scanned), ("claude", true, Some("claude-old".into())));
+        assert_eq!(resume_door(None, codex_pointer(), scanned), ("codex", false, Some("thread-1".into())));
+        assert_eq!(resume_door(Some("codex"), codex_pointer(), scanned), ("codex", false, Some("thread-1".into())));
+        assert_eq!(resume_door(Some("codex"), None, scanned), ("codex", false, None));
+    }
+
+    #[test]
+    fn an_interactive_session_names_the_provider_over_a_dispatch() {
+        let dir = PathBuf::from("/r/src/aipass/canary");
+        let sessions = [
+            ClaudeSession { cwd: dir.clone(), headless: true, provider: "codex" },
+            ClaudeSession { cwd: dir.clone(), headless: false, provider: "claude" },
+        ];
+        assert_eq!(live_provider(&sessions, &dir), Some("claude"));
+        assert_eq!(live_provider(&sessions[..1], &dir), Some("codex"));
+        assert_eq!(live_provider(&sessions, Path::new("/r/src/aipass/other")), None);
+    }
+
+    #[test]
+    fn a_claude_pointer_outranks_the_transcript_scan() {
+        let pointer = || Some(("claude", "pointed".to_string()));
+        let scanned = || (true, Some("scanned".to_string()));
+        assert_eq!(resume_door(None, pointer(), scanned), ("claude", true, Some("pointed".into())));
+        assert_eq!(resume_door(Some("claude"), pointer(), scanned), ("claude", true, Some("pointed".into())));
+        assert_eq!(resume_door(None, None, scanned), ("claude", true, Some("scanned".into())));
+        assert_eq!(resume_door(None, None, || (false, None)), ("claude", false, None));
+    }
+
+    #[test]
+    fn the_hark_pane_names_the_mic_state() {
+        // Real line shapes from the live room: the status line sits above Codex's prompt.
+        let tail = "   mic ▂▁▁▁▂▁  codex ▁▁▁▁▁▁\n› Ask Codex to do anything\n  ? for shortcuts\n";
+        let hints = "                                        f9 mute     /voice stop";
+        assert_eq!(hark_state_of(&format!(" voice ● listening{hints}\n{tail}")), "listening");
+        assert_eq!(hark_state_of(&format!(" voice ◌ muted{hints}\n{tail}")), "muted");
+        assert_eq!(hark_state_of(&format!(" voice ● listening\n{tail}")), "listening");
+        assert_eq!(hark_state_of("• Voice conversation ended: requested\n› Ask Codex to do anything\n"), "stopped");
+        // Chat that quotes the words is not the status line.
+        assert_eq!(hark_state_of("• Patrick reports that “Hark voice mute” did not stop speech.\n"), "stopped");
+    }
+
+    #[cfg(feature = "gui")]
+    #[test]
+    fn hark_voice_types_only_on_and_stop() {
+        assert!(hark_voice("mute".to_string()).unwrap_err().contains("on or stop"));
+        assert!(hark_voice("on; rm -rf ~".to_string()).unwrap_err().contains("on or stop"));
+    }
+
+    #[test]
+    fn an_opencode_pane_is_an_agent_pane() {
+        let scan = parse_panes("canary-oc\topencode\t/r/src/aipass/canary\n");
+        assert_eq!(scan.agent_panes, vec![("canary-oc".to_string(), PathBuf::from("/r/src/aipass/canary"))]);
+    }
+
+    #[test]
+    fn a_codex_pane_is_an_agent_pane() {
+        let scan = parse_panes("canary-switch\tcodex\t/r/src/aipass/canary\nshell\tbash\t/r\n");
+        assert_eq!(scan.agent_panes, vec![("canary-switch".to_string(), PathBuf::from("/r/src/aipass/canary"))]);
+        assert!(scan.holds_claude("canary-switch") && !scan.holds_claude("shell"));
     }
 
     #[test]
@@ -1204,6 +1400,75 @@ mod tests {
             .unwrap();
 
         assert_eq!(subagent_count_in(&dir), 2);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Overwrite `path` with `text` and pin its mtime, so len and mtime can be
+    /// held equal while the bytes change underneath the cache.
+    fn write_at(path: &Path, text: &str, modified: std::time::SystemTime) {
+        fs::write(path, text).unwrap();
+        let times = fs::FileTimes::new().set_modified(modified);
+        fs::File::options().write(true).open(path).unwrap().set_times(times).unwrap();
+    }
+
+    #[test]
+    fn an_unchanged_transcript_is_not_read_again_until_len_or_mtime_moves() {
+        let dir = std::env::temp_dir().join(format!("baud-cache-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let then = std::time::SystemTime::now() - std::time::Duration::from_secs(60);
+
+        // Head verdict: same len, same mtime, marker gone - the cached verdict stands.
+        let head = dir.join("chat.jsonl");
+        write_at(&head, &format!("{{{INTERACTIVE_MARKER}}}\n"), then);
+        assert_eq!(claude_history_in(&dir), (true, None));
+        write_at(&head, &format!("{{{}}}\n", INTERACTIVE_MARKER.replace("file", "fill")), then);
+        assert_eq!(claude_history_in(&dir), (true, None), "unchanged stamp must not re-read");
+        write_at(&head, &format!("{{{}}}\n", INTERACTIVE_MARKER.replace("file", "fill")), then + std::time::Duration::from_secs(1));
+        assert_eq!(claude_history_in(&dir), (false, Some("chat".to_string())), "a new mtime re-reads");
+        let _ = fs::remove_file(&head);
+
+        // Subagent tail: same rule; the 900 s window still reads the live mtime.
+        let tail = dir.join("live.jsonl");
+        write_at(&tail, &spawn_line("toolu_01one"), then);
+        assert_eq!(subagent_count_in(&dir), 1);
+        write_at(&tail, &spawn_line("toolu_01one").replace("Agent", "Agenx"), then);
+        assert_eq!(subagent_count_in(&dir), 1, "unchanged stamp must not re-read");
+        write_at(&tail, &spawn_line("toolu_01one").replace("Agent", "Agenx"), then + std::time::Duration::from_secs(1));
+        assert_eq!(subagent_count_in(&dir), 0, "a new mtime re-reads");
+        let stale = then - std::time::Duration::from_secs(SUBAGENT_LIVENESS_SECS * 2);
+        write_at(&tail, &spawn_line("toolu_01one"), stale);
+        assert_eq!(subagent_count_in(&dir), 0, "the window closes on the file's mtime");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_chunked_head_read_matches_the_old_full_64k_verdict() {
+        // The pre-cache reader, kept here as the oracle.
+        fn full_read(path: &Path) -> bool {
+            let mut head = Vec::new();
+            fs::File::open(path).unwrap().take(MARKER_SCAN_BYTES).read_to_end(&mut head).unwrap();
+            String::from_utf8_lossy(&head).contains(INTERACTIVE_MARKER)
+        }
+        let dir = std::env::temp_dir().join(format!("baud-head-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let cap = MARKER_SCAN_BYTES as usize;
+        let marker = INTERACTIVE_MARKER.len();
+        // Marker starts: first line, past the first chunk, astride a chunk edge,
+        // ending exactly at the cap, astride the cap, past the cap; plus none.
+        let starts = [Some(0), Some(10_000), Some(4096 - 5), Some(cap - marker), Some(cap - 5), Some(cap + 100), None];
+        for (case, start) in starts.into_iter().enumerate() {
+            let mut bytes = vec![b'x'; cap + 4096];
+            bytes[1] = 0xff; // invalid UTF-8 the old lossy read replaced
+            if let Some(at) = start {
+                bytes[at..at + marker].copy_from_slice(INTERACTIVE_MARKER.as_bytes());
+            }
+            let path = dir.join(format!("case{case}.jsonl"));
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(is_interactive_transcript(&path), full_read(&path), "marker at {start:?}");
+        }
+        assert!(is_interactive_transcript(&dir.join("case1.jsonl")), "past the first chunk still counts");
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -1611,6 +1876,7 @@ mod tests {
             name: "AIPASS".into(),
             root: PathBuf::from("/x"),
             fleet_dir: PathBuf::from("/x/src/aipass"),
+            citizens: Vec::new(),
             anchor: true,
         };
         assert_eq!(anchor.room_scope(), None);
@@ -1712,10 +1978,10 @@ mod tests {
         ));
 
         let sessions = vec![
-            ClaudeSession { cwd: mine.clone(), headless: false },
+            ClaudeSession { cwd: mine.clone(), headless: false, provider: "claude" },
             // A dispatched wake in the other room: a claude pane, but no chat
             // box - typing a slash command into it would go nowhere.
-            ClaudeSession { cwd: theirs.clone(), headless: true },
+            ClaudeSession { cwd: theirs.clone(), headless: true, provider: "claude" },
         ];
 
         assert_eq!(
@@ -1726,7 +1992,7 @@ mod tests {
 
         // The same room, now seating a human-driven session: it qualifies, and
         // it qualifies without anyone asking which project BAUD is seated in.
-        let sessions = vec![ClaudeSession { cwd: theirs, headless: false }];
+        let sessions = vec![ClaudeSession { cwd: theirs, headless: false, provider: "claude" }];
         assert_eq!(scan.live_agent_sessions(&sessions), vec!["far-away".to_string()]);
 
         assert!(
@@ -1783,7 +2049,7 @@ mod tests {
         fs::create_dir_all(vera.join("src/vera_studio/vera")).unwrap();
         fs::write(
             vera.join("VERA-STUDIO_REGISTRY.json"),
-            r#"{"metadata":{},"branches":[{"name":"VERA","path":"src/vera_studio/vera"}]}"#,
+            r#"{"metadata":{},"branches":[{"name":"VERA","path":"src/vera_studio/vera","status":"active"}]}"#,
         )
         .unwrap();
         let project = project_from_dir(&vera, false).expect("sealed dir reads as a project");
@@ -1802,21 +2068,33 @@ mod tests {
         fs::write(empty.join("EMPTY_REGISTRY.json"), r#"{"branches":[]}"#).unwrap();
         assert!(project_from_dir(&empty, false).is_none());
 
-        // Legacy flat layout - branches sit at the root itself: unswitchable.
+        // Rows that are not active are not citizens: nothing to card.
+        let retired = base.join("retired");
+        fs::create_dir_all(retired.join("src/retired/one")).unwrap();
+        fs::write(
+            retired.join("RETIRED_REGISTRY.json"),
+            r#"{"branches":[{"path":"src/retired/one","status":"archived"}]}"#,
+        )
+        .unwrap();
+        assert!(project_from_dir(&retired, false).is_none());
+
+        // Flat layout - branches sit at the root itself: the root is the fleet dir.
         let flat = base.join("flat");
         fs::create_dir_all(flat.join("devpulse")).unwrap();
         fs::write(
             flat.join("FLAT_REGISTRY.json"),
-            r#"{"branches":[{"path":"devpulse"}]}"#,
+            r#"{"branches":[{"path":"devpulse","status":"active"}]}"#,
         )
         .unwrap();
-        assert!(project_from_dir(&flat, false).is_none());
+        let flat_project = project_from_dir(&flat, false).expect("a flat layout seats");
+        assert_eq!(flat_project.fleet_dir, flat);
+        assert_eq!(flat_project.citizens, vec![flat.join("devpulse")]);
 
         // Two seals in one dir (legacy trees): the lexically first wins.
         let twin = base.join("twin");
         fs::create_dir_all(twin.join("src/twin/one")).unwrap();
         for seal in ["B_REGISTRY.json", "A_REGISTRY.json"] {
-            fs::write(twin.join(seal), r#"{"branches":[{"path":"src/twin/one"}]}"#).unwrap();
+            fs::write(twin.join(seal), r#"{"branches":[{"path":"src/twin/one","status":"active"}]}"#).unwrap();
         }
         assert_eq!(project_from_dir(&twin, false).unwrap().name, "A");
 
@@ -1824,7 +2102,7 @@ mod tests {
     }
 
     #[test]
-    fn discovery_covers_anchor_nested_and_siblings_without_duplicates() {
+    fn discovery_covers_anchor_nested_and_declared_roots_without_duplicates() {
         let base = std::env::temp_dir().join(format!("baud-disco-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
 
@@ -1832,7 +2110,7 @@ mod tests {
             fs::create_dir_all(dir.join(fleet).join("one")).unwrap();
             fs::write(
                 dir.join(format!("{name}_REGISTRY.json")),
-                format!(r#"{{"branches":[{{"path":"{fleet}/one"}}]}}"#),
+                format!(r#"{{"branches":[{{"path":"{fleet}/one","status":"active"}}]}}"#),
             )
             .unwrap();
         };
@@ -1843,15 +2121,110 @@ mod tests {
         seal(&base.join("Vera-Studio"), "VERA-STUDIO", "src/vera_studio");
         // A sibling with no seal is not a project and never listed.
         fs::create_dir_all(base.join("scratch")).unwrap();
+        // Declared twice, and the anchor declared as its own root: one listing
+        // each, never a duplicate.
+        fs::write(
+            anchor_dir.join("AIPASS_ROOTS.json"),
+            r#"{"roots":[{"path":"../Vera-Studio","status":"active"},{"path":"../Vera-Studio","status":"active"},{"path":".","status":"active"},{"path":"../scratch","status":"active"}]}"#,
+        )
+        .unwrap();
 
         let anchor = project_from_dir(&anchor_dir, true).expect("anchor seals");
         let names: Vec<String> = discover_projects(&anchor)
             .into_iter()
             .map(|project| project.name)
             .collect();
-        // Anchor first (never duplicated by the sibling scan), rest sorted.
+        // Anchor first (never duplicated by a declaration), rest sorted.
         assert_eq!(names, vec!["AIPASS", "BAUD", "VERA-STUDIO"]);
 
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    /// An anchor, one nested project, an active declared root whose registry
+    /// is flat (the row path has no parent, like Seed's "grow"), a declared
+    /// root that is not active, and an undeclared sibling with a registry.
+    fn declared_roots_fixture(tag: &str) -> (PathBuf, Project) {
+        let base = std::env::temp_dir().join(format!("baud-{tag}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let write = |path: PathBuf, text: &str| {
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        };
+        let row = |path: &str| format!(r#"{{"branches":[{{"name":"X","path":"{path}","status":"active"}}]}}"#);
+
+        let anchor_dir = base.join("AIPass");
+        write(anchor_dir.join("AIPASS_REGISTRY.json"), &row("src/aipass/one"));
+        fs::create_dir_all(anchor_dir.join("src/aipass/one")).unwrap();
+        // On disk under the fleet dir, in no registry row: not a citizen.
+        fs::create_dir_all(anchor_dir.join("src/aipass/stray")).unwrap();
+        write(anchor_dir.join("projects/baud/BAUD_REGISTRY.json"), &row("src/baud/baud"));
+        fs::create_dir_all(anchor_dir.join("projects/baud/src/baud/baud")).unwrap();
+        write(
+            anchor_dir.join("AIPASS_ROOTS.json"),
+            r#"{"roots":[{"path":"../seed","status":"active"},{"path":"../sealed","status":"retired"}]}"#,
+        );
+
+        write(base.join("seed/SEED_REGISTRY.json"), &row("grow"));
+        write(base.join("seed/grow/.trinity/passport.json"), "{}");
+        fs::create_dir_all(base.join("seed/node_modules")).unwrap();
+
+        write(base.join("sealed/SEALED_REGISTRY.json"), &row("src/sealed/one"));
+        fs::create_dir_all(base.join("sealed/src/sealed/one")).unwrap();
+
+        write(base.join("chess/CHESS_REGISTRY.json"), &row("src/chess/chess"));
+        fs::create_dir_all(base.join("chess/src/chess/chess")).unwrap();
+
+        let anchor = project_from_dir(&anchor_dir, true).expect("anchor seals");
+        (base, anchor)
+    }
+
+    fn card_names(project: &Project) -> Vec<String> {
+        branches_of(project, &[], &RoomScan::default())
+            .expect("cards read")
+            .into_iter()
+            .map(|branch| branch.name)
+            .collect()
+    }
+
+    #[test]
+    fn the_census_is_the_anchor_its_projects_and_active_declared_roots_only() {
+        let (base, anchor) = declared_roots_fixture("declared-census");
+        let names: Vec<String> = discover_projects(&anchor)
+            .into_iter()
+            .map(|project| project.name)
+            .collect();
+        // CHESS is an undeclared sibling and SEALED is declared but retired.
+        assert_eq!(names, vec!["AIPASS", "BAUD", "SEED"]);
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_declared_root_that_is_not_active_is_named_with_its_status() {
+        let (base, anchor) = declared_roots_fixture("declared-skipped");
+        let skipped = serde_json::to_value(skipped_roots(&anchor.root)).unwrap();
+        assert_eq!(skipped, serde_json::json!([{"path": "../sealed", "status": "retired"}]));
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn citizens_are_the_registry_rows_not_the_directory_listing() {
+        let (base, anchor) = declared_roots_fixture("declared-rows");
+        assert_eq!(card_names(&anchor), vec!["one"], "stray is on disk but in no row");
+        let seed = select_project(anchor, Some("SEED")).expect("seed is in the census");
+        assert_eq!(card_names(&seed), vec!["grow"], "node_modules is on disk but in no row");
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn a_flat_declared_project_seats_and_its_rooms_resolve() {
+        let (base, anchor) = declared_roots_fixture("declared-flat");
+        let seed = select_project(anchor, Some("SEED")).expect("seed is in the census");
+        assert_eq!(seed.root, base.join("seed").canonicalize().unwrap());
+        assert_eq!(seed.fleet_dir, seed.root, "a flat layout's fleet dir is its root");
+        assert_eq!(seed.room_scope().as_deref(), Some("seed"));
+        assert!(resolve_room(&seed, "grow").is_ok(), "a citizen's room lane resolves");
+        let refused = resolve_room(&seed, "node_modules").expect_err("not a citizen");
+        assert!(refused.contains("node_modules"), "{refused}");
         let _ = fs::remove_dir_all(&base);
     }
 

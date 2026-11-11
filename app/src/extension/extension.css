@@ -1,0 +1,563 @@
+/* The extension's own pages (options, side panel), on BAUD's tokens. The pulse's styles live in its shadow root. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body.baud-ext {
+  margin: 0;
+  background: var(--baud-bg);
+  color: var(--baud-ink);
+  font-family: var(--baud-mono);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.baud-ext-dim {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+  max-width: 32rem;
+  padding: var(--baud-pad);
+}
+
+.baud-ext-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext input,
+.baud-ext button {
+  font: inherit;
+  color: var(--baud-ink);
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  padding: 6px 8px;
+}
+
+.baud-ext button {
+  cursor: pointer;
+}
+
+.baud-ext button:hover {
+  border-color: var(--baud-line-strong);
+}
+
+.baud-ext-row {
+  display: flex;
+  gap: var(--baud-gap);
+}
+
+.baud-ext-said[data-tone="ok"] {
+  color: var(--baud-green);
+}
+
+.baud-ext-said[data-tone="bad"] {
+  color: var(--baud-red);
+}
+
+.baud-ext-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--baud-gap);
+  padding: var(--baud-pad);
+}
+
+/* ---- the side panel's chat */
+
+.baud-ext-chat {
+  height: 100%;
+  box-sizing: border-box;
+  gap: 6px;
+}
+
+.baud-ext-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-ext-chat .baud-ext-row {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.baud-ext-chat button {
+  padding: 2px 6px;
+}
+
+/* the header's controls: quiet lettered pills, lit only when on */
+.baud-ext-head button {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--baud-ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+
+.baud-ext-head button:hover {
+  color: var(--baud-ink);
+}
+
+.baud-ext-head .baud-ext-on {
+  background: color-mix(in srgb, var(--baud-green) 10%, transparent);
+}
+
+.baud-ext-chat button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.baud-ext-on {
+  border-color: var(--baud-green) !important;
+  color: var(--baud-green) !important;
+}
+
+.baud-ext-err {
+  color: var(--baud-red);
+  margin: 0;
+}
+
+.baud-ext-chat p {
+  margin: 0;
+}
+
+.baud-ext-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.baud-ext-tab {
+  display: inline-flex;
+}
+
+.baud-ext-tab button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.baud-ext-tab button:first-child {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-right: 7px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 11px;
+}
+
+.baud-ext-tab .baud-ext-arw {
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  padding-left: 5px;
+  padding-right: 7px;
+  color: var(--baud-ink-faint);
+}
+
+.baud-ext-tab.baud-ext-on button {
+  border-color: var(--baud-green);
+  background: color-mix(in srgb, var(--baud-green) 10%, transparent);
+}
+
+.baud-ext-tab.baud-ext-on button:first-child {
+  color: var(--baud-ink);
+}
+
+.baud-ext-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--baud-ink-faint);
+}
+
+.baud-ext-dot-idle {
+  background: var(--baud-green);
+}
+
+.baud-ext-dot-working {
+  background: var(--baud-amber);
+  box-shadow: 0 0 6px var(--baud-glow-amber);
+  animation: baud-ext-pulse 1.2s ease-in-out infinite;
+}
+
+.baud-ext-dot-waiting {
+  background: var(--baud-red);
+  box-shadow: 0 0 6px var(--baud-glow-red);
+}
+
+@keyframes baud-ext-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.baud-ext-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 8px;
+  background: var(--baud-bg-card);
+  border: 1px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+}
+
+.baud-ext-prov {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--baud-line);
+}
+
+.baud-ext-view {
+  border-color: var(--baud-blue) !important;
+}
+
+.baud-ext-model {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.baud-ext-chat .baud-ext-row-btn {
+  text-align: left;
+  border-color: transparent;
+}
+
+.baud-ext-chat .baud-ext-effort {
+  font-size: 11px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-ring {
+  display: inline-flex;
+  padding: 2px !important;
+  border: none !important;
+}
+
+.baud-ext-ring-track,
+.baud-ext-ring-fill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.baud-ext-ring-track {
+  stroke: var(--baud-line);
+}
+
+.baud-ext-ring-fill {
+  stroke: var(--baud-green);
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+
+.baud-ext-ring[data-severity="warning"] .baud-ext-ring-fill {
+  stroke: var(--baud-amber);
+}
+
+.baud-ext-ring[data-severity="critical"] .baud-ext-ring-fill {
+  stroke: var(--baud-red);
+}
+
+.baud-ext-dimmed {
+  opacity: 0.5;
+}
+
+.baud-ext-urow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+
+.baud-ext-urow progress {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 5px;
+  appearance: none;
+  border: none;
+  background: var(--baud-line);
+}
+
+.baud-ext-urow progress::-webkit-progress-bar {
+  background: var(--baud-line);
+}
+
+.baud-ext-urow progress::-webkit-progress-value {
+  background: var(--baud-green);
+}
+
+.baud-ext-urow progress[data-severity="warning"]::-webkit-progress-value {
+  background: var(--baud-amber);
+}
+
+.baud-ext-urow progress[data-severity="critical"]::-webkit-progress-value {
+  background: var(--baud-red);
+}
+
+.baud-ext-urow small {
+  grid-column: 1 / -1;
+}
+
+.baud-ext-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  user-select: text;
+}
+
+.baud-ext-line small {
+  display: block;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-text a,
+.baud-ext-md a {
+  color: var(--baud-blue);
+}
+
+.baud-ext-md {
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-md > :first-child {
+  margin-top: 0;
+}
+
+.baud-ext-md > :last-child {
+  margin-bottom: 0;
+}
+
+.baud-ext-md p,
+.baud-ext-md ul,
+.baud-ext-md ol,
+.baud-ext-md pre,
+.baud-ext-md blockquote,
+.baud-ext-md table {
+  margin: 0 0 0.6em;
+}
+
+.baud-ext-md ul,
+.baud-ext-md ol {
+  padding-left: 1.4em;
+}
+
+.baud-ext-md h1,
+.baud-ext-md h2,
+.baud-ext-md h3,
+.baud-ext-md h4 {
+  margin: 0.8em 0 0.3em;
+  font-size: 1.1em;
+  color: var(--baud-green);
+}
+
+.baud-ext-md strong {
+  color: var(--baud-ink);
+  font-weight: 700;
+}
+
+.baud-ext-md code {
+  color: var(--baud-amber);
+}
+
+.baud-ext-md pre {
+  position: relative;
+  padding: 6px 8px;
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  white-space: pre-wrap;
+  cursor: copy;
+}
+
+.baud-ext-md pre::after {
+  content: "copy";
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--baud-ink-faint);
+}
+
+.baud-ext-md pre:hover::after {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-md pre[data-copied]::after {
+  content: "copied";
+  color: var(--baud-green);
+}
+
+.baud-ext-md pre code {
+  color: var(--baud-ink);
+}
+
+.baud-ext-md blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--baud-line-strong);
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.baud-ext-md th,
+.baud-ext-md td {
+  padding: 2px 6px;
+  border: 1px solid var(--baud-line);
+  text-align: left;
+}
+
+.baud-ext-md img {
+  max-width: 100%;
+}
+
+.baud-ext-user small {
+  color: var(--baud-green);
+}
+
+.baud-ext-tool small {
+  color: var(--baud-amber);
+}
+
+.baud-ext-tool .baud-ext-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-stack {
+  cursor: pointer;
+}
+
+.baud-ext-note .baud-ext-text {
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-looktag {
+  color: var(--baud-blue);
+  cursor: help;
+}
+
+.baud-ext-acts {
+  display: inline-flex;
+  gap: 2px;
+  opacity: 0.45;
+}
+
+.baud-ext-acts:hover,
+.baud-ext-acts:focus-within {
+  opacity: 1;
+}
+
+.baud-ext-chat .baud-ext-acts button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.baud-ext-looking {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  color: var(--baud-ink-dim);
+}
+
+.baud-ext-looking span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.baud-ext-pend {
+  color: var(--baud-ink-dim);
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.baud-ext-pend-stale small,
+.baud-ext-pend-failed small {
+  color: var(--baud-amber);
+}
+
+.baud-ext-chat .baud-ext-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--baud-blue);
+  text-decoration: underline;
+}
+
+.baud-ext-busy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--baud-amber);
+}
+
+.baud-ext-ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.baud-ext-ask textarea {
+  flex: 1 1 auto;
+  /* shortcut: field-sizing needs Chrome 123+; on an older Chrome the box stays at its minimum height */
+  field-sizing: content;
+  min-height: 2.2em;
+  max-height: 9em;
+  resize: none;
+  font: inherit;
+  color: var(--baud-ink);
+  background: var(--baud-bg-panel);
+  border: 1px solid var(--baud-line);
+  border-radius: var(--baud-radius);
+  padding: 6px 8px;
+}
+
+.baud-ext-ask textarea.baud-ext-listening {
+  border-color: var(--baud-blue);
+  box-shadow: 0 0 8px var(--baud-glow-blue);
+}

@@ -35,11 +35,17 @@ the same crate, the same `run_headless`, cut from the same tag.
   is still a full envelope with `error` set and `branches` empty, never partial
   output and never nothing.
 - **`--project`** takes a name from BAUD's own census, which is case-sensitive
-  and comes from the `<NAME>_REGISTRY.json` seal — `AIPASS`, `BAUD`. An unknown
+  and comes from the `<NAME>_REGISTRY.json` seal — `AIPASS`, `BAUD`, or a root
+  declared active in the anchor's `AIPASS_ROOTS.json`, like `SEED`. An unknown
   name is refused rather than defaulted to the anchor: quietly reading the wrong
   project is how a remote verb ends up acting on a session nobody named. With no
   `--project`, the anchor is read; the window's default is the *seated* project,
   which does not exist in a process with no seat.
+- **`--list-projects`** prints `{projects, skipped, generated_at, error}`:
+  `projects` are the switcher's rows (`name`, `root`, `anchor`, `active`), and
+  `skipped` names each `AIPASS_ROOTS.json` row whose status is not `active`
+  as `{path, status}`, the path as declared. Only this verb reads `skipped`;
+  the window's polls never do.
 - **Exit codes.** `0` a real read (`error` is null) · `1` the snapshot could not
   be produced, and stdout carries a valid envelope explaining why · `2` usage
   error, and stdout is empty. So a caller may parse stdout unconditionally and

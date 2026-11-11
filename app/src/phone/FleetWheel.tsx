@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { BranchStatus } from "../types";
+import {
+  gateTurn,
+  keyStep,
+  QUIET,
+  WHEEL_SPEED_KEY,
+  WHEEL_SPEEDS,
+  wheelSpeed,
+  type WheelStep,
+  wheelStep,
+} from "./lib/wheelInput";
 
 const SCALE_CENTER = 1.28;
 const SCALE_SPREAD = 0.38;
@@ -70,7 +80,7 @@ function AppRing({ ring }: { ring: AppFace["ring"] }) {
 
 type WheelLayer = AgentLayer | AppLayer;
 
-/** Live and dispatched partition the working set by the desktop lamp's precedence, so a wheel's name and a card's light agree. */
+/** Live and dispatched partition the working set by one precedence, dispatched first, so a wheel's name and a card's dot agree. */
 const WHEELS: ReadonlyArray<WheelLayer> = [
   {
     key: "project",
@@ -122,6 +132,7 @@ const WHEELS: ReadonlyArray<WheelLayer> = [
         name: "backup",
         kind: "door",
       },
+      { key: "browser", mark: "WEB", name: "browser", kind: "door" },
     ],
   },
   /** Last, so the looping stack puts the monitor one backward flick from the first layer; the sheet keys on these card keys. */
@@ -407,6 +418,75 @@ export default function FleetWheel({
     drag.current = null;
   };
 
+  /** Centres the card `delta` places from the centred one; paint()'s own measurement, as the opening placement. */
+  const stepCard = useCallback((delta: number) => {
+    const strip = rail.current;
+    if (!strip) return;
+    const cards = Array.from(strip.children).filter(
+      (node) => (node as HTMLElement).dataset.name || (node as HTMLElement).dataset.app,
+    ) as HTMLElement[];
+    const at = cards.findIndex(
+      (card) => card.dataset.name === reported.current || card.dataset.app === appReported.current,
+    );
+    const target = cards[Math.min(Math.max(at + delta, 0), cards.length - 1)];
+    if (!target) return;
+    const box = target.getBoundingClientRect();
+    const middle = strip.getBoundingClientRect().left + strip.clientWidth / 2;
+    strip.scrollBy({ left: box.left + box.width / 2 - middle, behavior: "smooth" });
+  }, []);
+
+  const take = useCallback(
+    (step: WheelStep) => {
+      if (step === "open") {
+        // The apps layer keeps its centre local, so an agent ref left over from the last layer must not open.
+        if (apps) {
+          if (appReported.current) onOpenApp(appReported.current);
+        } else if (reported.current) {
+          onExpand(reported.current);
+        }
+      } else if ("card" in step) {
+        stepCard(step.card);
+      } else {
+        stepBy(step.layer);
+      }
+    },
+    [apps, onExpand, onOpenApp, stepBy, stepCard],
+  );
+
+  /** A fine pointer means a mouse or trackpad is attached; the phone's touch-only screen never binds these. */
+  const finePointer = useMemo(() => window.matchMedia?.("(any-pointer: fine)").matches === true, []);
+
+  /** Native and non-passive, since React's wheel listener is passive and the page must not scroll under the wheel. */
+  const takeRef = useRef(take);
+  takeRef.current = take;
+  useEffect(() => {
+    const box = wrap.current;
+    if (!box || !finePointer) return;
+    let gesture = QUIET;
+    const turn = (event: WheelEvent) => {
+      const step = wheelStep(event);
+      if (!step) return;
+      event.preventDefault();
+      const gate = WHEEL_SPEEDS[wheelSpeed(window.localStorage.getItem(WHEEL_SPEED_KEY))];
+      // A line-mode wheel reports notches as lines; ~16px a line puts it on the pixel scale the gate is set in.
+      const scale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : 1;
+      const delta = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) * scale;
+      const next = gateTurn(gesture, event.timeStamp, delta, gate);
+      gesture = next.gesture;
+      // One step per gesture, so a flung trackpad cannot ride through the whole stack.
+      if (next.fire) takeRef.current(step);
+    };
+    box.addEventListener("wheel", turn, { passive: false });
+    return () => box.removeEventListener("wheel", turn);
+  }, [finePointer]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = keyStep(event.key);
+    if (!step) return;
+    event.preventDefault();
+    take(step);
+  };
+
   /** A tap on an off-centre card only centres it; only a tap on the centred card opens it. */
   const onTap = (event: React.MouseEvent<HTMLDivElement>) => {
     // A swipe ends in a click that must not select; swiped clears on pointerdown because the click follows pointerup.
@@ -439,6 +519,9 @@ export default function FleetWheel({
     <div
       ref={wrap}
       className={`baud-wheel-wrap ${apps ? "baud-wheel-wrap-apps" : ""}`}
+      tabIndex={finePointer ? 0 : undefined}
+      aria-label={finePointer ? "fleet wheel: arrows move cards and layers, Enter opens" : undefined}
+      onKeyDown={finePointer ? onKeyDown : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
@@ -503,8 +586,9 @@ export default function FleetWheel({
           );
         })}
         {shown.map((branch) => {
-          // The desktop lamp's precedence: dispatched outranks live, as in BranchChip.
-          const word = branch.dispatched ? "dispatched" : branch.interactive ? "live" : "idle";
+          // The lamp precedence: dispatched outranks live, as on the card's state line.
+          const state = branch.dispatched ? "dispatched" : branch.interactive ? "live" : "idle";
+          const word = (branch.provider ?? "claude") === "claude" ? state : `${state} · ${branch.provider}`;
           const ref = cardRef(branch);
           const away = branch.project && branch.project !== seatedProject ? branch.project : null;
           /** Git adds nothing until known, so the sum can undercount but never invent. */

@@ -11,6 +11,8 @@ the same React app built against an HTTP transport instead, served over the
 tailnet by @api's host. Neither face knows which one it is: they both call the
 same typed verbs, and a single alias in a vite config decides what those verbs
 turn into.
+The *Chrome extension* is a third build of the same HTTP transport: a side
+panel and a pulse, with its own worker and content script.
 
 Everything below is under `app/` unless it says otherwise.
 
@@ -21,7 +23,8 @@ Everything below is under `app/` unless it says otherwise.
 | File | What it is |
 |---|---|
 | `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
-| `src/host/transport.ts` | The desktop's answer: `invoke` into Rust. |
+| `src/host/transport.ts` | The desktop's answer: `invoke` into Rust, or the phone's wire request through the Rust relay `host_api_call`. |
+| `src/host/route.ts` | `routeOf`: which door a desktop call takes, by its shape. Pure, plus `route.test.ts`, which also checks the IPC list against `lib.rs`'s registry. |
 | `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
 | `src/host/errorRef.ts` | The envelope's `ref` on the end of a refusal's message, "… (ref a1b2c3d4e5f6)", so every refusal on the phone has something to grep. Pure, plus `errorRef.test.ts`, which also drives the transport's refusal path with `fetch` stubbed. |
 | `vite.config.phone.ts` | **The whole port**, one alias: `./transport` → `transport.http.ts`. |
@@ -35,6 +38,7 @@ Everything below is under `app/` unless it says otherwise.
 |---|---|
 | `index.html` → `src/desktop/main.tsx` → `src/desktop/App.tsx` | The desktop window. |
 | `phone.html` → `src/phone/main.tsx` → `src/phone/PhoneApp.tsx` | The phone face. |
+| `src/extension/manifest.json` → `background.ts`, `content.ts`, `sidepanel.html`, `options.html` | The Chrome extension (`npm run build:extension` → `dist-extension/`). |
 | `src-tauri/src/main.rs` → `lib.rs::run()` | The Rust side; also `baud --snapshot`, the CLI the fleet read execs. |
 | `src-tauri/src/bin/baud_cli.rs` → `lib.rs::run_headless()` | `baud-cli`: the six headless verbs with no window, built with the `gui` feature off. The binary the host API prefers. |
 | `../src/baud/baud/apps/baud.py` | The AIPass branch shim (`drone @baud`). Nothing to do with the app. |
@@ -45,8 +49,10 @@ Everything below is under `app/` unless it says otherwise.
 
 | Piece | Where | The detail |
 |---|---|---|
-| The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop-19-files) |
+| The desktop face | `src/desktop/` | [its files, on the desktop index](docs/desktop.md#the-desktop-face--srcdesktop) |
 | The phone face | `src/phone/` | [its files, on their own page](docs/phone/files.md) |
+| The Chrome extension | `src/extension/` | [its files and the routes it uses](docs/extension.md) |
+| The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the opened card, both faces, in `src/phone/AgentSheet.tsx` | [the desktop's wheel and card](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
 | The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |
 | The phone's backend | @api's host, not in this repo | [Host lanes](#host-lanes--the-phones-backend-and-it-is-not-in-this-repo), below |
@@ -56,7 +62,8 @@ Everything below is under `app/` unless it says otherwise.
 ## The seam — how a face asks for anything
 
 ```
-a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (desktop)
+a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (desktop, desktop-shaped calls)
+                                                         →  invoke host_api_call → /v1  (desktop, every other call)
                                                          →  fetch   (phone, via the vite alias)
 ```
 
@@ -66,14 +73,12 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
 - `src/host/transport.http.ts` — a **38-row route table** over **31 distinct
   `/v1` paths**, each row a `path`, an optional `query`/`body`, and an `unwrap`
   that renames the wire's fields to the seam's. Also `HostError`, the token
-  store, the room socket and the image upload.
-- **Two refusal tables, and they are the map of what each face cannot do:**
-  - `NOT_YET` in `transport.http.ts` (12 rows) — verbs the desktop has and the
-    phone does not.
-  - `NOT_ON_THIS_FACE` in `transport.ts` (15 rows) — verbs the phone has and the
-    desktop does not.
-  - A verb with no route is refused **by name with a reason**, never bound to
-    the nearest plausible path.
+  store, the room socket and the image upload. `callWith(sender, ...)` is the
+  one parser; the phone's sender is `fetch`, the desktop's is the relay.
+- **`NOT_YET` in `transport.http.ts` (12 rows) is the map of what the phone
+  cannot do:** verbs the desktop has and the phone does not, refused **by name
+  with a reason**, never bound to the nearest plausible path. The desktop
+  refuses only `openRoomSocket` and `uploadImage`, by nature.
 
 
 ## Host lanes — the phone's backend, and it is **not in this repo**
@@ -156,13 +161,15 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/design/` | Approved design artefacts (the wheel mockup). |
 | `docs/architecture.md` | How BAUD reads the fleet, the three rules everything else follows from, the type seam, and the Rust backend's files. |
 | `docs/desktop.md` | The desktop window's index: running it, the face's files, the camera, the command surface, the layout, and the table of the pages below. |
-| `docs/desktop/window-and-cards.md` | The window, the cards and their doors, the opened passport. |
+| `docs/desktop/window-and-cards.md` | The window, the wheel and its round cards, the opened card and its passport. |
 | `docs/desktop/rooms.md` | Rooms and the seat model, the terminal, the workbench, the bell. |
-| `docs/desktop/settings.md` | The card gear, the header gear, the memory dials. |
+| `docs/desktop/settings.md` | The card gear, the header gear, the memory dials, the host API tab. |
+| `docs/desktop/apps.md` | The wheel's app and monitor cards, GIT, FILES, BACKUP, MACHINE and BROWSER, each the phone's screen in a workbench tab. |
+| `docs/desktop/browser.md` | BAUD's own Chrome: the profile copy, the room, the port, the four states, the native-hosts link, the live view (screencast, input, tab row, URL bar). |
 | `docs/headless.md` | `baud-cli`, the same answers without a window. |
 | `docs/development.md` | Building, the checks, the palette as data, and the host seam. |
 | `docs/phone.md` | The phone face's index: what the phone is, the transport and its refusal table, the token rule, project-named reads, serving, the checks, the visibility gate, and the table of the pages below. |
-| `docs/phone/wheel.md` | The fleet rail, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet. |
+| `docs/phone/wheel.md` | The fleet rail and its desktop input, the header name and reload, the verbs and lock chip, the `GIT` tile, the new-project sheet. |
 | `docs/phone/card.md` | The expanded agent card, cross-project doors, pane keys, the passport, the manager monitors, the birth certificate. |
 | `docs/phone/room.md` | The terminal sheet: attach, geometry, the key bar, scrolling, the standing layout, zoom, fullscreen, stream cost. |
 | `docs/phone/room-input.md` | Typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule. |

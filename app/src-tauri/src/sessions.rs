@@ -7,31 +7,50 @@
 //!
 //! Lifted out of lib.rs by FPLAN-0445 without a line of it changing.
 
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
+use std::time::SystemTime;
 
+use rusqlite::{Connection, OpenFlags};
 use serde_json::Value;
 
 use crate::*;
 
 /// Classify a `/proc/<pid>/cmdline` buffer (NUL-separated argv).
 ///
-/// Returns `Some(headless)` when argv[0] is a claude binary, `None` otherwise.
-/// `headless` means `-p`/`--print` is present - the shape of every dispatched
-/// wake (`claude -p ...` / `claude -c -p ...`); an interactive session never
-/// carries it.
-pub(crate) fn classify_claude_cmdline(cmdline: &[u8]) -> Option<bool> {
+/// Returns `Some((provider, headless))` when argv[0] is a claude, codex or
+/// opencode binary, `None` otherwise. For claude, `headless` means
+/// `-p`/`--print` is present - the shape of every dispatched wake. For codex it
+/// means the `exec` subcommand (`e` is its alias), for opencode the `run`
+/// subcommand; a prompt is one argv element, so a bare word match cannot be a
+/// sentence. The servers (codex `app-server`/`mcp-server`, opencode `serve`)
+/// outlive the session in its cwd and are no agent at all.
+pub(crate) fn classify_claude_cmdline(cmdline: &[u8]) -> Option<(&'static str, bool)> {
     let mut args = cmdline.split(|byte| *byte == 0).filter(|arg| !arg.is_empty());
 
     let argv0 = args.next()?;
     let argv0 = String::from_utf8_lossy(argv0);
     let binary = Path::new(argv0.as_ref()).file_name()?.to_string_lossy();
-    if binary != "claude" {
-        return None;
+    match binary.as_ref() {
+        "claude" => Some(("claude", args.any(|arg| arg == b"-p" || arg == b"--print"))),
+        "codex" => {
+            let args: Vec<&[u8]> = args.collect();
+            if args.iter().any(|arg| *arg == b"app-server" || *arg == b"mcp-server") {
+                return None;
+            }
+            Some(("codex", args.iter().any(|arg| *arg == b"exec" || *arg == b"e")))
+        }
+        "opencode" => {
+            let args: Vec<&[u8]> = args.collect();
+            if args.iter().any(|arg| *arg == b"serve") {
+                return None;
+            }
+            Some(("opencode", args.iter().any(|arg| *arg == b"run")))
+        }
+        _ => None,
     }
-
-    let headless = args.any(|arg| arg == b"-p" || arg == b"--print");
-    Some(headless)
 }
 
 /// One pass over the process table, collecting every live claude process and
@@ -58,8 +77,8 @@ pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
             Ok(contents) => contents,
             Err(_) => continue,
         };
-        let headless = match classify_claude_cmdline(&cmdline) {
-            Some(headless) => headless,
+        let (provider, headless) = match classify_claude_cmdline(&cmdline) {
+            Some(found) => found,
             None => continue,
         };
         let cwd = match fs::read_link(proc_dir.join("cwd")) {
@@ -67,7 +86,7 @@ pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
             Err(_) => continue,
         };
 
-        sessions.push(ClaudeSession { cwd, headless });
+        sessions.push(ClaudeSession { cwd, headless, provider });
     }
 
     sessions
@@ -100,18 +119,72 @@ pub(crate) fn transcript_dir_name(branch_dir: &Path) -> String {
 pub(crate) const INTERACTIVE_MARKER: &str = "\"type\":\"file-history-snapshot\"";
 pub(crate) const MARKER_SCAN_BYTES: u64 = 64 * 1024;
 
+/// The first read is this size and the scan stops at the marker, so a cold
+/// process pays one small read per interactive transcript, not 64 KB. A file
+/// without it (a headless dispatch) still costs the full 64 KB.
+const HEAD_CHUNK_BYTES: usize = 4096;
+
 pub(crate) fn is_interactive_transcript(path: &Path) -> bool {
-    let file = match fs::File::open(path) {
-        Ok(file) => file,
-        Err(_) => return false,
-    };
+    static HEADS: Memo<bool> = OnceLock::new();
+    memoized(&HEADS, path, || head_has_marker(path))
+}
 
-    let mut head = Vec::with_capacity(MARKER_SCAN_BYTES as usize);
-    if file.take(MARKER_SCAN_BYTES).read_to_end(&mut head).is_err() {
+/// The marker is ASCII, so a byte search finds exactly what the old lossy
+/// UTF-8 `contains` over the whole 64 KB head found.
+fn head_has_marker(path: &Path) -> bool {
+    let Ok(file) = fs::File::open(path) else {
         return false;
+    };
+    let mut file = file.take(MARKER_SCAN_BYTES);
+    let marker = INTERACTIVE_MARKER.as_bytes();
+    let mut head = Vec::new();
+    let mut chunk = vec![0u8; MARKER_SCAN_BYTES as usize];
+    loop {
+        // Doubling: a few syscalls for a 64 KB miss, at most 2x over-read for a late marker.
+        let want = head.len().clamp(HEAD_CHUNK_BYTES, chunk.len());
+        let read = match file.read(&mut chunk[..want]) {
+            Ok(0) => return false,
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(_) => return false,
+        };
+        // Re-scan the last marker-length-minus-one bytes: a marker can straddle chunks.
+        let from = head.len().saturating_sub(marker.len() - 1);
+        head.extend_from_slice(&chunk[..read]);
+        if head[from..].windows(marker.len()).any(|window| window == marker) {
+            return true;
+        }
     }
+}
 
-    String::from_utf8_lossy(&head).contains(INTERACTIVE_MARKER)
+/// A per-reader, process-wide memo keyed on a file's (len, mtime): a
+/// transcript that has not moved answers from memory, so the desktop's 5 s
+/// polls stop re-reading the same bytes. Any change to either re-reads.
+type Memo<T> = OnceLock<Mutex<HashMap<PathBuf, (u64, SystemTime, T)>>>;
+
+/// Past this many entries, gone files are dropped, then the rest if still full.
+const MEMO_CAP: usize = 4096;
+
+fn memoized<T: Clone>(memo: &'static Memo<T>, path: &Path, read: impl FnOnce() -> T) -> T {
+    // Stamp before reading: a write that lands mid-read moves the stamp, so the next poll re-reads.
+    let Some((len, modified)) = fs::metadata(path).ok().and_then(|meta| Some((meta.len(), meta.modified().ok()?))) else {
+        return read();
+    };
+    let memo = memo.get_or_init(Default::default);
+    let lock = || memo.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    if let Some((_, _, value)) = lock().get(path).filter(|(l, m, _)| *l == len && *m == modified) {
+        return value.clone();
+    }
+    let value = read();
+    let mut entries = lock();
+    if entries.len() >= MEMO_CAP {
+        entries.retain(|path, _| path.exists());
+        if entries.len() >= MEMO_CAP {
+            entries.clear();
+        }
+    }
+    entries.insert(path.to_path_buf(), (len, modified, value.clone()));
+    value
 }
 
 /// How the resume button reaches this branch's conversation, if any:
@@ -126,17 +199,19 @@ pub(crate) fn is_interactive_transcript(path: &Path) -> bool {
 /// Any failure to look reads as "no history" - the launch button then simply
 /// starts fresh, which is always safe.
 pub(crate) fn claude_history(branch_dir: &Path) -> (bool, Option<String>) {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return (false, None),
-    };
+    match home_dir() {
+        Some(home) => claude_history_in(&transcripts_of(&home, branch_dir)),
+        None => (false, None),
+    }
+}
 
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("HOME").ok().filter(|home| !home.trim().is_empty()).map(PathBuf::from)
+}
 
-    claude_history_in(&transcripts)
+/// `~/.claude/projects/<munged branch dir>`: where Claude keeps this branch's transcripts.
+fn transcripts_of(home: &Path, branch_dir: &Path) -> PathBuf {
+    home.join(".claude").join("projects").join(transcript_dir_name(branch_dir))
 }
 
 pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
@@ -189,19 +264,54 @@ pub(crate) fn claude_history_in(transcripts: &Path) -> (bool, Option<String>) {
 /// on a missing id fails the launch outright). Anything less is `None` and
 /// the caller falls back to the transcript scan — same fail-quiet rule as
 /// the rest of the card.
-pub(crate) fn session_pointer(branch_dir: &Path) -> Option<String> {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return None,
-    };
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
-    session_pointer_in(branch_dir, &transcripts)
+///
+/// Returns `(provider, session_id, run record)`. The pointer's `provider` is "claude" when
+/// absent; "codex" checks for the thread's rollout file under
+/// `~/.codex/sessions/YYYY/MM/DD/` instead, "opencode" for its row in
+/// OpenCode's SQLite store; any other provider is refused.
+pub(crate) fn session_pointer(branch_dir: &Path) -> Option<(&'static str, String, RunRecord)> {
+    let home = home_dir()?;
+    let transcripts = transcripts_of(&home, branch_dir);
+    let opencode_db = home.join(".local").join("share").join("opencode").join("opencode.db");
+    session_pointer_in(branch_dir, &transcripts, &home.join(".codex").join("sessions"), &opencode_db)
 }
 
-pub(crate) fn session_pointer_in(branch_dir: &Path, transcripts: &Path) -> Option<String> {
+/// An OpenCode session has no file of its own: it is a `session_v2` row, and
+/// its `directory` must be this branch. Opened read-only (the store is
+/// OpenCode's, live under WAL); a missing db, table or row is just `false`.
+fn opencode_session_exists(db: &Path, session_id: &str, branch_dir: &Path) -> bool {
+    let Ok(conn) = Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY) else {
+        return false;
+    };
+    let _ = conn.busy_timeout(std::time::Duration::from_millis(200));
+    conn.query_row("SELECT directory FROM session_v2 WHERE id = ?1", [session_id], |row| row.get::<_, String>(0))
+        .is_ok_and(|directory| Path::new(&directory) == branch_dir)
+}
+
+/// A Codex thread's transcript: `rollout-<stamp>-<thread_id>.jsonl` in any
+/// date dir three levels down.
+fn codex_rollout_exists(sessions: &Path, thread_id: &str) -> bool {
+    let suffix = format!("-{thread_id}.jsonl");
+    let dirs = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .map(|entries| entries.flatten().map(|entry| entry.path()).filter(|p| p.is_dir()).collect())
+            .unwrap_or_default()
+    };
+    dirs(sessions).iter().flat_map(|y| dirs(y)).flat_map(|m| dirs(&m)).any(|day| {
+        fs::read_dir(day).into_iter().flatten().flatten().any(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with("rollout-") && name.ends_with(&suffix)
+        })
+    })
+}
+
+pub(crate) fn session_pointer_in(
+    branch_dir: &Path,
+    transcripts: &Path,
+    codex_sessions: &Path,
+    opencode_db: &Path,
+) -> Option<(&'static str, String, RunRecord)> {
     let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("session.json")).ok()?;
     let pointer: Value = serde_json::from_str(&raw).ok()?;
     let session_id = pointer.get("session_id")?.as_str()?.trim().to_string();
@@ -214,10 +324,52 @@ pub(crate) fn session_pointer_in(branch_dir: &Path, transcripts: &Path) -> Optio
     if Path::new(pointer.get("cwd")?.as_str()?) != branch_dir {
         return None;
     }
-    if !transcripts.join(format!("{session_id}.jsonl")).is_file() {
+    let provider = match pointer.get("provider").and_then(Value::as_str) {
+        None | Some("claude") => "claude",
+        Some("codex") => "codex",
+        Some("opencode") => "opencode",
+        Some(_) => return None,
+    };
+    let exists = match provider {
+        "codex" => codex_rollout_exists(codex_sessions, &session_id),
+        "opencode" => opencode_session_exists(opencode_db, &session_id, branch_dir),
+        _ => transcripts.join(format!("{session_id}.jsonl")).is_file(),
+    };
+    if !exists {
         return None;
     }
-    Some(session_id)
+    let field = |key: &str, absent: &str| pointer.get(key).and_then(Value::as_str).unwrap_or(absent).to_string();
+    let run = RunRecord {
+        host_cli: pointer.get("host_cli").and_then(Value::as_str).map(str::to_string),
+        model_provider: field("model_provider", "pending"),
+        model_requested: field("model_requested", "cli_default"),
+        model_observed: field("model_observed", "pending"),
+        selection_source: field("selection_source", "unknown"),
+        observed_at: pointer.get("observed_at").and_then(Value::as_str).map(str::to_string),
+        receipt: grounding_receipt(branch_dir, &session_id),
+        session_id: session_id.clone(),
+    };
+    Some((provider, session_id, run))
+}
+
+/// The grounding hooks' receipt beside the pointer. A receipt for another
+/// session says nothing about this one, so it reads as no receipt.
+fn grounding_receipt(branch_dir: &Path, session_id: &str) -> Option<GroundingReceipt> {
+    let raw = fs::read_to_string(branch_dir.join(".ai_mail.local").join("grounding.json")).ok()?;
+    let receipt: Value = serde_json::from_str(&raw).ok()?;
+    let current = receipt.get("current")?;
+    if current.get("session_id")?.as_str()? != session_id {
+        return None;
+    }
+    Some(GroundingReceipt {
+        status: current.get("status")?.as_str()?.to_string(),
+        generation: current.get("generation")?.as_i64()?,
+        missing: current
+            .get("missing")
+            .and_then(Value::as_array)
+            .map(|keys| keys.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default(),
+    })
 }
 
 /// Sub-agents are invisible to the process table: they run INSIDE the parent
@@ -271,7 +423,19 @@ pub(crate) const AGENT_FILE_ACTIVE_SECS: u64 = 180;
 /// `agent-<id>.meta.json` names the spawning toolUseId): those are counted by
 /// file freshness over there, so they are excluded here - an async spawn still
 /// inside the tail must not count twice.
-pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::HashSet<String>) -> u64 {
+#[cfg(test)] // production goes through the memoized pairing in subagent_count_in
+pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &HashSet<String>) -> u64 {
+    not_async(&unmatched_spawns(tail), meta_ids)
+}
+
+/// (spawned minus meta) minus resolved equals (spawned minus resolved) minus
+/// meta, so the meta filter can run after the memoized tail pairing.
+fn not_async(unmatched: &HashSet<String>, meta_ids: &HashSet<String>) -> u64 {
+    unmatched.iter().filter(|id| !meta_ids.contains(*id)).count() as u64
+}
+
+/// Agent/Task spawn ids in a tail with no `tool_result` after them.
+fn unmatched_spawns(tail: &str) -> HashSet<String> {
     let mut spawned: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut resolved: std::collections::HashSet<String> = std::collections::HashSet::new();
 
@@ -297,9 +461,7 @@ pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::
                     let name = block.get("name").and_then(Value::as_str).unwrap_or("");
                     if name == "Agent" || name == "Task" {
                         if let Some(id) = block.get("id").and_then(Value::as_str) {
-                            if !meta_ids.contains(id) {
-                                spawned.insert(id.to_string());
-                            }
+                            spawned.insert(id.to_string());
                         }
                     }
                 }
@@ -313,7 +475,7 @@ pub(crate) fn count_inflight_subagents(tail: &str, meta_ids: &std::collections::
         }
     }
 
-    spawned.difference(&resolved).count() as u64
+    spawned.difference(&resolved).cloned().collect()
 }
 
 /// Async agents running under one session, straight from disk.
@@ -380,15 +542,7 @@ pub(crate) fn any_jsonl_modified_within(dir: &Path, window_secs: u64) -> bool {
 /// across every recently-active transcript. Any failure to look reads as 0 -
 /// the card then simply shows no sub badge, which is always safe.
 pub(crate) fn subagent_count(branch_dir: &Path) -> u64 {
-    let home = match std::env::var("HOME") {
-        Ok(home) if !home.trim().is_empty() => PathBuf::from(home),
-        _ => return 0,
-    };
-    let transcripts = home
-        .join(".claude")
-        .join("projects")
-        .join(transcript_dir_name(branch_dir));
-    subagent_count_in(&transcripts)
+    home_dir().map_or(0, |home| subagent_count_in(&transcripts_of(&home, branch_dir)))
 }
 
 pub(crate) fn subagent_count_in(transcripts: &Path) -> u64 {
@@ -414,7 +568,9 @@ pub(crate) fn subagent_count_in(transcripts: &Path) -> u64 {
         // disk, blocking agents by the unmatched spawn pair in the tail.
         let (meta_ids, running_async) = async_agents_running(&session_dir);
         count += running_async;
-        count += count_inflight_subagents(&read_tail(&path, SUBAGENT_TAIL_BYTES), &meta_ids);
+        static TAILS: Memo<HashSet<String>> = OnceLock::new();
+        let unmatched = memoized(&TAILS, &path, || unmatched_spawns(&read_tail(&path, SUBAGENT_TAIL_BYTES)));
+        count += not_async(&unmatched, &meta_ids);
     }
     count
 }
@@ -449,13 +605,43 @@ mod tests {
     /// A branch dir and a transcript dir, isolated per test. The pointer file
     /// format is the FPLAN-0447 contract: session_pointer.py's write_pointer
     /// is the only production writer, these literals mirror its payload.
-    fn scratch(tag: &str) -> (PathBuf, PathBuf) {
+    fn scratch(tag: &str) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
         let base = std::env::temp_dir().join(format!("baud-pointer-{tag}-{}", std::process::id()));
         let branch = base.join("branch");
         let transcripts = base.join("transcripts");
+        let codex = base.join("codex-sessions");
         fs::create_dir_all(branch.join(".ai_mail.local")).unwrap();
         fs::create_dir_all(&transcripts).unwrap();
-        (branch, transcripts)
+        fs::create_dir_all(&codex).unwrap();
+        (branch, transcripts, codex, base.join("opencode.db"))
+    }
+
+    /// OpenCode's store, cut to the two columns the check reads.
+    fn plant_opencode_row(db: &Path, session_id: &str, directory: &Path) {
+        let conn = Connection::open(db).unwrap();
+        conn.execute_batch("CREATE TABLE IF NOT EXISTS session_v2 (id text PRIMARY KEY, directory text NOT NULL)").unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO session_v2 (id, directory) VALUES (?1, ?2)",
+            [session_id, &directory.display().to_string()],
+        )
+        .unwrap();
+    }
+
+    fn plant_opencode_pointer(branch: &Path, session_id: &str) {
+        let payload = format!(
+            r#"{{"session_id":"{session_id}","provider":"opencode","set_by":"wake","cwd":"{}"}}"#,
+            branch.display()
+        );
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+    }
+
+    /// The pointer shape ai_mail writes for a Codex thread.
+    fn plant_codex_pointer(branch: &Path, thread_id: &str) {
+        let payload = format!(
+            r#"{{"session_id":"{thread_id}","provider":"codex","set_by":"wake","cwd":"{}"}}"#,
+            branch.display()
+        );
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
     }
 
     fn plant_pointer(branch: &Path, session_id: &str, cwd: &Path) {
@@ -466,55 +652,218 @@ mod tests {
         fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
     }
 
+    /// A resolving claude pointer carrying `fields` (the run record's keys,
+    /// as ai_mail writes them) beside the session id.
+    fn plant_run_pointer(tag: &str, fields: &str) -> RunRecord {
+        let (branch, transcripts, codex, opencode) = scratch(tag);
+        let payload = format!(r#"{{"session_id":"aaaa-bbbb","cwd":"{}"{fields}}}"#, branch.display());
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        session_pointer_in(&branch, &transcripts, &codex, &opencode).unwrap().2
+    }
+
+    /// The same, with `grounding.json` planted beside it first.
+    fn run_with_receipt(tag: &str, receipt: &str) -> Option<GroundingReceipt> {
+        let (branch, _, _, _) = scratch(tag);
+        fs::write(branch.join(".ai_mail.local").join("grounding.json"), receipt).unwrap();
+        plant_run_pointer(tag, "").receipt
+    }
+
+    fn receipt_row(session_id: &str, status: &str, generation: i64) -> String {
+        format!(
+            r#"{{"current":{{"session_id":"{session_id}","branch":"canary","generation":{generation},"status":"{status}","observation_boundary":"opencode_store","missing":["aipass-kernel"],"stale":[],"checked_at":"2026-10-28T13:56:35-0700"}},"history":[]}}"#
+        )
+    }
+
+    #[test]
+    fn an_old_pointer_without_the_run_record_reads_pending_not_an_error() {
+        let run = plant_run_pointer("runold", "");
+        assert_eq!(
+            run,
+            RunRecord {
+                session_id: "aaaa-bbbb".into(),
+                host_cli: None,
+                model_provider: "pending".into(),
+                model_requested: "cli_default".into(),
+                model_observed: "pending".into(),
+                selection_source: "unknown".into(),
+                observed_at: None,
+                receipt: None,
+            }
+        );
+    }
+
+    #[test]
+    fn a_new_pointer_carries_its_run_record_verbatim() {
+        let run = plant_run_pointer(
+            "runnew",
+            r#","host_cli":"opencode","model_provider":"openai","model_requested":"openai/gpt-6.1-sol","model_observed":"gpt-6.1-sol","selection_source":"flag","observed_at":"2026-10-28T13:48:44-07:00""#,
+        );
+        assert_eq!(run.host_cli.as_deref(), Some("opencode"));
+        assert_eq!(run.model_provider, "openai");
+        assert_eq!(run.model_requested, "openai/gpt-6.1-sol");
+        assert_eq!(run.model_observed, "gpt-6.1-sol");
+        assert_eq!(run.selection_source, "flag");
+        assert_eq!(run.observed_at.as_deref(), Some("2026-10-28T13:48:44-07:00"));
+    }
+
+    #[test]
+    fn a_pending_pointer_keeps_its_request_and_observes_nothing() {
+        let run = plant_run_pointer(
+            "runpending",
+            r#","host_cli":"claude","model_provider":"pending","model_requested":"opus","model_observed":"pending","selection_source":"flag","observed_at":null"#,
+        );
+        assert_eq!(run.model_requested, "opus");
+        assert_eq!(run.model_observed, "pending");
+        assert_eq!(run.model_provider, "pending");
+        assert_eq!(run.observed_at, None);
+    }
+
+    #[test]
+    fn each_receipt_status_reads_with_its_generation_and_missing_keys() {
+        for (generation, status) in (1..).zip(["verified", "ungrounded", "unverified", "pending"]) {
+            let receipt = run_with_receipt(&format!("receipt{status}"), &receipt_row("aaaa-bbbb", status, generation));
+            assert_eq!(
+                receipt,
+                Some(GroundingReceipt { status: status.into(), generation, missing: vec!["aipass-kernel".into()] })
+            );
+        }
+    }
+
+    #[test]
+    fn an_absent_garbled_or_foreign_receipt_is_no_receipt() {
+        assert_eq!(plant_run_pointer("receiptabsent", "").receipt, None);
+        assert_eq!(run_with_receipt("receiptgarbled", "not json{"), None);
+        assert_eq!(run_with_receipt("receiptforeign", &receipt_row("cccc-dddd", "verified", 1)), None);
+    }
+
     #[test]
     fn a_valid_pointer_names_its_session() {
-        let (branch, transcripts) = scratch("valid");
+        let (branch, transcripts, codex, opencode) = scratch("valid");
         plant_pointer(&branch, "aaaa-bbbb", &branch);
         fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
         assert_eq!(
-            session_pointer_in(&branch, &transcripts),
-            Some("aaaa-bbbb".to_string())
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
+            Some(("claude", "aaaa-bbbb".to_string()))
         );
+    }
+
+    #[test]
+    fn a_codex_pointer_resolves_against_its_rollout_file() {
+        let (branch, transcripts, codex, opencode) = scratch("codex");
+        let thread = "019a1b2c-3d4e-7f00-8a9b-0c1d2e3f4a5b";
+        plant_codex_pointer(&branch, thread);
+        let day = codex.join("2026").join("10").join("25");
+        fs::create_dir_all(&day).unwrap();
+        fs::write(day.join(format!("rollout-2026-10-25T13-30-00-{thread}.jsonl")), "{}\n").unwrap();
+        assert_eq!(
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
+            Some(("codex", thread.to_string()))
+        );
+    }
+
+    #[test]
+    fn a_codex_pointer_without_its_rollout_is_refused() {
+        // The Claude transcript dir holding the id is no proof for a Codex thread.
+        let (branch, transcripts, codex, opencode) = scratch("codexgone");
+        plant_codex_pointer(&branch, "aaaa-bbbb");
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        let day = codex.join("2026").join("10").join("25");
+        fs::create_dir_all(&day).unwrap();
+        fs::write(day.join("rollout-2026-10-25T13-30-00-other.jsonl"), "{}\n").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
+    }
+
+    #[test]
+    fn an_opencode_pointer_resolves_against_its_session_row() {
+        let (branch, transcripts, codex, opencode) = scratch("opencode");
+        let id = "ses_e7e3415cbffef1y2cc4IHRRmXX";
+        plant_opencode_pointer(&branch, id);
+        plant_opencode_row(&opencode, id, &branch);
+        assert_eq!(
+            session_pointer_in(&branch, &transcripts, &codex, &opencode).map(|(provider, id, _)| (provider, id)),
+            Some(("opencode", id.to_string()))
+        );
+    }
+
+    #[test]
+    fn an_opencode_row_for_another_directory_is_refused() {
+        let (branch, transcripts, codex, opencode) = scratch("opencodemoved");
+        plant_opencode_pointer(&branch, "ses_a");
+        plant_opencode_row(&opencode, "ses_a", Path::new("/somewhere/else"));
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
+    }
+
+    #[test]
+    fn an_opencode_pointer_without_its_row_or_store_is_refused() {
+        let (branch, transcripts, codex, opencode) = scratch("opencodegone");
+        plant_opencode_pointer(&branch, "ses_a");
+        // No store at all: refused, and the read-only open never creates one.
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
+        assert!(!opencode.exists());
+        // A store without the table, then one without the row.
+        Connection::open(&opencode).unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
+        plant_opencode_row(&opencode, "ses_other", &branch);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
+    }
+
+    #[test]
+    #[ignore]
+    fn live_opencode_pointer_resolves() {
+        let branch = PathBuf::from(std::env::var("BAUD_OPENCODE_PROOF_BRANCH").expect("a branch with an opencode pointer"));
+        let found = session_pointer(&branch);
+        println!("session_pointer({}) -> {found:?}", branch.display());
+        assert_eq!(found.map(|(provider, _, _)| provider), Some("opencode"));
+    }
+
+    #[test]
+    fn an_unknown_provider_is_refused() {
+        let (branch, transcripts, codex, opencode) = scratch("provider");
+        let payload = format!(r#"{{"session_id":"aaaa-bbbb","provider":"gemini","cwd":"{}"}}"#, branch.display());
+        fs::write(branch.join(".ai_mail.local").join("session.json"), payload).unwrap();
+        fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 
     #[test]
     fn a_pointer_for_another_directory_is_refused() {
         // A moved or copied branch inherits a pointer aimed at the ORIGINAL
         // directory's transcripts; resuming those grafts foreign memory.
-        let (branch, transcripts) = scratch("moved");
+        let (branch, transcripts, codex, opencode) = scratch("moved");
         plant_pointer(&branch, "aaaa-bbbb", Path::new("/somewhere/else"));
         fs::write(transcripts.join("aaaa-bbbb.jsonl"), "{}\n").unwrap();
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 
     #[test]
     fn a_pointer_without_a_transcript_is_refused() {
         // `--resume <missing id>` fails the launch outright — the guess scan
         // costs nothing by comparison.
-        let (branch, transcripts) = scratch("gone");
+        let (branch, transcripts, codex, opencode) = scratch("gone");
         plant_pointer(&branch, "aaaa-bbbb", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 
     #[test]
     fn no_pointer_file_is_simply_none() {
-        let (branch, transcripts) = scratch("absent");
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        let (branch, transcripts, codex, opencode) = scratch("absent");
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 
     #[test]
     fn a_malformed_pointer_is_none_not_a_crash() {
-        let (branch, transcripts) = scratch("garbage");
+        let (branch, transcripts, codex, opencode) = scratch("garbage");
         fs::write(branch.join(".ai_mail.local").join("session.json"), "not json{").unwrap();
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 
     #[test]
     fn a_blank_or_traversing_id_is_refused() {
-        let (branch, transcripts) = scratch("fence");
+        let (branch, transcripts, codex, opencode) = scratch("fence");
         plant_pointer(&branch, "  ", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
         plant_pointer(&branch, "../../escape", &branch);
-        assert_eq!(session_pointer_in(&branch, &transcripts), None);
+        assert_eq!(session_pointer_in(&branch, &transcripts, &codex, &opencode), None);
     }
 }

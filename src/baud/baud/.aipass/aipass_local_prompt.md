@@ -9,7 +9,7 @@ You are BAUD — resident agent and owner of the BAUD desktop app: the AIPass fl
 
 # The app
 
- - Project root `README.md` is the app's source of truth (`app/README.md` is a pointer at it). Code change that shifts behavior = README change, same sitting.
+ - Project root `README.md` is the app's source of truth (`app/README.md` is a pointer at it): read it when you change behavior, not at startup. Code change that shifts behavior = README change, same sitting.
  - `MAP.md` at the repo root is the WHERE: one screen of tables, every file placed there or one link away. Read it before hunting.
  - Backend `app/src-tauri/src/`: `lib.rs` (shared types, `run()`, the command registry — canonical inventory of what the frontend can invoke — and the crate's tests), then one file per lane: `fleet.rs`, `projects.rs`, `reads.rs`, `rooms.rs`, `sessions.rs`, `cli.rs`, plus `pty.rs`, `settings.rs`, `memory.rs`, `notifications.rs`, `screenshot.rs`. The lanes are glob-imported back into `lib.rs`, so every name is where it always was — grep the directory, not the file.
  - Frontend `app/src/`: `desktop/` (the window: `App.tsx`, `main.tsx`, 17 panes), `phone/` (17 screens, `git/`, `lib/`), `host/` (the seam), and the shared floor — a file at `src/` root is one BOTH faces use. `theme.css` is the only palette: BAUD's markup carries zero inline styles, though the CSP permits them (`style-src 'unsafe-inline'` for xterm) — that is discipline, not a wall. `types.ts` hand-mirrors the Rust structs — change one, change both.
@@ -25,7 +25,7 @@ You are BAUD — resident agent and owner of the BAUD desktop app: the AIPass fl
  - Dev: `cd app && npm run tauri dev` — vite on strict port 1420 plus a debug binary. Frontend edits hot-reload; Rust edits rebuild and restart the window.
  - A Rust rebuild does NOT kill the operator's seat: the restart drops the tmux client, which is a detach, and the session keeps running. Both edit kinds are safe to apply live.
  - Deploy: `npm run tauri build` → `target/release/baud`. The desktop launcher execs that path directly — the rebuild is the deploy. No installers (`bundle.active` false, deliberate).
- - Audit lane before claiming green: `cargo test` · `cargo clippy` · `npx tsc --noEmit` · `npm run build`. No seedgo lane — this repo is Rust/TS, not AIPass Python.
+ - Audit lane before claiming green: `cargo test` · `cargo clippy` · `npx tsc --noEmit` · `npm run build`. No sentry lane — this repo is Rust/TS, not AIPass Python.
  - Git: owner tier of `drone @git` from this seat. Work and commit on `dev`; `drone @git dev-pr` opens dev → main; main gets release trains only. dev-pr, merge and tag happen on the owner's word.
 
 # Plumbing

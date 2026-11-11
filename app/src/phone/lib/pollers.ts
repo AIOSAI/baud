@@ -104,7 +104,7 @@ export function useGitSweep(snapshot: FleetSnapshot | null) {
 }
 
 /** The bell's badge: the feed read, its cursor and the read/cleared markers; the seat reset must run before the poll. */
-export function useFeedBadge(project: string) {
+export function useFeedBadge(project: string, keep: number) {
   const [events, setEvents] = useState<NotificationEvent[]>([]);
   const [readUpTo, setReadUpTo] = useState("");
   const [clearedUpTo, setClearedUpTo] = useState("");
@@ -125,14 +125,14 @@ export function useFeedBadge(project: string) {
         .then((page) => {
           if (!mounted) return;
           feedCursor.current = page.cursor;
-          setEvents((seen) => mergeEvents(seen, page.events));
+          setEvents((seen) => mergeEvents(seen, page.events, keep));
         })
         .catch(() => {
           // Keeps the last good list and cursor; the next tick retries from where this one meant to start.
         });
     };
     return whileVisible(refresh, POLL_MS);
-  }, [project]);
+  }, [project, keep]);
 
   return { events, setEvents, readUpTo, setReadUpTo, clearedUpTo, setClearedUpTo };
 }
