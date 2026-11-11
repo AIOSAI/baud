@@ -572,6 +572,21 @@ export interface AgentLine {
   text: string;
   time: string;
   model?: string;
+  /** On an Edit or Write tool line: the file it changed. Counts are the host's line diff; never recounted. */
+  change?: AgentChange;
+}
+
+/** An Edit carries `start`, `old`, `new`; a Write `before` (null: a new file) and `after`; `large` neither. */
+export interface AgentChange {
+  path: string;
+  added: number;
+  removed: number;
+  large?: true;
+  start?: number;
+  old?: string;
+  new?: string;
+  before?: string | null;
+  after?: string;
 }
 
 export interface AgentFeed {

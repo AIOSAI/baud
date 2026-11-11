@@ -466,6 +466,67 @@ body.baud-ext {
   cursor: pointer;
 }
 
+.baud-ext-add {
+  color: var(--baud-green);
+}
+
+.baud-ext-del {
+  color: var(--baud-red);
+}
+
+/* a tool line that changed a file: reads as its text, opens the diff */
+.baud-ext-chat .baud-ext-change {
+  display: block;
+  width: 100%;
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-chat .baud-ext-change:hover,
+.baud-ext-chat .baud-ext-change:focus-visible {
+  text-decoration: underline;
+}
+
+.baud-ext-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  overflow-y: auto;
+  background: var(--baud-bg);
+  padding: 0 var(--baud-gap) var(--baud-gap);
+}
+
+.baud-ext-sheet header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--baud-gap);
+  padding: var(--baud-gap) 0;
+  background: var(--baud-bg);
+}
+
+.baud-ext-sheet header b {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.baud-ext-sheet header i {
+  color: var(--baud-ink-dim);
+  font-style: normal;
+  font-weight: normal;
+}
+
+.baud-ext-sheet .baud-git-diff {
+  margin: 0;
+}
+
 .baud-ext-note .baud-ext-text {
   color: var(--baud-ink-dim);
 }

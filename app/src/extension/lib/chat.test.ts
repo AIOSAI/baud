@@ -1,14 +1,17 @@
+import { parseDiff } from "react-diff-view";
 import { describe, expect, it } from "vitest";
 
-import type { AgentLine } from "../../types";
+import type { AgentChange, AgentLine } from "../../types";
 import type { FleetEntry, LookAt } from "../messages";
 import {
   busyView,
+  changeView,
   chatAgents,
   enterSends,
   escAction,
   insertTag,
   isActing,
+  lineDiff,
   linkParts,
   lookPick,
   lookText,
@@ -18,6 +21,7 @@ import {
   rememberAgent,
   resolveImages,
   retag,
+  runChange,
   runLabel,
   runsOf,
   shownAgent,
@@ -186,5 +190,64 @@ describe("usage and refusals", () => {
 
   it("reads aloud without markdown marks or code", () => {
     expect(speakable("**Done**. See [the doc](https://x).\n```\ncode\n```")).toBe("Done. See the doc.\n ");
+  });
+});
+
+describe("file changes", () => {
+  const tool = (n: number, change?: AgentChange): AgentLine => ({ ...line(n, "tool"), ...(change ? { change } : {}) });
+  const edit = (over: Partial<AgentChange> = {}): AgentChange => ({ path: "src/a.ts", added: 1, removed: 1, start: 10, old: "a\nb\nc", new: "a\nB\nc", ...over });
+  // The sheet's rows as the phone's differ reads them: kind, old number, new number, text.
+  const rowsOf = (v: ReturnType<typeof changeView>) => {
+    if (!("patch" in v)) throw new Error(`no patch: ${v.note}`);
+    return parseDiff(v.patch)[0].hunks.flatMap((h) =>
+      h.changes.map((c) =>
+        c.type === "normal" ? ["=", c.oldLineNumber, c.newLineNumber, c.content] : c.type === "insert" ? ["+", null, c.lineNumber, c.content] : ["-", c.lineNumber, null, c.content],
+      ),
+    );
+  };
+
+  it("totals a run over the lines that carry a change and ignores the rest", () => {
+    expect(runChange([tool(1, edit({ added: 3, removed: 1 })), tool(2), tool(3, edit({ added: 1, removed: 0 }))])).toEqual({ added: 4, removed: 1 });
+  });
+
+  it("gives no totals to a run with no change at all", () => {
+    expect(runChange([tool(1), tool(2)])).toBeNull();
+  });
+
+  it("numbers an Edit from its start line, the unchanged lines inside the block as context", () => {
+    expect(rowsOf(changeView(edit()))).toEqual([
+      ["=", 10, 10, "a"],
+      ["-", 11, null, "b"],
+      ["+", null, 11, "B"],
+      ["=", 12, 12, "c"],
+    ]);
+  });
+
+  it("diffs a Write's file before against after, numbered from line 1", () => {
+    expect(rowsOf(changeView({ path: "w.md", added: 1, removed: 0, before: "x\ny\n", after: "x\nnew\ny\n" }))).toEqual([
+      ["=", 1, 1, "x"],
+      ["+", null, 2, "new"],
+      ["=", 2, 3, "y"],
+    ]);
+  });
+
+  it("draws a new file all added", () => {
+    expect(rowsOf(changeView({ path: "n.md", added: 2, removed: 0, before: null, after: "one\ntwo\n" }))).toEqual([
+      ["+", null, 1, "one"],
+      ["+", null, 2, "two"],
+    ]);
+  });
+
+  it("says a large change was too large to keep and draws no diff", () => {
+    expect(changeView({ path: "big.ts", added: 900, removed: 3, large: true })).toEqual({ note: expect.stringContaining("too large to keep") });
+  });
+
+  it("says so, never guesses, for an Edit without its start line or a change without a body", () => {
+    expect(changeView(edit({ start: undefined }))).toEqual({ note: expect.stringContaining("cannot be numbered") });
+    expect(changeView({ path: "q", added: 1, removed: 0 })).toEqual({ note: expect.stringContaining("without a body") });
+  });
+
+  it("finds the longest common run, keeping a moved line's neighbours as context", () => {
+    expect(lineDiff(["a", "b", "c", "d"], ["a", "c", "d", "b"]).map((r) => r.kind + r.text)).toEqual([" a", "-b", " c", " d", "+b"]);
   });
 });

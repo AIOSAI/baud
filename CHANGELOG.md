@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Extension: file changes in the chat.** A tool run that edited or wrote files shows its `+N −M` in its label, an opened run lists each changed file with its counts, and a tap opens the diff over the chat (old and new line numbers, the phone's diff look, Esc or `✕` to close). Drawn from the optional `change` field the host feed puts on Edit and Write lines. See `docs/extension.md`.
+
 - **Extension: the pulse.** The corner presence on a tab is BAUD's own mark: a terminal-green dot and a row of bars that breathe when idle and run with the open agent's energy (speaking follows Piper's loudness), with one tick per live agent beneath, green interactive, amber dispatched, lit while working. Same size, drag, pin, `×` and Looking at as before. See `docs/extension.md`.
 
 - **Extension: quote-reply on agent messages.** Select text in an agent's reply in the side panel, tap `Reply`, type and press Enter: the quote and the `↳` answer are appended to the composer, unsent, and several stack before one send. Seton, vendored unchanged with its adapter for the panel. Extension version 0.5.1. See `docs/extension.md`.

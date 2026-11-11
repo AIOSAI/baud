@@ -3385,61 +3385,6 @@ body {
   font-size: 0.68rem;
 }
 
-/* NO `overflow` ON THIS BOX. In the reader's flex column, any overflow but
-   visible drops the item's automatic min size and squeezes the patch to one
-   screen with nothing to scroll; the page is what scrolls. The library's
-   palette is driven through its `--diff-*` properties. */
-.baud-git-diff {
-  margin: 12px calc(var(--baud-pad) / 1.5) 0;
-  padding: 8px 0;
-  background: var(--baud-bg-panel);
-  border: 1px solid var(--baud-line);
-  border-radius: 12px;
-
-  --diff-background-color: transparent;
-  --diff-text-color: var(--baud-ink);
-  --diff-font-family: var(--baud-mono);
-  --diff-gutter-insert-background-color: color-mix(in srgb, var(--baud-green) 12%, transparent);
-  --diff-gutter-delete-background-color: color-mix(in srgb, var(--baud-red) 12%, transparent);
-  --diff-code-insert-background-color: color-mix(in srgb, var(--baud-green) 10%, transparent);
-  --diff-code-delete-background-color: color-mix(in srgb, var(--baud-red) 10%, transparent);
-  --diff-code-insert-edit-background-color: color-mix(in srgb, var(--baud-green) 22%, transparent);
-  --diff-code-delete-edit-background-color: color-mix(in srgb, var(--baud-red) 22%, transparent);
-  --diff-selection-background-color: color-mix(in srgb, var(--baud-blue) 30%, transparent);
-  --diff-omit-gutter-line-color: var(--baud-line-strong);
-}
-
-/* Fixed layout is load-bearing for the wrap: an auto table grows to its
-   longest line and the cell never wraps. */
-.baud-git-diff .diff {
-  table-layout: fixed;
-  width: 100%;
-  font-size: 0.68rem;
-}
-
-.baud-git-diff .diff-line {
-  line-height: 1.5;
-}
-
-/* pre-wrap keeps the indentation; break-all folds long tokens. */
-.baud-git-diff .diff-code {
-  white-space: pre-wrap;
-  word-break: break-all;
-  padding: 0 8px 0 6px;
-}
-
-/* The gutter is a ruler: not tappable, and nowrap so it stays one column. */
-.baud-git-diff .diff-gutter {
-  color: var(--baud-ink-faint);
-  cursor: default;
-  white-space: nowrap;
-}
-
-.baud-git-diff .diff-decoration-content {
-  background: color-mix(in srgb, var(--baud-line) 55%, transparent);
-  color: var(--baud-ink-faint);
-}
-
 /* The @@ line wraps too: git appends the function signature, often the
    longest line on screen. */
 .baud-git-hunk {

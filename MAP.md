@@ -105,6 +105,7 @@ Changes there are @api's, not BAUD's. Cross-repo findings get mailed, not fixed.
 | `src/tokens/tokens.json` → `tokens.generated.css` | **The palette, as data.** `npm run tokens` regenerates the CSS; never hand-edit the generated file. |
 | `src/theme.css` (2092) | The desktop's stylesheet, and the **shared** floor — the phone loads it too. Written entirely in `var(--baud-*)`. |
 | `src/phone/phone.css` (3699) | Phone-only additions on top of `theme.css`. |
+| `src/diff.css` | The file diff look, `react-diff-view` on BAUD's tokens: the phone's git diff screen and the extension's change sheet both import it. |
 | `app/public/` | PWA icons and `manifest.webmanifest`. |
 
 Load order is fixed and both `main.tsx` files state it: tokens → theme → phone.

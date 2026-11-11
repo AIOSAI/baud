@@ -73,6 +73,21 @@ tool lines collapse into runs; each line shows its time and model. The feed
 stays at the bottom only if you were at the bottom, and a poll keeps your
 selection.
 
+**File changes.** A tool line for an Edit or a Write carries the host's
+`change` (path, lines added and removed, and the text it changed). A run's
+label adds its totals over those lines, `6 tool calls · 12:30 · +4 −1`, added
+green and removed red; a single such line shows its own. In an opened run, a
+line that changed a file reads as its file name and counts; a line that did not
+reads as before. Tapping one opens its diff in a sheet over the chat: the path
+and counts on top, `✕` or Esc to close (Esc there never stops the agent), then
+the rows in the phone's diff look (`src/diff.css`), old and new line numbers,
+long lines wrapping. An Edit is a line diff of the old text against the new,
+numbered from the line it starts on, so unchanged lines inside the block read
+as context; a Write diffs the file before against after, all green for a new
+file. A change too large for the host to keep, or one with no body the panel
+can draw, says so in the sheet and draws nothing. Closing leaves the chat
+scrolled where it was. Counts are the host's; the panel never recounts.
+
 - Enter sends to the open agent, Shift+Enter makes a newline. A Looking-at line
   rides as the first line, `[Looking at: …]`, exactly as Seed Dev's deck wrote it.
 - A send that fails, or meets a 409 because the agent has no room, stays
