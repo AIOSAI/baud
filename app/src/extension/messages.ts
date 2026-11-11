@@ -5,7 +5,7 @@ import type { BranchStatus } from "../types";
 export type LookKind = "pointer" | "selection" | "pin";
 export const LOOK_KINDS: readonly LookKind[] = ["pointer", "selection", "pin"];
 
-export type OrbMode = "idle" | "listening" | "thinking" | "acting" | "speaking";
+export type PulseMode = "idle" | "listening" | "thinking" | "acting" | "speaking";
 
 /** One Looking-at line. `text` empty means that kind was cleared; `page` is the address without query or hash. */
 export interface LookAt {
@@ -16,7 +16,7 @@ export interface LookAt {
   pinned: boolean;
 }
 
-/** The eyes switch (Looking-at gathering on/off) and the orb's hue, kept in chrome.storage.local under `eyes`. */
+/** The eyes switch (Looking-at gathering on/off) and a hue (stored, not drawn), kept in chrome.storage.local under `eyes`. */
 export interface Eyes {
   on: boolean;
   hue: number;
@@ -39,8 +39,8 @@ export interface Ring {
   subagents: number;
 }
 
-/** What the panel knows about the open agent; the worker turns it into the orb's mode. */
-export interface OrbInputs {
+/** What the panel knows about the open agent; the worker turns it into the pulse's mode. */
+export interface PulseInputs {
   busy: boolean;
   waiting: boolean;
   /** Busy and the newest feed line is a tool line. */
@@ -58,7 +58,7 @@ export type TabToWorker =
 
 // worker -> content
 export type WorkerToTab =
-  | { type: "state"; mode: OrbMode; speaker: number; eyes: Eyes; interact: boolean; rings: Ring[] }
+  | { type: "state"; mode: PulseMode; speaker: number; eyes: Eyes; interact: boolean; rings: Ring[] }
   | { type: "unpin" };
 
 // panel -> worker, port "panel:<windowId>"
@@ -66,7 +66,7 @@ export type PanelToWorker =
   | { type: "hello" }
   | { type: "ping" }
   | { type: "agent"; agent: string | null }
-  | ({ type: "orb" } & OrbInputs)
+  | ({ type: "pulse" } & PulseInputs)
   | ({ type: "eyes" } & Eyes)
   | { type: "unpin" }
   | { type: "interact"; toggle: boolean };
@@ -89,7 +89,7 @@ const isStr = (v: unknown): v is string => typeof v === "string";
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isKind = (v: unknown): v is LookKind => LOOK_KINDS.includes(v as LookKind);
-const isMode = (v: unknown): v is OrbMode => ["idle", "listening", "thinking", "acting", "speaking"].includes(v as string);
+const isMode = (v: unknown): v is PulseMode => ["idle", "listening", "thinking", "acting", "speaking"].includes(v as string);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 /** A port from a top-level http(s) page of this extension's own content script. */
@@ -144,10 +144,10 @@ export function asPanelToWorker(m: unknown): PanelToWorker | null {
       return { type: m.type };
     case "agent":
       return m.agent === null || (isStr(m.agent) && m.agent.includes("/")) ? { type: "agent", agent: m.agent } : null;
-    case "orb":
+    case "pulse":
       if (![m.busy, m.waiting, m.acting, m.speaking].every(isBool) || !isNum(m.loudness)) return null;
       return {
-        type: "orb",
+        type: "pulse",
         busy: m.busy as boolean,
         waiting: m.waiting as boolean,
         acting: m.acting as boolean,

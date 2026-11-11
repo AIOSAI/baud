@@ -2,7 +2,7 @@
 
 import type { AgentFeed, AgentLine, AgentUsage, UsageLimit } from "../../types";
 import type { FleetEntry, LookAt, LookKind } from "../messages";
-import { agentId } from "./orbState";
+import { agentId } from "./pulseState";
 
 export const FEED_KEEP = 1000;
 
@@ -40,7 +40,7 @@ export function runLabel(run: AgentLine[], agentName: string): string {
   return who + (at ? ` · ${at}` : "") + (l.role === "agent" && l.model ? ` · ${l.model}` : "");
 }
 
-/** Busy and the newest line is a tool call: the orb's "acting". */
+/** Busy and the newest line is a tool call: the pulse's "acting". */
 export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) => feed.busy && feed.lines[feed.lines.length - 1]?.role === "tool";
 
 const URL_RE = /(https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]}])/;
@@ -109,7 +109,7 @@ export function escAction(menuOpen: boolean, agent: string | null): "close" | "i
 
 /* ---- tabs */
 
-/** Chat tabs are live interactive agents; a dispatched agent is background work, seen on the orb only. */
+/** Chat tabs are live interactive agents; a dispatched agent is background work, seen on the pulse only. */
 export const chatAgents = (branches: FleetEntry[]) => branches.filter((b) => b.interactive && !b.dispatched);
 
 export const isBusyEntry = (b: FleetEntry) => b.busy === true || b.state === "working" || b.state === "waiting";

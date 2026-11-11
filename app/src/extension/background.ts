@@ -1,9 +1,9 @@
 /* The service worker: the one place that reads the host for the tabs (a content script runs under the page's
-   origin), the relay between a tab's orb and the side panel, and the panel's opener. */
+   origin), the relay between a tab's pulse and the side panel, and the panel's opener. */
 
 import { agentRoster } from "../host";
 import { loadHost } from "./lib/hostConfig";
-import { orbMode, ringsOf } from "./lib/orbState";
+import { pulseMode, ringsOf } from "./lib/pulseState";
 import { TabBook } from "./lib/tabBook";
 import {
   DEFAULT_EYES,
@@ -17,7 +17,7 @@ import {
   type Eyes,
   type FleetEntry,
   type LookAt,
-  type OrbInputs,
+  type PulseInputs,
   type WorkerToPanel,
   type WorkerToTab,
 } from "./messages";
@@ -30,7 +30,7 @@ const book = new TabBook();
 const tabs = new Set<Port>();
 const panels = new Map<number, Port>();
 /** Per window: the agent tab open in its panel, and what the panel last said about it. */
-const seats = new Map<number, { agent: string | null; inputs: OrbInputs | null }>();
+const seats = new Map<number, { agent: string | null; inputs: PulseInputs | null }>();
 let eyes: Eyes = DEFAULT_EYES;
 let branches: FleetEntry[] = [];
 let fleetError: string | null = null;
@@ -61,7 +61,7 @@ const toPanel = (windowId: number, m: WorkerToPanel) => panels.get(windowId)?.po
 function stateFor(port: Port): WorkerToTab {
   const tab = tabOf(port);
   const seat = seats.get(tab.windowId);
-  const { mode, speaker } = orbMode(seat?.agent ?? null, branches, seat?.inputs ?? null);
+  const { mode, speaker } = pulseMode(seat?.agent ?? null, branches, seat?.inputs ?? null);
   return { type: "state", mode, speaker, eyes, interact: book.isOn(tab.id!), rings: ringsOf(branches) };
 }
 
@@ -70,7 +70,7 @@ function push(windowId?: number) {
   for (const p of tabs) if (windowId === undefined || tabOf(p).windowId === windowId) toTab(p, stateFor(p));
 }
 
-// loudness arrives up to 25 times a second; the orbs draw at 15, so they hear it no faster
+// loudness arrives up to 25 times a second; the pulses draw at 15, so they hear it no faster
 function pushSoon() {
   if (pending) return;
   pending = setTimeout(() => {
@@ -94,7 +94,7 @@ async function readFleet() {
   for (const id of panels.keys()) toPanel(id, { type: "fleet", branches, error: fleetError });
 }
 
-/** The fleet is read while an orb shows it or a panel lists it, never otherwise. */
+/** The fleet is read while a pulse shows it or a panel lists it, never otherwise. */
 function fleetWanted() {
   const want = ready && (book.anyOn || panels.size > 0);
   if (want && !fleetTimer) {
@@ -167,7 +167,7 @@ function addPanel(port: Port, windowId: number) {
     if (panels.get(windowId) !== port) return;
     panels.delete(windowId);
     const seat = seats.get(windowId);
-    if (seat) seat.inputs = null; // the agent stays: the fleet's busy still drives the orb with the panel closed
+    if (seat) seat.inputs = null; // the agent stays: the fleet's busy still drives the pulse with the panel closed
     fleetWanted();
     push(windowId);
   });
@@ -185,7 +185,7 @@ function addPanel(port: Port, windowId: number) {
         seats.set(windowId, { agent: m.agent, inputs: null });
         push(windowId);
         return;
-      case "orb": {
+      case "pulse": {
         const { type: _type, ...inputs } = m;
         seats.set(windowId, { agent: seats.get(windowId)?.agent ?? null, inputs });
         pushSoon();

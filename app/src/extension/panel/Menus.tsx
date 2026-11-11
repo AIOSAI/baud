@@ -6,7 +6,7 @@ import { agentModel, modelsList } from "../../host";
 import type { AgentUsage, ModelCatalog, ModelRow } from "../../types";
 import { isBusyEntry, modelRefusal, usageWhy, worstSeverity } from "../lib/chat";
 import type { FleetEntry } from "../messages";
-import { agentId } from "../lib/orbState";
+import { agentId } from "../lib/pulseState";
 
 export const PROVIDERS = { claude: "Claude", codex: "Codex", opencode: "OpenCode" } as const;
 export type Provider = keyof typeof PROVIDERS;

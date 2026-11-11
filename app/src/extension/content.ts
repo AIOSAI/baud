@@ -1,14 +1,15 @@
-/* The corner overlay on a tab: the orb with its ×, and Looking at's resolver, whose lines go to the side panel
+/* The corner overlay on a tab: the pulse with its ×, and Looking at's resolver, whose lines go to the side panel
    through the worker. Nothing is drawn or sent until the panel switches Interact on for this tab; × turns it off.
    It never calls the host: its origin is the page's. Built as a classic script, since content scripts are not modules. */
 
 import { clampPlace, placeKey, type Place } from "./lib/place";
 import { pageId, pageTitle, selectionText, what } from "./lib/look";
 import { asWorkerToTab, DEFAULT_EYES, PING_MS, TAB_PORT, type LookKind, type TabToWorker, type WorkerToTab } from "./messages";
-import { makeOrb } from "./orb";
+import { makePulse } from "./pulse";
+import { tokens } from "../tokens";
 
 const CTX_WAIT = 150;
-const ORB_DRAG = 8;
+const PULSE_DRAG = 8;
 const FPS = 15;
 const SIZE = 140;
 
@@ -19,23 +20,23 @@ function start() {
     Object.assign(document.createElement(tag), props);
 
   // Inline on the host on purpose: page CSS outranks `:host`, and `all: initial` is the only reliable fence here.
-  const host = document.createElement("baud-orb");
+  const host = document.createElement("baud-pulse");
   const root = host.attachShadow({ mode: "closed" });
   host.style.cssText = "all: initial; position: fixed; top: 8px; right: 8px; z-index: 2147483647;";
   root.append(
     el("style", {
       textContent: `
-    :host { --hue: ${DEFAULT_EYES.hue}; font: 500 10px/1 system-ui, sans-serif; }
+    :host { font: 500 10px/1 system-ui, sans-serif; }
     .wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-    canvas { width: ${SIZE}px; height: ${SIZE}px; cursor: grab; touch-action: none; border-radius: 50%; background: radial-gradient(circle, rgba(4,6,15,.85) 40%, rgba(4,6,15,0) 70%); }
+    canvas { width: ${SIZE}px; height: ${SIZE}px; cursor: grab; touch-action: none; box-sizing: border-box; border: 1px solid ${tokens.line}; border-radius: 10px; background: ${tokens.bg}; }
     .bar { display: flex; gap: 4px; }
-    .bar a { padding: 3px 7px; border: 1px solid rgba(120,160,220,.22); border-radius: 999px; color: #9fb7d8; background: rgba(4,6,15,.8); cursor: pointer; user-select: none; }
-    .ghost { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, #fff, hsl(var(--hue) 90% 70%) 45%, transparent 70%); }
+    .bar a { padding: 3px 7px; border: 1px solid ${tokens.line}; border-radius: 999px; color: ${tokens.inkDim}; background: ${tokens.bg}; cursor: pointer; user-select: none; }
+    .ghost { position: fixed; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; pointer-events: none; background: ${tokens.green}; }
   `,
     }),
   );
   const canvas = el("canvas");
-  const close = el("a", { textContent: "×", title: "Click: Interact off for this tab. Hold and drag: move the orb" });
+  const close = el("a", { textContent: "×", title: "Click: Interact off for this tab. Hold and drag: move the pulse" });
   const bar = el("div", { className: "bar" });
   const wrap = el("div", { className: "wrap" });
   bar.append(close);
@@ -43,17 +44,16 @@ function start() {
   root.append(wrap);
   canvas.width = canvas.height = Math.round(SIZE * Math.min(2, devicePixelRatio || 1));
 
-  // the loop runs the whole time Interact is on: the orb is the owner's live view of the fleet from across the room
-  const draw = makeOrb(canvas);
+  // the loop runs the whole time Interact is on: the pulse is the owner's live view of the fleet from across the room
+  const draw = makePulse(canvas);
   const t0 = performance.now();
-  const look = [0, 0];
   let st: State = { type: "state", mode: "idle", speaker: 0, eyes: DEFAULT_EYES, interact: false, rings: [] };
   let raf = 0;
   let drawnAt = 0;
   let port: chrome.runtime.Port | null = null;
   const frame = (now: number) => {
     drawnAt = now;
-    draw({ mode: st.mode, speaker: st.speaker, hue: st.eyes.hue, rings: st.rings }, (now - t0) / 1000, look);
+    draw({ mode: st.mode, speaker: st.speaker, rings: st.rings }, (now - t0) / 1000);
   };
   function tick(now: number) {
     raf = 0;
@@ -63,16 +63,6 @@ function start() {
   const wake = () => {
     if (!raf && st.interact) raf = requestAnimationFrame(tick);
   };
-  // a unit-ish vector from the orb's centre to the point, shorter when the point is near
-  function gaze(x: number, y: number) {
-    const r = canvas.getBoundingClientRect();
-    const dx = x - (r.left + r.width / 2);
-    const dy = y - (r.top + r.height / 2);
-    const d = Math.hypot(dx, dy) || 1;
-    const k = Math.min(1, d / 200);
-    look[0] = (dx / d) * k;
-    look[1] = (dy / d) * k;
-  }
 
   function onWorker(raw: unknown) {
     const m = asWorkerToTab(raw);
@@ -83,7 +73,6 @@ function start() {
       return;
     }
     const was = st.interact;
-    const hueWas = st.eyes.hue;
     st = m;
     if (st.interact && !was) {
       host.style.visibility = "hidden"; // unseen until its place is read: no corner flash
@@ -93,8 +82,6 @@ function start() {
     } else if (!st.interact && was) leave();
     // eyes off closes gathering: pointer and selection go, a pin stays
     if (!st.eyes.on) for (const kind of ["pointer", "selection"] as const) if (said[kind]) say(kind, "");
-    host.style.setProperty("--hue", String(st.eyes.hue));
-    if (pinned && st.eyes.hue !== hueWas) pinned.style.outline = outline();
     wake();
   }
   function connect() {
@@ -116,7 +103,7 @@ function start() {
   // a message every PING_MS keeps the worker, and with it the fleet poll, alive while this tab is open
   setInterval(() => send({ type: "ping" }), PING_MS);
 
-  // Looking at: the element under the pointer, a selection, or the element the orb is dropped on
+  // Looking at: the element under the pointer, a selection, or the element the pulse is dropped on
   const said: Record<LookKind, string> = { pointer: "", selection: "", pin: "" };
   const say = (kind: LookKind, text: string) => {
     said[kind] = text;
@@ -128,16 +115,12 @@ function start() {
   let drag: { x: number; y: number; ghost: HTMLDivElement | null } | null = null;
   let pinned: HTMLElement | null = null;
   let pinOutline: [string, string] = ["", ""];
-  const outline = () => `2px solid hsl(${st.eyes.hue} 90% 70% / .7)`;
+  const outline = () => `2px solid ${tokens.green}`;
 
   addEventListener(
     "mousemove",
     (e) => {
       if (!st.interact) return;
-      if (!pinned) {
-        gaze(e.clientX, e.clientY); // pinned, the eyes stay on the pin
-        wake();
-      }
       if (!st.eyes.on || drag || pinned) return;
       clearTimeout(lookTimer);
       lookTimer = window.setTimeout(() => {
@@ -182,9 +165,6 @@ function start() {
     node.style.outline = outline();
     node.style.outlineOffset = "2px";
     pinWatch.observe(node, { subtree: true, childList: true, characterData: true });
-    const r = node.getBoundingClientRect();
-    gaze(r.left + r.width / 2, r.top + r.height / 2);
-    wake();
     say("pin", text);
   }
   canvas.addEventListener("pointerdown", (e) => {
@@ -194,7 +174,7 @@ function start() {
   });
   canvas.addEventListener("pointermove", (e) => {
     if (!drag) return;
-    if (!drag.ghost && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > ORB_DRAG) {
+    if (!drag.ghost && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > PULSE_DRAG) {
       drag.ghost = el("div", { className: "ghost" });
       root.append(drag.ghost);
     }
@@ -236,7 +216,7 @@ function start() {
   });
   close.addEventListener("pointermove", (e) => {
     if (!grip) return;
-    if (!grip.moved && Math.hypot(e.clientX - grip.x, e.clientY - grip.y) > ORB_DRAG) grip.moved = true;
+    if (!grip.moved && Math.hypot(e.clientX - grip.x, e.clientY - grip.y) > PULSE_DRAG) grip.moved = true;
     if (grip.moved) {
       Object.assign(host.style, { left: `${grip.left + e.clientX - grip.x}px`, top: `${grip.top + e.clientY - grip.y}px`, right: "auto" });
     }
@@ -277,4 +257,6 @@ function start() {
   connect();
 }
 
-if (window.top === window && !document.querySelector("baud-orb")) start();
+// an update orphans the old script but not its element, which carries the old name: drop it so a tab never shows two
+document.querySelector("baud-orb")?.remove();
+if (window.top === window && !document.querySelector("baud-pulse")) start();

@@ -1,4 +1,4 @@
-/** The orb's place on a site: one storage key per origin, clamped into the viewport on return. */
+/** The pulse's place on a site: one storage key per origin, clamped into the viewport on return. */
 
 export interface Place {
   left: number;

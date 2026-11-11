@@ -36,7 +36,7 @@ import {
   type Answered,
 } from "../lib/chat";
 import { loadHost } from "../lib/hostConfig";
-import { agentId } from "../lib/orbState";
+import { agentId } from "../lib/pulseState";
 import * as P from "../lib/pending";
 import { DEFAULT_EYES, type Eyes, type FleetEntry, type LookAt, type LookKind, type WorkerToPanel } from "../messages";
 import { holdSpace } from "./dictation";
@@ -57,7 +57,7 @@ const voice = createVoice((s) => voiceHeard.forEach((f) => f(s)));
 
 const FEED_MS = 2000;
 const USAGE_MS = 30_000;
-const ORB_MS = 40; // the speaker level, about 25 a second while a reply plays
+const PULSE_MS = 40; // the speaker level, about 25 a second while a reply plays
 const STAR = "·✢✳✶✻✽✻✶✳✢";
 const WORDS = ["Pondering", "Noodling", "Tinkering", "Conjuring", "Mulling", "Brewing", "Scheming", "Untangling", "Rummaging",
   "Fiddling", "Whirring", "Puzzling", "Simmering", "Wrangling", "Hatching", "Sleuthing", "Marinating", "Cogitating", "Humming"];
@@ -118,11 +118,11 @@ function Panel() {
   agentRef.current = agent;
   feedRef.current = feed;
 
-  const tellOrb = useCallback(() => {
+  const tellPulse = useCallback(() => {
     const f = feedRef.current;
     const s = voice.state;
     link.send({
-      type: "orb",
+      type: "pulse",
       busy: !!f?.busy,
       waiting: !!f?.waiting,
       acting: f ? isActing(f) : false,
@@ -191,7 +191,7 @@ function Panel() {
         if (!alive) return;
         setFeed((was) => ({ agent, lines, busy: was?.busy ?? false, waiting: was?.waiting ?? null, error: errText(err) }));
       }
-      tellOrb();
+      tellPulse();
     };
     poke.current = () => setTimeout(() => void tick(), 600);
     const stop = whileVisible(() => void tick(), FEED_MS);
@@ -199,7 +199,7 @@ function Panel() {
       alive = false;
       stop();
     };
-  }, [agent, host, tellOrb]);
+  }, [agent, host, tellPulse]);
 
   // usage on tab open and every 30 s
   useEffect(() => {
@@ -218,13 +218,13 @@ function Panel() {
     };
   }, [agent, host]);
 
-  // the orb hears the reader's level while a reply plays
+  // the pulse hears the reader's level while a reply plays
   useEffect(() => {
-    tellOrb();
+    tellPulse();
     if (said.id === null || said.loading || said.paused) return;
-    const t = setInterval(tellOrb, ORB_MS);
+    const t = setInterval(tellPulse, PULSE_MS);
     return () => clearInterval(t);
-  }, [said, tellOrb]);
+  }, [said, tellPulse]);
 
   const stopAgent = useCallback(() => {
     const a = agentRef.current;
@@ -392,7 +392,7 @@ function Panel() {
             role="switch"
             aria-checked={eyes.on}
             className={eyes.on ? "baud-ext-on" : ""}
-            title={eyes.on ? "Looking at: on. What you point at, select, or pin the orb on goes with your next message. Click to close his eyes: then only a pin goes." : "Looking at: off. Only what you pin the orb on goes with your messages. Click to open his eyes."}
+            title={eyes.on ? "Looking at: on. What you point at, select, or pin the pulse on goes with your next message. Click to turn it off: then only a pin goes." : "Looking at: off. Only what you pin the pulse on goes with your messages. Click to turn it on."}
             onClick={toggleEyes}
           >
             {eyes.on ? "◉ eyes" : "◡ eyes"}
@@ -402,7 +402,7 @@ function Panel() {
             role="switch"
             aria-checked={!!interact?.on}
             disabled={!interact?.can}
-            title={!interact?.can ? "Interact: no BAUD script answers in this tab. Reload it; chrome:// pages and files never run it." : interact.on ? "Interact: on. The orb is on this tab. Click to take it off." : "Interact: off. Click to put the orb on this tab."}
+            title={!interact?.can ? "Interact: no BAUD script answers in this tab. Reload it; chrome:// pages and files never run it." : interact.on ? "Interact: on. The pulse is on this tab. Click to take it off." : "Interact: off. Click to put the pulse on this tab."}
             onClick={() => link.send({ type: "interact", toggle: true })}
           >
             {interact?.on ? "interact: on" : "interact: off"}

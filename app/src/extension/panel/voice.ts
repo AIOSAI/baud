@@ -141,7 +141,7 @@ export function createVoice(onChange: (s: VoiceState) => void) {
     else me.end();
   }
 
-  /** The orb's speaker level while a reply plays, 0 otherwise. */
+  /** The pulse's speaker level while a reply plays, 0 otherwise. */
   function level(): number {
     if (!cur || state.paused) return 0;
     cur.an.getFloatTimeDomainData(frame);

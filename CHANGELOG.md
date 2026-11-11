@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Extension: the pulse.** The corner presence on a tab is BAUD's own mark: a terminal-green dot and a row of bars that breathe when idle and run with the open agent's energy (speaking follows Piper's loudness), with one tick per live agent beneath, green interactive, amber dispatched, lit while working. Same size, drag, pin, `×` and Looking at as before. See `docs/extension.md`.
+
 - **Extension: quote-reply on agent messages.** Select text in an agent's reply in the side panel, tap `Reply`, type and press Enter: the quote and the `↳` answer are appended to the composer, unsent, and several stack before one send. Seton, vendored unchanged with its adapter for the panel. Extension version 0.5.1. See `docs/extension.md`.
 
 - **Phone chat: read-aloud, model menu, usage, photos.** Each reply on the phone chat plays aloud through the extension's Piper player (play, pause, back 10 s, stop; one at a time); the model label in the head opens the model menu (provider chips, models, effort levels, the typed confirmation or the refusal in words); the usage ring beside it opens the usage sheet, read every 30 s; and `+` uploads a photo into the message as an `[Image #n]` tag that goes out as its host path. The extension's player now makes its audio context inside the tap. See `docs/phone/chat.md`.

@@ -86,9 +86,9 @@ describe("panel <-> worker", () => {
     expect(asPanelToWorker({ type: "agent", agent: null })).toEqual({ type: "agent", agent: null });
     expect(asPanelToWorker({ type: "agent", agent: "noslash" })).toBeNull();
     expect(
-      asPanelToWorker({ type: "orb", busy: true, waiting: false, acting: true, speaking: false, loudness: -2 }),
-    ).toEqual({ type: "orb", busy: true, waiting: false, acting: true, speaking: false, loudness: 0 });
-    expect(asPanelToWorker({ type: "orb", busy: true, loudness: 0 })).toBeNull();
+      asPanelToWorker({ type: "pulse", busy: true, waiting: false, acting: true, speaking: false, loudness: -2 }),
+    ).toEqual({ type: "pulse", busy: true, waiting: false, acting: true, speaking: false, loudness: 0 });
+    expect(asPanelToWorker({ type: "pulse", busy: true, loudness: 0 })).toBeNull();
     expect(asPanelToWorker({ type: "eyes", on: true, hue: "red" })).toEqual({ type: "eyes", on: true, hue: 187 });
     expect(asPanelToWorker({ type: "interact", toggle: true })).toEqual({ type: "interact", toggle: true });
     expect(asPanelToWorker({ type: "interact" })).toBeNull();

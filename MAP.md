@@ -12,7 +12,7 @@ tailnet by @api's host. Neither face knows which one it is: they both call the
 same typed verbs, and a single alias in a vite config decides what those verbs
 turn into.
 The *Chrome extension* is a third build of the same HTTP transport: a side
-panel and an orb, with its own worker and content script.
+panel and a pulse, with its own worker and content script.
 
 Everything below is under `app/` unless it says otherwise.
 

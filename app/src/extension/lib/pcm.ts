@@ -15,7 +15,7 @@ export function pcmSamples(carry: Uint8Array | null, chunk: Uint8Array): { sampl
   return { samples, carry: whole < bytes.length ? bytes.slice(whole) : null };
 }
 
-/** Output level 0..1 from a time-domain frame: RMS, scaled so ordinary speech fills the orb. */
+/** Output level 0..1 from a time-domain frame: RMS, scaled so ordinary speech fills the pulse. */
 export function loudness(frame: Float32Array): number {
   let sum = 0;
   for (const v of frame) sum += v * v;

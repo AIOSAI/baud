@@ -72,6 +72,6 @@ each time the model menu opens. Nothing polls once the screen closes.
 ### What it leaves to the extension
 
 The Looking-at line, the screenshot button, image drop and paste, the agent tab
-row, the orb, Interact, and hold-Space dictation (on the phone the keyboard's own
+row, the pulse, Interact, and hold-Space dictation (on the phone the keyboard's own
 mic dictates). Esc to stop is a desktop key; the phone has `■`. Copying a whole
 reply stays the extension's; on the phone a code box copies on a tap.

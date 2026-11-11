@@ -14,7 +14,7 @@ beforeEach(() => {
     <table><tr><td id="td">cell text</td></tr></table>
     <p id="p">   plain
       paragraph   </p>
-    <div id="host">orb</div>`;
+    <div id="host">pulse</div>`;
 });
 const $ = (id: string) => document.getElementById(id)!;
 

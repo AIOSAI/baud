@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { clampPlace, placeKey } from "./place";
 
-describe("orb place", () => {
+describe("pulse place", () => {
   it("keys one place per site", () => {
     expect(placeKey("https://a.com")).toBe("overlay:https://a.com");
     expect(placeKey("https://a.com")).not.toBe(placeKey("https://b.com"));
