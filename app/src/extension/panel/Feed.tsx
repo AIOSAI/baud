@@ -12,7 +12,7 @@ import "../../diff.css";
 import { splitPath } from "../../phone/lib/gitStatus";
 import { markdownHtml } from "../../phone/lib/markdown";
 import type { AgentChange, AgentLine } from "../../types";
-import { changeView, linkParts, retag, runChange, runLabel, runsOf, splitLook, stamp } from "../lib/chat";
+import { changeView, linkParts, retag, runChange, runLabel, runsOf, splitLook, stamp, takeLinkClick } from "../lib/chat";
 import type { Voice, VoiceState } from "./voice";
 
 export interface Note {
@@ -234,6 +234,7 @@ export function Feed(props: {
           const b = e.currentTarget;
           atEnd.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40;
         }}
+        onClick={(e) => takeLinkClick(e, (url) => chrome.tabs.create({ url }).catch((err: unknown) => console.error("open link:", url, err)))}
       >
         {items.map((x) => x.el)}
         {error && <div className="baud-ext-line baud-ext-err">{error}</div>}

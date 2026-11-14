@@ -17,6 +17,7 @@ const host = vi.hoisted(() => ({
   modelsList: vi.fn(),
   uploadImage: vi.fn(),
   speak: vi.fn(),
+  openExternal: vi.fn(),
 }));
 vi.mock("../host", () => host);
 
@@ -110,6 +111,34 @@ describe("ChatSheet", () => {
     expect(box.querySelector(".baud-chat-user")?.textContent).toContain("hello");
     expect(box.querySelector(".baud-chat-agent strong")?.textContent).toBe("hi");
     expect(box.querySelector(".baud-chat-model")?.textContent).toBe("opus");
+  });
+
+  it("opens a reply's markdown link and a line's bare URL through the host, never in the page", async () => {
+    host.agentFeed.mockResolvedValue(
+      feed({
+        lines: [
+          { n: 1, role: "user", text: "see https://x.dev/a", time: at(-60) },
+          { n: 2, role: "agent", text: "read [the doc](https://x.dev/b)", time: at(-50) },
+        ],
+      }),
+    );
+    await mount();
+    const clicks = [...box.querySelectorAll<HTMLAnchorElement>(".baud-chat-feed a")].map((a) => {
+      const e = new MouseEvent("click", { bubbles: true, cancelable: true });
+      act(() => void a.dispatchEvent(e));
+      return e.defaultPrevented;
+    });
+    expect(clicks).toEqual([true, true]);
+    expect(host.openExternal.mock.calls).toEqual([["https://x.dev/a"], ["https://x.dev/b"]]);
+  });
+
+  it("says so when the host cannot open a link", async () => {
+    host.agentFeed.mockResolvedValue(feed({ lines: [{ n: 1, role: "user", text: "https://x.dev/a", time: at(-60) }] }));
+    host.openExternal.mockRejectedValue(new Error("no browser"));
+    await mount();
+    act(() => void box.querySelector<HTMLAnchorElement>(".baud-chat-feed a")!.click());
+    await flush();
+    expect(box.textContent).toContain("link: no browser");
   });
 
   it("shows a send as pending until the feed echoes the line", async () => {

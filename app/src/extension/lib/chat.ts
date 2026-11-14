@@ -109,6 +109,17 @@ export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) => feed.busy &
 
 const URL_RE = /(https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]}])/;
 
+/** A click on an http(s) link goes to `open`, never the page: a side panel and the desktop's webview do not open
+    `target=_blank` themselves. Any other scheme is left alone. True when the click was taken. */
+export function takeLinkClick(e: { target: EventTarget | null; preventDefault(): void }, open: (url: string) => void): boolean {
+  const a = (e.target as Element | null)?.closest?.("a[href]");
+  const href = a?.getAttribute("href")?.trim() ?? "";
+  if (!/^https?:\/\//i.test(href)) return false;
+  e.preventDefault();
+  open(href);
+  return true;
+}
+
 /** Text split on its http(s) URLs: odd parts are links, the rest stay text. */
 export const linkParts = (text: string) => String(text).split(URL_RE).map((s, i) => ({ text: s, link: i % 2 === 1 }));
 

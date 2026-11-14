@@ -69,6 +69,8 @@ read brings the last 80 lines, and each later one asks `since` the last line
 held, which the host reads as exclusive. Line numbers restart in a new
 transcript, so when the answer's `session` changes the panel drops what it
 holds and reads again without `since`. Messages are plain text with http(s) links only;
+a click on one opens it in a new browser tab through `chrome.tabs.create`, never
+in the panel, and no other scheme is followed;
 tool lines collapse into runs; each line shows its time and model. The feed
 stays at the bottom only if you were at the bottom, and a poll keeps your
 selection.

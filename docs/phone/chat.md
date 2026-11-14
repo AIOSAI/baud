@@ -14,7 +14,9 @@ rules are the extension's own, imported from `extension/lib/chat.ts` and
 
 - **The feed** is the agent's transcript. A reply renders as markdown through
   `lib/markdown.ts` and its sanitizer; every other line is text with only
-  http(s) URLs linked. Consecutive tool calls stack into one line; a tap opens
+  http(s) URLs linked. A tapped http(s) link goes to the host's `openExternal`, a
+  new tab on the phone and the operator's browser in the desktop window, never
+  this page; a failure shows in the flash line. Consecutive tool calls stack into one line; a tap opens
   the stack. A code box copies on a tap and says "copied" for a moment; over
   plain http the copy takes `lib/copyPath.ts`'s legacy lane, and a refused copy
   shows no flash.

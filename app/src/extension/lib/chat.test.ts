@@ -1,5 +1,5 @@
 import { parseDiff } from "react-diff-view";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AgentChange, AgentLine } from "../../types";
 import type { FleetEntry, LookAt } from "../messages";
@@ -29,6 +29,7 @@ import {
   splitLook,
   stamp,
   sessionChanged,
+  takeLinkClick,
   usageWhy,
   withLook,
   worstSeverity,
@@ -38,6 +39,25 @@ const T = "2026-11-05T10:07:00Z";
 const line = (n: number, role: AgentLine["role"], text = `l${n}`, model?: string): AgentLine => ({ n, role, text, time: T, ...(model ? { model } : {}) });
 const look = (kind: LookAt["kind"], text: string): LookAt => ({ kind, text, title: "Docs", page: "https://x.dev/a", pinned: kind === "pin" });
 const entry = (over: Partial<FleetEntry>): FleetEntry => ({ name: "api", project: "aipass", interactive: true, dispatched: false, subagents: 0, ...over }) as FleetEntry;
+
+describe("link clicks", () => {
+  const click = (href: string | null) => {
+    const a = { getAttribute: () => href };
+    const e = { target: { closest: (sel: string) => (sel === "a[href]" && href !== null ? a : null) } as unknown as EventTarget, preventDefault: vi.fn() };
+    const open = vi.fn();
+    return { taken: takeLinkClick(e, open), prevented: e.preventDefault.mock.calls.length, opened: open.mock.calls };
+  };
+
+  it("hands an http or https link to the opener and keeps the page from following it", () => {
+    expect(click(" https://x.dev/a ")).toEqual({ taken: true, prevented: 1, opened: [["https://x.dev/a"]] });
+    expect(click("http://x.dev").opened).toEqual([["http://x.dev"]]);
+  });
+
+  it("leaves javascript, data, mailto, a relative path and a click off any link alone", () => {
+    for (const href of ["javascript:alert(1)", "data:text/html,x", "mailto:a@b.c", "/v1/fleet", null])
+      expect(click(href)).toEqual({ taken: false, prevented: 0, opened: [] });
+  });
+});
 
 describe("feed lines", () => {
   it("merges polls by line number, a re-sent line replacing itself", () => {
