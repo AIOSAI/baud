@@ -61,7 +61,7 @@ The installer checks each one and offers to install whatever is missing, one at 
 curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
 ```
 
-The script prints what the machine has, installs what is missing after one Enter, installs the `aipass` CLI from PyPI, and runs `aipass install`. That clones AIPass into `~/AIPass` and lands this release's phone face. It never overwrites an existing `AIPass` folder. To install under another folder, name the parent:
+The script prints what the machine has and what it will install and change, then waits for one Enter. That Enter is the only question: it installs what is missing, installs the `aipass` CLI from PyPI, and runs `aipass install --yes`, consent to the machine changes the plan named (Claude Code hooks in `~/.claude/settings.json`, shell rc lines, the `drone` and `aipass` symlinks). That clones AIPass into `~/AIPass`, lands this release's phone face, and ends on AIPass's own closing screen. A phone face that does not land fails the install, with the retry, `aipass baud install --tag <tag>`, named. It never overwrites an existing `AIPass` folder. To install under another folder, name the parent:
 
 ```sh
 curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh -s -- ~/Projects

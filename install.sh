@@ -153,6 +153,15 @@ stop_on_uninstallable() {
     fi
 }
 
+# The Enter after the plan is the consent `aipass install --yes` carries, so the plan names every machine change.
+print_machine_changes() {
+    say "aipass install will also change this machine:"
+    say "  ~/.claude/settings.json: AIPass hooks, env and deny rules (backed up first)"
+    say "  ~/.bashrc: a claude() boot shim, AIPASS_HOME and a PATH line if needed; ~/.profile: AIPASS_HOME"
+    say "  Codex hooks and config pins, the OpenCode plugin (only if they are installed)"
+    say "  drone and aipass symlinks in /usr/local/bin (sudo) or ~/.local/bin"
+}
+
 print_plan() {
     PLAN_MISSING=""
     PLAN_CLAUDE=""
@@ -165,7 +174,8 @@ print_plan() {
     [ "$STATE_tailscale_up" = ok ] || PLAN_TAILSCALE=1
     if [ -z "$PLAN_MISSING$PLAN_CLAUDE$PLAN_TAILSCALE" ]; then
         say "Nothing to install. AIPass and the BAUD phone face will land in $HOME_DIR."
-        say "Press Enter to start, Ctrl-C to stop."
+        print_machine_changes
+        say "Press Enter to start, Ctrl-C to stop. Nothing changes until Enter."
         return 0
     fi
     say "BAUD $BAUD_TAG will install into $HOME_DIR."
@@ -193,6 +203,7 @@ print_plan() {
     elif [ -n "$PLAN_TAILSCALE" ]; then
         say "Then one sign-in runs: Tailscale (it prints a link)."
     fi
+    print_machine_changes
     say "Press Enter to start, Ctrl-C to stop. Nothing changes until Enter."
 }
 
@@ -333,9 +344,10 @@ main() {
     fi
     # Each ${AIPASS_SOURCE:+...} adds its own word only when set: a spaced path holds and SC2086 stays quiet.
     say "Running aipass install (this clones AIPass into $HOME_DIR${AIPASS_SOURCE:+ from $AIPASS_SOURCE})"
-    if ! aipass install --non-interactive --no-chat --path "$HOME_DIR" --baud-tag "$BAUD_TAG" ${AIPASS_SOURCE:+--source} ${AIPASS_SOURCE:+"$AIPASS_SOURCE"}; then
+    if ! aipass install --non-interactive --yes --path "$HOME_DIR" --baud-tag "$BAUD_TAG" ${AIPASS_SOURCE:+--source} ${AIPASS_SOURCE:+"$AIPASS_SOURCE"}; then
         say ""
         say "aipass install stopped. Its own output above names the step."
+        say "If the step was the BAUD phone face, retry it alone: aipass baud install --tag $BAUD_TAG"
         say "Already on disk:"
         [ -n "$INSTALLED_CLI" ] && say "  the aipass CLI ($AIPASS_VERSION)"
         [ -e "$HOME_DIR" ] && say "  $HOME_DIR (partial)"
@@ -350,17 +362,10 @@ main() {
         say "'sudo tailscale up', then follow $GUIDE_URL"
     fi
     say ""
-    # aipass install exits 0 even when its phone face step fails, so ask the disk:
-    # the face's marker is written last and swapped in whole (aipass baud unpack).
-    if [ -f "$HOME/.aipass/baud/phone/.baud-phone.json" ]; then
-        say "BAUD $BAUD_TAG is installed in $HOME_DIR."
-    else
-        say "AIPass is installed in $HOME_DIR; the BAUD phone face is not (see above)."
-        say "  Retry: aipass baud install --tag $BAUD_TAG"
-    fi
+    say "BAUD $BAUD_TAG is installed in $HOME_DIR."
     say "Phone guide: $GUIDE_URL"
     if [ -n "$CLAUDE_SIGNIN_SKIPPED" ]; then
-        say "Claude Code is not signed in: run 'claude auth login' before running 'claude' in $HOME_DIR."
+        say "Claude Code is not signed in: run 'claude auth login'."
     fi
     say "If a new terminal cannot find aipass or claude, add \$HOME/.local/bin to your PATH."
     # One pointer, not the undo list: the full list scrolls the QR below off an 80x40 screen.
