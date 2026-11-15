@@ -56,7 +56,6 @@ pub(crate) fn classify_claude_cmdline(cmdline: &[u8]) -> Option<(&'static str, b
 /// One pass over the process table, collecting every live claude process and
 /// where it runs. Pure `/proc` reads - no processes spawned, nothing written.
 /// Any unreadable entry (raced exit, permissions) is simply skipped.
-#[cfg(target_os = "linux")]
 pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
     let mut sessions = Vec::new();
 
@@ -90,12 +89,6 @@ pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
     }
 
     sessions
-}
-
-/// No process table to read here - branches simply never show interactive.
-#[cfg(not(target_os = "linux"))]
-pub(crate) fn scan_claude_sessions() -> Vec<ClaudeSession> {
-    Vec::new()
 }
 
 /// Claude Code keeps each directory's conversation transcripts under

@@ -209,9 +209,8 @@ fn base64_encode(bytes: &[u8]) -> String {
 
 // ------------------------------------------------------------- teardown
 
-/// Signal an entire process group. Unix only; see the module docs for why the
-/// group and not the pid.
-#[cfg(unix)]
+/// Signal an entire process group; see the module docs for why the group and
+/// not the pid.
 fn signal_group(pid: u32, signal: i32) {
     let group = pid as libc::pid_t;
     if group <= 0 {
@@ -241,28 +240,20 @@ fn wait_for_exit(child: &mut Box<dyn Child + Send + Sync>, grace: Duration) -> b
 
 /// Kill one session and reclaim everything it held.
 fn terminate(mut session: Session) {
-    #[cfg(unix)]
-    {
-        match session.pid {
-            Some(pid) => {
-                // SIGHUP is what closing a terminal window sends: shells and
-                // well-behaved jobs clean up after themselves.
-                signal_group(pid, libc::SIGHUP);
-                if !wait_for_exit(&mut session.child, KILL_GRACE) {
-                    signal_group(pid, libc::SIGKILL);
-                    let _ = wait_for_exit(&mut session.child, KILL_GRACE);
-                }
-            }
-            // No pid means no group to signal; fall back to the child itself.
-            None => {
-                let _ = session.child.kill();
+    match session.pid {
+        Some(pid) => {
+            // SIGHUP is what closing a terminal window sends: shells and
+            // well-behaved jobs clean up after themselves.
+            signal_group(pid, libc::SIGHUP);
+            if !wait_for_exit(&mut session.child, KILL_GRACE) {
+                signal_group(pid, libc::SIGKILL);
+                let _ = wait_for_exit(&mut session.child, KILL_GRACE);
             }
         }
-    }
-
-    #[cfg(not(unix))]
-    {
-        let _ = session.child.kill();
+        // No pid means no group to signal; fall back to the child itself.
+        None => {
+            let _ = session.child.kill();
+        }
     }
 
     // Reap, or the shell lingers as a zombie for the life of the app.

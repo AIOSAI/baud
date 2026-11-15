@@ -92,10 +92,8 @@ pub(crate) fn receipt_path(home: &Path) -> PathBuf {
 }
 
 fn home_dir() -> Result<PathBuf, String> {
-    ["HOME", "USERPROFILE"]
-        .iter()
-        .filter_map(std::env::var_os)
-        .find(|value| !value.is_empty())
+    std::env::var_os("HOME")
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| "cannot find the home directory (HOME is unset)".to_string())
 }

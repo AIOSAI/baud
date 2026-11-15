@@ -100,7 +100,7 @@ Save proactively — after milestones, decisions, topic switches.
 
 # House rules
 
- - Public repo — write as if it ships, because it does. No secrets in the tree, no hardcoded paths (`pathlib`, never `/home/...`), cross-platform.
+ - Public repo — write as if it ships, because it does. No secrets in the tree, no hardcoded paths (`pathlib`, never `/home/...`), Linux only.
  - No bare imports — always `from aipass.<agent>.apps...`.
  - State lives in `.trinity/` and dashboards, never in prompts. Prompts are signposts; memories record; registries catalog.
  - New test files need permission: a hook gate refuses them by policy (`.aipass/test_write_policy.json`). Editing an existing test is fine. Need a new test? Mail @devpulse with the defect or contract it pins. Never route around the gate.

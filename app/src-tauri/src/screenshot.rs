@@ -16,11 +16,6 @@
 //! for free instead of us building an overlay. The portal saves the capture
 //! to its own temp location; we copy it into the operator's Pictures/BAUD
 //! and report OUR copy, because the portal may clean its temp file up later.
-//!
-//! Cross-platform seam: macOS/Windows have no portal; direct capture there
-//! is legal (`xcap` is the candidate crate) and slots in behind the same
-//! command when the cross-platform milestone lands. Until then non-Linux
-//! answers with an honest error instead of a silent no-op.
 
 use std::path::{Path, PathBuf};
 
@@ -65,7 +60,6 @@ fn percent_decode(text: &str) -> String {
 /// path. Slow by design - the operator is inside the system picker choosing
 /// region/window/screen - so the command is async and the frontend must not
 /// block on it.
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub async fn screenshot_capture(app: tauri::AppHandle) -> Result<String, String> {
     use tauri::Manager;
@@ -97,15 +91,6 @@ pub async fn screenshot_capture(app: tauri::AppHandle) -> Result<String, String>
     // The portal's temp copy is its own to clean up - we never delete.
 
     Ok(destination.display().to_string())
-}
-
-/// The cross-platform seam, stated honestly: direct capture (xcap) belongs
-/// here when the cross-platform milestone lands. Until then the button
-/// reports why instead of pretending.
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub async fn screenshot_capture(_app: tauri::AppHandle) -> Result<String, String> {
-    Err("screenshot capture is Linux-only for now - the xcap seam lands with the cross-platform milestone".into())
 }
 
 #[cfg(test)]

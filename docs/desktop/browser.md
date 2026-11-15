@@ -5,8 +5,7 @@ runs in, the four states the BROWSER tab reads, the native-hosts link, and the
 live view of the shown page. The host side is `app/src-tauri/src/browser.rs`;
 the screen is `app/src/phone/BrowserScreen.tsx`, the live view
 `app/src/phone/BrowserView.tsx` with its input mapping in
-`app/src/phone/lib/browserInput.ts`. Linux only: elsewhere the commands answer
-with a refusal.
+`app/src/phone/lib/browserInput.ts`.
 
 ← [the desktop window](../desktop.md) · [the apps](apps.md)
 

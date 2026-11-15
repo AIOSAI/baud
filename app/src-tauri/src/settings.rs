@@ -619,11 +619,10 @@ mod tests {
     /// unreadable, and a patch that must NOT proceed. Before the fix this
     /// wrote a three-key document over @devpulse's deny list without a word.
     ///
-    /// Unix only, and it SKIPS ITSELF under a uid that ignores the mode bits
-    /// rather than pretending to have tested something. The skip is measured,
-    /// not assumed: the test chmods the file and then tries to read it, and
-    /// only continues if the read actually failed.
-    #[cfg(unix)]
+    /// It SKIPS ITSELF under a uid that ignores the mode bits rather than
+    /// pretending to have tested something. The skip is measured, not
+    /// assumed: the test chmods the file and then tries to read it, and only
+    /// continues if the read actually failed.
     #[test]
     fn a_write_over_an_unreadable_file_leaves_the_file_alone() {
         use std::os::unix::fs::PermissionsExt;
