@@ -5,9 +5,16 @@ import type { BackupJob, BackupLane, BackupLaneStatus, BackupProgress, BackupRun
 
 export const BACKUP_BUTTONS: ReadonlyArray<{ lane: BackupLane; label: string }> = [
   { lane: "snapshot", label: "Snapshot now" },
-  { lane: "all", label: "Full backup" },
   { lane: "drive_sync", label: "Sync to Drive" },
 ];
+
+const UNPRESSED_LABELS: Partial<Record<BackupLane, string>> = { all: "Full backup" };
+
+/** `all` has no press (the nightly schedule runs it): it shows only while it runs, as its Stop. */
+export function shownButtons(active: readonly BackupLane[]): Array<{ lane: BackupLane; label: string }> {
+  const extra = [...new Set(active)].filter((verb) => !BACKUP_BUTTONS.some((button) => button.lane === verb));
+  return [...BACKUP_BUTTONS, ...extra.map((lane) => ({ lane, label: verbLabel(lane) }))];
+}
 
 /** `all` has no status line: it runs the other lanes, and each of them keeps its date. */
 export const STATUS_LANES: ReadonlyArray<{ key: "snapshot" | "drive_sync"; label: string }> = [
@@ -26,17 +33,12 @@ export function driveLine(status: BackupStatus): string {
   return `Drive sync setting · ${status.drive_sync ? "on" : "off"}`;
 }
 
-/** An unknown Drive setting asks: asking once too often is a tap, not asking is a publish nobody meant. */
-export function leavesMachine(lane: BackupLane, driveSyncOn: boolean | null): boolean {
-  if (lane === "drive_sync") return true;
-  if (lane === "all") return driveSyncOn !== false;
-  return false;
+export function leavesMachine(lane: BackupLane): boolean {
+  return lane === "drive_sync";
 }
 
-export function confirmLine(lane: BackupLane, project: string): string {
-  return lane === "drive_sync"
-    ? `Sync ${project}'s backups to Google Drive?`
-    : `Run a full backup of ${project}, including its Drive sync?`;
+export function confirmLine(project: string): string {
+  return `Sync ${project}'s backups to Google Drive?`;
 }
 
 export const NO_PROJECT = "no project is seated yet";
@@ -60,7 +62,7 @@ export const JOB_FORGOTTEN =
   "the server restarted and forgot this run - its outcome is in the status lines above now";
 
 /** verb -> job id from status's `running`, so a sheet opened mid-run reads the outcome. Keyed on
- *  `verb`, never `lane`: under `all` the lane changes while the job stays the one Full backup started. */
+ *  `verb`, never `lane`: under `all` the lane changes while the job stays the one the nightly run started. */
 export function runningJobs(status: Pick<BackupStatus, "running"> | null): Partial<Record<BackupLane, string>> {
   const jobs: Partial<Record<BackupLane, string>> = {};
   for (const entry of status?.running ?? []) {
@@ -105,13 +107,13 @@ export function buttonWord(label: string, phase: ButtonPhase): string {
   }
 }
 
-/** A button's name for a screen reader: three buttons can all read Stop. */
+/** A button's name for a screen reader: every shown button can read Stop at once. */
 export function buttonName(label: string, phase: ButtonPhase): string {
   return phase === "stop" || phase === "stopping" ? `stop ${label}` : label;
 }
 
 export function verbLabel(verb: BackupLane): string {
-  return BACKUP_BUTTONS.find((button) => button.lane === verb)?.label ?? verb;
+  return BACKUP_BUTTONS.find((button) => button.lane === verb)?.label ?? UNPRESSED_LABELS[verb] ?? verb;
 }
 
 /** 1024-based, as @backup's `_human_bytes`, so the bar and the stopped summary name a size alike. */

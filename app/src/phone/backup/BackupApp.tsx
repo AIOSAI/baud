@@ -1,4 +1,4 @@
-/** The backup app: the seated project's store, lane by lane, and three presses. Reference: docs/phone/backup.md */
+/** The backup app: the seated project's store, lane by lane, and two presses. Reference: docs/phone/backup.md */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -9,7 +9,6 @@ import { bytesText } from "../lib/machine";
 import { type Scope, scopeRefusal, screenIsAwake } from "../lib/verbs";
 import { whileVisible } from "../lib/whileVisible";
 import {
-  BACKUP_BUTTONS,
   JOB_FORGOTTEN,
   NO_PROJECT,
   STATUS_LANES,
@@ -28,7 +27,9 @@ import {
   progressLine,
   runningJobs,
   runningVerbs,
+  shownButtons,
   unregisteredLine,
+  verbLabel,
 } from "./backupView";
 
 /** The contract's cadence for watching a run. */
@@ -51,10 +52,6 @@ interface Outcome {
 
 function sentence(error: unknown): string {
   return error instanceof HostError ? error.message : String(error);
-}
-
-function labelOf(lane: BackupLane): string {
-  return BACKUP_BUTTONS.find((button) => button.lane === lane)?.label ?? lane;
 }
 
 export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
@@ -195,7 +192,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
       void stop(lane);
       return;
     }
-    if (leavesMachine(lane, status ? status.drive_sync : null)) {
+    if (leavesMachine(lane)) {
       setPending(lane);
       return;
     }
@@ -261,7 +258,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
 
       {/* The other presses stay live while one runs: @backup decides what overlapping lanes mean. */}
       <div className="baud-backup-buttons">
-        {BACKUP_BUTTONS.map(({ lane, label }) => {
+        {shownButtons([...listed, ...(Object.keys(jobs) as BackupLane[])]).map(({ lane, label }) => {
           const phase = buttonPhase(lane, listed, Boolean(jobs[lane]), Boolean(stopping[lane]));
           const tone =
             phase === "stop" ? "baud-backup-button-stop" : phase === "idle" ? "" : "baud-backup-button-running";
@@ -300,8 +297,8 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
       {said ? <p className="baud-backup-said">{said}</p> : null}
 
       {pending ? (
-        <div className="baud-phone-confirm" role="dialog" aria-label={`confirm ${labelOf(pending)}`}>
-          <p className="baud-phone-confirm-line">{confirmLine(pending, project)}</p>
+        <div className="baud-phone-confirm" role="dialog" aria-label={`confirm ${verbLabel(pending)}`}>
+          <p className="baud-phone-confirm-line">{confirmLine(project)}</p>
           <p className="baud-phone-confirm-warn">this sends files off this machine</p>
           <div className="baud-phone-confirm-row">
             <button type="button" className="baud-phone-confirm-no" onClick={() => setPending(null)}>
@@ -314,7 +311,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
         </div>
       ) : null}
 
-      {BACKUP_BUTTONS.filter(({ lane }) => outcomes[lane]).map(({ lane, label }) => {
+      {shownButtons(Object.keys(outcomes) as BackupLane[]).filter(({ lane }) => outcomes[lane]).map(({ lane, label }) => {
         const outcome = outcomes[lane] as Outcome;
         const view = outcomeView(label, outcome.state, outcome.text);
         return (

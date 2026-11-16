@@ -1,10 +1,10 @@
 # The backup app
 
-This page covers the backup app on the wheel's apps layer: what the store holds, the three presses, stop and progress, and which project it reads.
+This page covers the backup app on the wheel's apps layer: what the store holds, the two presses, stop and progress, and which project it reads.
 
 ← [the phone face](../phone.md)
 
-### The backup app — the store, and three presses that add to it
+### The backup app — the store, and two presses that add to it
 
 **The third card on the apps layer**, `BKP`, after `git` and `files`.
 A project's backup store belongs to nobody in it, which is why it sits on the
@@ -19,9 +19,10 @@ words, plus the project's Drive sync setting, on or off. **sizes** re-reads with
 store takes seconds. These lines come from @backup reading its own store on disk,
 so they survive a server restart that forgets every job.
 
-**Three click options:** **Snapshot now**, **Full backup** and **Sync to Drive**,
-which are the lanes `snapshot`, `all` and `drive_sync`. Full backup runs
-`snapshot`, then `drive_sync`. Each press is `POST /v1/backup/run` and answers at once with a job.
+**Two click options:** **Snapshot now** and **Sync to Drive**, which are the
+lanes `snapshot` and `drive_sync`. A run of the `all` lane, started elsewhere (the
+nightly schedule), shows on the card as a running job with its sub-lane, as
+**Full backup** with its Stop, while it runs. Each press is `POST /v1/backup/run` and answers at once with a job.
 While anything runs, the sheet reads `GET /v1/backup/status` every 2 s, while the
 screen is looked at. When status no longer lists the press, the sheet reads
 `GET /v1/backup/job` once for the outcome, shows the command's own last lines
@@ -41,7 +42,7 @@ well as the phone's, each with its pressed `verb`, the `lane` at work and a
   ended between two reads, so status is read again. A read token is refused the
   Stop by name, as it is every run. A press the phone holds a job for that status
   does not list yet shows `· running…` and does not fire.
-- **One progress block per running entry:** the press's name (under Full backup,
+- **One progress block per running entry:** the press's name (under a running `all`, *Full backup* and
   the sub-lane at work with its counts: *Full backup · snapshot · 300 / 15,491*);
   a bar, which is a real `<progress>` and is indeterminate while the lane scans;
   the line *1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s* (bytes in @backup's
@@ -57,8 +58,8 @@ well as the phone's, each with its pressed `verb`, the `lane` at work and a
   headroom: *Drive has 1.4 GB free; this run needs 2.9 GB. Nothing uploaded.*),
   that line is the headline and only the lines above it stay in the block below.
 
-**The two presses that can send files off the machine ask once:** Sync to Drive
-always, and Full backup when the Drive setting is on (or not known). The confirm
+**The press that sends files off the machine asks once:** Sync to Drive, always,
+whatever the Drive setting says. The confirm
 is the kill verb's dialog shape and the face's manners only: the server is not
 told a human confirmed, because it would not honour that. A read token sees the
 status and is refused every press by name. The server's sentences (a 400

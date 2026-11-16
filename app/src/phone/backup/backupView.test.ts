@@ -26,6 +26,7 @@ import {
   remainingText,
   runningJobs,
   runningVerbs,
+  shownButtons,
   unregisteredLine,
   verbLabel,
 } from "./backupView";
@@ -77,13 +78,20 @@ function entry(over: Partial<BackupRunning> = {}): BackupRunning {
   };
 }
 
-describe("the three click options", () => {
+describe("the two click options", () => {
   it("are the owner's words, in his order, on the contract's lane names", () => {
     expect(BACKUP_BUTTONS).toEqual([
       { lane: "snapshot", label: "Snapshot now" },
-      { lane: "all", label: "Full backup" },
       { lane: "drive_sync", label: "Sync to Drive" },
     ]);
+  });
+
+  it("show a running all, once, after the two presses, so it can be stopped", () => {
+    expect(shownButtons(["all", "drive_sync", "all"])).toEqual([
+      ...BACKUP_BUTTONS,
+      { lane: "all", label: "Full backup" },
+    ]);
+    expect(shownButtons([])).toEqual(BACKUP_BUTTONS);
   });
 
   it("list the status lanes in the contract's order, with no line for all", () => {
@@ -126,28 +134,17 @@ describe("driveLine", () => {
 
 describe("leavesMachine", () => {
   it("never asks for the one lane that stays on this machine", () => {
-    expect(leavesMachine("snapshot", true)).toBe(false);
-    expect(leavesMachine("snapshot", null)).toBe(false);
+    expect(leavesMachine("snapshot")).toBe(false);
   });
 
   it("always asks for Sync to Drive, whatever the setting says", () => {
-    expect(leavesMachine("drive_sync", false)).toBe(true);
-  });
-
-  it("asks for Full backup only when the Drive setting is on", () => {
-    expect(leavesMachine("all", true)).toBe(true);
-    expect(leavesMachine("all", false)).toBe(false);
-  });
-
-  it("asks for Full backup when the setting is not known yet", () => {
-    expect(leavesMachine("all", null)).toBe(true);
+    expect(leavesMachine("drive_sync")).toBe(true);
   });
 });
 
 describe("confirmLine", () => {
   it("names the project and where the files go", () => {
-    expect(confirmLine("drive_sync", "baud")).toBe("Sync baud's backups to Google Drive?");
-    expect(confirmLine("all", "baud")).toBe("Run a full backup of baud, including its Drive sync?");
+    expect(confirmLine("baud")).toBe("Sync baud's backups to Google Drive?");
   });
 });
 

@@ -219,7 +219,7 @@ Each screen of the face has its own page under `docs/phone/`.
 | [room input](phone/room-input.md) | typing into a room: Enter and bracketed paste, the compose slot, armed typing, the keyboard rule |
 | [room delivery](phone/room-delivery.md) | links and copy, sending a photo, dropped writes, a dead room and its reconnect ladder |
 | [files and git](phone/files-git.md) | the git app and the FILES app: roots, browsing, copying a path, git status on rows |
-| [backup](phone/backup.md) | the backup app: the store, the three presses, stop and progress |
+| [backup](phone/backup.md) | the backup app: the store, the two presses, stop and progress |
 | [monitor](phone/monitor.md) | the monitor row, the cpu page, what is running, rooms and watches that end |
 | [settings and navigation](phone/settings-nav.md) | the bell and the feed, the gear, the startup seat, designed reads, settings, Back and tabs |
 | [files](phone/files.md) | every file of the face, placed: screens and sheets, the git and backup apps, the `lib/` logic |
