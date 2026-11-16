@@ -3454,11 +3454,26 @@ body {
   padding: 4px 9px;
 }
 
+.baud-backup-schedule-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.baud-backup-schedule-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .baud-backup-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   padding: var(--baud-gap) calc(var(--baud-pad) / 1.5) 0;
+}
+
+.baud-backup-buttons > :nth-child(3) {
+  grid-column: 1 / -1;
 }
 
 .baud-backup-button {

@@ -8,6 +8,8 @@ import type {
   BackupCancel,
   BackupJob,
   BackupLane,
+  BackupSchedule,
+  BackupScheduleWrite,
   BackupStatus,
   BaudSettings,
   BranchStatus,
@@ -195,6 +197,11 @@ export const backupStatus = (project: string, sizes = false) =>
 /** 404 not_running means the run ended between two reads. */
 export const backupCancel = (project: string, lane: BackupLane) =>
   call<BackupCancel>("backup_cancel", { project, lane });
+
+export const backupSchedule = (project: string) => call<BackupSchedule>("backup_schedule", { project });
+
+export const backupScheduleSet = (write: BackupScheduleWrite) =>
+  call<BackupSchedule>("backup_schedule_set", { ...write });
 
 /* Not `call`s, but both transports export them and the vite alias picks one, keeping http out of the desktop. */
 export { openRoomSocket, speak, uploadImage } from "./transport";

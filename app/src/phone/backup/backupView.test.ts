@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import type { BackupProgress, BackupRunning, BackupStatus } from "../../types";
+import type { BackupProgress, BackupRunning, BackupSchedule, BackupStatus } from "../../types";
 import {
   BACKUP_BUTTONS,
   CURRENT_TAIL,
+  FREQUENCIES,
+  HOURS,
   JOB_FORGOTTEN,
+  MINUTES,
+  MONTH_DAYS,
   NOTHING_UPLOADED,
   NO_PROJECT,
   STATUS_LANES,
+  WEEKDAYS,
   backupBytes,
   backupHead,
   barFraction,
@@ -17,18 +22,26 @@ import {
   confirmLine,
   currentTail,
   driveLine,
+  driveSyncOn,
+  editProblem,
   elapsedText,
   laneLine,
+  lastRunLine,
   leavesMachine,
+  nextRunLine,
   outcomeView,
   progressHead,
   progressLine,
   remainingText,
   runningJobs,
   runningVerbs,
+  scheduleBody,
+  scheduleEdit,
   shownButtons,
+  stepsLine,
   unregisteredLine,
   verbLabel,
+  whenLine,
 } from "./backupView";
 
 const NOW = Date.parse("2026-10-16T09:00:00+00:00");
@@ -66,6 +79,26 @@ function progress(over: Partial<BackupProgress> = {}): BackupProgress {
   };
 }
 
+function schedule(over: Partial<BackupSchedule> = {}): BackupSchedule {
+  return {
+    project: "baud",
+    root: "/home/alice/AIPass/projects/baud",
+    job_id: "backup_baud",
+    scheduled: true,
+    on: true,
+    frequency: "daily",
+    time: "05:00",
+    weekday: null,
+    day: null,
+    steps: ["snapshot", "drive_sync"],
+    last_run: null,
+    last_status: null,
+    last_error: null,
+    next_run: "2026-10-16T05:00:00",
+    ...over,
+  };
+}
+
 function entry(over: Partial<BackupRunning> = {}): BackupRunning {
   return {
     job: "b7f3c2",
@@ -78,20 +111,25 @@ function entry(over: Partial<BackupRunning> = {}): BackupRunning {
   };
 }
 
-describe("the two click options", () => {
+describe("the three click options", () => {
   it("are the owner's words, in his order, on the contract's lane names", () => {
     expect(BACKUP_BUTTONS).toEqual([
       { lane: "snapshot", label: "Snapshot now" },
       { lane: "drive_sync", label: "Sync to Drive" },
+      { lane: "all", label: "Back up all now" },
     ]);
   });
 
-  it("show a running all, once, after the two presses, so it can be stopped", () => {
-    expect(shownButtons(["all", "drive_sync", "all"])).toEqual([
-      ...BACKUP_BUTTONS,
-      { lane: "all", label: "Full backup" },
-    ]);
+  it("show a running all once, as its own press, so a scheduled run can be stopped", () => {
+    expect(shownButtons(["all", "drive_sync", "all"])).toEqual(BACKUP_BUTTONS);
     expect(shownButtons([])).toEqual(BACKUP_BUTTONS);
+  });
+
+  it("show a listed verb that has no press, once, after the presses", () => {
+    expect(shownButtons(["nightly" as never, "nightly" as never])).toEqual([
+      ...BACKUP_BUTTONS,
+      { lane: "nightly", label: "nightly" },
+    ]);
   });
 
   it("list the status lanes in the contract's order, with no line for all", () => {
@@ -139,12 +177,124 @@ describe("leavesMachine", () => {
 
   it("always asks for Sync to Drive, whatever the setting says", () => {
     expect(leavesMachine("drive_sync")).toBe(true);
+    expect(leavesMachine("drive_sync", false)).toBe(true);
+  });
+
+  it("asks for Back up all only when Drive sync is on for the project", () => {
+    expect(leavesMachine("all", true)).toBe(true);
+    expect(leavesMachine("all", false)).toBe(false);
+    expect(leavesMachine("all")).toBe(false);
+    expect(leavesMachine("snapshot", true)).toBe(false);
+  });
+});
+
+describe("driveSyncOn", () => {
+  it("reads the status's setting, or a schedule whose steps include Drive sync", () => {
+    expect(driveSyncOn(status({ drive_sync: true }), null)).toBe(true);
+    expect(driveSyncOn(status(), null)).toBe(false);
+    expect(driveSyncOn(status(), schedule())).toBe(true);
+    expect(driveSyncOn(null, schedule({ steps: ["snapshot"] }))).toBe(false);
+    expect(driveSyncOn(status(), schedule({ steps: ["snapshot"] }))).toBe(false);
+  });
+
+  it("counts as on before either answer lands, so nothing leaves unasked", () => {
+    expect(driveSyncOn(null, null)).toBe(true);
   });
 });
 
 describe("confirmLine", () => {
   it("names the project and where the files go", () => {
     expect(confirmLine("baud")).toBe("Sync baud's backups to Google Drive?");
+    expect(confirmLine("baud", "drive_sync")).toBe("Sync baud's backups to Google Drive?");
+  });
+
+  it("names both steps for Back up all", () => {
+    expect(confirmLine("baud", "all")).toBe("Snapshot baud, then sync its backups to Google Drive?");
+  });
+});
+
+describe("the schedule's lines", () => {
+  it("say when it runs, in plain words, for each frequency", () => {
+    expect(whenLine(schedule())).toBe("Every day at 05:00");
+    expect(whenLine(schedule({ frequency: "weekly", weekday: "monday" }))).toBe("Every Monday at 05:00");
+    expect(whenLine(schedule({ frequency: "monthly", day: 31 }))).toBe("Every month on day 31 at 05:00");
+    expect(whenLine(schedule({ scheduled: false, frequency: null, time: null }))).toBe(null);
+  });
+
+  it("say what a run does, in the server's order, never a fixed sequence", () => {
+    expect(stepsLine(["snapshot", "drive_sync"])).toBe("Snapshot, then Drive sync");
+    expect(stepsLine(["snapshot"])).toBe("Snapshot only");
+    expect(stepsLine(["drive_sync", "snapshot"])).toBe("Drive sync, then Snapshot");
+    expect(stepsLine(["snapshot", "prune"])).toBe("Snapshot, then prune");
+  });
+
+  it("say the last run's age, never before a first run, and its status and error when not a success", () => {
+    expect(lastRunLine(schedule(), NOW)).toBe("Last run · never");
+    expect(lastRunLine(schedule({ last_run: "2026-10-16T05:00:00+00:00", last_status: "success" }), NOW)).toBe(
+      "Last run · 4h ago",
+    );
+    expect(
+      lastRunLine(
+        schedule({ last_run: "2026-10-15T05:00:00+00:00", last_status: "failed", last_error: "drive quota exceeded" }),
+        NOW,
+      ),
+    ).toBe("Last run · 1d ago · failed · drive quota exceeded");
+  });
+
+  it("say the next run as written, and only while on", () => {
+    expect(nextRunLine(schedule())).toBe("Next run · Fri 16 Oct at 05:00");
+    expect(nextRunLine(schedule({ on: false, next_run: null }))).toBe("Off · no run until it is switched on");
+    expect(nextRunLine(schedule({ next_run: null }))).toBe("Next run · not known");
+    expect(nextRunLine(schedule({ next_run: "soon" }))).toBe("Next run · soon");
+  });
+});
+
+describe("the schedule editor", () => {
+  it("starts from the schedule, or a daily 05:00 for a project with none", () => {
+    expect(scheduleEdit(schedule({ frequency: "weekly", weekday: "friday", time: "23:15" }))).toEqual({
+      frequency: "weekly",
+      weekday: "friday",
+      day: 1,
+      time: "23:15",
+    });
+    expect(scheduleEdit(null)).toEqual({ frequency: "daily", weekday: "monday", day: 1, time: "05:00" });
+  });
+
+  it("sends only the fields the frequency takes", () => {
+    const edit = { frequency: "daily", weekday: "friday", day: 9, time: "05:00" } as const;
+    expect(scheduleBody("baud", edit)).toEqual({ project: "baud", frequency: "daily", time: "05:00" });
+    expect(scheduleBody("baud", { ...edit, frequency: "weekly" })).toEqual({
+      project: "baud",
+      frequency: "weekly",
+      weekday: "friday",
+      time: "05:00",
+    });
+    expect(scheduleBody("baud", { ...edit, frequency: "monthly" })).toEqual({
+      project: "baud",
+      frequency: "monthly",
+      day: 9,
+      time: "05:00",
+    });
+  });
+
+  it("refuses a time, weekday or day the server would refuse", () => {
+    const edit = scheduleEdit(null);
+    expect(editProblem(edit)).toBe(null);
+    expect(editProblem({ ...edit, time: "5:00" })).toBe("the time must be HH:MM, 24-hour");
+    expect(editProblem({ ...edit, time: "24:00" })).toBe("the time must be HH:MM, 24-hour");
+    expect(editProblem({ ...edit, frequency: "weekly", weekday: "Monday" as never })).toBe("pick a weekday");
+    expect(editProblem({ ...edit, frequency: "monthly", day: 0 })).toBe("the day must be 1 to 31");
+    expect(editProblem({ ...edit, frequency: "monthly", day: 31 })).toBe(null);
+    expect(editProblem({ ...edit, frequency: "monthly", day: 1.5 })).toBe("the day must be 1 to 31");
+    expect(editProblem({ ...edit, frequency: "hourly" as never })).toBe("pick how often it runs");
+  });
+
+  it("offers every hour, minute and month day, two-digit where it is a time", () => {
+    expect([HOURS[0], HOURS[23], HOURS.length]).toEqual(["00", "23", 24]);
+    expect([MINUTES[5], MINUTES[59], MINUTES.length]).toEqual(["05", "59", 60]);
+    expect([MONTH_DAYS[0], MONTH_DAYS[30], MONTH_DAYS.length]).toEqual([1, 31, 31]);
+    expect(WEEKDAYS).toEqual(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]);
+    expect(FREQUENCIES.map((choice) => choice.label)).toEqual(["Every day", "Every week", "Every month"]);
   });
 });
 
@@ -236,7 +386,8 @@ describe("the Stop/running mapping", () => {
   });
 
   it("labels a verb as its press, and an unknown one by its own name", () => {
-    expect(verbLabel("all")).toBe("Full backup");
+    expect(verbLabel("all")).toBe("Back up all");
+    expect(verbLabel("snapshot")).toBe("Snapshot now");
     expect(verbLabel("drive_sync")).toBe("Sync to Drive");
     expect(verbLabel("nightly" as never)).toBe("nightly");
   });
@@ -409,18 +560,18 @@ describe("progressHead", () => {
     expect(progressHead(entry())).toBe("Sync to Drive");
   });
 
-  it("names Full backup's sub-lane with its counts", () => {
+  it("names Back up all's sub-lane with its counts", () => {
     expect(progressHead(entry({ verb: "all", lane: "snapshot", progress: progress({ done: 300, total: 15491 }) }))).toBe(
-      "Full backup · snapshot · 300 / 15,491",
+      "Back up all · snapshot · 300 / 15,491",
     );
   });
 
   it("marks thousands on both of the sub-lane's counts", () => {
-    expect(progressHead(entry({ verb: "all", lane: "drive_sync" }))).toBe("Full backup · drive_sync · 1,204 / 15,414");
+    expect(progressHead(entry({ verb: "all", lane: "drive_sync" }))).toBe("Back up all · drive_sync · 1,204 / 15,414");
   });
 
   it("names the sub-lane alone while it scans", () => {
-    expect(progressHead(entry({ verb: "all", lane: "snapshot", progress: null }))).toBe("Full backup · snapshot");
+    expect(progressHead(entry({ verb: "all", lane: "snapshot", progress: null }))).toBe("Back up all · snapshot");
   });
 });
 

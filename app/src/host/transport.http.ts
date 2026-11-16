@@ -298,6 +298,21 @@ const ROUTES: Record<string, Route> = {
     method: "POST",
     body: (args) => ({ project: args.project, lane: args.lane }),
   },
+  backup_schedule: {
+    path: "/v1/backup/schedule",
+  },
+  backup_schedule_set: {
+    path: "/v1/backup/schedule",
+    method: "POST",
+    body: (args) => ({
+      project: args.project,
+      frequency: args.frequency,
+      time: args.time,
+      weekday: args.weekday,
+      day: args.day,
+      on: args.on,
+    }),
+  },
 
   /* Patches cross untouched: JSON.stringify keeps null and drops undefined, which IS the
      three-state contract, so no body mapper may "clean" a patch here. */

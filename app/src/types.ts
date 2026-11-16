@@ -562,6 +562,36 @@ export interface BackupCancel {
   message: string;
 }
 
+export type BackupFrequency = "daily" | "weekly" | "monthly";
+export type BackupWeekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+/** `GET /v1/backup/schedule` and the POST's answer. `scheduled: false` is no job: off, every field null. */
+export interface BackupSchedule {
+  project: string;
+  root: string;
+  job_id: string | null;
+  scheduled: boolean;
+  on: boolean;
+  frequency: BackupFrequency | null;
+  time: string | null;
+  weekday: BackupWeekday | null;
+  day: number | null;
+  steps: string[];
+  last_run: string | null;
+  last_status: string | null;
+  last_error: string | null;
+  next_run: string | null;
+}
+
+export interface BackupScheduleWrite {
+  project: string;
+  frequency?: BackupFrequency;
+  time?: string;
+  weekday?: BackupWeekday;
+  day?: number;
+  on?: boolean;
+}
+
 /* The extension's chat; `<agent>` is `<project>/<name>` as /v1/fleet names it. */
 
 export interface AgentLine {

@@ -1,35 +1,49 @@
-/** The backup app: the seated project's store, lane by lane, and two presses. Reference: docs/phone/backup.md */
+/** The backup app: the seated project's schedule, its store lane by lane, and three presses. Reference: docs/phone/backup.md */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { backupCancel, backupJob, backupRun, backupStatus } from "../../host";
+import { backupCancel, backupJob, backupRun, backupSchedule, backupScheduleSet, backupStatus } from "../../host";
 import { HostError } from "../../host/transport.http";
-import type { BackupJob, BackupLane, BackupStatus } from "../../types";
+import type { BackupJob, BackupLane, BackupSchedule, BackupScheduleWrite, BackupStatus } from "../../types";
 import { bytesText } from "../lib/machine";
 import { type Scope, scopeRefusal, screenIsAwake } from "../lib/verbs";
 import { whileVisible } from "../lib/whileVisible";
 import {
+  FREQUENCIES,
+  HOURS,
   JOB_FORGOTTEN,
+  MINUTES,
+  MONTH_DAYS,
   NO_PROJECT,
   STATUS_LANES,
+  WEEKDAYS,
   backupHead,
   barFraction,
   buttonName,
   buttonPhase,
   buttonWord,
+  capital,
   confirmLine,
   currentTail,
   driveLine,
+  driveSyncOn,
+  editProblem,
   laneLine,
+  lastRunLine,
   leavesMachine,
+  nextRunLine,
   outcomeView,
   progressHead,
   progressLine,
   runningJobs,
   runningVerbs,
+  scheduleBody,
+  scheduleEdit,
   shownButtons,
+  stepsLine,
   unregisteredLine,
   verbLabel,
+  whenLine,
 } from "./backupView";
 
 /** The contract's cadence for watching a run. */
@@ -95,6 +109,53 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
     [project],
   );
 
+  const [schedule, setSchedule] = useState<BackupSchedule | null>(null);
+  const [scheduleSaid, setScheduleSaid] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [edit, setEdit] = useState(() => scheduleEdit(null));
+  const [saving, setSaving] = useState(false);
+
+  const readSchedule = useCallback(async () => {
+    if (!project) return;
+    try {
+      setSchedule(await backupSchedule(project));
+      setScheduleSaid(null);
+    } catch (error) {
+      setScheduleSaid(sentence(error));
+    }
+  }, [project]);
+
+  useEffect(() => {
+    void readSchedule();
+  }, [readSchedule]);
+
+  async function writeSchedule(write: BackupScheduleWrite) {
+    const refusal = scopeRefusal(scope);
+    if (refusal) {
+      setScheduleSaid(`refused: ${refusal}`);
+      return;
+    }
+    setSaving(true);
+    setScheduleSaid(null);
+    try {
+      setSchedule(await backupScheduleSet(write));
+      setEditing(false);
+    } catch (error) {
+      setScheduleSaid(sentence(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function saveSchedule() {
+    const problem = editProblem(edit);
+    if (problem) {
+      setScheduleSaid(problem);
+      return;
+    }
+    void writeSchedule(scheduleBody(project, edit));
+  }
+
   const busy = Object.keys(jobs).length > 0 || (status?.running?.length ?? 0) > 0;
 
   // whileVisible ticks at once, so this is also the read on open.
@@ -148,10 +209,13 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
         ticking.current = false;
       }
       // The lane's `last` moved when it ended: one more read shows it.
-      if (ended) void readStatus();
+      if (ended) {
+        void readStatus();
+        void readSchedule();
+      }
     };
     return whileVisible(() => void tick(), POLL_MS);
-  }, [busy, readStatus]);
+  }, [busy, readStatus, readSchedule]);
 
   async function fire(lane: BackupLane) {
     setSaid(null);
@@ -192,7 +256,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
       void stop(lane);
       return;
     }
-    if (leavesMachine(lane)) {
+    if (leavesMachine(lane, driveSyncOn(status, schedule))) {
       setPending(lane);
       return;
     }
@@ -228,6 +292,147 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
         </span>
       </header>
       {head.path ? <p className="baud-backup-root">{head.path}</p> : null}
+
+      {project ? (
+        <div className="baud-backup-status">
+          <div className="baud-settings-row">
+            <span className="baud-backup-line baud-backup-schedule-title">Scheduled backup</span>
+            {schedule?.scheduled ? (
+              <>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={schedule.on}
+                  aria-label="scheduled backup"
+                  className={`baud-settings-switch ${schedule.on ? "baud-settings-switch-on" : ""}`}
+                  disabled={saving}
+                  onClick={() => void writeSchedule({ project, on: !schedule.on })}
+                >
+                  <span className="baud-settings-knob" aria-hidden="true" />
+                </button>
+                <span className="baud-settings-state">{schedule.on ? "on" : "off"}</span>
+              </>
+            ) : null}
+          </div>
+          {schedule ? (
+            <>
+              <p className="baud-backup-line">{schedule.scheduled ? whenLine(schedule) : "No scheduled backup"}</p>
+              {schedule.steps.length ? <p className="baud-backup-line">{stepsLine(schedule.steps)}</p> : null}
+              {schedule.scheduled ? (
+                <>
+                  <p className="baud-backup-line">{lastRunLine(schedule, now)}</p>
+                  <p className="baud-backup-line">{nextRunLine(schedule)}</p>
+                </>
+              ) : null}
+            </>
+          ) : scheduleSaid ? null : (
+            <p className="baud-backup-line">reading the schedule…</p>
+          )}
+          {editing || schedule?.scheduled === false ? (
+            <div className="baud-backup-schedule-edit">
+              <label className="baud-settings-row">
+                <span className="baud-settings-label">how often</span>
+                <select
+                  className="baud-settings-select"
+                  value={edit.frequency}
+                  onChange={(event) => setEdit({ ...edit, frequency: event.target.value as typeof edit.frequency })}
+                >
+                  {FREQUENCIES.map((choice) => (
+                    <option key={choice.value} value={choice.value}>
+                      {choice.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {edit.frequency === "weekly" ? (
+                <label className="baud-settings-row">
+                  <span className="baud-settings-label">weekday</span>
+                  <select
+                    className="baud-settings-select"
+                    value={edit.weekday}
+                    onChange={(event) => setEdit({ ...edit, weekday: event.target.value as typeof edit.weekday })}
+                  >
+                    {WEEKDAYS.map((weekday) => (
+                      <option key={weekday} value={weekday}>
+                        {capital(weekday)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {edit.frequency === "monthly" ? (
+                <>
+                  <label className="baud-settings-row">
+                    <span className="baud-settings-label">day</span>
+                    <select
+                      className="baud-settings-select"
+                      value={edit.day}
+                      onChange={(event) => setEdit({ ...edit, day: Number(event.target.value) })}
+                    >
+                      {MONTH_DAYS.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span className="baud-settings-hint">past a month's end, it runs on that month's last day</span>
+                </>
+              ) : null}
+              <div className="baud-settings-row">
+                <span className="baud-settings-label">time</span>
+                <select
+                  className="baud-settings-select"
+                  aria-label="hour"
+                  value={edit.time.slice(0, 2)}
+                  onChange={(event) => setEdit({ ...edit, time: `${event.target.value}:${edit.time.slice(3, 5)}` })}
+                >
+                  {HOURS.map((hour) => (
+                    <option key={hour} value={hour}>
+                      {hour}
+                    </option>
+                  ))}
+                </select>
+                :
+                <select
+                  className="baud-settings-select"
+                  aria-label="minute"
+                  value={edit.time.slice(3, 5)}
+                  onChange={(event) => setEdit({ ...edit, time: `${edit.time.slice(0, 2)}:${event.target.value}` })}
+                >
+                  {MINUTES.map((minute) => (
+                    <option key={minute} value={minute}>
+                      {minute}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                {editing ? (
+                  <button type="button" className="baud-backup-chip" onClick={() => setEditing(false)}>
+                    cancel
+                  </button>
+                ) : null}{" "}
+                <button type="button" className="baud-backup-chip" disabled={saving} onClick={saveSchedule}>
+                  {saving ? "saving…" : "save"}
+                </button>
+              </div>
+            </div>
+          ) : schedule?.scheduled ? (
+            <button
+              type="button"
+              className="baud-backup-chip"
+              onClick={() => {
+                setEdit(scheduleEdit(schedule));
+                setEditing(true);
+              }}
+            >
+              change
+            </button>
+          ) : null}
+          {scheduleSaid ? <p className="baud-backup-said">{scheduleSaid}</p> : null}
+        </div>
+      ) : null}
 
       <div className="baud-backup-status">
         {status ? (
@@ -298,7 +503,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
 
       {pending ? (
         <div className="baud-phone-confirm" role="dialog" aria-label={`confirm ${verbLabel(pending)}`}>
-          <p className="baud-phone-confirm-line">{confirmLine(project)}</p>
+          <p className="baud-phone-confirm-line">{confirmLine(project, pending)}</p>
           <p className="baud-phone-confirm-warn">this sends files off this machine</p>
           <div className="baud-phone-confirm-row">
             <button type="button" className="baud-phone-confirm-no" onClick={() => setPending(null)}>
