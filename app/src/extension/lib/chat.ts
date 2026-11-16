@@ -32,10 +32,24 @@ export const stamp = (time: string | number | undefined): string => {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
+const NOTICES = new Map([
+  ["medic", { label: "Medic", tone: "alert" }],
+  ["job_failed", { label: "Job failed", tone: "alert" }],
+  ["rounds", { label: "Rounds", tone: "info" }],
+  ["mail", { label: "Mail", tone: "plain" }],
+] as const);
+
+/** A notice's kind in words; an unknown kind reads as sent. */
+export const noticeLabel = (kind: unknown): string =>
+  NOTICES.get(kind as never)?.label ?? (typeof kind === "string" && kind ? kind : "notice");
+
+export const noticeTone = (kind: unknown): "alert" | "info" | "plain" => NOTICES.get(kind as never)?.tone ?? "plain";
+
 /** The small label over a run: who, when, and on a reply the model. */
 export function runLabel(run: AgentLine[], agentName: string): string {
   const l = run[run.length - 1];
-  const who = l.role === "agent" ? agentName : l.role === "user" ? "you" : run.length > 1 ? `${run.length} tool calls` : "tool";
+  const who =
+    l.role === "agent" ? agentName : l.role === "user" ? "you" : l.role === "notice" ? noticeLabel(l.kind) : run.length > 1 ? `${run.length} tool calls` : "tool";
   const at = stamp(l.time);
   return who + (at ? ` · ${at}` : "") + (l.role === "agent" && l.model ? ` · ${l.model}` : "");
 }
@@ -104,8 +118,9 @@ export function changeView(c: AgentChange): { patch: string } | { note: string }
   return { patch: `diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -${start},${olds} +${start},${news} @@\n${body}\n` };
 }
 
-/** Busy and the newest line is a tool call: the pulse's "acting". */
-export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) => feed.busy && feed.lines[feed.lines.length - 1]?.role === "tool";
+/** Busy and the newest line is a tool call: the pulse's "acting". A notice arriving mid-turn changes nothing. */
+export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) =>
+  feed.busy && [...feed.lines].reverse().find((l) => l.role !== "notice")?.role === "tool";
 
 const URL_RE = /(https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]}])/;
 

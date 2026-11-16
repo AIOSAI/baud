@@ -17,6 +17,8 @@ import {
   lookText,
   mergeLines,
   modelRefusal,
+  noticeLabel,
+  noticeTone,
   recallAgent,
   rememberAgent,
   resolveImages,
@@ -85,6 +87,20 @@ describe("feed lines", () => {
     expect(isActing({ busy: true, lines: [line(1, "agent"), line(2, "tool")] })).toBe(true);
     expect(isActing({ busy: false, lines: [line(2, "tool")] })).toBe(false);
     expect(isActing({ busy: true, lines: [line(2, "agent")] })).toBe(false);
+  });
+
+  it("keeps a notice inert: its own run, its kind as label, no say in acting", () => {
+    const note = { ...line(3, "notice", "@api: m1 landed"), kind: "medic", mail_id: "m1" };
+    expect(runsOf([line(1, "tool"), line(2, "tool"), note, line(4, "tool")]).map((r) => r.map((l) => l.n))).toEqual([[1, 2], [3], [4]]);
+    expect(runLabel([note], "api")).toBe(`Medic · ${stamp(T)}`);
+    expect(isActing({ busy: true, lines: [line(1, "tool"), note] })).toBe(true);
+    expect(isActing({ busy: true, lines: [line(1, "agent"), note] })).toBe(false);
+  });
+
+  it("names and tones each notice kind, an unknown one as sent", () => {
+    const kinds = ["medic", "job_failed", "rounds", "mail", "quake", "", undefined, 7, "constructor"];
+    expect(kinds.map(noticeLabel)).toEqual(["Medic", "Job failed", "Rounds", "Mail", "quake", "notice", "notice", "notice", "constructor"]);
+    expect(kinds.map(noticeTone)).toEqual(["alert", "alert", "info", "plain", "plain", "plain", "plain", "plain", "plain"]);
   });
 
   it("links http(s) URLs only, trailing punctuation left out", () => {

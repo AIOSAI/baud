@@ -4289,6 +4289,42 @@ span.baud-browser-tab {
   font-size: 0.66rem;
 }
 
+.baud-chat-notice {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--baud-line);
+  border-left: 2px solid var(--baud-line-strong);
+  border-radius: var(--baud-radius);
+  background: var(--baud-bg-panel);
+}
+
+.baud-chat-notice small {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.baud-chat-notice .baud-chat-text {
+  color: var(--baud-ink-dim);
+  font-size: 0.66rem;
+}
+
+.baud-chat-notice-alert {
+  border-left-color: var(--baud-red);
+}
+
+.baud-chat-notice-alert small {
+  color: var(--baud-red);
+}
+
+.baud-chat-notice-info {
+  border-left-color: var(--baud-blue);
+}
+
+.baud-chat-notice-info small {
+  color: var(--baud-blue);
+}
+
 .baud-chat-md.baud-phone-md {
   padding: 0;
 }

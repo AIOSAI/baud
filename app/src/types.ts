@@ -596,10 +596,12 @@ export interface BackupScheduleWrite {
 
 export interface AgentLine {
   n: number;
-  role: "user" | "agent" | "tool";
+  role: "user" | "agent" | "tool" | "notice";
   text: string;
   time: string;
   model?: string;
+  kind?: string;
+  mail_id?: string;
   /** On an Edit or Write tool line: the file it changed. Counts are the host's line diff; never recounted. */
   change?: AgentChange;
 }

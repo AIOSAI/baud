@@ -75,6 +75,17 @@ tool lines collapse into runs; each line shows its time and model. The feed
 stays at the bottom only if you were at the bottom, and a poll keeps your
 selection.
 
+**Notices.** Besides user, agent and tool lines the feed carries `role:
+"notice"` lines, `{n, role, kind, text, time, mail_id}`: mail that reached the
+agent, one line `@sender: subject`. Each is drawn at its place by `n` as a
+small box with a status role, its label `Medic`, `Rounds`, `Job failed`, `Mail`
+or an unknown kind as sent, then its time and text; the label and the box's
+left edge are red for medic and job_failed, blue for rounds, dim otherwise
+(`noticeLabel`, `noticeTone` in `lib/chat.ts`, which the phone imports too). A
+notice is no button: `mail_id` rides on it as `data-mail-id` only. It is never a
+reply, your line or a tool call: it has no read-aloud or copy, settles no
+pending send, and the "acting" pulse looks past it to the last other line.
+
 **File changes.** A tool line for an Edit or a Write carries the host's
 `change` (path, lines added and removed, and the text it changed). A run's
 label adds its totals over those lines, `6 tool calls · 12:30 · +4 −1`, added

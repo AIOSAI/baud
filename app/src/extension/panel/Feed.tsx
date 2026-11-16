@@ -12,7 +12,7 @@ import "../../diff.css";
 import { splitPath } from "../../phone/lib/gitStatus";
 import { markdownHtml } from "../../phone/lib/markdown";
 import type { AgentChange, AgentLine } from "../../types";
-import { changeView, linkParts, retag, runChange, runLabel, runsOf, splitLook, stamp, takeLinkClick } from "../lib/chat";
+import { changeView, linkParts, noticeTone, retag, runChange, runLabel, runsOf, splitLook, stamp, takeLinkClick } from "../lib/chat";
 import type { Voice, VoiceState } from "./voice";
 
 export interface Note {
@@ -180,7 +180,9 @@ export function Feed(props: {
       el: (
         <div
           key={`l${first}`}
-          className={`baud-ext-line baud-ext-${l.role}${stack ? " baud-ext-stack" : ""}`}
+          className={`baud-ext-line baud-ext-${l.role}${stack ? " baud-ext-stack" : ""}${l.role === "notice" ? ` baud-ext-notice-${noticeTone(l.kind)}` : ""}`}
+          role={l.role === "notice" ? "status" : undefined}
+          data-mail-id={l.mail_id}
           onClick={stack ? (e) => !(e.target as Element).closest("a, button") && toggle(first) : undefined}
         >
           <small>
