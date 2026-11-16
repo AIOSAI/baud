@@ -40,7 +40,7 @@
 <p align="center">
   <img src="docs/assets/baud-files.png" alt="The files app with a project file open" width="250">
   <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="250">
-  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="250">
+  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, full backup and Drive sync, one tap each" width="250">
 </p>
 <p align="center"><sub>A project file in the files app · a file's changes in the git app · the backup app</sub></p>
 

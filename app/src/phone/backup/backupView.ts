@@ -5,15 +5,13 @@ import type { BackupJob, BackupLane, BackupLaneStatus, BackupProgress, BackupRun
 
 export const BACKUP_BUTTONS: ReadonlyArray<{ lane: BackupLane; label: string }> = [
   { lane: "snapshot", label: "Snapshot now" },
-  { lane: "versioned", label: "Versioned now" },
   { lane: "all", label: "Full backup" },
   { lane: "drive_sync", label: "Sync to Drive" },
 ];
 
 /** `all` has no status line: it runs the other lanes, and each of them keeps its date. */
-export const STATUS_LANES: ReadonlyArray<{ key: "snapshot" | "versioned" | "drive_sync"; label: string }> = [
+export const STATUS_LANES: ReadonlyArray<{ key: "snapshot" | "drive_sync"; label: string }> = [
   { key: "snapshot", label: "Snapshot" },
-  { key: "versioned", label: "Versioned" },
   { key: "drive_sync", label: "Drive" },
 ];
 
@@ -107,7 +105,7 @@ export function buttonWord(label: string, phase: ButtonPhase): string {
   }
 }
 
-/** A button's name for a screen reader: four buttons can all read Stop. */
+/** A button's name for a screen reader: three buttons can all read Stop. */
 export function buttonName(label: string, phase: ButtonPhase): string {
   return phase === "stop" || phase === "stopping" ? `stop ${label}` : label;
 }

@@ -43,7 +43,6 @@ function status(over: Partial<BackupStatus> = {}): BackupStatus {
     runs: 6,
     lanes: {
       snapshot: { last: "2026-10-16T07:00:00+00:00", files: 15414 },
-      versioned: { last: "2026-09-28T03:12:00+00:00", files: 4 },
       drive_sync: { last: null, files: null },
     },
     drive: { tracked_files: 12 },
@@ -78,18 +77,17 @@ function entry(over: Partial<BackupRunning> = {}): BackupRunning {
   };
 }
 
-describe("the four click options", () => {
+describe("the three click options", () => {
   it("are the owner's words, in his order, on the contract's lane names", () => {
     expect(BACKUP_BUTTONS).toEqual([
       { lane: "snapshot", label: "Snapshot now" },
-      { lane: "versioned", label: "Versioned now" },
       { lane: "all", label: "Full backup" },
       { lane: "drive_sync", label: "Sync to Drive" },
     ]);
   });
 
   it("list the status lanes in the contract's order, with no line for all", () => {
-    expect(STATUS_LANES.map((lane) => lane.key)).toEqual(["snapshot", "versioned", "drive_sync"]);
+    expect(STATUS_LANES.map((lane) => lane.key)).toEqual(["snapshot", "drive_sync"]);
   });
 });
 
@@ -99,7 +97,7 @@ describe("laneLine", () => {
   });
 
   it("uses the face's own age words for days", () => {
-    expect(laneLine("Versioned", status().lanes.versioned, NOW)).toBe("Versioned · 18d ago · 4 files");
+    expect(laneLine("Drive", { last: "2026-09-28T03:12:00+00:00", files: 4 }, NOW)).toBe("Drive · 18d ago · 4 files");
   });
 
   it("says never for a lane that never ran, never a zero", () => {
@@ -107,7 +105,7 @@ describe("laneLine", () => {
   });
 
   it("never puts a count beside never, even when a count rides along", () => {
-    expect(laneLine("Versioned", { last: null, files: 4 }, NOW)).toBe("Versioned · never");
+    expect(laneLine("Drive", { last: null, files: 4 }, NOW)).toBe("Drive · never");
   });
 
   it("says never when the answer carried no entry for the lane", () => {
@@ -127,9 +125,9 @@ describe("driveLine", () => {
 });
 
 describe("leavesMachine", () => {
-  it("never asks for the two lanes that stay on this machine", () => {
+  it("never asks for the one lane that stays on this machine", () => {
     expect(leavesMachine("snapshot", true)).toBe(false);
-    expect(leavesMachine("versioned", null)).toBe(false);
+    expect(leavesMachine("snapshot", null)).toBe(false);
   });
 
   it("always asks for Sync to Drive, whatever the setting says", () => {
@@ -158,7 +156,7 @@ describe("runningJobs", () => {
     const answer = status({
       running: [
         entry({ job: "b7f3c2", verb: "snapshot", lane: "snapshot" }),
-        entry({ job: "c1d2e3", verb: "all", lane: "versioned" }),
+        entry({ job: "c1d2e3", verb: "all", lane: "drive_sync" }),
       ],
     });
     expect(runningJobs(answer)).toEqual({ snapshot: "b7f3c2", all: "c1d2e3" });
@@ -190,7 +188,7 @@ describe("runningVerbs", () => {
   it("lists each verb once, in the order status lists them, never the sub-lane", () => {
     const answer = status({
       running: [
-        entry({ verb: "all", lane: "versioned" }),
+        entry({ verb: "all", lane: "snapshot" }),
         entry({ verb: "drive_sync" }),
         entry({ verb: "all", lane: "drive_sync" }),
       ],
@@ -415,8 +413,8 @@ describe("progressHead", () => {
   });
 
   it("names Full backup's sub-lane with its counts", () => {
-    expect(progressHead(entry({ verb: "all", lane: "versioned", progress: progress({ done: 300, total: 15491 }) }))).toBe(
-      "Full backup · versioned · 300 / 15,491",
+    expect(progressHead(entry({ verb: "all", lane: "snapshot", progress: progress({ done: 300, total: 15491 }) }))).toBe(
+      "Full backup · snapshot · 300 / 15,491",
     );
   });
 

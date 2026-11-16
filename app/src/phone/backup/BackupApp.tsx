@@ -1,4 +1,4 @@
-/** The backup app: the seated project's store, lane by lane, and four presses. Reference: docs/phone/backup.md */
+/** The backup app: the seated project's store, lane by lane, and three presses. Reference: docs/phone/backup.md */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -246,8 +246,7 @@ export default function BackupApp({ project, scope, onClose }: BackupAppProps) {
             <p className="baud-backup-line">{driveLine(status)}</p>
             {status.store ? (
               <p className="baud-backup-line">
-                Store · snapshots {bytesText(status.store.snapshots_bytes)} · versioned{" "}
-                {bytesText(status.store.versioned_bytes)}
+                Store · snapshots {bytesText(status.store.snapshots_bytes)}
               </p>
             ) : null}
             <button type="button" className="baud-backup-chip" onClick={() => void sizes()}>

@@ -1,10 +1,10 @@
 # The backup app
 
-This page covers the backup app on the wheel's apps layer: what the store holds, the four presses, stop and progress, and which project it reads.
+This page covers the backup app on the wheel's apps layer: what the store holds, the three presses, stop and progress, and which project it reads.
 
 ← [the phone face](../phone.md)
 
-### The backup app — the store, and four presses that add to it
+### The backup app — the store, and three presses that add to it
 
 **The third card on the apps layer**, `BKP`, after `git` and `files`.
 A project's backup store belongs to nobody in it, which is why it sits on the
@@ -13,16 +13,15 @@ apps layer. The card carries no badge. Tapping it opens
 header chip's name, the same value the git app gets); `‹ wheel` closes it.
 
 **What the store holds**, read from `GET /v1/backup/status`: one line per lane,
-*Snapshot · 2h ago · 15,414 files*, *Versioned · 18d ago · 4 files*,
-*Drive · never*, using the face's own age words, plus the project's Drive sync
-setting, on or off. **sizes** re-reads with `sizes=1` and adds the two store
-sizes. It is a chip rather than part of every read, because walking a large
+*Snapshot · 2h ago · 15,414 files*, *Drive · never*, using the face's own age
+words, plus the project's Drive sync setting, on or off. **sizes** re-reads with
+`sizes=1` and adds the snapshots' store size. It is a chip rather than part of every read, because walking a large
 store takes seconds. These lines come from @backup reading its own store on disk,
 so they survive a server restart that forgets every job.
 
-**Four click options:** **Snapshot now**, **Versioned now**, **Full backup** and
-**Sync to Drive**, which are the lanes `snapshot`, `versioned`, `all` and
-`drive_sync`. Each press is `POST /v1/backup/run` and answers at once with a job.
+**Three click options:** **Snapshot now**, **Full backup** and **Sync to Drive**,
+which are the lanes `snapshot`, `all` and `drive_sync`. Full backup runs
+`snapshot`, then `drive_sync`. Each press is `POST /v1/backup/run` and answers at once with a job.
 While anything runs, the sheet reads `GET /v1/backup/status` every 2 s, while the
 screen is looked at. When status no longer lists the press, the sheet reads
 `GET /v1/backup/job` once for the outcome, shows the command's own last lines
@@ -43,7 +42,7 @@ well as the phone's, each with its pressed `verb`, the `lane` at work and a
   Stop by name, as it is every run. A press the phone holds a job for that status
   does not list yet shows `· running…` and does not fire.
 - **One progress block per running entry:** the press's name (under Full backup,
-  the sub-lane at work with its counts: *Full backup · versioned · 300 / 15,491*);
+  the sub-lane at work with its counts: *Full backup · snapshot · 300 / 15,491*);
   a bar, which is a real `<progress>` and is indeterminate while the lane scans;
   the line *1,204 / 15,414 files · 310 MB of 2.9 GB · 2m 10s* (bytes in @backup's
   own 1024-based words, *of …* only when the lane knows its planned bytes, elapsed
@@ -97,8 +96,8 @@ Four routes on the host API, with the same token rules as the rest of the phone'
 surface. `types.ts` holds them as `BackupStatus`, `BackupRunning`,
 `BackupProgress`, `BackupJob` and `BackupCancel`, and `transport.http.ts` maps the
 verbs `backup_run`, `backup_job`, `backup_status` and `backup_cancel` onto them.
-The lane is always one of the four drone verb names: `snapshot`, `versioned`,
-`all`, `drive_sync`.
+The lane is always one of the three drone verb names: `snapshot`, `all`,
+`drive_sync`.
 
 | route | scope | sends | answers |
 | --- | --- | --- | --- |
@@ -109,9 +108,9 @@ The lane is always one of the four drone verb names: `snapshot`, `versioned`,
 
 - **Status** is @backup's own `status --json`, passed through: `project`, `root`,
   `registered`, `mode`, `drive_sync` (the setting), `runs`, `lanes` with
-  `{last, files}` for `snapshot`, `versioned` and `drive_sync` (both null when the
-  lane never ran), `drive.tracked_files`, and `store` with `snapshots_bytes` and
-  `versioned_bytes`, present only under `sizes=1`. An unregistered root answers
+  `{last, files}` for `snapshot` and `{last, files, complete}` for `drive_sync`
+  (`last` and `files` null when the lane never ran), `drive.tracked_files`, and
+  `store` with `snapshots_bytes`, present only under `sizes=1`. An unregistered root answers
   `registered: false`, every `last` null and `runs` 0, which is not an error.
 - **Running** is a list on the status, `[]` when idle. Each entry has `job` (this
   server's id when it started the run, `null` for a terminal or daemon run),
@@ -126,7 +125,7 @@ The lane is always one of the four drone verb names: `snapshot`, `versioned`,
   exit, a timeout, or a routing error mid-run). The server keeps finished jobs
   for an hour, in memory only.
 - **The errors the sheet handles:** **400 `verb_refused`** for an unknown project,
-  a lane outside the four, or a run already in flight for that project and lane
+  a lane outside the three, or a run already in flight for that project and lane
   (*"<lane> already running for <project> since <iso>"*). **404 `job_unknown`**
   for a job the server forgot, which sends the sheet to the status. **404
   `not_running`** from cancel when nothing of that lane runs. **503

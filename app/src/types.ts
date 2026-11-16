@@ -453,7 +453,7 @@ export interface MemoryConfigPatch {
 
 /* @backup's and @api's shapes (phone-only), see docs/phone/backup.md. Change with the host's answer. */
 
-export type BackupLane = "snapshot" | "versioned" | "all" | "drive_sync";
+export type BackupLane = "snapshot" | "all" | "drive_sync";
 
 export interface BackupLaneStatus {
   last: string | null;
@@ -491,13 +491,11 @@ export interface BackupStatus {
   runs: number;
   lanes: {
     snapshot: BackupLaneStatus;
-    versioned: BackupLaneStatus;
     drive_sync: BackupLaneStatus;
   };
   /** Present only when asked with sizes=1: the walk takes seconds. */
   store?: {
     snapshots_bytes: number;
-    versioned_bytes: number;
   };
   drive: { tracked_files: number };
   running: BackupRunning[];
