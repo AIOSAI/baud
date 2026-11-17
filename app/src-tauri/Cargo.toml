@@ -75,7 +75,7 @@ rusqlite = { version = "0.40.2", features = ["bundled"] }
 # PID - orphaned children are the classic terminal-emulator leak.
 libc = "0.2"
 # The screenshot portal client (screenshot.rs).
-ashpd ={ version = "0.13.13", default-features = false, features = ["tokio", "screenshot"], optional = true }
+ashpd = { version = "0.13.13", default-features = false, features = ["tokio", "screenshot"], optional = true }
 
 [profile.release]
 codegen-units = 1
