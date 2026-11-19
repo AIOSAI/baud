@@ -18,11 +18,11 @@ Everything below is under `app/` unless it says otherwise.
 
 ---
 
-## Start here — the five files that explain the shape
+## Start here — the files that explain the shape
 
 | File | What it is |
 |---|---|
-| `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. 41 of them. |
+| `src/host/index.ts` | **The vocabulary.** Every verb either face can ask for, typed, in one list. |
 | `src/host/transport.ts` | The desktop's answer: `invoke` into Rust, or the phone's wire request through the Rust relay `host_api_call`. |
 | `src/host/route.ts` | `routeOf`: which door a desktop call takes, by its shape. Pure, plus `route.test.ts`, which also checks the IPC list against `lib.rs`'s registry. |
 | `src/host/transport.http.ts` | The phone's answer: `fetch` to `/v1/*`, plus the WebSocket. |
@@ -54,7 +54,7 @@ Everything below is under `app/` unless it says otherwise.
 | The Chrome extension | `src/extension/` | [its files and the routes it uses](docs/extension.md) |
 | The wheel, both faces | `src/phone/FleetWheel.tsx`, its desktop keys and mouse wheel in `src/phone/lib/wheelInput.ts`; the opened card, both faces, in `src/phone/AgentSheet.tsx` | [the desktop's wheel and card](docs/desktop/window-and-cards.md#the-wheel) · [desktop input](docs/phone/wheel.md#desktop-input) |
 | The type seam | `src/types.ts` | [TypeScript mirrors Rust by hand](docs/architecture.md#the-type-seam--typescript-mirrors-rust-by-hand) |
-| The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc-6644-lines) |
+| The desktop's backend | `src-tauri/src/` | [the Rust files](docs/architecture.md#rust--the-desktops-backend-src-taurisrc) |
 | The phone's backend | @api's host, not in this repo | [Host lanes](#host-lanes--the-phones-backend-and-it-is-not-in-this-repo), below |
 
 ---
@@ -67,7 +67,7 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
                                                          →  fetch   (phone, via the vite alias)
 ```
 
-- `src/host/index.ts` — **48 exported verbs**. Optional arguments use the
+- `src/host/index.ts` — **the exported verbs**. Optional arguments use the
   *omitted-key* pattern: a key that is empty is left off the payload entirely,
   so the desktop's `invoke` object stays byte-identical.
 - `src/host/transport.http.ts` — a **38-row route table** over **31 distinct
@@ -75,7 +75,7 @@ a screen  →  host/index.ts (typed verb)  →  ./transport  →  invoke  (deskt
   that renames the wire's fields to the seam's. Also `HostError`, the token
   store, the room socket and the image upload. `callWith(sender, ...)` is the
   one parser; the phone's sender is `fetch`, the desktop's is the relay.
-- **`NOT_YET` in `transport.http.ts` (12 rows) is the map of what the phone
+- **`NOT_YET` in `transport.http.ts` is the map of what the phone
   cannot do:** verbs the desktop has and the phone does not, refused **by name
   with a reason**, never bound to the nearest plausible path. The desktop
   refuses only `openRoomSocket` and `uploadImage`, by nature.
@@ -103,8 +103,8 @@ Changes there are @api's, not BAUD's. Cross-repo findings get mailed, not fixed.
 | File | One line |
 |---|---|
 | `src/tokens/tokens.json` → `tokens.generated.css` | **The palette, as data.** `npm run tokens` regenerates the CSS; never hand-edit the generated file. |
-| `src/theme.css` (2092) | The desktop's stylesheet, and the **shared** floor — the phone loads it too. Written entirely in `var(--baud-*)`. |
-| `src/phone/phone.css` (3699) | Phone-only additions on top of `theme.css`. |
+| `src/theme.css` | The desktop's stylesheet, and the **shared** floor — the phone loads it too. Written entirely in `var(--baud-*)`. |
+| `src/phone/phone.css` | Phone-only additions on top of `theme.css`. |
 | `src/diff.css` | The file diff look, `react-diff-view` on BAUD's tokens: the phone's git diff screen and the extension's change sheet both import it. |
 | `app/public/` | PWA icons and `manifest.webmanifest`. |
 
@@ -180,10 +180,13 @@ headless and checks its `ldd`; after touching the `gui` gate, run
 | `docs/phone/monitor.md` | The monitor row, the cpu page, what is running, rooms and watches that end. |
 | `docs/phone/settings-nav.md` | The bell and the feed, the gear, the startup seat, designed reads, settings, Back and tabs. |
 | `docs/phone/files.md` | Every file of the phone face, placed: screens and sheets, the git and backup apps, `lib/`. |
+| `docs/phone/chat.md` | The chat screen: one agent's transcript and a box to talk to it. |
+| `docs/extension.md` | The Chrome extension: the side panel chat and the pulse on the page. |
+| `docs/sandbox.md` | The install sandbox: the installer tested in a saved Docker image. |
+| `docs/uninstall.md` | Undoing a BAUD install, step by step. |
 | `docs/releases.md` | Versions, what a release carries, and the one human step. |
-| `docs/history.md` | How it got here: the milestones and the rounds after them. |
 | `docs/phone-setup-android.md` | The stranger's step-by-step for an Android phone: Tailscale, token, sign in. |
-| `AGENTS.md` · `CLAUDE.md` | The startup protocol for agents working in this repo. |
+| `AGENTS.md` | The startup protocol for agents working in this repo. |
 | `BAUD_REGISTRY.json` | Machine-managed. Do not hand-edit. |
 | `MAP.md` (root) | This file. |
 | `app/README.md` | A pointer at the root README and this map. Nothing else lives there. |
@@ -205,7 +208,7 @@ argue with it. What the tree looks like now is everything above this line.
 What is left is one entry, and it is a decision rather than a task. Its number is
 the original ranking, kept so that a plan naming *item 8* still names this thing.
 
-8. **`phone.css` is 3699 lines in one file.** Findable today because every rule
+8. **`phone.css` is over 4,500 lines in one file.** Findable today because every rule
    is commented and the class prefixes are systematic.
    → Leave it. Listed so nobody re-discovers it as a problem: the map is the
    fix, splitting it would break the cascade order that several rules depend on.

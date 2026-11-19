@@ -81,7 +81,7 @@ the compiler will not tell you.
 
 ---
 
-## Rust — the desktop's backend, `src-tauri/src/` (6,644 lines)
+## Rust — the desktop's backend, `src-tauri/src/`
 
 | File | One line |
 |---|---|

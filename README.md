@@ -53,7 +53,7 @@ A desktop app is under development; today it runs from source ([docs/desktop.md]
 - **[Claude Code](https://claude.com/claude-code)**, signed in to your Anthropic account.
 - git, tmux, curl and Python 3.10 or newer.
 
-The installer checks each one and offers to install whatever is missing, one at a time, asking first. It names `sudo` wherever it needs it.
+The installer checks each one, lists what is missing and installs it after one Enter. It names `sudo` wherever it needs it. It installs git, tmux, curl and Python through apt (Debian or Ubuntu); on another Linux, install those yourself first.
 
 ## Install
 
@@ -96,7 +96,7 @@ Pre-release, `0.x`. Linux only, and the surface still moves. Changes are listed 
   - [The wheel](docs/phone/wheel.md) · [The card](docs/phone/card.md) · [The room](docs/phone/room.md) · [Room input](docs/phone/room-input.md) · [Room delivery](docs/phone/room-delivery.md)
   - [Files and git](docs/phone/files-git.md) · [Backup](docs/phone/backup.md) · [Monitor](docs/phone/monitor.md) · [Settings and navigation](docs/phone/settings-nav.md) · [Files](docs/phone/files.md)
 - [The desktop window](docs/desktop.md) (under development): [window and cards](docs/desktop/window-and-cards.md) · [rooms](docs/desktop/rooms.md) · [settings](docs/desktop/settings.md)
-- [The Chrome extension](docs/extension.md): chat with your agents in Chrome's side panel, and the pulse on the page.
+- [The Chrome extension](docs/extension.md) (on `main`, not yet in a release): chat with your agents in Chrome's side panel, and the pulse on the page.
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
 - [Architecture](docs/architecture.md) · [Development](docs/development.md) · [The install sandbox](docs/sandbox.md) · [Releases](docs/releases.md)
 - [CHANGELOG.md](CHANGELOG.md) · [MAP.md](MAP.md): where every file lives.
