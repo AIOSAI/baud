@@ -40,7 +40,7 @@
 <p align="center">
   <img src="docs/assets/baud-files.png" alt="The files app with a project file open" width="250">
   <img src="docs/assets/baud-git-diff.png" alt="The git app: a file's changes, removed lines red, added lines green" width="250">
-  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot, versioned, full backup and Drive sync, one tap each" width="250">
+  <img src="docs/assets/baud-backup.png" alt="The backup app: snapshot and Drive sync, one tap each" width="250">
 </p>
 <p align="center"><sub>A project file in the files app · a file's changes in the git app · the backup app</sub></p>
 
@@ -53,7 +53,7 @@ A desktop app is under development; today it runs from source ([docs/desktop.md]
 - **[Claude Code](https://claude.com/claude-code)**, signed in to your Anthropic account.
 - git, tmux, curl and Python 3.10 or newer.
 
-The installer checks each one and offers to install whatever is missing, one at a time, asking first. It names `sudo` wherever it needs it.
+The installer checks each one, lists what is missing and installs it after one Enter. It names `sudo` wherever it needs it. It installs git, tmux, curl and Python through apt (Debian or Ubuntu); on another Linux, install those yourself first.
 
 ## Install
 
@@ -61,7 +61,7 @@ The installer checks each one and offers to install whatever is missing, one at 
 curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh
 ```
 
-The script prints what the machine has, installs what is missing after one Enter, installs the `aipass` CLI from PyPI, and runs `aipass install`. That clones AIPass into `~/AIPass` and lands this release's phone face. It never overwrites an existing `AIPass` folder. To install under another folder, name the parent:
+The script prints what the machine has and what it will install and change, then waits for one Enter. That Enter is the only question: it installs what is missing, installs the `aipass` CLI from PyPI, and runs `aipass install --yes`, consent to the machine changes the plan named (Claude Code hooks in `~/.claude/settings.json`, shell rc lines, the `drone` and `aipass` symlinks). That clones AIPass into `~/AIPass`, lands this release's phone face, and ends on AIPass's own closing screen. A phone face that does not land fails the install, with the retry, `aipass baud install --tag <tag>`, named. It never overwrites an existing `AIPass` folder. To install under another folder, name the parent:
 
 ```sh
 curl -fsSL https://github.com/AIOSAI/baud/releases/latest/download/install.sh | sh -s -- ~/Projects
@@ -96,7 +96,7 @@ Pre-release, `0.x`. Linux only, and the surface still moves. Changes are listed 
   - [The wheel](docs/phone/wheel.md) · [The card](docs/phone/card.md) · [The room](docs/phone/room.md) · [Room input](docs/phone/room-input.md) · [Room delivery](docs/phone/room-delivery.md)
   - [Files and git](docs/phone/files-git.md) · [Backup](docs/phone/backup.md) · [Monitor](docs/phone/monitor.md) · [Settings and navigation](docs/phone/settings-nav.md) · [Files](docs/phone/files.md)
 - [The desktop window](docs/desktop.md) (under development): [window and cards](docs/desktop/window-and-cards.md) · [rooms](docs/desktop/rooms.md) · [settings](docs/desktop/settings.md)
-- [The Chrome extension](docs/extension.md): chat with your agents in Chrome's side panel, and the pulse on the page.
+- [The Chrome extension](docs/extension.md) (on `main`, not yet in a release): chat with your agents in Chrome's side panel, and the pulse on the page.
 - [The headless doors](docs/headless.md): `baud-cli` and the same answers without a window.
 - [Architecture](docs/architecture.md) · [Development](docs/development.md) · [The install sandbox](docs/sandbox.md) · [Releases](docs/releases.md)
 - [CHANGELOG.md](CHANGELOG.md) · [MAP.md](MAP.md): where every file lives.

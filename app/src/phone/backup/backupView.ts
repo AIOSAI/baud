@@ -1,19 +1,37 @@
 /** The backup sheet's words and rules, pure so they test without a server. Reference: docs/phone/backup.md */
 
 import { relativeAge } from "../../age";
-import type { BackupJob, BackupLane, BackupLaneStatus, BackupProgress, BackupRunning, BackupStatus } from "../../types";
+import type {
+  BackupFrequency,
+  BackupJob,
+  BackupLane,
+  BackupLaneStatus,
+  BackupProgress,
+  BackupRunning,
+  BackupSchedule,
+  BackupScheduleWrite,
+  BackupStatus,
+  BackupWeekday,
+} from "../../types";
 
 export const BACKUP_BUTTONS: ReadonlyArray<{ lane: BackupLane; label: string }> = [
   { lane: "snapshot", label: "Snapshot now" },
-  { lane: "versioned", label: "Versioned now" },
-  { lane: "all", label: "Full backup" },
   { lane: "drive_sync", label: "Sync to Drive" },
+  { lane: "all", label: "Back up all now" },
 ];
 
+/** A run's name where it differs from its press: a running all reads "Back up all", scheduled or pressed. */
+const RUN_LABELS: Partial<Record<BackupLane, string>> = { all: "Back up all" };
+
+/** A verb status lists that has no press still shows, as its Stop. */
+export function shownButtons(active: readonly BackupLane[]): Array<{ lane: BackupLane; label: string }> {
+  const extra = [...new Set(active)].filter((verb) => !BACKUP_BUTTONS.some((button) => button.lane === verb));
+  return [...BACKUP_BUTTONS, ...extra.map((lane) => ({ lane, label: verbLabel(lane) }))];
+}
+
 /** `all` has no status line: it runs the other lanes, and each of them keeps its date. */
-export const STATUS_LANES: ReadonlyArray<{ key: "snapshot" | "versioned" | "drive_sync"; label: string }> = [
+export const STATUS_LANES: ReadonlyArray<{ key: "snapshot" | "drive_sync"; label: string }> = [
   { key: "snapshot", label: "Snapshot" },
-  { key: "versioned", label: "Versioned" },
   { key: "drive_sync", label: "Drive" },
 ];
 
@@ -28,17 +46,122 @@ export function driveLine(status: BackupStatus): string {
   return `Drive sync setting · ${status.drive_sync ? "on" : "off"}`;
 }
 
-/** An unknown Drive setting asks: asking once too often is a tap, not asking is a publish nobody meant. */
-export function leavesMachine(lane: BackupLane, driveSyncOn: boolean | null): boolean {
-  if (lane === "drive_sync") return true;
-  if (lane === "all") return driveSyncOn !== false;
-  return false;
+/** Unknown counts as on: a press must never send files off the machine unasked. */
+export function driveSyncOn(
+  status: Pick<BackupStatus, "drive_sync"> | null,
+  schedule: Pick<BackupSchedule, "steps"> | null,
+): boolean {
+  if (!status && !schedule) return true;
+  return status?.drive_sync === true || (schedule?.steps ?? []).includes("drive_sync");
 }
 
-export function confirmLine(lane: BackupLane, project: string): string {
-  return lane === "drive_sync"
-    ? `Sync ${project}'s backups to Google Drive?`
-    : `Run a full backup of ${project}, including its Drive sync?`;
+export function leavesMachine(lane: BackupLane, driveOn = false): boolean {
+  return lane === "drive_sync" || (lane === "all" && driveOn);
+}
+
+export function confirmLine(project: string, lane: BackupLane = "drive_sync"): string {
+  return lane === "all"
+    ? `Snapshot ${project}, then sync its backups to Google Drive?`
+    : `Sync ${project}'s backups to Google Drive?`;
+}
+
+export const FREQUENCIES: ReadonlyArray<{ value: BackupFrequency; label: string }> = [
+  { value: "daily", label: "Every day" },
+  { value: "weekly", label: "Every week" },
+  { value: "monthly", label: "Every month" },
+];
+
+export const WEEKDAYS: readonly BackupWeekday[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+
+const twoDigits = (count: number) => Array.from({ length: count }, (_, n) => String(n).padStart(2, "0"));
+export const HOURS = twoDigits(24);
+export const MINUTES = twoDigits(60);
+export const MONTH_DAYS = Array.from({ length: 31 }, (_, n) => n + 1);
+
+export const capital = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+/** "Every day at 05:00", "Every Monday at 05:00", "Every month on day 31 at 05:00"; null with no schedule. */
+export function whenLine(schedule: Pick<BackupSchedule, "frequency" | "time" | "weekday" | "day">): string | null {
+  const { frequency, time, weekday, day } = schedule;
+  if (!frequency || !time) return null;
+  if (frequency === "weekly") return `Every ${weekday ? capital(weekday) : "week"} at ${time}`;
+  if (frequency === "monthly") return day ? `Every month on day ${day} at ${time}` : `Every month at ${time}`;
+  return `Every day at ${time}`;
+}
+
+const STEP_WORDS: Record<string, string> = { snapshot: "Snapshot", drive_sync: "Drive sync" };
+
+/** What a run does, in the server's order: "Snapshot, then Drive sync", "Snapshot only". */
+export function stepsLine(steps: readonly string[]): string {
+  const words = steps.map((step) => STEP_WORDS[step] ?? step);
+  return words.length === 1 ? `${words[0]} only` : words.join(", then ");
+}
+
+export function lastRunLine(
+  schedule: Pick<BackupSchedule, "last_run" | "last_status" | "last_error">,
+  now: number = Date.now(),
+): string {
+  if (!schedule.last_run) return "Last run · never";
+  const parts = ["Last run", relativeAge(schedule.last_run, now).label];
+  if (schedule.last_status && schedule.last_status !== "success") parts.push(schedule.last_status);
+  if (schedule.last_error) parts.push(schedule.last_error);
+  return parts.join(" · ");
+}
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "Next run · Mon 16 Nov at 05:00", read off the naive local stamp as written; off says so and names no run. */
+export function nextRunLine(schedule: Pick<BackupSchedule, "on" | "next_run">): string {
+  if (!schedule.on) return "Off · no run until it is switched on";
+  if (!schedule.next_run) return "Next run · not known";
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(schedule.next_run);
+  if (!match) return `Next run · ${schedule.next_run}`;
+  const [, year, month, day, hour, minute] = match;
+  const weekday = DAY_NAMES[new Date(Number(year), Number(month) - 1, Number(day)).getDay()];
+  return `Next run · ${weekday} ${Number(day)} ${MONTH_NAMES[Number(month) - 1]} at ${hour}:${minute}`;
+}
+
+export interface ScheduleEdit {
+  frequency: BackupFrequency;
+  weekday: BackupWeekday;
+  day: number;
+  time: string;
+}
+
+export function scheduleEdit(schedule: BackupSchedule | null): ScheduleEdit {
+  return {
+    frequency: schedule?.frequency ?? "daily",
+    weekday: schedule?.weekday ?? "monday",
+    day: schedule?.day ?? 1,
+    time: schedule?.time ?? "05:00",
+  };
+}
+
+export function editProblem(edit: ScheduleEdit): string | null {
+  if (!FREQUENCIES.some((choice) => choice.value === edit.frequency)) return "pick how often it runs";
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(edit.time)) return "the time must be HH:MM, 24-hour";
+  if (edit.frequency === "weekly" && !WEEKDAYS.includes(edit.weekday)) return "pick a weekday";
+  if (edit.frequency === "monthly" && !(Number.isInteger(edit.day) && edit.day >= 1 && edit.day <= 31)) {
+    return "the day must be 1 to 31";
+  }
+  return null;
+}
+
+/** Only the fields the frequency takes: the server refuses the rest. */
+export function scheduleBody(project: string, edit: ScheduleEdit): BackupScheduleWrite {
+  const body: BackupScheduleWrite = { project, frequency: edit.frequency, time: edit.time };
+  if (edit.frequency === "weekly") body.weekday = edit.weekday;
+  if (edit.frequency === "monthly") body.day = edit.day;
+  return body;
 }
 
 export const NO_PROJECT = "no project is seated yet";
@@ -62,7 +185,7 @@ export const JOB_FORGOTTEN =
   "the server restarted and forgot this run - its outcome is in the status lines above now";
 
 /** verb -> job id from status's `running`, so a sheet opened mid-run reads the outcome. Keyed on
- *  `verb`, never `lane`: under `all` the lane changes while the job stays the one Full backup started. */
+ *  `verb`, never `lane`: under `all` the lane changes while the job stays the one the nightly run started. */
 export function runningJobs(status: Pick<BackupStatus, "running"> | null): Partial<Record<BackupLane, string>> {
   const jobs: Partial<Record<BackupLane, string>> = {};
   for (const entry of status?.running ?? []) {
@@ -107,13 +230,13 @@ export function buttonWord(label: string, phase: ButtonPhase): string {
   }
 }
 
-/** A button's name for a screen reader: four buttons can all read Stop. */
+/** A button's name for a screen reader: every shown button can read Stop at once. */
 export function buttonName(label: string, phase: ButtonPhase): string {
   return phase === "stop" || phase === "stopping" ? `stop ${label}` : label;
 }
 
 export function verbLabel(verb: BackupLane): string {
-  return BACKUP_BUTTONS.find((button) => button.lane === verb)?.label ?? verb;
+  return RUN_LABELS[verb] ?? BACKUP_BUTTONS.find((button) => button.lane === verb)?.label ?? verb;
 }
 
 /** 1024-based, as @backup's `_human_bytes`, so the bar and the stopped summary name a size alike. */

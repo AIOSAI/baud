@@ -69,9 +69,37 @@ read brings the last 80 lines, and each later one asks `since` the last line
 held, which the host reads as exclusive. Line numbers restart in a new
 transcript, so when the answer's `session` changes the panel drops what it
 holds and reads again without `since`. Messages are plain text with http(s) links only;
+a click on one opens it in a new browser tab through `chrome.tabs.create`, never
+in the panel, and no other scheme is followed;
 tool lines collapse into runs; each line shows its time and model. The feed
 stays at the bottom only if you were at the bottom, and a poll keeps your
 selection.
+
+**Notices.** Besides user, agent and tool lines the feed carries `role:
+"notice"` lines, `{n, role, kind, text, time, mail_id}`: mail that reached the
+agent, one line `@sender: subject`. Each is drawn at its place by `n` as a
+small box with a status role, its label `Medic`, `Rounds`, `Job failed`, `Mail`
+or an unknown kind as sent, then its time and text; the label and the box's
+left edge are red for medic and job_failed, blue for rounds, dim otherwise
+(`noticeLabel`, `noticeTone` in `lib/chat.ts`, which the phone imports too). A
+notice is no button: `mail_id` rides on it as `data-mail-id` only. It is never a
+reply, your line or a tool call: it has no read-aloud or copy, settles no
+pending send, and the "acting" pulse looks past it to the last other line.
+
+**File changes.** A tool line for an Edit or a Write carries the host's
+`change` (path, lines added and removed, and the text it changed). A run's
+label adds its totals over those lines, `6 tool calls · 12:30 · +4 −1`, added
+green and removed red; a single such line shows its own. In an opened run, a
+line that changed a file reads as its file name and counts; a line that did not
+reads as before. Tapping one opens its diff in a sheet over the chat: the path
+and counts on top, `✕` or Esc to close (Esc there never stops the agent), then
+the rows in the phone's diff look (`src/diff.css`), old and new line numbers,
+long lines wrapping. An Edit is a line diff of the old text against the new,
+numbered from the line it starts on, so unchanged lines inside the block read
+as context; a Write diffs the file before against after, all green for a new
+file. A change too large for the host to keep, or one with no body the panel
+can draw, says so in the sheet and draws nothing. Closing leaves the chat
+scrolled where it was. Counts are the host's; the panel never recounts.
 
 - Enter sends to the open agent, Shift+Enter makes a newline. A Looking-at line
   rides as the first line, `[Looking at: …]`, exactly as Seed Dev's deck wrote it.

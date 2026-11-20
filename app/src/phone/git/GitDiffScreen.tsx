@@ -4,8 +4,9 @@
 import { Fragment, useEffect, useState } from "react";
 import { Decoration, Diff, Hunk, parseDiff } from "react-diff-view";
 import type { FileData } from "react-diff-view";
-// Its `--diff-*` custom properties are retuned to the phone's tokens in phone.css.
+// Its `--diff-*` custom properties are retuned to BAUD's tokens in diff.css.
 import "react-diff-view/style/index.css";
+import "../../diff.css";
 
 import { gitFileDiff } from "../../host";
 import type { GitFileDiff } from "../../types";

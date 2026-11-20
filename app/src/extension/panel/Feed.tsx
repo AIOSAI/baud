@@ -1,13 +1,18 @@
 /** The open agent's transcript: runs of lines, tool runs stacked, the panel's own notes placed among them by time.
     An agent's reply renders as markdown through the phone's sanitizer; every other line is text, only http(s) URLs linked.
+    A tool line that changed a file carries its counts and opens its diff in a sheet over the feed.
     Nodes are keyed by line number, so a poll leaves a selection be. */
 
 import DOMPurify from "dompurify";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Diff, Hunk, parseDiff } from "react-diff-view";
+import "react-diff-view/style/index.css";
 
+import "../../diff.css";
+import { splitPath } from "../../phone/lib/gitStatus";
 import { markdownHtml } from "../../phone/lib/markdown";
-import type { AgentLine } from "../../types";
-import { linkParts, retag, runLabel, runsOf, splitLook, stamp } from "../lib/chat";
+import type { AgentChange, AgentLine } from "../../types";
+import { changeView, linkParts, noticeTone, retag, runChange, runLabel, runsOf, splitLook, stamp, takeLinkClick } from "../lib/chat";
 import type { Voice, VoiceState } from "./voice";
 
 export interface Note {
@@ -35,6 +40,52 @@ function copyBlock(e: React.MouseEvent<HTMLDivElement>) {
     pre.dataset.copied = "";
     setTimeout(() => delete pre.dataset.copied, 1200);
   });
+}
+
+const Counts = ({ c }: { c: { added: number; removed: number } }) => (
+  <>
+    <span className="baud-ext-add">+{c.added}</span> <span className="baud-ext-del">−{c.removed}</span>
+  </>
+);
+
+/** Over the feed, which stays mounted beneath it, so closing returns the chat scrolled where it was. */
+function ChangeSheet({ change, onClose }: { change: AgentChange; onClose: () => void }) {
+  const view = changeView(change);
+  const file = "patch" in view ? (parseDiff(view.patch)[0] ?? null) : null;
+  const { dir, name } = splitPath(change.path);
+  // Capture runs before the panel's own Esc, which would otherwise stop the agent.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    addEventListener("keydown", onKey, true);
+    return () => removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+  return (
+    <div className="baud-ext-sheet" role="dialog" aria-modal="true" aria-label={`changes to ${change.path}`}>
+      <header>
+        <b title={change.path}>
+          {dir && <i>{dir}</i>}
+          {name}
+        </b>
+        <Counts c={change} />
+        <button type="button" title="close (Esc)" autoFocus onClick={onClose}>
+          ✕
+        </button>
+      </header>
+      {file ? (
+        <div className="baud-git-diff">
+          <Diff diffType={file.type} hunks={file.hunks} viewType="unified">
+            {(hunks) => hunks.map((h) => <Hunk key={h.content} hunk={h} />)}
+          </Diff>
+        </div>
+      ) : (
+        <p className="baud-ext-dim">{"note" in view ? view.note : "the panel's own patch did not parse; nothing to draw"}</p>
+      )}
+    </div>
+  );
 }
 
 function Actions({ id, text, voice, said }: { id: string; text: string; voice: Voice; said: VoiceState }) {
@@ -79,6 +130,8 @@ export function Feed(props: {
   const { agent, lines, notes, error, shownAs, voice, said } = props;
   const name = agent.split("/")[1] ?? agent;
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const [sheet, setSheet] = useState<AgentChange | null>(null);
+  const closeSheet = useRef(() => setSheet(null)).current;
   const box = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
 
@@ -99,17 +152,47 @@ export function Feed(props: {
     const first = run[0].n;
     const stack = run.length > 1;
     const shown = l.role === "user" ? splitLook(retag(l.text, shownAs)) : { look: null, text: l.text };
-    const body = stack && open.has(first) ? run.map((t) => <div key={t.n}>{linked(t.text)}</div>) : linked(shown.text);
+    const changed = (t: AgentLine, label: ReactNode) => (
+      <button type="button" className="baud-ext-change" onClick={() => setSheet(t.change!)}>
+        {label}
+      </button>
+    );
+    const body =
+      stack && open.has(first)
+        ? run.map((t) => (
+            <div key={t.n}>
+              {t.change
+                ? changed(
+                    t,
+                    <>
+                      {splitPath(t.change.path).name} <Counts c={t.change} />
+                    </>,
+                  )
+                : linked(t.text)}
+            </div>
+          ))
+        : !stack && l.change
+          ? changed(l, l.text)
+          : linked(shown.text);
+    const total = runChange(run);
     return {
       at: Date.parse(run[0].time),
       el: (
         <div
           key={`l${first}`}
-          className={`baud-ext-line baud-ext-${l.role}${stack ? " baud-ext-stack" : ""}`}
+          className={`baud-ext-line baud-ext-${l.role}${stack ? " baud-ext-stack" : ""}${l.role === "notice" ? ` baud-ext-notice-${noticeTone(l.kind)}` : ""}`}
+          role={l.role === "notice" ? "status" : undefined}
+          data-mail-id={l.mail_id}
           onClick={stack ? (e) => !(e.target as Element).closest("a, button") && toggle(first) : undefined}
         >
           <small>
             {runLabel(run, name)}
+            {total && (
+              <>
+                {" · "}
+                <Counts c={total} />
+              </>
+            )}
             {stack && (open.has(first) ? " ▴" : " ▾")}
             {shown.look !== null && (
               <>
@@ -144,17 +227,21 @@ export function Feed(props: {
   }
 
   return (
-    <div
-      ref={box}
-      className="baud-ext-feed"
-      onScroll={(e) => {
-        const b = e.currentTarget;
-        atEnd.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40;
-      }}
-    >
-      {items.map((x) => x.el)}
-      {error && <div className="baud-ext-line baud-ext-err">{error}</div>}
-      {!lines.length && !error && <p className="baud-ext-dim">nothing said yet</p>}
-    </div>
+    <>
+      {sheet && <ChangeSheet change={sheet} onClose={closeSheet} />}
+      <div
+        ref={box}
+        className="baud-ext-feed"
+        onScroll={(e) => {
+          const b = e.currentTarget;
+          atEnd.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40;
+        }}
+        onClick={(e) => takeLinkClick(e, (url) => chrome.tabs.create({ url }).catch((err: unknown) => console.error("open link:", url, err)))}
+      >
+        {items.map((x) => x.el)}
+        {error && <div className="baud-ext-line baud-ext-err">{error}</div>}
+        {!lines.length && !error && <p className="baud-ext-dim">nothing said yet</p>}
+      </div>
+    </>
   );
 }

@@ -40,10 +40,11 @@ took 330 lines out of the file above.
 row.
 
 **The backup app — `src/phone/backup/`**: `BackupApp.tsx`, one
-screen of status lines and four lane presses for the seated project (a running
-press becomes Stop, with a progress block per lane in flight), and
-`backupView.ts` with its test, which holds the sheet's words, its
-ask-before-sending rule and its Stop/progress/outcome rules, pure.
+screen of the scheduled backup, status lines and three lane presses for the
+seated project (a running press becomes Stop, with a progress block per lane in
+flight), and `backupView.ts` with its test, which holds the sheet's words, the
+schedule's lines and editor rules, its ask-before-sending rule and its
+Stop/progress/outcome rules, pure.
 
 **Logic modules — `src/phone/lib/`, no JSX** — the pieces screens share:
 

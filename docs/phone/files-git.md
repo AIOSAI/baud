@@ -75,8 +75,9 @@ the wire. The renderer is `react-diff-view` (MIT), consuming exactly what the
 server sends: writing a unified-patch renderer by hand is writing a unified-patch
 parser by hand, and every edge case it misses — hunk headers, no-newline markers,
 renames, binaries — is a *wrong picture of a real change* rather than a crash.
-Its stylesheet exposes every colour as a `--diff-*` custom property, so the
-phone's palette drives it instead of a second set of hexes being pasted over it.
+Its stylesheet exposes every colour as a `--diff-*` custom property, so BAUD's
+palette drives it from `src/diff.css` instead of a second set of hexes being
+pasted over it; the extension's change sheet wears the same file.
 
 **Rows that leave.** Pull requests, issues and the remote are the forge's pages,
 not this app's screens: they are anchors, they open a browser tab, they act on

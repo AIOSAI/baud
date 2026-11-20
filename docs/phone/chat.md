@@ -14,10 +14,18 @@ rules are the extension's own, imported from `extension/lib/chat.ts` and
 
 - **The feed** is the agent's transcript. A reply renders as markdown through
   `lib/markdown.ts` and its sanitizer; every other line is text with only
-  http(s) URLs linked. Consecutive tool calls stack into one line; a tap opens
+  http(s) URLs linked. A tapped http(s) link goes to the host's `openExternal`, a
+  new tab on the phone and the operator's browser in the desktop window, never
+  this page; a failure shows in the flash line. Consecutive tool calls stack into one line; a tap opens
   the stack. A code box copies on a tap and says "copied" for a moment; over
   plain http the copy takes `lib/copyPath.ts`'s legacy lane, and a refused copy
   shows no flash.
+- **A notice** (`role: "notice"`: medic, rounds, job_failed, mail, or a kind
+  the app does not know) is mail that reached the agent, drawn at its place as
+  a small box with a status role: `Medic`, `Rounds`, `Job failed`, `Mail` or the
+  kind as sent, its time, then `@sender: subject`. Medic and job_failed edge
+  red, rounds blue, the rest dim. It opens nothing and is never a reply, your
+  line or a tool call; the rules are the extension's (see its **Notices**).
 - **The list scrolls to the newest line** on open and on every new line, unless
   the reader has scrolled up more than 40 px.
 - **The composer is pinned to the bottom.** The page does not resize under the

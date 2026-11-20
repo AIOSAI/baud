@@ -1,6 +1,6 @@
-/** The side panel's chat rules, pure: feed lines and runs, the Looking-at tag, image tags, keys, tab memory. */
+/** The side panel's chat rules, pure: feed lines and runs, file changes, the Looking-at tag, image tags, keys, tab memory. */
 
-import type { AgentFeed, AgentLine, AgentUsage, UsageLimit } from "../../types";
+import type { AgentChange, AgentFeed, AgentLine, AgentUsage, UsageLimit } from "../../types";
 import type { FleetEntry, LookAt, LookKind } from "../messages";
 import { agentId } from "./pulseState";
 
@@ -32,18 +32,108 @@ export const stamp = (time: string | number | undefined): string => {
   return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 };
 
+const NOTICES = new Map([
+  ["medic", { label: "Medic", tone: "alert" }],
+  ["job_failed", { label: "Job failed", tone: "alert" }],
+  ["rounds", { label: "Rounds", tone: "info" }],
+  ["mail", { label: "Mail", tone: "plain" }],
+] as const);
+
+/** A notice's kind in words; an unknown kind reads as sent. */
+export const noticeLabel = (kind: unknown): string =>
+  NOTICES.get(kind as never)?.label ?? (typeof kind === "string" && kind ? kind : "notice");
+
+export const noticeTone = (kind: unknown): "alert" | "info" | "plain" => NOTICES.get(kind as never)?.tone ?? "plain";
+
 /** The small label over a run: who, when, and on a reply the model. */
 export function runLabel(run: AgentLine[], agentName: string): string {
   const l = run[run.length - 1];
-  const who = l.role === "agent" ? agentName : l.role === "user" ? "you" : run.length > 1 ? `${run.length} tool calls` : "tool";
+  const who =
+    l.role === "agent" ? agentName : l.role === "user" ? "you" : l.role === "notice" ? noticeLabel(l.kind) : run.length > 1 ? `${run.length} tool calls` : "tool";
   const at = stamp(l.time);
   return who + (at ? ` · ${at}` : "") + (l.role === "agent" && l.model ? ` · ${l.model}` : "");
 }
 
-/** Busy and the newest line is a tool call: the pulse's "acting". */
-export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) => feed.busy && feed.lines[feed.lines.length - 1]?.role === "tool";
+/* ---- file changes */
+
+/** A run's totals over the lines that carry a change; null when none does. */
+export function runChange(run: AgentLine[]): { added: number; removed: number } | null {
+  const cs = run.flatMap((l) => (l.change ? [l.change] : []));
+  return cs.length ? { added: cs.reduce((n, c) => n + c.added, 0), removed: cs.reduce((n, c) => n + c.removed, 0) } : null;
+}
+
+export interface DiffRow {
+  kind: " " | "+" | "-";
+  text: string;
+}
+
+const linesOf = (text: string) => (text === "" ? [] : text.replace(/\n$/, "").split("\n"));
+
+/** Longest common subsequence over lines, removals first; the shared head and tail are cut so a big file costs its middle. */
+export function lineDiff(a: string[], b: string[]): DiffRow[] {
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+  const x = a.slice(head, a.length - tail);
+  const y = b.slice(head, b.length - tail);
+  const w = y.length + 1;
+  const lcs = new Uint32Array((x.length + 1) * w);
+  for (let i = x.length - 1; i >= 0; i--)
+    for (let j = y.length - 1; j >= 0; j--)
+      lcs[i * w + j] = x[i] === y[j] ? lcs[(i + 1) * w + j + 1] + 1 : Math.max(lcs[(i + 1) * w + j], lcs[i * w + j + 1]);
+  const same = (text: string): DiffRow => ({ kind: " ", text });
+  const mid: DiffRow[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < x.length && j < y.length) {
+    if (x[i] === y[j]) {
+      mid.push(same(x[i++]));
+      j++;
+    } else if (lcs[(i + 1) * w + j] >= lcs[i * w + j + 1]) mid.push({ kind: "-", text: x[i++] });
+    else mid.push({ kind: "+", text: y[j++] });
+  }
+  while (i < x.length) mid.push({ kind: "-", text: x[i++] });
+  while (j < y.length) mid.push({ kind: "+", text: y[j++] });
+  return [...a.slice(0, head).map(same), ...mid, ...a.slice(a.length - tail).map(same)];
+}
+
+/** What the diff sheet draws: one unified hunk for the phone's differ, or the sentence saying why there is none. */
+export function changeView(c: AgentChange): { patch: string } | { note: string } {
+  if (c.large) return { note: "this change was too large to keep: the counts came through, the diff did not" };
+  let from: string;
+  let to: string;
+  let start: number;
+  if (typeof c.old === "string" && typeof c.new === "string") {
+    if (!Number.isInteger(c.start) || c.start! < 1) return { note: "this edit came without the line it starts on, so it cannot be numbered" };
+    [from, to, start] = [c.old, c.new, c.start!];
+  } else if (typeof c.after === "string" && (c.before === null || typeof c.before === "string")) {
+    [from, to, start] = [c.before ?? "", c.after, 1];
+  } else return { note: "this change came without a body the panel can draw" };
+  const rows = lineDiff(linesOf(from), linesOf(to));
+  if (!rows.length) return { note: "both sides are empty: nothing to draw" };
+  const olds = rows.filter((r) => r.kind !== "+").length;
+  const news = rows.filter((r) => r.kind !== "-").length;
+  const body = rows.map((r) => r.kind + r.text).join("\n");
+  return { patch: `diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -${start},${olds} +${start},${news} @@\n${body}\n` };
+}
+
+/** Busy and the newest line is a tool call: the pulse's "acting". A notice arriving mid-turn changes nothing. */
+export const isActing = (feed: Pick<AgentFeed, "busy" | "lines">) =>
+  feed.busy && [...feed.lines].reverse().find((l) => l.role !== "notice")?.role === "tool";
 
 const URL_RE = /(https?:\/\/[^\s<>"'`]*[^\s<>"'`.,;:!?)\]}])/;
+
+/** A click on an http(s) link goes to `open`, never the page: a side panel and the desktop's webview do not open
+    `target=_blank` themselves. Any other scheme is left alone. True when the click was taken. */
+export function takeLinkClick(e: { target: EventTarget | null; preventDefault(): void }, open: (url: string) => void): boolean {
+  const a = (e.target as Element | null)?.closest?.("a[href]");
+  const href = a?.getAttribute("href")?.trim() ?? "";
+  if (!/^https?:\/\//i.test(href)) return false;
+  e.preventDefault();
+  open(href);
+  return true;
+}
 
 /** Text split on its http(s) URLs: odd parts are links, the rest stay text. */
 export const linkParts = (text: string) => String(text).split(URL_RE).map((s, i) => ({ text: s, link: i % 2 === 1 }));

@@ -3,9 +3,9 @@
 import DOMPurify from "dompurify";
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 
-import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, uploadImage } from "../host";
+import { agentAllow, agentDeny, agentFeed, agentInterrupt, agentSend, openExternal, uploadImage } from "../host";
 import type { AgentLine } from "../types";
-import { busyView, errText, insertTag, isImage, lastN, linkParts, mergeLines, resolveImages, retag, runLabel, runsOf, sessionChanged, type Answered } from "../extension/lib/chat";
+import { busyView, errText, insertTag, isImage, lastN, linkParts, mergeLines, noticeTone, resolveImages, retag, runLabel, runsOf, sessionChanged, takeLinkClick, type Answered } from "../extension/lib/chat";
 import * as P from "../extension/lib/pending";
 import { ModelMenu, UsageRing, UsageSheet, useUsage } from "./ChatMenus";
 import { ReadAloud, useVoice } from "./ChatVoice";
@@ -226,6 +226,7 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
           const b = e.currentTarget;
           atEnd.current = b.scrollHeight - b.scrollTop - b.clientHeight < 40;
         }}
+        onClick={(e) => takeLinkClick(e, (url) => openExternal(url).catch((err: unknown) => fail(`link: ${errText(err)}`)))}
       >
         {runsOf(lines).map((run) => {
           const l = run[run.length - 1];
@@ -234,7 +235,9 @@ export default function ChatSheet({ agent, backLabel = "back", onClose }: ChatSh
           return (
             <div
               key={first}
-              className={`baud-chat-line baud-chat-${l.role}${stack ? " baud-chat-stack" : ""}`}
+              className={`baud-chat-line baud-chat-${l.role}${stack ? " baud-chat-stack" : ""}${l.role === "notice" ? ` baud-chat-notice-${noticeTone(l.kind)}` : ""}`}
+              role={l.role === "notice" ? "status" : undefined}
+              data-mail-id={l.mail_id}
               onClick={stack ? (e) => !(e.target as Element).closest("a, button") && toggle(first) : undefined}
             >
               <small>

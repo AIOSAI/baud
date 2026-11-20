@@ -71,8 +71,7 @@ D-Bus) rather than shelling out to a screenshot binary. The capture is copied to
 `~/Pictures/BAUD/baud-<stamp>.png` and its path is typed into the chat box,
 unsubmitted — claude reads images by path, so the path is the delivery, and
 Enter stays the operator's. The button goes quiet while a request is out and
-carries the failure (including a cancelled picker) in its tooltip. On non-Linux
-targets the command returns an honest error.
+carries the failure (including a cancelled picker) in its tooltip.
 
 ## The Hark chip
 

@@ -14,6 +14,8 @@ and every change that lands adds its line there in the same sitting.
 
 ### Added
 
+- **Extension: file changes in the chat.** A tool run that edited or wrote files shows its `+N −M` in its label, an opened run lists each changed file with its counts, and a tap opens the diff over the chat (old and new line numbers, the phone's diff look, Esc or `✕` to close). Drawn from the optional `change` field the host feed puts on Edit and Write lines. See `docs/extension.md`.
+
 - **Extension: the pulse.** The corner presence on a tab is BAUD's own mark: a terminal-green dot and a row of bars that breathe when idle and run with the open agent's energy (speaking follows Piper's loudness), with one tick per live agent beneath, green interactive, amber dispatched, lit while working. Same size, drag, pin, `×` and Looking at as before. See `docs/extension.md`.
 
 - **Extension: quote-reply on agent messages.** Select text in an agent's reply in the side panel, tap `Reply`, type and press Enter: the quote and the `↳` answer are appended to the composer, unsent, and several stack before one send. Seton, vendored unchanged with its adapter for the panel. Extension version 0.5.1. See `docs/extension.md`.
@@ -56,12 +58,14 @@ and every change that lands adds its line there in the same sitting.
 
 ### Fixed
 
+- **Links in the chat open.** An http(s) link in a chat message, an agent's markdown link or a bare URL in any line, opens in a new browser tab: from the extension's side panel through `chrome.tabs.create`, from the phone chat (and the phone face in the desktop window) through the host's `openExternal`. No other scheme is followed, and the panel itself never navigates. See `docs/extension.md`, `docs/phone/chat.md`.
 - **`▸ resume ⚡` is offered on Claude cards only.** Reclaim stops Claude processes only, so on a dispatched Codex or OpenCode card the door started a second agent beside the live dispatch; those cards offer `▸ fresh` alone.
 - **A card's provider prefers the interactive agent.** With a headless dispatch and an interactive session in one branch, the interactive one names the CLI, so the chips and switch legs match the room. The desktop's room spelling also reads the roster, so a room opened in another project gets its own CLI's commands.
 - **Phone: "bell keeps" now governs the badge and the feed.** The phone kept a fixed 200 events and read no setting, so a badge said `99+` while the desktop bell, set to 50, held at 50. The badge hook and the feed screen now keep `bell_max_events` events (the desktop's own retention), newest first; `FEED_KEEP` is only the fallback before the settings load. The interface door's summary moves "bell keeps" to the shared list.
 
 ### Changed
 
+- **`install.sh` follows `aipass install`'s new end.** It passes `--yes` instead of the removed `--no-chat`, and the plan before the one Enter now lists the machine changes that Enter consents to (Claude Code hooks in `~/.claude/settings.json`, the `~/.bashrc` and `~/.profile` lines, Codex and OpenCode wiring when present, the `drone` and `aipass` symlinks). A phone face that does not land is now `aipass install`'s own failure, so the check of the face's marker on disk is gone, and the failure message names the retry, `aipass baud install --tag <tag>`. The closing block no longer tells you to run `claude` in the home, since AIPass prints its own closing screen; the sign-in and PATH hints stay. Needs the AIPass release that carries `--yes`.
 - **Desktop: the operator terminal paints with WebGL.** `Terminal.tsx` loads `@xterm/addon-webgl` 0.19; the monitor and inquiry panes keep xterm's DOM renderer. On a streaming room this took WebKit from 22 to about 5 CPU seconds a minute on an Iris 5100. There is no fallback to the DOM renderer: a renderer that will not load, or a lost WebGL context, detaches the terminal, covers it with the reason, and writes `baud: terminal: <reason>` to the process's stderr through the new `page_log` command. See `docs/desktop/rooms.md`.
 - **Desktop: the bell's audio sleeps between chimes.** The chime's Web Audio context is resumed before its notes are scheduled and suspended when the last note ends, so WebKit's audio threads (about 9 percent of a core, measured) no longer run at rest. The bell still polls while the window is hidden. See `docs/desktop/rooms.md`.
 - **A snapshot reads only the transcripts that changed.** The interactive-marker head scan reads from 4 KB upward and stops at the marker instead of always reading 64 KB, and the head verdict and the sub badge's tail pairing are kept per process for each transcript until its length or mtime changes, so the desktop's polls stop re-reading unchanged files. Answers are unchanged. See `docs/architecture.md`.
@@ -70,6 +74,14 @@ and every change that lands adds its line there in the same sitting.
 - **Desktop: the FILES card docks the file tree on the left.** On the wheel's apps layer FILES seats the left-hand `FileTree` at the seated project's root, as a passport's `files` door does for a branch; a file opens as a tab on the right, and a second open closes the tree. `FileTree` takes a seat (a name and a path) instead of a branch. GIT, BACKUP and MACHINE keep their tabs.
 - **Desktop: the fleet strip is the phone's wheel.** `App.tsx` mounts `FleetWheel` in the strip slot: round cards left to right, the layers (current project, live, dispatched, apps, monitor) up and down, replacing the strip's three tabs. On a mouse or trackpad (`any-pointer: fine`) the wheel also takes ←/→ for cards, ↑/↓ for layers, Enter to open, a vertical wheel turn for the layer and shift+wheel for a card, one step per gesture (`phone/lib/wheelInput.ts`, pinned by its test); touch is untouched. Opening a card opens its passport, which now carries the chip's doors, figures and sub-agent badge (`PassportDoors.tsx`); app cards open their tabs, every monitor card the machine tab. The rail is capped at 960px. `FleetStrip`, `BranchChip` and the unreachable `DiffView` tab are retired.
 - **Phone: the backup card's running line says the time left, not the time so far.** `remainingText` (`backupView.ts`) scales the seconds since the start by the files still to go, `1,204 / 15,414 files · 310 MB of 2.9 GB · 25m 34s left`; before the first file lands the line keeps the elapsed time, since there is no rate yet. The owner, reading a six-hour Drive rebuild on the card (2026-10-22): the counter should say how long is left to complete, not how long has passed. By devpulse; `backupView.test.ts` pins the arithmetic, the fallback and the nulls.
+
+### Removed
+
+- **The Windows and macOS pieces.** BAUD is Linux only. Gone: the release build's `windows_subsystem` attribute, the non-Linux stubs for the browser, screenshot and session-scan commands, the non-unix pty teardown, the `USERPROFILE` home fallback, and the `win32` UTF-8 block in `apps/baud.py`. The `cfg(target_os = "linux")` / `cfg(unix)` gates and `Cargo.toml`'s target tables are plain code and plain dependencies now. Nothing changes on Linux.
+
+### Security
+
+- **SQLite bumped past RUSTSEC-2026-0459.** rusqlite 0.40.2 → 0.41.1 brings the bundled libsqlite3-sys 0.38.2 → 0.39.1, out of the SQLite advisory (CVE-2026-119375) that the read-only OpenCode session lookup in `sessions.rs` carried. No code change.
 
 ## [0.5.0] — 2026-10-19
 

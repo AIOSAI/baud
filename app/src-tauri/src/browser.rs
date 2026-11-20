@@ -49,7 +49,6 @@ pub enum BrowserInput {
     Key(serde_json::Value),
 }
 
-#[cfg(target_os = "linux")]
 fn profile_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     use tauri::Manager;
     app.path()
@@ -58,43 +57,36 @@ fn profile_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
         .map_err(|err| format!("no config dir for BAUD: {err}"))
 }
 
-#[cfg(target_os = "linux")]
 fn user_chrome_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".config/google-chrome")
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_status(app: tauri::AppHandle) -> Result<BrowserStatus, String> {
     Ok(linux::status(&profile_dir(&app)?))
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_launch(app: tauri::AppHandle) -> Result<BrowserStatus, String> {
     linux::launch(&profile_dir(&app)?, &user_chrome_dir().join("NativeMessagingHosts"))
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_adopt(app: tauri::AppHandle) -> Result<BrowserStatus, String> {
     linux::adopt(&profile_dir(&app)?, &user_chrome_dir())
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_view_open(target_id: String, on_event: tauri::ipc::Channel<BrowserEvent>) -> Result<String, String> {
     linux::view_open(linux::PORT, &target_id, move |event| on_event.send(event).is_ok())
 }
 
 /// Ends BAUD's stream only; the page stays open in Chrome.
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub fn browser_view_close(view_id: String) {
     linux::view_close(&view_id);
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub fn browser_input(view_id: String, event: BrowserInput) -> Result<(), String> {
     let (method, params) = match event {
@@ -104,19 +96,16 @@ pub fn browser_input(view_id: String, event: BrowserInput) -> Result<(), String>
     linux::view_send(&view_id, method, params)
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub fn browser_navigate(view_id: String, url: String) -> Result<(), String> {
     linux::view_send(&view_id, "Page.navigate", serde_json::json!({ "url": url }))
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_new_tab() -> Result<BrowserTarget, String> {
     linux::new_tab(linux::PORT)
 }
 
-#[cfg(target_os = "linux")]
 #[tauri::command]
 pub fn browser_history(view_id: String, step: i32) -> Result<(), String> {
     let expression = linux::history_expression(step).ok_or("a history step of 0 goes nowhere")?;
@@ -125,81 +114,10 @@ pub fn browser_history(view_id: String, step: i32) -> Result<(), String> {
 }
 
 /// Closes the page in Chrome; a view on it ends through `Inspector.detached`.
-#[cfg(target_os = "linux")]
 #[tauri::command(async)]
 pub fn browser_close_tab(target_id: String) -> Result<(), String> {
     linux::close_tab(linux::PORT, &target_id)
 }
-
-#[cfg(not(target_os = "linux"))]
-const NOT_LINUX: &str = "BAUD's Chrome is Linux-only for now - the room, the profile path and the binary are Linux's";
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_status() -> Result<BrowserStatus, String> {
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_launch() -> Result<BrowserStatus, String> {
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_adopt() -> Result<BrowserStatus, String> {
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_view_open(target_id: String, on_event: tauri::ipc::Channel<BrowserEvent>) -> Result<String, String> {
-    let _ = (target_id, on_event);
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub fn browser_view_close(view_id: String) {
-    let _ = view_id;
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub fn browser_input(view_id: String, event: BrowserInput) -> Result<(), String> {
-    let _ = (view_id, event);
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub fn browser_navigate(view_id: String, url: String) -> Result<(), String> {
-    let _ = (view_id, url);
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_new_tab() -> Result<BrowserTarget, String> {
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command]
-pub fn browser_history(view_id: String, step: i32) -> Result<(), String> {
-    let _ = (view_id, step);
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(not(target_os = "linux"))]
-#[tauri::command(async)]
-pub fn browser_close_tab(target_id: String) -> Result<(), String> {
-    let _ = target_id;
-    Err(NOT_LINUX.into())
-}
-
-#[cfg(target_os = "linux")]
 mod linux {
     use super::{BrowserEvent, BrowserStatus, BrowserTarget};
     use std::io::{Read, Write};

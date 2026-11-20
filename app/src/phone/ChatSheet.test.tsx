@@ -17,6 +17,7 @@ const host = vi.hoisted(() => ({
   modelsList: vi.fn(),
   uploadImage: vi.fn(),
   speak: vi.fn(),
+  openExternal: vi.fn(),
 }));
 vi.mock("../host", () => host);
 
@@ -110,6 +111,56 @@ describe("ChatSheet", () => {
     expect(box.querySelector(".baud-chat-user")?.textContent).toContain("hello");
     expect(box.querySelector(".baud-chat-agent strong")?.textContent).toBe("hi");
     expect(box.querySelector(".baud-chat-model")?.textContent).toBe("opus");
+  });
+
+  it("draws a notice as a status box among the lines, never as a reply", async () => {
+    host.agentFeed.mockResolvedValue(
+      feed({
+        lines: [
+          { n: 1, role: "agent", text: "on it", time: at(-60), model: "opus" },
+          { n: 2, role: "notice", kind: "medic", text: "@api: m1 landed", time: at(-50), mail_id: "m1" },
+          { n: 3, role: "notice", kind: "quake", text: "@x: y", time: at(-40), mail_id: "m2" },
+        ],
+      }),
+    );
+    await mount();
+    const boxes = [...box.querySelectorAll<HTMLElement>(".baud-chat-notice")];
+    expect(boxes.map((b) => [b.getAttribute("role"), b.dataset.mailId, b.querySelector("small")?.textContent?.split(" · ")[0]])).toEqual([
+      ["status", "m1", "Medic"],
+      ["status", "m2", "quake"],
+    ]);
+    expect(boxes[0].className).toContain("baud-chat-notice-alert");
+    expect(boxes[0].textContent).toContain("@api: m1 landed");
+    expect(box.querySelectorAll(".baud-chat-agent")).toHaveLength(1);
+    expect(box.querySelector(".baud-chat-model")?.textContent).toBe("opus");
+  });
+
+  it("opens a reply's markdown link and a line's bare URL through the host, never in the page", async () => {
+    host.agentFeed.mockResolvedValue(
+      feed({
+        lines: [
+          { n: 1, role: "user", text: "see https://x.dev/a", time: at(-60) },
+          { n: 2, role: "agent", text: "read [the doc](https://x.dev/b)", time: at(-50) },
+        ],
+      }),
+    );
+    await mount();
+    const clicks = [...box.querySelectorAll<HTMLAnchorElement>(".baud-chat-feed a")].map((a) => {
+      const e = new MouseEvent("click", { bubbles: true, cancelable: true });
+      act(() => void a.dispatchEvent(e));
+      return e.defaultPrevented;
+    });
+    expect(clicks).toEqual([true, true]);
+    expect(host.openExternal.mock.calls).toEqual([["https://x.dev/a"], ["https://x.dev/b"]]);
+  });
+
+  it("says so when the host cannot open a link", async () => {
+    host.agentFeed.mockResolvedValue(feed({ lines: [{ n: 1, role: "user", text: "https://x.dev/a", time: at(-60) }] }));
+    host.openExternal.mockRejectedValue(new Error("no browser"));
+    await mount();
+    act(() => void box.querySelector<HTMLAnchorElement>(".baud-chat-feed a")!.click());
+    await flush();
+    expect(box.textContent).toContain("link: no browser");
   });
 
   it("shows a send as pending until the feed echoes the line", async () => {

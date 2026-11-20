@@ -1,23 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { parseDiff } from "react-diff-view";
+import { describe, expect, it, vi } from "vitest";
 
-import type { AgentLine } from "../../types";
+import type { AgentChange, AgentLine } from "../../types";
 import type { FleetEntry, LookAt } from "../messages";
 import {
   busyView,
+  changeView,
   chatAgents,
   enterSends,
   escAction,
   insertTag,
   isActing,
+  lineDiff,
   linkParts,
   lookPick,
   lookText,
   mergeLines,
   modelRefusal,
+  noticeLabel,
+  noticeTone,
   recallAgent,
   rememberAgent,
   resolveImages,
   retag,
+  runChange,
   runLabel,
   runsOf,
   shownAgent,
@@ -25,6 +31,7 @@ import {
   splitLook,
   stamp,
   sessionChanged,
+  takeLinkClick,
   usageWhy,
   withLook,
   worstSeverity,
@@ -34,6 +41,25 @@ const T = "2026-11-05T10:07:00Z";
 const line = (n: number, role: AgentLine["role"], text = `l${n}`, model?: string): AgentLine => ({ n, role, text, time: T, ...(model ? { model } : {}) });
 const look = (kind: LookAt["kind"], text: string): LookAt => ({ kind, text, title: "Docs", page: "https://x.dev/a", pinned: kind === "pin" });
 const entry = (over: Partial<FleetEntry>): FleetEntry => ({ name: "api", project: "aipass", interactive: true, dispatched: false, subagents: 0, ...over }) as FleetEntry;
+
+describe("link clicks", () => {
+  const click = (href: string | null) => {
+    const a = { getAttribute: () => href };
+    const e = { target: { closest: (sel: string) => (sel === "a[href]" && href !== null ? a : null) } as unknown as EventTarget, preventDefault: vi.fn() };
+    const open = vi.fn();
+    return { taken: takeLinkClick(e, open), prevented: e.preventDefault.mock.calls.length, opened: open.mock.calls };
+  };
+
+  it("hands an http or https link to the opener and keeps the page from following it", () => {
+    expect(click(" https://x.dev/a ")).toEqual({ taken: true, prevented: 1, opened: [["https://x.dev/a"]] });
+    expect(click("http://x.dev").opened).toEqual([["http://x.dev"]]);
+  });
+
+  it("leaves javascript, data, mailto, a relative path and a click off any link alone", () => {
+    for (const href of ["javascript:alert(1)", "data:text/html,x", "mailto:a@b.c", "/v1/fleet", null])
+      expect(click(href)).toEqual({ taken: false, prevented: 0, opened: [] });
+  });
+});
 
 describe("feed lines", () => {
   it("merges polls by line number, a re-sent line replacing itself", () => {
@@ -61,6 +87,20 @@ describe("feed lines", () => {
     expect(isActing({ busy: true, lines: [line(1, "agent"), line(2, "tool")] })).toBe(true);
     expect(isActing({ busy: false, lines: [line(2, "tool")] })).toBe(false);
     expect(isActing({ busy: true, lines: [line(2, "agent")] })).toBe(false);
+  });
+
+  it("keeps a notice inert: its own run, its kind as label, no say in acting", () => {
+    const note = { ...line(3, "notice", "@api: m1 landed"), kind: "medic", mail_id: "m1" };
+    expect(runsOf([line(1, "tool"), line(2, "tool"), note, line(4, "tool")]).map((r) => r.map((l) => l.n))).toEqual([[1, 2], [3], [4]]);
+    expect(runLabel([note], "api")).toBe(`Medic · ${stamp(T)}`);
+    expect(isActing({ busy: true, lines: [line(1, "tool"), note] })).toBe(true);
+    expect(isActing({ busy: true, lines: [line(1, "agent"), note] })).toBe(false);
+  });
+
+  it("names and tones each notice kind, an unknown one as sent", () => {
+    const kinds = ["medic", "job_failed", "rounds", "mail", "quake", "", undefined, 7, "constructor"];
+    expect(kinds.map(noticeLabel)).toEqual(["Medic", "Job failed", "Rounds", "Mail", "quake", "notice", "notice", "notice", "constructor"]);
+    expect(kinds.map(noticeTone)).toEqual(["alert", "alert", "info", "plain", "plain", "plain", "plain", "plain", "plain"]);
   });
 
   it("links http(s) URLs only, trailing punctuation left out", () => {
@@ -186,5 +226,64 @@ describe("usage and refusals", () => {
 
   it("reads aloud without markdown marks or code", () => {
     expect(speakable("**Done**. See [the doc](https://x).\n```\ncode\n```")).toBe("Done. See the doc.\n ");
+  });
+});
+
+describe("file changes", () => {
+  const tool = (n: number, change?: AgentChange): AgentLine => ({ ...line(n, "tool"), ...(change ? { change } : {}) });
+  const edit = (over: Partial<AgentChange> = {}): AgentChange => ({ path: "src/a.ts", added: 1, removed: 1, start: 10, old: "a\nb\nc", new: "a\nB\nc", ...over });
+  // The sheet's rows as the phone's differ reads them: kind, old number, new number, text.
+  const rowsOf = (v: ReturnType<typeof changeView>) => {
+    if (!("patch" in v)) throw new Error(`no patch: ${v.note}`);
+    return parseDiff(v.patch)[0].hunks.flatMap((h) =>
+      h.changes.map((c) =>
+        c.type === "normal" ? ["=", c.oldLineNumber, c.newLineNumber, c.content] : c.type === "insert" ? ["+", null, c.lineNumber, c.content] : ["-", c.lineNumber, null, c.content],
+      ),
+    );
+  };
+
+  it("totals a run over the lines that carry a change and ignores the rest", () => {
+    expect(runChange([tool(1, edit({ added: 3, removed: 1 })), tool(2), tool(3, edit({ added: 1, removed: 0 }))])).toEqual({ added: 4, removed: 1 });
+  });
+
+  it("gives no totals to a run with no change at all", () => {
+    expect(runChange([tool(1), tool(2)])).toBeNull();
+  });
+
+  it("numbers an Edit from its start line, the unchanged lines inside the block as context", () => {
+    expect(rowsOf(changeView(edit()))).toEqual([
+      ["=", 10, 10, "a"],
+      ["-", 11, null, "b"],
+      ["+", null, 11, "B"],
+      ["=", 12, 12, "c"],
+    ]);
+  });
+
+  it("diffs a Write's file before against after, numbered from line 1", () => {
+    expect(rowsOf(changeView({ path: "w.md", added: 1, removed: 0, before: "x\ny\n", after: "x\nnew\ny\n" }))).toEqual([
+      ["=", 1, 1, "x"],
+      ["+", null, 2, "new"],
+      ["=", 2, 3, "y"],
+    ]);
+  });
+
+  it("draws a new file all added", () => {
+    expect(rowsOf(changeView({ path: "n.md", added: 2, removed: 0, before: null, after: "one\ntwo\n" }))).toEqual([
+      ["+", null, 1, "one"],
+      ["+", null, 2, "two"],
+    ]);
+  });
+
+  it("says a large change was too large to keep and draws no diff", () => {
+    expect(changeView({ path: "big.ts", added: 900, removed: 3, large: true })).toEqual({ note: expect.stringContaining("too large to keep") });
+  });
+
+  it("says so, never guesses, for an Edit without its start line or a change without a body", () => {
+    expect(changeView(edit({ start: undefined }))).toEqual({ note: expect.stringContaining("cannot be numbered") });
+    expect(changeView({ path: "q", added: 1, removed: 0 })).toEqual({ note: expect.stringContaining("without a body") });
+  });
+
+  it("finds the longest common run, keeping a moved line's neighbours as context", () => {
+    expect(lineDiff(["a", "b", "c", "d"], ["a", "c", "d", "b"]).map((r) => r.kind + r.text)).toEqual([" a", "-b", " c", " d", "+b"]);
   });
 });

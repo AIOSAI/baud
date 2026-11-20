@@ -453,7 +453,7 @@ export interface MemoryConfigPatch {
 
 /* @backup's and @api's shapes (phone-only), see docs/phone/backup.md. Change with the host's answer. */
 
-export type BackupLane = "snapshot" | "versioned" | "all" | "drive_sync";
+export type BackupLane = "snapshot" | "all" | "drive_sync";
 
 export interface BackupLaneStatus {
   last: string | null;
@@ -491,13 +491,11 @@ export interface BackupStatus {
   runs: number;
   lanes: {
     snapshot: BackupLaneStatus;
-    versioned: BackupLaneStatus;
     drive_sync: BackupLaneStatus;
   };
   /** Present only when asked with sizes=1: the walk takes seconds. */
   store?: {
     snapshots_bytes: number;
-    versioned_bytes: number;
   };
   drive: { tracked_files: number };
   running: BackupRunning[];
@@ -564,14 +562,61 @@ export interface BackupCancel {
   message: string;
 }
 
+export type BackupFrequency = "daily" | "weekly" | "monthly";
+export type BackupWeekday = "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+
+/** `GET /v1/backup/schedule` and the POST's answer. `scheduled: false` is no job: off, every field null. */
+export interface BackupSchedule {
+  project: string;
+  root: string;
+  job_id: string | null;
+  scheduled: boolean;
+  on: boolean;
+  frequency: BackupFrequency | null;
+  time: string | null;
+  weekday: BackupWeekday | null;
+  day: number | null;
+  steps: string[];
+  last_run: string | null;
+  last_status: string | null;
+  last_error: string | null;
+  next_run: string | null;
+}
+
+export interface BackupScheduleWrite {
+  project: string;
+  frequency?: BackupFrequency;
+  time?: string;
+  weekday?: BackupWeekday;
+  day?: number;
+  on?: boolean;
+}
+
 /* The extension's chat; `<agent>` is `<project>/<name>` as /v1/fleet names it. */
 
 export interface AgentLine {
   n: number;
-  role: "user" | "agent" | "tool";
+  role: "user" | "agent" | "tool" | "notice";
   text: string;
   time: string;
   model?: string;
+  kind?: string;
+  mail_id?: string;
+  /** On an Edit or Write tool line: the file it changed. Counts are the host's line diff; never recounted. */
+  change?: AgentChange;
+}
+
+/** An Edit carries `start`, `old`, `new`; a Write `before` (null: a new file) and `after`; `large` neither. */
+export interface AgentChange {
+  path: string;
+  added: number;
+  removed: number;
+  large?: true;
+  start?: number;
+  old?: string;
+  new?: string;
+  before?: string | null;
+  after?: string;
 }
 
 export interface AgentFeed {
