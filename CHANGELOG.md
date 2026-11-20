@@ -79,6 +79,10 @@ and every change that lands adds its line there in the same sitting.
 
 - **The Windows and macOS pieces.** BAUD is Linux only. Gone: the release build's `windows_subsystem` attribute, the non-Linux stubs for the browser, screenshot and session-scan commands, the non-unix pty teardown, the `USERPROFILE` home fallback, and the `win32` UTF-8 block in `apps/baud.py`. The `cfg(target_os = "linux")` / `cfg(unix)` gates and `Cargo.toml`'s target tables are plain code and plain dependencies now. Nothing changes on Linux.
 
+### Security
+
+- **SQLite bumped past RUSTSEC-2026-0459.** rusqlite 0.40.2 → 0.41.1 brings the bundled libsqlite3-sys 0.38.2 → 0.39.1, out of the SQLite advisory (CVE-2026-119375) that the read-only OpenCode session lookup in `sessions.rs` carried. No code change.
+
 ## [0.5.0] — 2026-10-19
 
 ### Added
